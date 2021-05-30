@@ -1,0 +1,59 @@
+# Copyright (C) 2020 Dremio
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: CI
+
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  java:
+    name: Java/Gradle
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 4
+      matrix:
+        java-version: [8, 11, 16]
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up JDK ${{ matrix.java-version }}
+        uses: actions/setup-java@v1
+        with:
+          java-version: ${{ matrix.java-version }}
+      - name: Cache Gradle packages
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ matrix.java-version }}-${{ hashFiles('**/*.gradle.kts') }}
+          restore-keys: gradle-${{ matrix.java-version }}
+      - name: Build with Gradle
+        # Java 8 and 16+ don't run spotless, because google-java-format requires Java 11+ (but doesn't run w/ Java 16)
+        run: |
+          if [[ ${{ matrix.java-version }} -ge 16 || ${{ matrix.java-version }} -eq 8 ]] ; then
+            ADDITIONAL_ARGS="-x spotlessCheck"
+          fi
+          ./gradlew --rerun-tasks --no-daemon --info jar check publishToMavenLocal ${ADDITIONAL_ARGS}
+      - name: Capture test results
+        uses: actions/upload-artifact@v2
+        if: failure()
+        with:
+          name: test-results
+          path: |
+            **/build/reports/*
+            **/build/test-results/*
