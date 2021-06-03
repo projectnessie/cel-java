@@ -16,6 +16,8 @@
 package org.projectnessie.cel.common.types;
 
 import static org.projectnessie.cel.common.types.BoolT.BoolType;
+import static org.projectnessie.cel.common.types.BoolT.False;
+import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.BoolT.boolOf;
 import static org.projectnessie.cel.common.types.BytesT.BytesType;
 import static org.projectnessie.cel.common.types.BytesT.bytesOf;
@@ -24,7 +26,8 @@ import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.DurationT.DurationType;
 import static org.projectnessie.cel.common.types.DurationT.durationOf;
 import static org.projectnessie.cel.common.types.Err.newErr;
-import static org.projectnessie.cel.common.types.Err.valOrErr;
+import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
+import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.TimestampT.TimestampType;
@@ -33,9 +36,12 @@ import static org.projectnessie.cel.common.types.TypeValue.TypeType;
 import static org.projectnessie.cel.common.types.UintT.UintType;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 
+import com.google.protobuf.Any;
+import com.google.protobuf.StringValue;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.regex.Pattern;
 import org.projectnessie.cel.common.types.ref.BaseVal;
@@ -84,7 +90,7 @@ public class StringT extends BaseVal implements Adder, Comparer, Matcher, Receiv
   @Override
   public Val add(Val other) {
     if (!(other instanceof StringT)) {
-      return valOrErr(other, "no such overload");
+      return noSuchOverload(this, "add", other);
     }
     return new StringT(s + ((StringT) other).s);
   }
@@ -93,7 +99,7 @@ public class StringT extends BaseVal implements Adder, Comparer, Matcher, Receiv
   @Override
   public Val compare(Val other) {
     if (!(other instanceof StringT)) {
-      return valOrErr(other, "no such overload");
+      return noSuchOverload(this, "compare", other);
     }
 
     return intOf(s.compareTo(((StringT) other).s));
@@ -103,30 +109,28 @@ public class StringT extends BaseVal implements Adder, Comparer, Matcher, Receiv
   @SuppressWarnings("unchecked")
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
-    if (typeDesc == String.class) {
+    if (typeDesc == String.class || typeDesc == Object.class) {
       return (T) s;
     }
     if (typeDesc == byte[].class) {
       return (T) s.getBytes(StandardCharsets.UTF_8);
     }
-
+    if (typeDesc == Any.class) {
+      return (T) Any.pack(StringValue.of(s));
+    }
+    if (typeDesc == StringValue.class) {
+      return (T) StringValue.of(s);
+    }
+    if (typeDesc == Val.class || typeDesc == StringT.class) {
+      return (T) this;
+    }
+    // TODO implemeng the following as well?
     //		switch typeDesc.Kind() {
-    //		case reflect.String:
-    //			if reflect.TypeOf(s).AssignableTo(typeDesc) {
-    //				return s, nil
-    //			}
-    //			return s.Value(), nil
     //		case reflect.Ptr:
     //			switch typeDesc {
-    //			case anyValueType:
-    //				// Primitives must be wrapped before being set on an Any field.
-    //				return anypb.New(wrapperspb.String(string(s)))
     //			case jsonValueType:
     //				// Convert to a protobuf representation of a JSON String.
     //				return structpb.NewStringValue(string(s)), nil
-    //			case stringWrapperType:
-    //				// Convert to a wrapperspb.StringValue.
-    //				return wrapperspb.String(string(s)), nil
     //			}
     //			if typeDesc.Elem().Kind() == reflect.String {
     //				p := s.Value().(string)
@@ -152,32 +156,30 @@ public class StringT extends BaseVal implements Adder, Comparer, Matcher, Receiv
     try {
       if (typeVal == IntType) {
         return intOf(Long.parseLong(s));
-      }
-      if (typeVal == UintType) {
+      } else if (typeVal == UintType) {
         return uintOf(Long.parseUnsignedLong(s));
-      }
-      if (typeVal == DoubleType) {
+      } else if (typeVal == DoubleType) {
         return doubleOf(Double.parseDouble(s));
-      }
-      if (typeVal == BoolType) {
-        return boolOf(Boolean.parseBoolean(s));
-      }
-      if (typeVal == BytesType) {
+      } else if (typeVal == BoolType) {
+        if ("true".equalsIgnoreCase(s)) {
+          return True;
+        }
+        if ("false".equalsIgnoreCase(s)) {
+          return False;
+        }
+      } else if (typeVal == BytesType) {
         return bytesOf(s.getBytes(StandardCharsets.UTF_8));
-      }
-      if (typeVal == DurationType) {
+      } else if (typeVal == DurationType) {
         return durationOf(s);
-      }
-      if (typeVal == TimestampType) {
+      } else if (typeVal == TimestampType) {
         return timestampOf(s);
       }
       if (typeVal == StringType) {
         return this;
-      }
-      if (typeVal == TypeType) {
+      } else if (typeVal == TypeType) {
         return StringType;
       }
-      return newErr("type conversion error from '%s' to '%s'", StringType, typeVal);
+      return newTypeConversionError(StringType, typeVal);
     } catch (Exception e) {
       return newErr(
           "error during type conversion from '%s' to %s: %s", StringType, typeVal, e.toString());
@@ -188,7 +190,7 @@ public class StringT extends BaseVal implements Adder, Comparer, Matcher, Receiv
   @Override
   public Val equal(Val other) {
     if (!(other instanceof StringT)) {
-      return valOrErr(other, "no such overload");
+      return noSuchOverload(this, "equal", other);
     }
     return boolOf(s.equals(((StringT) other).s));
   }
@@ -197,7 +199,7 @@ public class StringT extends BaseVal implements Adder, Comparer, Matcher, Receiv
   @Override
   public Val match(Val pattern) {
     if (!(pattern instanceof StringT)) {
-      return valOrErr(pattern, "no such overload");
+      return noSuchOverload(this, "match", pattern);
     }
     try {
       Pattern p = Pattern.compile(((StringT) pattern).s);
@@ -217,7 +219,7 @@ public class StringT extends BaseVal implements Adder, Comparer, Matcher, Receiv
         return f.apply(s, args[0]);
       }
     }
-    return newErr("no such overload");
+    return noSuchOverload(this, function, overload, args);
   }
 
   /** Size implements traits.Sizer.Size. */
@@ -238,23 +240,40 @@ public class StringT extends BaseVal implements Adder, Comparer, Matcher, Receiv
     return s;
   }
 
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    StringT stringT = (StringT) o;
+    return Objects.equals(s, stringT.s);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(super.hashCode(), s);
+  }
+
   static Val stringContains(String s, Val sub) {
     if (!(sub instanceof StringT)) {
-      return valOrErr(sub, "no such overload");
+      return noSuchOverload(StringType, "contains", sub);
     }
     return boolOf(s.contains(((StringT) sub).s));
   }
 
   static Val stringEndsWith(String s, Val suf) {
     if (!(suf instanceof StringT)) {
-      return valOrErr(suf, "no such overload");
+      return noSuchOverload(StringType, "endsWith", suf);
     }
     return boolOf(s.endsWith(((StringT) suf).s));
   }
 
   static Val stringStartsWith(String s, Val pre) {
     if (!(pre instanceof StringT)) {
-      return valOrErr(pre, "no such overload");
+      return noSuchOverload(StringType, "startsWith", pre);
     }
     return boolOf(s.startsWith(((StringT) pre).s));
   }

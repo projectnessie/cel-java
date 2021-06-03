@@ -17,20 +17,23 @@ package org.projectnessie.cel.common.types;
 
 import static org.projectnessie.cel.common.types.BoolT.boolOf;
 import static org.projectnessie.cel.common.types.Err.errDurationOverflow;
-import static org.projectnessie.cel.common.types.Err.newErr;
-import static org.projectnessie.cel.common.types.Err.valOrErr;
+import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
+import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.StringT.StringType;
+import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.TimestampT.TimestampType;
 import static org.projectnessie.cel.common.types.TimestampT.timestampOf;
 import static org.projectnessie.cel.common.types.TypeValue.TypeType;
 
+import com.google.protobuf.Any;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
-import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import org.projectnessie.cel.common.types.Overflow.OverflowException;
 import org.projectnessie.cel.common.types.ref.BaseVal;
@@ -86,6 +89,10 @@ public final class DurationT extends BaseVal
     return durationOf(dur);
   }
 
+  public static DurationT durationOf(com.google.protobuf.Duration d) {
+    return new DurationT(Duration.ofSeconds(d.getSeconds(), d.getNanos()));
+  }
+
   public static DurationT durationOf(Duration d) {
     return new DurationT(d);
   }
@@ -107,14 +114,14 @@ public final class DurationT extends BaseVal
         return errDurationOverflow;
       }
     }
-    return valOrErr(other, "no such overload");
+    return noSuchOverload(this, "add", other);
   }
 
   /** Compare implements traits.Comparer.Compare. */
   @Override
   public Val compare(Val other) {
     if (!(other instanceof DurationT)) {
-      return Err.valOrErr(other, "no such overload");
+      return noSuchOverload(this, "compare", other);
     }
     Duration o = ((DurationT) other).d;
     return IntT.intOf(d.compareTo(o));
@@ -127,6 +134,21 @@ public final class DurationT extends BaseVal
     if (Duration.class.isAssignableFrom(typeDesc)) {
       return (T) d;
     }
+    if (com.google.protobuf.Duration.class == typeDesc || typeDesc == Object.class) {
+      return (T) pbVal();
+    }
+    if (Any.class == typeDesc) {
+      return (T) Any.pack(pbVal());
+    }
+    if (Long.class == typeDesc) {
+      return (T) Long.valueOf(toJavaLong());
+    }
+    if (String.class == typeDesc) {
+      return (T) toPbString();
+    }
+    if (typeDesc == Val.class || typeDesc == DurationT.class) {
+      return (T) this;
+    }
     //		// If the duration is already assignable to the desired type return it.
     //		if reflect.TypeOf(d.Duration).AssignableTo(typeDesc) {
     //			return d.Duration, nil
@@ -135,12 +157,6 @@ public final class DurationT extends BaseVal
     //			return d, nil
     //		}
     //		switch typeDesc {
-    //		case anyValueType:
-    //			// Pack the duration as a dpb.Duration into an Any value.
-    //			return anypb.New(dpb.New(d.Duration))
-    //		case durationValueType:
-    //			// Unwrap the CEL value to its underlying proto value.
-    //			return dpb.New(d.Duration), nil
     //		case jsonValueType:
     //			// CEL follows the proto3 to JSON conversion.
     //			// Note, using jsonpb would wrap the result in extra double quotes.
@@ -155,17 +171,30 @@ public final class DurationT extends BaseVal
             "native type conversion error from '%s' to '%s'", DurationType, typeDesc.getName()));
   }
 
+  private com.google.protobuf.Duration pbVal() {
+    return com.google.protobuf.Duration.newBuilder()
+        .setSeconds(d.getSeconds())
+        .setNanos(d.getNano())
+        .build();
+  }
+
+  private long toJavaLong() {
+    return TimeUnit.SECONDS.toNanos(d.getSeconds()) + d.getNano();
+  }
+
+  private String toPbString() {
+    // 7506.000001s
+    return String.format("%d.%06ds", d.getSeconds(), TimeUnit.NANOSECONDS.toMicros(d.getNano()));
+  }
+
   /** ConvertToType implements ref.Val.ConvertToType. */
   @Override
   public Val convertToType(Type typeValue) {
     if (typeValue == StringType) {
-      // TODO Java's Duration has a DIFFERENT string representation than Go !!!
-      throw new UnsupportedOperationException("IMPLEMENT ME PROPERLY!");
-      // return String(strconv.FormatFloat(d.Seconds(), 'f', -1, 64) + "s")
+      return stringOf(toPbString());
     }
     if (typeValue == IntType) {
-      // TODO is this correct??
-      return IntT.intOf(d.getSeconds());
+      return IntT.intOf(toJavaLong());
     }
     if (typeValue == DurationType) {
       return this;
@@ -173,14 +202,14 @@ public final class DurationT extends BaseVal
     if (typeValue == TypeType) {
       return DurationType;
     }
-    return newErr("type conversion error from '%s' to '%s'", DurationType, typeValue);
+    return newTypeConversionError(DurationType, typeValue);
   }
 
   /** Equal implements ref.Val.Equal. */
   @Override
   public Val equal(Val other) {
     if (!(other instanceof DurationT)) {
-      return Err.valOrErr(other, "no such overload");
+      return noSuchOverload(this, "equal", other);
     }
     return boolOf(d.equals(((DurationT) other).d));
   }
@@ -204,14 +233,14 @@ public final class DurationT extends BaseVal
         return f.apply(d);
       }
     }
-    return newErr("no such overload");
+    return noSuchOverload(this, function, overload, args);
   }
 
   /** Subtract implements traits.Subtractor.Subtract. */
   @Override
   public Val subtract(Val other) {
     if (!(other instanceof DurationT)) {
-      return Err.valOrErr(other, "no such overload");
+      return noSuchOverload(this, "subtract", other);
     }
     try {
       return durationOf(Overflow.subtractDurationChecked(d, ((DurationT) other).d));
@@ -232,19 +261,38 @@ public final class DurationT extends BaseVal
     return d;
   }
 
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    DurationT durationT = (DurationT) o;
+    return Objects.equals(d, durationT.d);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(super.hashCode(), d);
+  }
+
   public static Val timeGetHours(Duration duration) {
-    return IntT.intOf(duration.get(ChronoUnit.HOURS));
+    return IntT.intOf(TimeUnit.SECONDS.toHours(duration.getSeconds()));
   }
 
   public static Val timeGetMinutes(Duration duration) {
-    return IntT.intOf(duration.get(ChronoUnit.HOURS));
+    return IntT.intOf(TimeUnit.SECONDS.toMinutes(duration.getSeconds()));
   }
 
   public static Val timeGetSeconds(Duration duration) {
-    return IntT.intOf(duration.get(ChronoUnit.HOURS));
+    return IntT.intOf(duration.getSeconds());
   }
 
   public static Val timeGetMilliseconds(Duration duration) {
-    return IntT.intOf(duration.get(ChronoUnit.HOURS));
+    return IntT.intOf(
+        TimeUnit.SECONDS.toMillis(duration.getSeconds())
+            + TimeUnit.NANOSECONDS.toMillis(duration.getNano()));
   }
 }

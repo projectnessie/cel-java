@@ -15,14 +15,18 @@
  */
 package org.projectnessie.cel.common.types;
 
+import static java.util.Arrays.asList;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.BoolT.boolOf;
-import static org.projectnessie.cel.common.types.Err.newErr;
+import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
+import static org.projectnessie.cel.common.types.Err.noMoreElements;
+import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.TypeValue.TypeType;
 
+import java.lang.reflect.Array;
 import java.util.Arrays;
 import java.util.List;
 import org.projectnessie.cel.common.types.ref.BaseVal;
@@ -55,65 +59,9 @@ public abstract class ListT extends BaseVal implements Lister {
     return new ValListT(adapter, value);
   }
 
-  public static Val newWrappedList(TypeAdapter adapter, List<?> value) {
-    return newGenericArrayList(adapter, value.toArray());
-  }
-
   @Override
   public Type type() {
     return ListType;
-  }
-
-  static final class GenericListT extends BaseListT {
-    private final Object[] array;
-
-    GenericListT(TypeAdapter adapter, Object[] array) {
-      super(adapter, array.length);
-      this.array = array;
-    }
-
-    @Override
-    public Object value() {
-      return array;
-    }
-
-    @Override
-    public Val add(Val other) {
-      Object[] newArray = Arrays.copyOf(array, array.length + 1);
-      newArray[array.length] = other.value();
-      return new GenericListT(adapter, newArray);
-    }
-
-    @Override
-    public Val get(Val index) {
-      return wrap(array[(int) index.intValue()]);
-    }
-  }
-
-  static final class ValListT extends BaseListT {
-    private final Val[] array;
-
-    ValListT(TypeAdapter adapter, Val[] array) {
-      super(adapter, array.length);
-      this.array = array;
-    }
-
-    @Override
-    public Object value() {
-      return array;
-    }
-
-    @Override
-    public Val add(Val other) {
-      Object[] newArray = Arrays.copyOf(array, array.length + 1);
-      newArray[array.length] = other;
-      return new GenericListT(adapter, newArray);
-    }
-
-    @Override
-    public Val get(Val index) {
-      return wrap(array[(int) index.intValue()]);
-    }
   }
 
   abstract static class BaseListT extends ListT {
@@ -129,9 +77,27 @@ public abstract class ListT extends BaseVal implements Lister {
       return adapter.nativeToValue(v);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <T> T convertToNative(Class<T> typeDesc) {
-      throw new UnsupportedOperationException(); // TODO implement
+      if (typeDesc.isArray()) {
+        int s = (int) size;
+        Class<?> compType = typeDesc.getComponentType();
+        Object array = Array.newInstance(compType, s);
+
+        for (int i = 0; i < s; i++) {
+          Val v = get(intOf(i));
+          Object e = v.convertToNative(compType);
+          Array.set(array, i, e);
+        }
+
+        return (T) array;
+      }
+      if (typeDesc == List.class || typeDesc == Object.class) {
+        return (T) asList(convertToNative(Object[].class));
+      }
+      throw new IllegalArgumentException(
+          String.format("Unsupported conversion of '%s' to '%s'", ListType, typeDesc.getName()));
     }
 
     @Override
@@ -142,7 +108,7 @@ public abstract class ListT extends BaseVal implements Lister {
       if (typeValue == TypeType) {
         return ListType;
       }
-      return newErr("type conversion error from '%s' to '%s'", ListType, typeValue);
+      return newTypeConversionError(ListType, typeValue);
     }
 
     @Override
@@ -160,7 +126,7 @@ public abstract class ListT extends BaseVal implements Lister {
         return False;
       }
       for (long i = 0; i < size; i++) {
-        if (!get(intOf(i)).equal(o.get(intOf(i))).booleanValue()) {
+        if (get(intOf(i)).equal(o.get(intOf(i))) != True) {
           return False;
         }
       }
@@ -170,7 +136,7 @@ public abstract class ListT extends BaseVal implements Lister {
     @Override
     public Val contains(Val value) {
       for (long i = 0; i < size; i++) {
-        if (value.equal(get(intOf(i))).booleanValue()) {
+        if (value.equal(get(intOf(i))) == True) {
           return True;
         }
       }
@@ -182,7 +148,7 @@ public abstract class ListT extends BaseVal implements Lister {
       return intOf(size);
     }
 
-    private class ArrayListIteratorT implements IteratorT {
+    private class ArrayListIteratorT extends BaseVal implements IteratorT {
       private long index;
 
       @Override
@@ -195,8 +161,151 @@ public abstract class ListT extends BaseVal implements Lister {
         if (index < size) {
           return get(intOf(index++));
         }
-        return null;
+        return noMoreElements();
       }
+
+      @Override
+      public <T> T convertToNative(Class<T> typeDesc) {
+        throw new UnsupportedOperationException("IMPLEMENT ME??");
+      }
+
+      @Override
+      public Val convertToType(Type typeValue) {
+        throw new UnsupportedOperationException("IMPLEMENT ME??");
+      }
+
+      @Override
+      public Val equal(Val other) {
+        throw new UnsupportedOperationException("IMPLEMENT ME??");
+      }
+
+      @Override
+      public Type type() {
+        throw new UnsupportedOperationException("IMPLEMENT ME??");
+      }
+
+      @Override
+      public Object value() {
+        throw new UnsupportedOperationException("IMPLEMENT ME??");
+      }
+    }
+  }
+
+  static final class GenericListT extends BaseListT {
+    private final Object[] array;
+
+    GenericListT(TypeAdapter adapter, Object[] array) {
+      super(adapter, array.length);
+      this.array = array;
+    }
+
+    @Override
+    public Object value() {
+      return array;
+    }
+
+    @Override
+    public Val add(Val other) {
+      if (!(other instanceof Lister)) {
+        return noSuchOverload(this, "add", other);
+      }
+      Lister otherList = (Lister) other;
+      Object[] otherArray = (Object[]) otherList.value();
+      Object[] newArray = Arrays.copyOf(array, array.length + otherArray.length);
+      System.arraycopy(otherArray, 0, newArray, array.length, otherArray.length);
+      return new GenericListT(adapter, newArray);
+    }
+
+    @Override
+    public Val get(Val index) {
+      return wrap(array[(int) index.intValue()]);
+    }
+
+    @Override
+    public String toString() {
+      return "GenericListT{"
+          + "array="
+          + Arrays.toString(array)
+          + ", adapter="
+          + adapter
+          + ", size="
+          + size
+          + '}';
+    }
+  }
+
+  static final class ValListT extends BaseListT {
+    private final Val[] array;
+
+    ValListT(TypeAdapter adapter, Val[] array) {
+      super(adapter, array.length);
+      this.array = array;
+    }
+
+    @Override
+    public Object value() {
+      Object[] nativeArray = new Object[array.length];
+      for (int i = 0; i < array.length; i++) {
+        nativeArray[i] = array[i].value();
+      }
+      return nativeArray;
+    }
+
+    @Override
+    public Val add(Val other) {
+      if (!(other instanceof Lister)) {
+        return noSuchOverload(this, "add", other);
+      }
+      if (other instanceof ValListT) {
+        Val[] otherArray = ((ValListT) other).array;
+        Val[] newArray = Arrays.copyOf(array, array.length + otherArray.length);
+        System.arraycopy(otherArray, 0, newArray, array.length, otherArray.length);
+        return new ValListT(adapter, newArray);
+      } else {
+        Lister otherLister = (Lister) other;
+        int otherSIze = (int) otherLister.size().intValue();
+        Val[] newArray = Arrays.copyOf(array, array.length + otherSIze);
+        for (int i = 0; i < otherSIze; i++) {
+          newArray[array.length + i] = otherLister.get(intOf(i));
+        }
+        return new ValListT(adapter, newArray);
+      }
+    }
+
+    @Override
+    public Val get(Val index) {
+      return wrap(array[(int) index.intValue()]);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      ValListT valListT = (ValListT) o;
+      return Arrays.equals(array, valListT.array);
+    }
+
+    @Override
+    public int hashCode() {
+      int result = super.hashCode();
+      result = 31 * result + Arrays.hashCode(array);
+      return result;
+    }
+
+    @Override
+    public String toString() {
+      return "ValListT{"
+          + "array="
+          + Arrays.toString(array)
+          + ", adapter="
+          + adapter
+          + ", size="
+          + size
+          + '}';
     }
   }
 }
@@ -286,7 +395,7 @@ public abstract class ListT extends BaseVal implements Lister {
 //				// had written a per-element comparison in an exists() macro or logical ||, e.g.
 //				//    list.exists(e, e == elem)
 //				if !ok && err == nil {
-//					err = ValOrErr(cmp, "no such overload")
+//					err = noSuchOverload(cmp, "no such overload: "........)
 //				}
 //				if b == True {
 //					return True
@@ -359,7 +468,7 @@ public abstract class ListT extends BaseVal implements Lister {
 //			if (typeValue == TypeValue.TypeType) {
 //				return ListType;
 //			}
-//			return newErr("type conversion error from '%s' to '%s'", ListType, typeValue);
+//			return newTypeConversionError(ListType, typeValue);
 //		}
 //
 //		/**Equal implements the ref.Val interface method.. */
@@ -496,7 +605,7 @@ public abstract class ListT extends BaseVal implements Lister {
 //			if (typeValue == TypeValue.TypeType) {
 //				return ListType;
 //			}
-//			return newErr("type conversion error from '%s' to '%s'", ListType, typeValue);
+//			return newTypeConversionError(ListType, typeValue);
 //		}
 //
 //		/**Equal implements the ref.Val interface method.. */

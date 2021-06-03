@@ -16,12 +16,14 @@
 package org.projectnessie.cel.common.types;
 
 import static org.projectnessie.cel.common.types.BoolT.True;
-import static org.projectnessie.cel.common.types.Err.newErr;
-import static org.projectnessie.cel.common.types.Err.valOrErr;
+import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
+import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.TypeValue.TypeType;
 
+import com.google.protobuf.Any;
+import com.google.protobuf.Value;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.Val;
@@ -34,25 +36,33 @@ public final class NullT extends BaseVal {
   /** NullValue singleton. */
   public static NullT NullValue = new NullT();
 
+  private static Value PbValue =
+      Value.newBuilder().setNullValue(com.google.protobuf.NullValue.NULL_VALUE).build();
+  private static Any PbAny = Any.pack(PbValue);
+
   /** ConvertToNative implements ref.Val.ConvertToNative. */
+  @SuppressWarnings("unchecked")
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
+    if (typeDesc == Integer.class || typeDesc == int.class) {
+      return (T) (Integer) 0;
+    }
+    if (typeDesc == Any.class) {
+      return (T) PbAny;
+    }
+    if (typeDesc == Value.class) {
+      return (T) PbValue;
+    }
+    if (typeDesc == com.google.protobuf.NullValue.class) {
+      return (T) com.google.protobuf.NullValue.NULL_VALUE;
+    }
+    if (typeDesc == Val.class || typeDesc == NullT.class) {
+      return (T) this;
+    }
+    if (typeDesc == Object.class) {
+      return null;
+    }
     //		switch typeDesc.Kind() {
-    //		case reflect.Int32:
-    //			return reflect.ValueOf(n).Convert(typeDesc).Interface(), nil
-    //		case reflect.Ptr:
-    //			switch typeDesc {
-    //			case anyValueType:
-    //				// Convert to a JSON-null before packing to an Any field since the enum value for JSON
-    //				// null cannot be packed directly.
-    //				pb, err := n.ConvertToNative(jsonValueType)
-    //				if err != nil {
-    //					return nil, err
-    //				}
-    //				return anypb.New(pb.(proto.Message))
-    //			case jsonValueType:
-    //				return structpb.NewNullValue(), nil
-    //			}
     //		case reflect.Interface:
     //			nv := n.Value()
     //			if reflect.TypeOf(nv).Implements(typeDesc) {
@@ -68,6 +78,10 @@ public final class NullT extends BaseVal {
             "native type conversion error from '%s' to '%s'", NullType, typeDesc.getName()));
   }
 
+  private Value asPbValue() {
+    return Value.newBuilder().setNullValue(com.google.protobuf.NullValue.NULL_VALUE).build();
+  }
+
   /** ConvertToType implements ref.Val.ConvertToType. */
   @Override
   public Val convertToType(Type typeValue) {
@@ -80,14 +94,14 @@ public final class NullT extends BaseVal {
     if (typeValue == TypeType) {
       return NullType;
     }
-    return newErr("type conversion error from '%s' to '%s'", NullType, typeValue);
+    return newTypeConversionError(NullType, typeValue);
   }
 
   /** Equal implements ref.Val.Equal. */
   @Override
   public Val equal(Val other) {
     if (NullType != other.type()) {
-      return valOrErr(other, "no such overload");
+      return noSuchOverload(this, "equal", other);
     }
     return True;
   }
@@ -101,7 +115,21 @@ public final class NullT extends BaseVal {
   /** Value implements ref.Val.Value. */
   @Override
   public Object value() {
-    throw new UnsupportedOperationException("IMPLEMENT ME"); // TODO
-    // return structpb.NullValue_NULL_VALUE
+    return com.google.protobuf.NullValue.NULL_VALUE;
+  }
+
+  @Override
+  public String toString() {
+    return "null";
+  }
+
+  @Override
+  public int hashCode() {
+    return 0;
+  }
+
+  @Override
+  public boolean equals(Object obj) {
+    return obj.getClass() == NullT.class;
   }
 }

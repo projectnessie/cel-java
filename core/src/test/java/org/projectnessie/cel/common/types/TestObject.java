@@ -15,164 +15,190 @@
  */
 package org.projectnessie.cel.common.types;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.projectnessie.cel.common.types.BoolT.False;
+import static org.projectnessie.cel.common.types.BoolT.True;
+import static org.projectnessie.cel.common.types.IntT.IntZero;
+import static org.projectnessie.cel.common.types.IntT.intOf;
+import static org.projectnessie.cel.common.types.ProtoTypeRegistry.newRegistry;
+import static org.projectnessie.cel.common.types.StringT.stringOf;
+import static org.projectnessie.cel.common.types.TypeValue.TypeType;
+
+import com.google.api.expr.v1alpha1.Expr;
+import com.google.api.expr.v1alpha1.ParsedExpr;
+import com.google.api.expr.v1alpha1.SourceInfo;
+import com.google.protobuf.Any;
+import com.google.protobuf.Message;
+import java.util.Arrays;
+import java.util.Collections;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
+import org.projectnessie.cel.common.types.ref.TypeRegistry;
+import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.common.types.traits.Indexer;
+
 public class TestObject {
 
-  //  @Test
-  //	void NewProtoObject() {
-  //		reg := newTestRegistry(t)
-  //		parsedExpr := &exprpb.ParsedExpr{
-  //			SourceInfo: &exprpb.SourceInfo{
-  //				LineOffsets: []int32{1, 2, 3}}}
-  //		reg.RegisterMessage(parsedExpr)
-  //		obj := reg.NativeToValue(parsedExpr).(traits.Indexer)
-  //		si := obj.Get(String("source_info")).(traits.Indexer)
-  //		lo := si.Get(String("line_offsets")).(traits.Indexer)
-  //		if lo.Get(Int(2)).Equal(Int(3)) != True {
-  //			t.Errorf("Could not select fields by their proto type names")
-  //		}
-  //		expr := obj.Get(String("expr")).(traits.Indexer)
-  //		call := expr.Get(String("call_expr")).(traits.Indexer)
-  //		if call.Get(String("function")).Equal(String("")) != True {
-  //			t.Errorf("Could not traverse through default values for unset fields")
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void ProtoObjectConvertToNative() {
-  //		reg := newTestRegistry(t, &exprpb.Expr{})
-  //		msg := &exprpb.ParsedExpr{
-  //			SourceInfo: &exprpb.SourceInfo{
-  //				LineOffsets: []int32{1, 2, 3}}}
-  //		objVal := reg.NativeToValue(msg)
-  //
-  //		// Proto Message
-  //		val, err := objVal.ConvertToNative(reflect.TypeOf(&exprpb.ParsedExpr{}))
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		if !proto.Equal(val.(proto.Message), msg) {
-  //			t.Errorf("Messages were not equal, expect '%v', got '%v'", objVal.Value(), msg)
-  //		}
-  //
-  //		// Dynamic protobuf
-  //		dynPB := reg.NewValue(
-  //			string(msg.ProtoReflect().Descriptor().FullName()),
-  //			map[string]ref.Val{
-  //				"source_info": reg.NativeToValue(msg.GetSourceInfo()),
-  //			})
-  //		if IsError(dynPB) {
-  //			t.Fatalf("reg.NewValue() failed: %v", dynPB)
-  //		}
-  //		dynVal := reg.NativeToValue(dynPB)
-  //		val, err = dynVal.ConvertToNative(reflect.TypeOf(msg))
-  //		if err != nil {
-  //			t.Fatalf("dynVal.ConvertToNative() failed: %v", err)
-  //		}
-  //		if !proto.Equal(val.(proto.Message), msg) {
-  //			t.Errorf("Messages were not equal, expect '%v', got '%v'", objVal.Value(), msg)
-  //		}
-  //
-  //		// google.protobuf.Any
-  //		anyVal, err := objVal.ConvertToNative(anyValueType)
-  //		if err != nil {
-  //			t.Fatalf("objVal.ConvertToNative() failed: %v", err)
-  //		}
-  //		anyMsg := anyVal.(*anypb.Any)
-  //		unpackedAny, err := anyMsg.UnmarshalNew()
-  //		if err != nil {
-  //			t.Fatalf("UnmarshalNew() failed: %v", err)
-  //		}
-  //		if !proto.Equal(unpackedAny, objVal.Value().(proto.Message)) {
-  //			t.Errorf("Messages were not equal, expect '%v', got '%v'", objVal.Value(), unpackedAny)
-  //		}
-  //
-  //		// JSON
-  //		jsonVal, err := objVal.ConvertToNative(jsonValueType)
-  //		if err != nil {
-  //			t.Fatalf("objVal.ConvertToNative(%v) failed: %v", jsonValueType, err)
-  //		}
-  //		jsonBytes, err := protojson.Marshal(jsonVal.(proto.Message))
-  //		jsonTxt := string(jsonBytes)
-  //		if err != nil {
-  //			t.Fatalf("protojson.Marshal(%v) failed: %v", jsonVal, err)
-  //		}
-  //		outMap := map[string]interface{}{}
-  //		err = json.Unmarshal(jsonBytes, &outMap)
-  //		if err != nil {
-  //			t.Fatalf("json.Unmarshal(%q) failed: %v", jsonTxt, err)
-  //		}
-  //		want := map[string]interface{}{
-  //			"sourceInfo": map[string]interface{}{
-  //				"lineOffsets": []interface{}{1.0, 2.0, 3.0},
-  //			},
-  //		}
-  //		if !reflect.DeepEqual(outMap, want) {
-  //			t.Errorf("got json '%v', expected %v", outMap, want)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void ProtoObjectIsSet() {
-  //		msg := &exprpb.ParsedExpr{
-  //			SourceInfo: &exprpb.SourceInfo{
-  //				LineOffsets: []int32{1, 2, 3},
-  //			},
-  //		}
-  //		reg := newTestRegistry(t, msg)
-  //		objVal := reg.NativeToValue(msg).(*protoObj)
-  //		if objVal.IsSet(String("source_info")) != True {
-  //			t.Error("got 'source_info' not set, wanted set")
-  //		}
-  //		if objVal.IsSet(String("expr")) != False {
-  //			t.Error("got 'expr' set, wanted not set")
-  //		}
-  //		if !IsError(objVal.IsSet(String("bad_field"))) {
-  //			t.Error("got 'bad_field' wanted error")
-  //		}
-  //		if !IsError(objVal.IsSet(IntZero)) {
-  //			t.Error("got field '0' wanted error")
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void ProtoObjectGet() {
-  //		msg := &exprpb.ParsedExpr{
-  //			SourceInfo: &exprpb.SourceInfo{
-  //				LineOffsets: []int32{1, 2, 3},
-  //			},
-  //		}
-  //		reg := newTestRegistry(t, msg)
-  //		objVal := reg.NativeToValue(msg).(*protoObj)
-  //		if objVal.Get(String("source_info")).Equal(reg.NativeToValue(msg.GetSourceInfo())) != True {
-  //			t.Error("could not get 'source_info'")
-  //		}
-  //		if objVal.Get(String("expr")).Equal(reg.NativeToValue(&exprpb.Expr{})) != True {
-  //			t.Errorf("did not get 'expr' default value: %v", objVal.Get(String("expr")))
-  //		}
-  //		if !IsError(objVal.Get(String("bad_field"))) {
-  //			t.Error("got 'bad_field' wanted error")
-  //		}
-  //		if !IsError(objVal.Get(IntZero)) {
-  //			t.Error("got field '0' wanted error")
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void ProtoObjectConvertToType() {
-  //		msg := &exprpb.ParsedExpr{
-  //			SourceInfo: &exprpb.SourceInfo{
-  //				LineOffsets: []int32{1, 2, 3},
-  //			},
-  //		}
-  //		reg := newTestRegistry(t, msg)
-  //		objVal := reg.NativeToValue(msg)
-  //		tv := objVal.Type().(*TypeValue)
-  //		if objVal.ConvertToType(TypeType).Equal(tv) != True {
-  //			t.Errorf("got non-type value: %v, wanted objet type", objVal.ConvertToType(TypeType))
-  //		}
-  //		if objVal.ConvertToType(objVal.Type()) != objVal {
-  //			t.Error("identity type conversion failed")
-  //		}
-  //	}
+  @Test
+  void newProtoObject() {
+    TypeRegistry reg = newRegistry();
+    ParsedExpr parsedExpr =
+        ParsedExpr.newBuilder()
+            .setSourceInfo(
+                SourceInfo.newBuilder().addAllLineOffsets(Arrays.asList(1, 2, 3)).build())
+            .build();
+    reg.registerMessage(parsedExpr);
+    Indexer obj = (Indexer) reg.nativeToValue(parsedExpr);
+    Indexer si = (Indexer) obj.get(stringOf("source_info"));
+    Indexer lo = (Indexer) si.get(stringOf("line_offsets"));
+    assertThat(lo.get(intOf(2)).equal(intOf(3))).isSameAs(True);
 
+    Indexer expr = (Indexer) obj.get(stringOf("expr"));
+    Indexer call = (Indexer) expr.get(stringOf("call_expr"));
+    assertThat(call.get(stringOf("function")).equal(stringOf(""))).isSameAs(True);
+  }
+
+  @Test
+  void protoObjectConvertToNative() throws Exception {
+    TypeRegistry reg = newRegistry(Expr.getDefaultInstance());
+    ParsedExpr msg =
+        ParsedExpr.newBuilder()
+            .setSourceInfo(
+                SourceInfo.newBuilder().addAllLineOffsets(Arrays.asList(1, 2, 3)).build())
+            .build();
+    Val objVal = reg.nativeToValue(msg);
+
+    // Proto Message
+    ParsedExpr val = objVal.convertToNative(ParsedExpr.class);
+    assertThat(val).isEqualTo(msg);
+
+    // Dynamic protobuf
+    Val dynPB =
+        reg.newValue(
+            msg.getDescriptorForType().getFullName(),
+            Collections.singletonMap("source_info", reg.nativeToValue(msg.getSourceInfo())));
+    Val dynVal = reg.nativeToValue(dynPB);
+    val = dynVal.convertToNative(msg.getClass());
+    assertThat(val).isEqualTo(msg);
+
+    // google.protobuf.Any
+    Any anyVal = objVal.convertToNative(Any.class);
+    Message anyMsg = anyVal;
+    Message unpackedAny = anyVal.unpack(ParsedExpr.class);
+    assertThat(unpackedAny).isEqualTo(objVal.value());
+  }
+
+  @Test
+  @Disabled("IMPLEMENT ME")
+  void protoObjectConvertToNative_JSON() {
+    // TODO this test is the same as ProtoObjectConvertToNative, but has the JSON stuff - commented
+    // out
+    //    TypeRegistry reg = newRegistry(Expr.getDefaultInstance());
+    //    		ParsedExpr msg = ParsedExpr.newBuilder()
+    //						.setSourceInfo(
+    //								SourceInfo.newBuilder().addAllLineOffsets(Arrays.asList(1, 2, 3)).build())
+    //						.build();
+    //		Val objVal = reg.nativeToValue(msg);
+    //
+    //    		// Proto Message
+    //    		ParsedExpr val = objVal.convertToNative(ParsedExpr.class);
+    //    		assertThat(val).isEqualTo(msg);
+    //
+    //    		// Dynamic protobuf
+    //		Val dynPB = reg.newValue(msg.getDescriptorForType().getFullName(),
+    //				Collections.singletonMap("source_info", reg.nativeToValue(msg.getSourceInfo())));
+    //		Val dynVal = reg.nativeToValue(dynPB);
+    //    		val = dynVal.convertToNative(msg.getClass());
+    //    		assertThat(val).isEqualTo(msg);
+    //
+    //    		// google.protobuf.Any
+    //    		Any  anyVal = objVal.convertToNative(Any.class);
+    //    		Message anyMsg = anyVal;
+    //    		Message unpackedAny = anyMsg.unpack(Message.class);
+    //    		if !proto.equal(unpackedAny, objVal.value().(proto.Message)) {
+    //    			t.Errorf("Messages were not equal, expect '%v', got '%v'", objVal.value(), unpackedAny)
+    //    		}
+    //
+    //    		// JSON
+    //    		jsonVal = objVal.convertToNative(jsonValueType)
+    //    		if err != nil {
+    //    			t.Fatalf("objVal.convertToNative(%v) failed: %v", jsonValueType, err)
+    //    		}
+    //    		jsonBytes = protojson.Marshal(jsonVal.(proto.Message))
+    //    		jsonTxt := string(jsonBytes)
+    //    		if err != nil {
+    //    			t.Fatalf("protojson.Marshal(%v) failed: %v", jsonVal, err)
+    //    		}
+    //    		outMap := map[string]interface{}{}
+    //    		err = json.Unmarshal(jsonBytes, &outMap)
+    //    		if err != nil {
+    //    			t.Fatalf("json.Unmarshal(%q) failed: %v", jsonTxt, err)
+    //    		}
+    //    		want := map[string]interface{}{
+    //    			"sourceInfo": map[string]interface{}{
+    //    				"lineOffsets": []interface{}{1.0, 2.0, 3.0},
+    //    			},
+    //    		}
+    //    		if !reflect.DeepEqual(outMap, want) {
+    //    			t.Errorf("got json '%v', expected %v", outMap, want)
+    //    		}
+  }
+
+  @Test
+  void protoObjectIsSet() {
+    TypeRegistry reg = newRegistry(Expr.getDefaultInstance());
+    ParsedExpr msg =
+        ParsedExpr.newBuilder()
+            .setSourceInfo(
+                SourceInfo.newBuilder().addAllLineOffsets(Arrays.asList(1, 2, 3)).build())
+            .build();
+
+    Val obj = reg.nativeToValue(msg);
+    assertThat(obj).isInstanceOf(ObjectT.class);
+    ObjectT objVal = (ObjectT) obj;
+
+    assertThat(objVal.isSet(stringOf("source_info"))).isSameAs(True);
+    assertThat(objVal.isSet(stringOf("expr"))).isSameAs(False);
+    assertThat(objVal.isSet(stringOf("bad_field"))).matches(Err::isError);
+    assertThat(objVal.isSet(IntZero)).matches(Err::isError);
+  }
+
+  @Test
+  void protoObjectGet() {
+    TypeRegistry reg = newRegistry(Expr.getDefaultInstance());
+    ParsedExpr msg =
+        ParsedExpr.newBuilder()
+            .setSourceInfo(
+                SourceInfo.newBuilder().addAllLineOffsets(Arrays.asList(1, 2, 3)).build())
+            .build();
+
+    Val obj = reg.nativeToValue(msg);
+    assertThat(obj).isInstanceOf(ObjectT.class);
+    ObjectT objVal = (ObjectT) obj;
+
+    assertThat(objVal.get(stringOf("source_info")).equal(reg.nativeToValue(msg.getSourceInfo())))
+        .isSameAs(True);
+    assertThat(objVal.get(stringOf("expr")).equal(reg.nativeToValue(Expr.getDefaultInstance())))
+        .isSameAs(True);
+    assertThat(objVal.get(stringOf("bad_field"))).matches(Err::isError);
+    assertThat(objVal.get(IntZero)).matches(Err::isError);
+  }
+
+  @Test
+  void protoObjectConvertToType() {
+    TypeRegistry reg = newRegistry(Expr.getDefaultInstance());
+    ParsedExpr msg =
+        ParsedExpr.newBuilder()
+            .setSourceInfo(
+                SourceInfo.newBuilder().addAllLineOffsets(Arrays.asList(1, 2, 3)).build())
+            .build();
+
+    Val obj = reg.nativeToValue(msg);
+    assertThat(obj).isInstanceOf(ObjectT.class);
+    ObjectT objVal = (ObjectT) obj;
+
+    TypeValue tv = (TypeValue) objVal.type();
+    assertThat(objVal.convertToType(TypeType).equal(tv)).isSameAs(True);
+    assertThat(objVal.convertToType(objVal.type())).isSameAs(objVal);
+  }
 }

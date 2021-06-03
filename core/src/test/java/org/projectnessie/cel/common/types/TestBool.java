@@ -27,37 +27,32 @@ import static org.projectnessie.cel.common.types.IntT.IntOne;
 import static org.projectnessie.cel.common.types.IntT.IntZero;
 import static org.projectnessie.cel.common.types.UintT.UintZero;
 
+import com.google.protobuf.Any;
+import com.google.protobuf.BoolValue;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.common.types.ref.Val;
 
 class TestBool {
 
   @Test
-  void BoolCompare() {
+  void boolCompare() {
     assertThat(False.compare(True)).isEqualTo(IntNegOne);
     assertThat(True.compare(False)).isEqualTo(IntOne);
     assertThat(True.compare(True)).isEqualTo(IntZero);
     assertThat(False.compare(False)).isEqualTo(IntZero);
-    assertThat(True.compare(UintZero)).extracting(Err::isError).isEqualTo(true);
+    assertThat(True.compare(UintZero)).matches(Err::isError);
   }
 
-  //  @Test
-  //  void BoolConvertToNative_Any() {
-  //    val, err := True.ConvertToNative(anyValueType)
-  //    if err != nil {
-  //      t.Error(err)
-  //    }
-  //    pbVal, err := anypb.New(wrapperspb.Bool(true))
-  //    if err != nil {
-  //      t.Error(err)
-  //    }
-  //    if !proto.Equal(val.(proto.Message), pbVal) {
-  //      t.Error("Error during conversion to protobuf.Any", val)
-  //    }
-  //  }
+  @Test
+  void boolConvertToNative_Any() {
+    Object val = True.convertToNative(Any.class);
+    Any pbVal = Any.pack(BoolValue.of(true));
+    assertThat(val).isEqualTo(pbVal);
+  }
 
   @Test
-  void BoolConvertToNative_Bool() {
+  void boolConvertToNative_Bool() {
     Boolean val = True.convertToNative(Boolean.class);
     assertThat(val).isTrue();
     val = False.convertToNative(boolean.class);
@@ -65,48 +60,45 @@ class TestBool {
   }
 
   @Test
-  void BoolConvertToNative_Error() {
+  void boolConvertToNative_Error() {
     assertThatThrownBy(() -> True.convertToNative(String.class))
         .isInstanceOf(RuntimeException.class)
         .hasMessage("native type conversion error from 'bool' to 'java.lang.String'");
   }
 
-  //  @Test
-  //  void BoolConvertToNative_Json() {
-  //    val, err := True.ConvertToNative(jsonValueType)
-  //    pbVal := &structpb.Value{Kind: &structpb.Value_BoolValue{BoolValue: true}}
-  //    if err != nil {
-  //      t.Error(err)
-  //    } else if !proto.Equal(val.(proto.Message), pbVal) {
-  //      t.Error("Error during conversion to json Value type", val)
-  //    }
-  //  }
-  //
-  //  @Test
-  //  void BoolConvertToNative_Ptr() {
-  //    ptrType := true
-  //    refType := reflect.TypeOf(&ptrType)
-  //    val, err := True.ConvertToNative(refType)
-  //    if err != nil {
-  //      t.Error(err)
-  //    } else if !*val.(*bool) {
-  //      t.Error("Error during conversion to *bool", val)
-  //    }
-  //  }
-  //
-  //  @Test
-  //  void BoolConvertToNative_Wrapper() {
-  //    val, err := True.ConvertToNative(boolWrapperType)
-  //    pbVal := wrapperspb.Bool(true)
-  //    if err != nil {
-  //      t.Error(err)
-  //    } else if !proto.Equal(val.(proto.Message), pbVal) {
-  //      t.Error("Error during conversion to wrapper value type", val)
-  //    }
-  //  }
+  @Test
+  @Disabled("IMPLEMENT ME")
+  void boolConvertToNative_Json() {
+    //          val = True.convertToNative(jsonValueType)
+    //          pbVal := &structpb.Value{Kind: &structpb.Value_BoolValue{BoolValue: true}}
+    //          if err != nil {
+    //            t.Error(err)
+    //          } else if !proto.equal(val.(proto.Message), pbVal) {
+    //            t.Error("Error during conversion to json Value type", val)
+    //          }
+  }
 
   @Test
-  void BoolConvertToType() {
+  void boolConvertToNative_Ptr() {
+    Boolean val = True.convertToNative(Boolean.class);
+    assertThat(val).isTrue();
+  }
+
+  @Test
+  void boolConvertToNative() {
+    Boolean val = True.convertToNative(boolean.class);
+    assertThat(val).isTrue();
+  }
+
+  @Test
+  void boolConvertToNative_Wrapper() {
+    BoolValue val = True.convertToNative(BoolValue.class);
+    BoolValue pbVal = BoolValue.of(true);
+    assertThat(val).isEqualTo(pbVal);
+  }
+
+  @Test
+  void boolConvertToType() {
     assertThat(True.convertToType(StringT.StringType).equal(StringT.stringOf("true")))
         .isEqualTo(True);
     assertThat(True.convertToType(BoolT.BoolType)).isEqualTo(True);
@@ -118,27 +110,27 @@ class TestBool {
   }
 
   @Test
-  void BoolEqual() {
+  void boolEqual() {
     assertThat(True.equal(True)).extracting(Val::booleanValue).isEqualTo(Boolean.TRUE);
     assertThat(False.equal(True)).extracting(Val::booleanValue).isEqualTo(Boolean.FALSE);
     assertThat(doubleOf(0.0d).equal(False))
         .isInstanceOf(Err.class)
         .extracting(Object::toString)
-        .isEqualTo("no such overload");
+        .isEqualTo("no such overload: double.equal(bool)");
     assertThat(False.equal(doubleOf(0.0d)))
         .isInstanceOf(Err.class)
         .extracting(Object::toString)
-        .isEqualTo("no such overload");
+        .isEqualTo("no such overload: bool.equal(double)");
   }
 
   @Test
-  void BoolNegate() {
+  void boolNegate() {
     assertThat(True.negate()).isEqualTo(False);
     assertThat(False.negate()).isEqualTo(True);
   }
 
   @Test
-  void BoolPredefined() {
+  void boolPredefined() {
     assertThat(boolOf(true)).isSameAs(True);
     assertThat(boolOf(false)).isSameAs(False);
     assertThat(boolOf(Boolean.TRUE)).isSameAs(True);

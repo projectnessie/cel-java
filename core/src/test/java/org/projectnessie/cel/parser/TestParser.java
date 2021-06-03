@@ -18,6 +18,10 @@ package org.projectnessie.cel.parser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.google.api.expr.v1alpha1.Expr;
+import com.google.api.expr.v1alpha1.Expr.CreateStruct.Entry;
+import com.google.api.expr.v1alpha1.Expr.ExprKindCase;
+import com.google.api.expr.v1alpha1.SourceInfo;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -26,49 +30,45 @@ import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.Source;
 import org.projectnessie.cel.common.debug.Debug;
 import org.projectnessie.cel.parser.Parser.ParseResult;
-import org.projectnessie.cel.pb.Expr;
-import org.projectnessie.cel.pb.Expr.Const;
-import org.projectnessie.cel.pb.Expr.StructExpr;
-import org.projectnessie.cel.pb.SourceInfo;
 
 class TestParser {
   @SuppressWarnings("unused")
   public static String[][] testCases() {
     return new String[][] {
       new String[] {
-        "0", "\"A\"", "\"A\"^#1:*expr.Constant_StringValue#", "", "",
+        "0", "\"A\"", "\"A\"^#1:*expr.Constant_STRING_VALUE#", "", "",
       },
       new String[] {
-        "1", "true", "true^#1:*expr.Constant_BoolValue#", "", "",
+        "1", "true", "true^#1:*expr.Constant_BOOL_VALUE#", "", "",
       },
       new String[] {
-        "2", "false", "false^#1:*expr.Constant_BoolValue#", "", "",
+        "2", "false", "false^#1:*expr.Constant_BOOL_VALUE#", "", "",
       },
       new String[] {
-        "3", "0", "0^#1:*expr.Constant_Int64Value#", "", "",
+        "3", "0", "0^#1:*expr.Constant_INT64_VALUE#", "", "",
       },
       new String[] {
-        "4", "42", "42^#1:*expr.Constant_Int64Value#", "", "",
+        "4", "42", "42^#1:*expr.Constant_INT64_VALUE#", "", "",
       },
       new String[] {
-        "5", "0u", "0u^#1:*expr.Constant_Uint64Value#", "", "",
+        "5", "0u", "0u^#1:*expr.Constant_UINT64_VALUE#", "", "",
       },
       new String[] {
-        "6", "23u", "23u^#1:*expr.Constant_Uint64Value#", "", "",
+        "6", "23u", "23u^#1:*expr.Constant_UINT64_VALUE#", "", "",
       },
       new String[] {
-        "7", "24u", "24u^#1:*expr.Constant_Uint64Value#", "", "",
+        "7", "24u", "24u^#1:*expr.Constant_UINT64_VALUE#", "", "",
       },
       new String[] {
-        "8", "-1", "-1^#1:*expr.Constant_Int64Value#", "", "",
+        "8", "-1", "-1^#1:*expr.Constant_INT64_VALUE#", "", "",
       },
       new String[] {
         "9",
         "4--4",
         "_-_(\n"
-            + "  4^#1:*expr.Constant_Int64Value#,\n"
-            + "  -4^#3:*expr.Constant_Int64Value#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "  4^#1:*expr.Constant_INT64_VALUE#,\n"
+            + "  -4^#3:*expr.Constant_INT64_VALUE#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -76,39 +76,39 @@ class TestParser {
         "10",
         "4--4.1",
         "_-_(\n"
-            + "  4^#1:*expr.Constant_Int64Value#,\n"
-            + "  -4.1^#3:*expr.Constant_DoubleValue#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "  4^#1:*expr.Constant_INT64_VALUE#,\n"
+            + "  -4.1^#3:*expr.Constant_DOUBLE_VALUE#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
       new String[] {
-        "11", "b\"abc\"", "b\"abc\"^#1:*expr.Constant_BytesValue#", "", "",
+        "11", "b\"abc\"", "b\"abc\"^#1:*expr.Constant_BYTES_VALUE#", "", "",
       },
       new String[] {
-        "12", "23.39", "23.39^#1:*expr.Constant_DoubleValue#", "", "",
+        "12", "23.39", "23.39^#1:*expr.Constant_DOUBLE_VALUE#", "", "",
       },
       new String[] {
         "13",
         "!a",
-        "!_(\n" + "  a^#2:*expr.Expr_IdentExpr#\n" + ")^#1:*expr.Expr_CallExpr#",
+        "!_(\n" + "  a^#2:*expr.Expr_IDENT_EXPR#\n" + ")^#1:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
       new String[] {
-        "14", "null", "null^#1:*expr.Constant_NullValue#", "", "",
+        "14", "null", "null^#1:*expr.Constant_NULL_VALUE#", "", "",
       },
       new String[] {
-        "15", "a", "a^#1:*expr.Expr_IdentExpr#", "", "",
+        "15", "a", "a^#1:*expr.Expr_IDENT_EXPR#", "", "",
       },
       new String[] {
         "16",
         "a?b:c",
         "_?_:_(\n"
-            + "  a^#1:*expr.Expr_IdentExpr#,\n"
-            + "  b^#3:*expr.Expr_IdentExpr#,\n"
-            + "  c^#4:*expr.Expr_IdentExpr#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "  a^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "  b^#3:*expr.Expr_IDENT_EXPR#,\n"
+            + "  c^#4:*expr.Expr_IDENT_EXPR#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -116,9 +116,9 @@ class TestParser {
         "17",
         "a || b",
         "_||_(\n"
-            + "  a^#1:*expr.Expr_IdentExpr#,\n"
-            + "  b^#2:*expr.Expr_IdentExpr#\n"
-            + ")^#3:*expr.Expr_CallExpr#",
+            + "  a^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "  b^#2:*expr.Expr_IDENT_EXPR#\n"
+            + ")^#3:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -128,19 +128,19 @@ class TestParser {
         "_||_(\n"
             + "  _||_(\n"
             + "    _||_(\n"
-            + "      a^#1:*expr.Expr_IdentExpr#,\n"
-            + "      b^#2:*expr.Expr_IdentExpr#\n"
-            + "    )^#3:*expr.Expr_CallExpr#,\n"
-            + "    c^#4:*expr.Expr_IdentExpr#\n"
-            + "  )^#5:*expr.Expr_CallExpr#,\n"
+            + "      a^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "      b^#2:*expr.Expr_IDENT_EXPR#\n"
+            + "    )^#3:*expr.Expr_CALL_EXPR#,\n"
+            + "    c^#4:*expr.Expr_IDENT_EXPR#\n"
+            + "  )^#5:*expr.Expr_CALL_EXPR#,\n"
             + "  _||_(\n"
             + "    _||_(\n"
-            + "      d^#6:*expr.Expr_IdentExpr#,\n"
-            + "      e^#8:*expr.Expr_IdentExpr#\n"
-            + "    )^#9:*expr.Expr_CallExpr#,\n"
-            + "    f^#10:*expr.Expr_IdentExpr#\n"
-            + "  )^#11:*expr.Expr_CallExpr#\n"
-            + ")^#7:*expr.Expr_CallExpr#",
+            + "      d^#6:*expr.Expr_IDENT_EXPR#,\n"
+            + "      e^#8:*expr.Expr_IDENT_EXPR#\n"
+            + "    )^#9:*expr.Expr_CALL_EXPR#,\n"
+            + "    f^#10:*expr.Expr_IDENT_EXPR#\n"
+            + "  )^#11:*expr.Expr_CALL_EXPR#\n"
+            + ")^#7:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -148,9 +148,9 @@ class TestParser {
         "19",
         "a && b",
         "_&&_(\n"
-            + "  a^#1:*expr.Expr_IdentExpr#,\n"
-            + "  b^#2:*expr.Expr_IdentExpr#\n"
-            + ")^#3:*expr.Expr_CallExpr#",
+            + "  a^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "  b^#2:*expr.Expr_IDENT_EXPR#\n"
+            + ")^#3:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -160,22 +160,22 @@ class TestParser {
         "_&&_(\n"
             + "  _&&_(\n"
             + "    _&&_(\n"
-            + "      a^#1:*expr.Expr_IdentExpr#,\n"
-            + "      b^#2:*expr.Expr_IdentExpr#\n"
-            + "    )^#3:*expr.Expr_CallExpr#,\n"
+            + "      a^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "      b^#2:*expr.Expr_IDENT_EXPR#\n"
+            + "    )^#3:*expr.Expr_CALL_EXPR#,\n"
             + "    _&&_(\n"
-            + "      c^#4:*expr.Expr_IdentExpr#,\n"
-            + "      d^#6:*expr.Expr_IdentExpr#\n"
-            + "    )^#7:*expr.Expr_CallExpr#\n"
-            + "  )^#5:*expr.Expr_CallExpr#,\n"
+            + "      c^#4:*expr.Expr_IDENT_EXPR#,\n"
+            + "      d^#6:*expr.Expr_IDENT_EXPR#\n"
+            + "    )^#7:*expr.Expr_CALL_EXPR#\n"
+            + "  )^#5:*expr.Expr_CALL_EXPR#,\n"
             + "  _&&_(\n"
             + "    _&&_(\n"
-            + "      e^#8:*expr.Expr_IdentExpr#,\n"
-            + "      f^#10:*expr.Expr_IdentExpr#\n"
-            + "    )^#11:*expr.Expr_CallExpr#,\n"
-            + "    g^#12:*expr.Expr_IdentExpr#\n"
-            + "  )^#13:*expr.Expr_CallExpr#\n"
-            + ")^#9:*expr.Expr_CallExpr#",
+            + "      e^#8:*expr.Expr_IDENT_EXPR#,\n"
+            + "      f^#10:*expr.Expr_IDENT_EXPR#\n"
+            + "    )^#11:*expr.Expr_CALL_EXPR#,\n"
+            + "    g^#12:*expr.Expr_IDENT_EXPR#\n"
+            + "  )^#13:*expr.Expr_CALL_EXPR#\n"
+            + ")^#9:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -185,25 +185,25 @@ class TestParser {
         "_||_(\n"
             + "  _&&_(\n"
             + "    _&&_(\n"
-            + "      a^#1:*expr.Expr_IdentExpr#,\n"
-            + "      b^#2:*expr.Expr_IdentExpr#\n"
-            + "    )^#3:*expr.Expr_CallExpr#,\n"
+            + "      a^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "      b^#2:*expr.Expr_IDENT_EXPR#\n"
+            + "    )^#3:*expr.Expr_CALL_EXPR#,\n"
             + "    _&&_(\n"
-            + "      c^#4:*expr.Expr_IdentExpr#,\n"
-            + "      d^#6:*expr.Expr_IdentExpr#\n"
-            + "    )^#7:*expr.Expr_CallExpr#\n"
-            + "  )^#5:*expr.Expr_CallExpr#,\n"
+            + "      c^#4:*expr.Expr_IDENT_EXPR#,\n"
+            + "      d^#6:*expr.Expr_IDENT_EXPR#\n"
+            + "    )^#7:*expr.Expr_CALL_EXPR#\n"
+            + "  )^#5:*expr.Expr_CALL_EXPR#,\n"
             + "  _&&_(\n"
             + "    _&&_(\n"
-            + "      e^#8:*expr.Expr_IdentExpr#,\n"
-            + "      f^#9:*expr.Expr_IdentExpr#\n"
-            + "    )^#10:*expr.Expr_CallExpr#,\n"
+            + "      e^#8:*expr.Expr_IDENT_EXPR#,\n"
+            + "      f^#9:*expr.Expr_IDENT_EXPR#\n"
+            + "    )^#10:*expr.Expr_CALL_EXPR#,\n"
             + "    _&&_(\n"
-            + "      g^#11:*expr.Expr_IdentExpr#,\n"
-            + "      h^#13:*expr.Expr_IdentExpr#\n"
-            + "    )^#14:*expr.Expr_CallExpr#\n"
-            + "  )^#12:*expr.Expr_CallExpr#\n"
-            + ")^#15:*expr.Expr_CallExpr#",
+            + "      g^#11:*expr.Expr_IDENT_EXPR#,\n"
+            + "      h^#13:*expr.Expr_IDENT_EXPR#\n"
+            + "    )^#14:*expr.Expr_CALL_EXPR#\n"
+            + "  )^#12:*expr.Expr_CALL_EXPR#\n"
+            + ")^#15:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -211,9 +211,9 @@ class TestParser {
         "22",
         "a + b",
         "_+_(\n"
-            + "  a^#1:*expr.Expr_IdentExpr#,\n"
-            + "  b^#3:*expr.Expr_IdentExpr#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "  a^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "  b^#3:*expr.Expr_IDENT_EXPR#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -221,9 +221,9 @@ class TestParser {
         "23",
         "a - b",
         "_-_(\n"
-            + "  a^#1:*expr.Expr_IdentExpr#,\n"
-            + "  b^#3:*expr.Expr_IdentExpr#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "  a^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "  b^#3:*expr.Expr_IDENT_EXPR#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -231,9 +231,9 @@ class TestParser {
         "24",
         "a * b",
         "_*_(\n"
-            + "  a^#1:*expr.Expr_IdentExpr#,\n"
-            + "  b^#3:*expr.Expr_IdentExpr#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "  a^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "  b^#3:*expr.Expr_IDENT_EXPR#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -241,9 +241,9 @@ class TestParser {
         "25",
         "a / b",
         "_/_(\n"
-            + "  a^#1:*expr.Expr_IdentExpr#,\n"
-            + "  b^#3:*expr.Expr_IdentExpr#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "  a^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "  b^#3:*expr.Expr_IDENT_EXPR#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -251,9 +251,9 @@ class TestParser {
         "26",
         "a % b",
         "_%_(\n"
-            + "  a^#1:*expr.Expr_IdentExpr#,\n"
-            + "  b^#3:*expr.Expr_IdentExpr#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "  a^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "  b^#3:*expr.Expr_IDENT_EXPR#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -261,9 +261,9 @@ class TestParser {
         "27",
         "a in b",
         "@in(\n"
-            + "  a^#1:*expr.Expr_IdentExpr#,\n"
-            + "  b^#3:*expr.Expr_IdentExpr#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "  a^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "  b^#3:*expr.Expr_IDENT_EXPR#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -271,9 +271,9 @@ class TestParser {
         "28",
         "a == b",
         "_==_(\n"
-            + "  a^#1:*expr.Expr_IdentExpr#,\n"
-            + "  b^#3:*expr.Expr_IdentExpr#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "  a^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "  b^#3:*expr.Expr_IDENT_EXPR#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -281,9 +281,9 @@ class TestParser {
         "29",
         "a != b",
         "_!=_(\n"
-            + "  a^#1:*expr.Expr_IdentExpr#,\n"
-            + "  b^#3:*expr.Expr_IdentExpr#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "  a^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "  b^#3:*expr.Expr_IDENT_EXPR#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -291,9 +291,9 @@ class TestParser {
         "30",
         "a > b",
         "_>_(\n"
-            + "  a^#1:*expr.Expr_IdentExpr#,\n"
-            + "  b^#3:*expr.Expr_IdentExpr#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "  a^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "  b^#3:*expr.Expr_IDENT_EXPR#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -301,9 +301,9 @@ class TestParser {
         "31",
         "a >= b",
         "_>=_(\n"
-            + "  a^#1:*expr.Expr_IdentExpr#,\n"
-            + "  b^#3:*expr.Expr_IdentExpr#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "  a^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "  b^#3:*expr.Expr_IDENT_EXPR#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -311,9 +311,9 @@ class TestParser {
         "32",
         "a < b",
         "_<_(\n"
-            + "  a^#1:*expr.Expr_IdentExpr#,\n"
-            + "  b^#3:*expr.Expr_IdentExpr#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "  a^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "  b^#3:*expr.Expr_IDENT_EXPR#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -321,19 +321,19 @@ class TestParser {
         "33",
         "a <= b",
         "_<=_(\n"
-            + "  a^#1:*expr.Expr_IdentExpr#,\n"
-            + "  b^#3:*expr.Expr_IdentExpr#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "  a^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "  b^#3:*expr.Expr_IDENT_EXPR#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
       new String[] {
-        "34", "a.b", "a^#1:*expr.Expr_IdentExpr#.b^#2:*expr.Expr_SelectExpr#", "", "",
+        "34", "a.b", "a^#1:*expr.Expr_IDENT_EXPR#.b^#2:*expr.Expr_SELECT_EXPR#", "", "",
       },
       new String[] {
         "35",
         "a.b.c",
-        "a^#1:*expr.Expr_IdentExpr#.b^#2:*expr.Expr_SelectExpr#.c^#3:*expr.Expr_SelectExpr#",
+        "a^#1:*expr.Expr_IDENT_EXPR#.b^#2:*expr.Expr_SELECT_EXPR#.c^#3:*expr.Expr_SELECT_EXPR#",
         "",
         "",
       },
@@ -341,21 +341,21 @@ class TestParser {
         "36",
         "a[b]",
         "_[_](\n"
-            + "  a^#1:*expr.Expr_IdentExpr#,\n"
-            + "  b^#3:*expr.Expr_IdentExpr#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "  a^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "  b^#3:*expr.Expr_IDENT_EXPR#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
       new String[] {
-        "37", "foo{ }", "foo{}^#2:*expr.Expr_StructExpr#", "", "",
+        "37", "foo{ }", "foo{}^#2:*expr.Expr_STRUCT_EXPR#", "", "",
       },
       new String[] {
         "38",
         "foo{ a:b }",
         "foo{\n"
-            + "  a:b^#4:*expr.Expr_IdentExpr#^#3:*expr.Expr_CreateStruct_Entry#\n"
-            + "}^#2:*expr.Expr_StructExpr#",
+            + "  a:b^#4:*expr.Expr_IDENT_EXPR#^#3:*expr.Expr_CreateStruct_Entry#\n"
+            + "}^#2:*expr.Expr_STRUCT_EXPR#",
         "",
         "",
       },
@@ -363,55 +363,59 @@ class TestParser {
         "39",
         "foo{ a:b, c:d }",
         "foo{\n"
-            + "  a:b^#4:*expr.Expr_IdentExpr#^#3:*expr.Expr_CreateStruct_Entry#,\n"
-            + "  c:d^#6:*expr.Expr_IdentExpr#^#5:*expr.Expr_CreateStruct_Entry#\n"
-            + "}^#2:*expr.Expr_StructExpr#",
+            + "  a:b^#4:*expr.Expr_IDENT_EXPR#^#3:*expr.Expr_CreateStruct_Entry#,\n"
+            + "  c:d^#6:*expr.Expr_IDENT_EXPR#^#5:*expr.Expr_CreateStruct_Entry#\n"
+            + "}^#2:*expr.Expr_STRUCT_EXPR#",
         "",
         "",
       },
       new String[] {
-        "40", "{}", "{}^#1:*expr.Expr_StructExpr#", "", "",
+        "40", "{}", "{}^#1:*expr.Expr_STRUCT_EXPR#", "", "",
       },
       new String[] {
         "41",
         "{a:b, c:d}",
         "{\n"
-            + "  a^#3:*expr.Expr_IdentExpr#:b^#4:*expr.Expr_IdentExpr#^#2:*expr.Expr_CreateStruct_Entry#,\n"
-            + "  c^#6:*expr.Expr_IdentExpr#:d^#7:*expr.Expr_IdentExpr#^#5:*expr.Expr_CreateStruct_Entry#\n"
-            + "}^#1:*expr.Expr_StructExpr#",
+            + "  a^#3:*expr.Expr_IDENT_EXPR#:b^#4:*expr.Expr_IDENT_EXPR#^#2:*expr.Expr_CreateStruct_Entry#,\n"
+            + "  c^#6:*expr.Expr_IDENT_EXPR#:d^#7:*expr.Expr_IDENT_EXPR#^#5:*expr.Expr_CreateStruct_Entry#\n"
+            + "}^#1:*expr.Expr_STRUCT_EXPR#",
         "",
         "",
       },
       new String[] {
-        "42", "[]", "[]^#1:*expr.Expr_ListExpr#", "", "",
+        "42", "[]", "[]^#1:*expr.Expr_LIST_EXPR#", "", "",
       },
       new String[] {
-        "43", "[a]", "[\n" + "  a^#2:*expr.Expr_IdentExpr#\n" + "]^#1:*expr.Expr_ListExpr#", "", "",
+        "43",
+        "[a]",
+        "[\n" + "  a^#2:*expr.Expr_IDENT_EXPR#\n" + "]^#1:*expr.Expr_LIST_EXPR#",
+        "",
+        "",
       },
       new String[] {
         "44",
         "[a, b, c]",
         "[\n"
-            + "  a^#2:*expr.Expr_IdentExpr#,\n"
-            + "  b^#3:*expr.Expr_IdentExpr#,\n"
-            + "  c^#4:*expr.Expr_IdentExpr#\n"
-            + "]^#1:*expr.Expr_ListExpr#",
+            + "  a^#2:*expr.Expr_IDENT_EXPR#,\n"
+            + "  b^#3:*expr.Expr_IDENT_EXPR#,\n"
+            + "  c^#4:*expr.Expr_IDENT_EXPR#\n"
+            + "]^#1:*expr.Expr_LIST_EXPR#",
         "",
         "",
       },
       new String[] {
-        "45", "(a)", "a^#1:*expr.Expr_IdentExpr#", "", "",
+        "45", "(a)", "a^#1:*expr.Expr_IDENT_EXPR#", "", "",
       },
       new String[] {
-        "46", "((a))", "a^#1:*expr.Expr_IdentExpr#", "", "",
+        "46", "((a))", "a^#1:*expr.Expr_IDENT_EXPR#", "", "",
       },
       new String[] {
-        "47", "a()", "a()^#1:*expr.Expr_CallExpr#", "", "",
+        "47", "a()", "a()^#1:*expr.Expr_CALL_EXPR#", "", "",
       },
       new String[] {
         "48",
         "a(b)",
-        "a(\n" + "  b^#2:*expr.Expr_IdentExpr#\n" + ")^#1:*expr.Expr_CallExpr#",
+        "a(\n" + "  b^#2:*expr.Expr_IDENT_EXPR#\n" + ")^#1:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -419,21 +423,21 @@ class TestParser {
         "49",
         "a(b, c)",
         "a(\n"
-            + "  b^#2:*expr.Expr_IdentExpr#,\n"
-            + "  c^#3:*expr.Expr_IdentExpr#\n"
-            + ")^#1:*expr.Expr_CallExpr#",
+            + "  b^#2:*expr.Expr_IDENT_EXPR#,\n"
+            + "  c^#3:*expr.Expr_IDENT_EXPR#\n"
+            + ")^#1:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
       new String[] {
-        "50", "a.b()", "a^#1:*expr.Expr_IdentExpr#.b()^#2:*expr.Expr_CallExpr#", "", "",
+        "50", "a.b()", "a^#1:*expr.Expr_IDENT_EXPR#.b()^#2:*expr.Expr_CALL_EXPR#", "", "",
       },
       new String[] {
         "51",
         "a.b(c)",
-        "a^#1:*expr.Expr_IdentExpr#.b(\n"
-            + "  c^#3:*expr.Expr_IdentExpr#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+        "a^#1:*expr.Expr_IDENT_EXPR#.b(\n"
+            + "  c^#3:*expr.Expr_IDENT_EXPR#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "a^#1[1,0]#.b(\n" + "  c^#3[1,4]#\n" + ")^#2[1,3]#",
       },
@@ -470,7 +474,7 @@ class TestParser {
       new String[] {
         "54",
         "has(m.f)",
-        "m^#2:*expr.Expr_IdentExpr#.f~test-only~^#4:*expr.Expr_SelectExpr#",
+        "m^#2:*expr.Expr_IDENT_EXPR#.f~test-only~^#4:*expr.Expr_SELECT_EXPR#",
         "",
         "m^#2[1,4]#.f~test-only~^#4[1,3]#",
       },
@@ -481,27 +485,27 @@ class TestParser {
             + "  // Variable\n"
             + "  v,\n"
             + "  // Target\n"
-            + "  m^#1:*expr.Expr_IdentExpr#,\n"
+            + "  m^#1:*expr.Expr_IDENT_EXPR#,\n"
             + "  // Accumulator\n"
             + "  __result__,\n"
             + "  // Init\n"
-            + "  0^#5:*expr.Constant_Int64Value#,\n"
+            + "  0^#5:*expr.Constant_INT64_VALUE#,\n"
             + "  // LoopCondition\n"
-            + "  true^#7:*expr.Constant_BoolValue#,\n"
+            + "  true^#7:*expr.Constant_BOOL_VALUE#,\n"
             + "  // LoopStep\n"
             + "  _?_:_(\n"
-            + "    f^#4:*expr.Expr_IdentExpr#,\n"
+            + "    f^#4:*expr.Expr_IDENT_EXPR#,\n"
             + "    _+_(\n"
-            + "      __result__^#8:*expr.Expr_IdentExpr#,\n"
-            + "      1^#6:*expr.Constant_Int64Value#\n"
-            + "    )^#9:*expr.Expr_CallExpr#,\n"
-            + "    __result__^#10:*expr.Expr_IdentExpr#\n"
-            + "  )^#11:*expr.Expr_CallExpr#,\n"
+            + "      __result__^#8:*expr.Expr_IDENT_EXPR#,\n"
+            + "      1^#6:*expr.Constant_INT64_VALUE#\n"
+            + "    )^#9:*expr.Expr_CALL_EXPR#,\n"
+            + "    __result__^#10:*expr.Expr_IDENT_EXPR#\n"
+            + "  )^#11:*expr.Expr_CALL_EXPR#,\n"
             + "  // Result\n"
             + "  _==_(\n"
-            + "    __result__^#12:*expr.Expr_IdentExpr#,\n"
-            + "    1^#6:*expr.Constant_Int64Value#\n"
-            + "  )^#13:*expr.Expr_CallExpr#)^#14:*expr.Expr_ComprehensionExpr#",
+            + "    __result__^#12:*expr.Expr_IDENT_EXPR#,\n"
+            + "    1^#6:*expr.Constant_INT64_VALUE#\n"
+            + "  )^#13:*expr.Expr_CALL_EXPR#)^#14:*expr.Expr_COMPREHENSION_EXPR#",
         "",
         "",
       },
@@ -512,22 +516,22 @@ class TestParser {
             + "  // Variable\n"
             + "  v,\n"
             + "  // Target\n"
-            + "  m^#1:*expr.Expr_IdentExpr#,\n"
+            + "  m^#1:*expr.Expr_IDENT_EXPR#,\n"
             + "  // Accumulator\n"
             + "  __result__,\n"
             + "  // Init\n"
-            + "  []^#6:*expr.Expr_ListExpr#,\n"
+            + "  []^#6:*expr.Expr_LIST_EXPR#,\n"
             + "  // LoopCondition\n"
-            + "  true^#7:*expr.Constant_BoolValue#,\n"
+            + "  true^#7:*expr.Constant_BOOL_VALUE#,\n"
             + "  // LoopStep\n"
             + "  _+_(\n"
-            + "    __result__^#5:*expr.Expr_IdentExpr#,\n"
+            + "    __result__^#5:*expr.Expr_IDENT_EXPR#,\n"
             + "    [\n"
-            + "      f^#4:*expr.Expr_IdentExpr#\n"
-            + "    ]^#8:*expr.Expr_ListExpr#\n"
-            + "  )^#9:*expr.Expr_CallExpr#,\n"
+            + "      f^#4:*expr.Expr_IDENT_EXPR#\n"
+            + "    ]^#8:*expr.Expr_LIST_EXPR#\n"
+            + "  )^#9:*expr.Expr_CALL_EXPR#,\n"
             + "  // Result\n"
-            + "  __result__^#5:*expr.Expr_IdentExpr#)^#10:*expr.Expr_ComprehensionExpr#",
+            + "  __result__^#5:*expr.Expr_IDENT_EXPR#)^#10:*expr.Expr_COMPREHENSION_EXPR#",
         "",
         "",
       },
@@ -538,26 +542,26 @@ class TestParser {
             + "  // Variable\n"
             + "  v,\n"
             + "  // Target\n"
-            + "  m^#1:*expr.Expr_IdentExpr#,\n"
+            + "  m^#1:*expr.Expr_IDENT_EXPR#,\n"
             + "  // Accumulator\n"
             + "  __result__,\n"
             + "  // Init\n"
-            + "  []^#7:*expr.Expr_ListExpr#,\n"
+            + "  []^#7:*expr.Expr_LIST_EXPR#,\n"
             + "  // LoopCondition\n"
-            + "  true^#8:*expr.Constant_BoolValue#,\n"
+            + "  true^#8:*expr.Constant_BOOL_VALUE#,\n"
             + "  // LoopStep\n"
             + "  _?_:_(\n"
-            + "    p^#4:*expr.Expr_IdentExpr#,\n"
+            + "    p^#4:*expr.Expr_IDENT_EXPR#,\n"
             + "    _+_(\n"
-            + "      __result__^#6:*expr.Expr_IdentExpr#,\n"
+            + "      __result__^#6:*expr.Expr_IDENT_EXPR#,\n"
             + "      [\n"
-            + "        f^#5:*expr.Expr_IdentExpr#\n"
-            + "      ]^#9:*expr.Expr_ListExpr#\n"
-            + "    )^#10:*expr.Expr_CallExpr#,\n"
-            + "    __result__^#6:*expr.Expr_IdentExpr#\n"
-            + "  )^#11:*expr.Expr_CallExpr#,\n"
+            + "        f^#5:*expr.Expr_IDENT_EXPR#\n"
+            + "      ]^#9:*expr.Expr_LIST_EXPR#\n"
+            + "    )^#10:*expr.Expr_CALL_EXPR#,\n"
+            + "    __result__^#6:*expr.Expr_IDENT_EXPR#\n"
+            + "  )^#11:*expr.Expr_CALL_EXPR#,\n"
             + "  // Result\n"
-            + "  __result__^#6:*expr.Expr_IdentExpr#)^#12:*expr.Expr_ComprehensionExpr#",
+            + "  __result__^#6:*expr.Expr_IDENT_EXPR#)^#12:*expr.Expr_COMPREHENSION_EXPR#",
         "",
         "",
       },
@@ -568,26 +572,26 @@ class TestParser {
             + "  // Variable\n"
             + "  v,\n"
             + "  // Target\n"
-            + "  m^#1:*expr.Expr_IdentExpr#,\n"
+            + "  m^#1:*expr.Expr_IDENT_EXPR#,\n"
             + "  // Accumulator\n"
             + "  __result__,\n"
             + "  // Init\n"
-            + "  []^#6:*expr.Expr_ListExpr#,\n"
+            + "  []^#6:*expr.Expr_LIST_EXPR#,\n"
             + "  // LoopCondition\n"
-            + "  true^#7:*expr.Constant_BoolValue#,\n"
+            + "  true^#7:*expr.Constant_BOOL_VALUE#,\n"
             + "  // LoopStep\n"
             + "  _?_:_(\n"
-            + "    p^#4:*expr.Expr_IdentExpr#,\n"
+            + "    p^#4:*expr.Expr_IDENT_EXPR#,\n"
             + "    _+_(\n"
-            + "      __result__^#5:*expr.Expr_IdentExpr#,\n"
+            + "      __result__^#5:*expr.Expr_IDENT_EXPR#,\n"
             + "      [\n"
-            + "        v^#3:*expr.Expr_IdentExpr#\n"
-            + "      ]^#8:*expr.Expr_ListExpr#\n"
-            + "    )^#9:*expr.Expr_CallExpr#,\n"
-            + "    __result__^#5:*expr.Expr_IdentExpr#\n"
-            + "  )^#10:*expr.Expr_CallExpr#,\n"
+            + "        v^#3:*expr.Expr_IDENT_EXPR#\n"
+            + "      ]^#8:*expr.Expr_LIST_EXPR#\n"
+            + "    )^#9:*expr.Expr_CALL_EXPR#,\n"
+            + "    __result__^#5:*expr.Expr_IDENT_EXPR#\n"
+            + "  )^#10:*expr.Expr_CALL_EXPR#,\n"
             + "  // Result\n"
-            + "  __result__^#5:*expr.Expr_IdentExpr#)^#11:*expr.Expr_ComprehensionExpr#",
+            + "  __result__^#5:*expr.Expr_IDENT_EXPR#)^#11:*expr.Expr_COMPREHENSION_EXPR#",
         "",
         "",
       },
@@ -595,9 +599,9 @@ class TestParser {
         "59",
         "x * 2",
         "_*_(\n"
-            + "  x^#1:*expr.Expr_IdentExpr#,\n"
-            + "  2^#3:*expr.Constant_Int64Value#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "  x^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "  2^#3:*expr.Constant_INT64_VALUE#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -605,9 +609,9 @@ class TestParser {
         "60",
         "x * 2u",
         "_*_(\n"
-            + "  x^#1:*expr.Expr_IdentExpr#,\n"
-            + "  2u^#3:*expr.Constant_Uint64Value#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "  x^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "  2u^#3:*expr.Constant_UINT64_VALUE#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -615,38 +619,38 @@ class TestParser {
         "61",
         "x * 2.0",
         "_*_(\n"
-            + "  x^#1:*expr.Expr_IdentExpr#,\n"
-            + "  2^#3:*expr.Constant_DoubleValue#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "  x^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "  2^#3:*expr.Constant_DOUBLE_VALUE#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
       new String[] {
-        "62", "\"\\u2764\"", "\"❤\"^#1:*expr.Constant_StringValue#", "", "",
+        "62", "\"\\u2764\"", "\"❤\"^#1:*expr.Constant_STRING_VALUE#", "", "",
       },
       new String[] {
-        "63", "\"❤\"", "\"❤\"^#1:*expr.Constant_StringValue#", "", "",
+        "63", "\"❤\"", "\"❤\"^#1:*expr.Constant_STRING_VALUE#", "", "",
       },
       new String[] {
         "64",
         "! false",
-        "!_(\n" + "  false^#2:*expr.Constant_BoolValue#\n" + ")^#1:*expr.Expr_CallExpr#",
+        "!_(\n" + "  false^#2:*expr.Constant_BOOL_VALUE#\n" + ")^#1:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
       new String[] {
         "65",
         "-a",
-        "-_(\n" + "  a^#2:*expr.Expr_IdentExpr#\n" + ")^#1:*expr.Expr_CallExpr#",
+        "-_(\n" + "  a^#2:*expr.Expr_IDENT_EXPR#\n" + ")^#1:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
       new String[] {
         "66",
         "a.b(5)",
-        "a^#1:*expr.Expr_IdentExpr#.b(\n"
-            + "  5^#3:*expr.Constant_Int64Value#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+        "a^#1:*expr.Expr_IDENT_EXPR#.b(\n"
+            + "  5^#3:*expr.Constant_INT64_VALUE#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -654,9 +658,9 @@ class TestParser {
         "67",
         "a[3]",
         "_[_](\n"
-            + "  a^#1:*expr.Expr_IdentExpr#,\n"
-            + "  3^#3:*expr.Constant_Int64Value#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "  a^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "  3^#3:*expr.Constant_INT64_VALUE#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -664,9 +668,9 @@ class TestParser {
         "68",
         "SomeMessage{foo: 5, bar: \"xyz\"}",
         "SomeMessage{\n"
-            + "  foo:5^#4:*expr.Constant_Int64Value#^#3:*expr.Expr_CreateStruct_Entry#,\n"
-            + "  bar:\"xyz\"^#6:*expr.Constant_StringValue#^#5:*expr.Expr_CreateStruct_Entry#\n"
-            + "}^#2:*expr.Expr_StructExpr#",
+            + "  foo:5^#4:*expr.Constant_INT64_VALUE#^#3:*expr.Expr_CreateStruct_Entry#,\n"
+            + "  bar:\"xyz\"^#6:*expr.Constant_STRING_VALUE#^#5:*expr.Expr_CreateStruct_Entry#\n"
+            + "}^#2:*expr.Expr_STRUCT_EXPR#",
         "",
         "",
       },
@@ -674,10 +678,10 @@ class TestParser {
         "69",
         "[3, 4, 5]",
         "[\n"
-            + "  3^#2:*expr.Constant_Int64Value#,\n"
-            + "  4^#3:*expr.Constant_Int64Value#,\n"
-            + "  5^#4:*expr.Constant_Int64Value#\n"
-            + "]^#1:*expr.Expr_ListExpr#",
+            + "  3^#2:*expr.Constant_INT64_VALUE#,\n"
+            + "  4^#3:*expr.Constant_INT64_VALUE#,\n"
+            + "  5^#4:*expr.Constant_INT64_VALUE#\n"
+            + "]^#1:*expr.Expr_LIST_EXPR#",
         "",
         "",
       },
@@ -685,10 +689,10 @@ class TestParser {
         "70",
         "[3, 4, 5,]",
         "[\n"
-            + "  3^#2:*expr.Constant_Int64Value#,\n"
-            + "  4^#3:*expr.Constant_Int64Value#,\n"
-            + "  5^#4:*expr.Constant_Int64Value#\n"
-            + "]^#1:*expr.Expr_ListExpr#",
+            + "  3^#2:*expr.Constant_INT64_VALUE#,\n"
+            + "  4^#3:*expr.Constant_INT64_VALUE#,\n"
+            + "  5^#4:*expr.Constant_INT64_VALUE#\n"
+            + "]^#1:*expr.Expr_LIST_EXPR#",
         "",
         "",
       },
@@ -696,9 +700,9 @@ class TestParser {
         "71",
         "{foo: 5, bar: \"xyz\"}",
         "{\n"
-            + "  foo^#3:*expr.Expr_IdentExpr#:5^#4:*expr.Constant_Int64Value#^#2:*expr.Expr_CreateStruct_Entry#,\n"
-            + "  bar^#6:*expr.Expr_IdentExpr#:\"xyz\"^#7:*expr.Constant_StringValue#^#5:*expr.Expr_CreateStruct_Entry#\n"
-            + "}^#1:*expr.Expr_StructExpr#",
+            + "  foo^#3:*expr.Expr_IDENT_EXPR#:5^#4:*expr.Constant_INT64_VALUE#^#2:*expr.Expr_CreateStruct_Entry#,\n"
+            + "  bar^#6:*expr.Expr_IDENT_EXPR#:\"xyz\"^#7:*expr.Constant_STRING_VALUE#^#5:*expr.Expr_CreateStruct_Entry#\n"
+            + "}^#1:*expr.Expr_STRUCT_EXPR#",
         "",
         "",
       },
@@ -706,9 +710,9 @@ class TestParser {
         "72",
         "{foo: 5, bar: \"xyz\", }",
         "{\n"
-            + "  foo^#3:*expr.Expr_IdentExpr#:5^#4:*expr.Constant_Int64Value#^#2:*expr.Expr_CreateStruct_Entry#,\n"
-            + "  bar^#6:*expr.Expr_IdentExpr#:\"xyz\"^#7:*expr.Constant_StringValue#^#5:*expr.Expr_CreateStruct_Entry#\n"
-            + "}^#1:*expr.Expr_StructExpr#",
+            + "  foo^#3:*expr.Expr_IDENT_EXPR#:5^#4:*expr.Constant_INT64_VALUE#^#2:*expr.Expr_CreateStruct_Entry#,\n"
+            + "  bar^#6:*expr.Expr_IDENT_EXPR#:\"xyz\"^#7:*expr.Constant_STRING_VALUE#^#5:*expr.Expr_CreateStruct_Entry#\n"
+            + "}^#1:*expr.Expr_STRUCT_EXPR#",
         "",
         "",
       },
@@ -717,14 +721,14 @@ class TestParser {
         "a > 5 && a < 10",
         "_&&_(\n"
             + "  _>_(\n"
-            + "    a^#1:*expr.Expr_IdentExpr#,\n"
-            + "    5^#3:*expr.Constant_Int64Value#\n"
-            + "  )^#2:*expr.Expr_CallExpr#,\n"
+            + "    a^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "    5^#3:*expr.Constant_INT64_VALUE#\n"
+            + "  )^#2:*expr.Expr_CALL_EXPR#,\n"
             + "  _<_(\n"
-            + "    a^#4:*expr.Expr_IdentExpr#,\n"
-            + "    10^#6:*expr.Constant_Int64Value#\n"
-            + "  )^#5:*expr.Expr_CallExpr#\n"
-            + ")^#7:*expr.Expr_CallExpr#",
+            + "    a^#4:*expr.Expr_IDENT_EXPR#,\n"
+            + "    10^#6:*expr.Constant_INT64_VALUE#\n"
+            + "  )^#5:*expr.Expr_CALL_EXPR#\n"
+            + ")^#7:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -733,14 +737,14 @@ class TestParser {
         "a < 5 || a > 10",
         "_||_(\n"
             + "  _<_(\n"
-            + "    a^#1:*expr.Expr_IdentExpr#,\n"
-            + "    5^#3:*expr.Constant_Int64Value#\n"
-            + "  )^#2:*expr.Expr_CallExpr#,\n"
+            + "    a^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "    5^#3:*expr.Constant_INT64_VALUE#\n"
+            + "  )^#2:*expr.Expr_CALL_EXPR#,\n"
             + "  _>_(\n"
-            + "    a^#4:*expr.Expr_IdentExpr#,\n"
-            + "    10^#6:*expr.Constant_Int64Value#\n"
-            + "  )^#5:*expr.Expr_CallExpr#\n"
-            + ")^#7:*expr.Expr_CallExpr#",
+            + "    a^#4:*expr.Expr_IDENT_EXPR#,\n"
+            + "    10^#6:*expr.Constant_INT64_VALUE#\n"
+            + "  )^#5:*expr.Expr_CALL_EXPR#\n"
+            + ")^#7:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -758,17 +762,17 @@ class TestParser {
         "[] + [1,2,3,] + [4]",
         "_+_(\n"
             + "  _+_(\n"
-            + "    []^#1:*expr.Expr_ListExpr#,\n"
+            + "    []^#1:*expr.Expr_LIST_EXPR#,\n"
             + "    [\n"
-            + "      1^#4:*expr.Constant_Int64Value#,\n"
-            + "      2^#5:*expr.Constant_Int64Value#,\n"
-            + "      3^#6:*expr.Constant_Int64Value#\n"
-            + "    ]^#3:*expr.Expr_ListExpr#\n"
-            + "  )^#2:*expr.Expr_CallExpr#,\n"
+            + "      1^#4:*expr.Constant_INT64_VALUE#,\n"
+            + "      2^#5:*expr.Constant_INT64_VALUE#,\n"
+            + "      3^#6:*expr.Constant_INT64_VALUE#\n"
+            + "    ]^#3:*expr.Expr_LIST_EXPR#\n"
+            + "  )^#2:*expr.Expr_CALL_EXPR#,\n"
             + "  [\n"
-            + "    4^#9:*expr.Constant_Int64Value#\n"
-            + "  ]^#8:*expr.Expr_ListExpr#\n"
-            + ")^#7:*expr.Expr_CallExpr#",
+            + "    4^#9:*expr.Constant_INT64_VALUE#\n"
+            + "  ]^#8:*expr.Expr_LIST_EXPR#\n"
+            + ")^#7:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -776,9 +780,9 @@ class TestParser {
         "77",
         "{1:2u, 2:3u}",
         "{\n"
-            + "  1^#3:*expr.Constant_Int64Value#:2u^#4:*expr.Constant_Uint64Value#^#2:*expr.Expr_CreateStruct_Entry#,\n"
-            + "  2^#6:*expr.Constant_Int64Value#:3u^#7:*expr.Constant_Uint64Value#^#5:*expr.Expr_CreateStruct_Entry#\n"
-            + "}^#1:*expr.Expr_StructExpr#",
+            + "  1^#3:*expr.Constant_INT64_VALUE#:2u^#4:*expr.Constant_UINT64_VALUE#^#2:*expr.Expr_CreateStruct_Entry#,\n"
+            + "  2^#6:*expr.Constant_INT64_VALUE#:3u^#7:*expr.Constant_UINT64_VALUE#^#5:*expr.Expr_CreateStruct_Entry#\n"
+            + "}^#1:*expr.Expr_STRUCT_EXPR#",
         "",
         "",
       },
@@ -786,9 +790,9 @@ class TestParser {
         "78",
         "TestAllTypes{single_int32: 1, single_int64: 2}",
         "TestAllTypes{\n"
-            + "  single_int32:1^#4:*expr.Constant_Int64Value#^#3:*expr.Expr_CreateStruct_Entry#,\n"
-            + "  single_int64:2^#6:*expr.Constant_Int64Value#^#5:*expr.Expr_CreateStruct_Entry#\n"
-            + "}^#2:*expr.Expr_StructExpr#",
+            + "  single_int32:1^#4:*expr.Constant_INT64_VALUE#^#3:*expr.Expr_CreateStruct_Entry#,\n"
+            + "  single_int64:2^#6:*expr.Constant_INT64_VALUE#^#5:*expr.Expr_CreateStruct_Entry#\n"
+            + "}^#2:*expr.Expr_STRUCT_EXPR#",
         "",
         "",
       },
@@ -806,10 +810,10 @@ class TestParser {
         "size(x) == x.size()",
         "_==_(\n"
             + "  size(\n"
-            + "    x^#2:*expr.Expr_IdentExpr#\n"
-            + "  )^#1:*expr.Expr_CallExpr#,\n"
-            + "  x^#4:*expr.Expr_IdentExpr#.size()^#5:*expr.Expr_CallExpr#\n"
-            + ")^#3:*expr.Expr_CallExpr#",
+            + "    x^#2:*expr.Expr_IDENT_EXPR#\n"
+            + "  )^#1:*expr.Expr_CALL_EXPR#,\n"
+            + "  x^#4:*expr.Expr_IDENT_EXPR#.size()^#5:*expr.Expr_CALL_EXPR#\n"
+            + ")^#3:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -835,19 +839,19 @@ class TestParser {
         "",
       },
       new String[] {
-        "83", "\"\\\"\"", "\"\\\"\"^#1:*expr.Constant_StringValue#", "", "",
+        "83", "\"\\\"\"", "\"\\\"\"^#1:*expr.Constant_STRING_VALUE#", "", "",
       },
       new String[] {
         "84",
         "[1,3,4][0]",
         "_[_](\n"
             + "  [\n"
-            + "    1^#2:*expr.Constant_Int64Value#,\n"
-            + "    3^#3:*expr.Constant_Int64Value#,\n"
-            + "    4^#4:*expr.Constant_Int64Value#\n"
-            + "  ]^#1:*expr.Expr_ListExpr#,\n"
-            + "  0^#6:*expr.Constant_Int64Value#\n"
-            + ")^#5:*expr.Expr_CallExpr#",
+            + "    1^#2:*expr.Constant_INT64_VALUE#,\n"
+            + "    3^#3:*expr.Constant_INT64_VALUE#,\n"
+            + "    4^#4:*expr.Constant_INT64_VALUE#\n"
+            + "  ]^#1:*expr.Expr_LIST_EXPR#,\n"
+            + "  0^#6:*expr.Constant_INT64_VALUE#\n"
+            + ")^#5:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -863,11 +867,11 @@ class TestParser {
         "x[\"a\"].single_int32 == 23",
         "_==_(\n"
             + "  _[_](\n"
-            + "    x^#1:*expr.Expr_IdentExpr#,\n"
-            + "    \"a\"^#3:*expr.Constant_StringValue#\n"
-            + "  )^#2:*expr.Expr_CallExpr#.single_int32^#4:*expr.Expr_SelectExpr#,\n"
-            + "  23^#6:*expr.Constant_Int64Value#\n"
-            + ")^#5:*expr.Expr_CallExpr#",
+            + "    x^#1:*expr.Expr_IDENT_EXPR#,\n"
+            + "    \"a\"^#3:*expr.Constant_STRING_VALUE#\n"
+            + "  )^#2:*expr.Expr_CALL_EXPR#.single_int32^#4:*expr.Expr_SELECT_EXPR#,\n"
+            + "  23^#6:*expr.Constant_INT64_VALUE#\n"
+            + ")^#5:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -875,9 +879,9 @@ class TestParser {
         "87",
         "x.single_nested_message != null",
         "_!=_(\n"
-            + "  x^#1:*expr.Expr_IdentExpr#.single_nested_message^#2:*expr.Expr_SelectExpr#,\n"
-            + "  null^#4:*expr.Constant_NullValue#\n"
-            + ")^#3:*expr.Expr_CallExpr#",
+            + "  x^#1:*expr.Expr_IDENT_EXPR#.single_nested_message^#2:*expr.Expr_SELECT_EXPR#,\n"
+            + "  null^#4:*expr.Constant_NULL_VALUE#\n"
+            + ")^#3:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -887,16 +891,16 @@ class TestParser {
         "_?_:_(\n"
             + "  _||_(\n"
             + "    _&&_(\n"
-            + "      false^#1:*expr.Constant_BoolValue#,\n"
+            + "      false^#1:*expr.Constant_BOOL_VALUE#,\n"
             + "      !_(\n"
-            + "        true^#3:*expr.Constant_BoolValue#\n"
-            + "      )^#2:*expr.Expr_CallExpr#\n"
-            + "    )^#4:*expr.Expr_CallExpr#,\n"
-            + "    false^#5:*expr.Constant_BoolValue#\n"
-            + "  )^#6:*expr.Expr_CallExpr#,\n"
-            + "  2^#8:*expr.Constant_Int64Value#,\n"
-            + "  3^#9:*expr.Constant_Int64Value#\n"
-            + ")^#7:*expr.Expr_CallExpr#",
+            + "        true^#3:*expr.Constant_BOOL_VALUE#\n"
+            + "      )^#2:*expr.Expr_CALL_EXPR#\n"
+            + "    )^#4:*expr.Expr_CALL_EXPR#,\n"
+            + "    false^#5:*expr.Constant_BOOL_VALUE#\n"
+            + "  )^#6:*expr.Expr_CALL_EXPR#,\n"
+            + "  2^#8:*expr.Constant_INT64_VALUE#,\n"
+            + "  3^#9:*expr.Constant_INT64_VALUE#\n"
+            + ")^#7:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -904,9 +908,9 @@ class TestParser {
         "89",
         "b\"abc\" + B\"def\"",
         "_+_(\n"
-            + "  b\"abc\"^#1:*expr.Constant_BytesValue#,\n"
-            + "  b\"def\"^#3:*expr.Constant_BytesValue#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "  b\"abc\"^#1:*expr.Constant_BYTES_VALUE#,\n"
+            + "  b\"def\"^#3:*expr.Constant_BYTES_VALUE#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -916,22 +920,22 @@ class TestParser {
         "_==_(\n"
             + "  _-_(\n"
             + "    _+_(\n"
-            + "      1^#1:*expr.Constant_Int64Value#,\n"
+            + "      1^#1:*expr.Constant_INT64_VALUE#,\n"
             + "      _*_(\n"
-            + "        2^#3:*expr.Constant_Int64Value#,\n"
-            + "        3^#5:*expr.Constant_Int64Value#\n"
-            + "      )^#4:*expr.Expr_CallExpr#\n"
-            + "    )^#2:*expr.Expr_CallExpr#,\n"
+            + "        2^#3:*expr.Constant_INT64_VALUE#,\n"
+            + "        3^#5:*expr.Constant_INT64_VALUE#\n"
+            + "      )^#4:*expr.Expr_CALL_EXPR#\n"
+            + "    )^#2:*expr.Expr_CALL_EXPR#,\n"
             + "    _/_(\n"
-            + "      1^#7:*expr.Constant_Int64Value#,\n"
-            + "      2^#9:*expr.Constant_Int64Value#\n"
-            + "    )^#8:*expr.Expr_CallExpr#\n"
-            + "  )^#6:*expr.Expr_CallExpr#,\n"
+            + "      1^#7:*expr.Constant_INT64_VALUE#,\n"
+            + "      2^#9:*expr.Constant_INT64_VALUE#\n"
+            + "    )^#8:*expr.Expr_CALL_EXPR#\n"
+            + "  )^#6:*expr.Expr_CALL_EXPR#,\n"
             + "  _%_(\n"
-            + "    6^#11:*expr.Constant_Int64Value#,\n"
-            + "    1^#13:*expr.Constant_Int64Value#\n"
-            + "  )^#12:*expr.Expr_CallExpr#\n"
-            + ")^#10:*expr.Expr_CallExpr#",
+            + "    6^#11:*expr.Constant_INT64_VALUE#,\n"
+            + "    1^#13:*expr.Constant_INT64_VALUE#\n"
+            + "  )^#12:*expr.Expr_CALL_EXPR#\n"
+            + ")^#10:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -951,9 +955,9 @@ class TestParser {
         "92",
         "\"abc\" + \"def\"",
         "_+_(\n"
-            + "  \"abc\"^#1:*expr.Constant_StringValue#,\n"
-            + "  \"def\"^#3:*expr.Constant_StringValue#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "  \"abc\"^#1:*expr.Constant_STRING_VALUE#,\n"
+            + "  \"def\"^#3:*expr.Constant_STRING_VALUE#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -967,21 +971,25 @@ class TestParser {
         "",
       },
       new String[] {
-        "94", "\"\\xC3\\XBF\"", "\"Ã¿\"^#1:*expr.Constant_StringValue#", "", "",
+        "94", "\"\\xC3\\XBF\"", "\"Ã¿\"^#1:*expr.Constant_STRING_VALUE#", "", "",
       },
       new String[] {
-        "95", "\"\\303\\277\"", "\"Ã¿\"^#1:*expr.Constant_StringValue#", "", "",
+        "95", "\"\\303\\277\"", "\"Ã¿\"^#1:*expr.Constant_STRING_VALUE#", "", "",
       },
       new String[] {
-        "96", "\"hi\\u263A \\u263Athere\"", "\"hi☺ ☺there\"^#1:*expr.Constant_StringValue#", "", "",
+        "96",
+        "\"hi\\u263A \\u263Athere\"",
+        "\"hi☺ ☺there\"^#1:*expr.Constant_STRING_VALUE#",
+        "",
+        "",
       },
       new String[] {
-        "97", "\"\\U000003A8\\?\"", "\"Ψ?\"^#1:*expr.Constant_StringValue#", "", "",
+        "97", "\"\\U000003A8\\?\"", "\"Ψ?\"^#1:*expr.Constant_STRING_VALUE#", "", "",
       },
       new String[] {
         "98",
         "\"\\a\\b\\f\\n\\r\\t\\v'\\\"\\\\\\? Legal escapes\"",
-        "\"\\a\\b\\f\\n\\r\\t\\v'\\\"\\\\? Legal escapes\"^#1:*expr.Constant_StringValue#",
+        "\"\\a\\b\\f\\n\\r\\t\\v'\\\"\\\\? Legal escapes\"^#1:*expr.Constant_STRING_VALUE#",
         "",
         "",
       },
@@ -1019,13 +1027,13 @@ class TestParser {
         "101",
         "\"😁\" in [\"😁\", \"😑\", \"😦\"]",
         "@in(\n"
-            + "  \"😁\"^#1:*expr.Constant_StringValue#,\n"
+            + "  \"😁\"^#1:*expr.Constant_STRING_VALUE#,\n"
             + "  [\n"
-            + "    \"😁\"^#4:*expr.Constant_StringValue#,\n"
-            + "    \"😑\"^#5:*expr.Constant_StringValue#,\n"
-            + "    \"😦\"^#6:*expr.Constant_StringValue#\n"
-            + "  ]^#3:*expr.Expr_ListExpr#\n"
-            + ")^#2:*expr.Expr_CallExpr#",
+            + "    \"😁\"^#4:*expr.Constant_STRING_VALUE#,\n"
+            + "    \"😑\"^#5:*expr.Constant_STRING_VALUE#,\n"
+            + "    \"😦\"^#6:*expr.Constant_STRING_VALUE#\n"
+            + "  ]^#3:*expr.Expr_LIST_EXPR#\n"
+            + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
       },
@@ -1296,22 +1304,23 @@ class TestParser {
   @ParameterizedTest
   @MethodSource("testCases")
   void parseTest(String num, String i, String p, String e, String l) {
-    Parser parser = new Parser(Options.builder().macros(Macro.AllMacros).build());
     Source src = Source.newTextSource(i);
-    ParseResult parseResult = parser.parse(src);
+    ParseResult parseResult = Parser.parseAllMacros(src);
 
-    String actualErr = parseResult.errors.toDisplayString();
+    String actualErr = parseResult.getErrors().toDisplayString();
     assertThat(actualErr).isEqualTo(e);
     // Hint for my future self and others: if the above "isEqualTo" fails but the strings look
     // similar,
     // look into the char[] representation... unicode can be very surprising.
 
-    String actualWithKind = Debug.toAdornedDebugString(parseResult.expr, new KindAndIdAdorner());
+    String actualWithKind =
+        Debug.toAdornedDebugString(parseResult.getExpr(), new KindAndIdAdorner());
     assertThat(actualWithKind).isEqualTo(p);
 
     if (!l.isEmpty()) {
       String actualWithLocation =
-          Debug.toAdornedDebugString(parseResult.expr, new LocationAdorner(parseResult.sourceInfo));
+          Debug.toAdornedDebugString(
+              parseResult.getExpr(), new LocationAdorner(parseResult.getSourceInfo()));
       assertThat(actualWithLocation).isEqualTo(l);
     }
   }
@@ -1333,18 +1342,12 @@ class TestParser {
             Options.builder().macros(Macro.AllMacros).expressionSizeCodePointLimit(2).build());
     Source src = Source.newTextSource("foo");
     ParseResult parseResult = p.parse(src);
-    assertThat(parseResult.errors.getErrors())
+    assertThat(parseResult.getErrors().getErrors())
         .containsExactly(
             new Error(
                 Location.newLocation(-1, -1),
                 "expression code point size exceeds limit: size: 3, limit 2"));
   }
-
-  interface Metadata {
-    Location getLocation(long exprID);
-  }
-
-  //  var _ metadata = &locationAdorner{}
 
   static class KindAndIdAdorner implements Debug.Adorner {
 
@@ -1352,15 +1355,15 @@ class TestParser {
     public String getMetadata(Object elem) {
       if (elem instanceof Expr) {
         Expr e = (Expr) elem;
-        if (e instanceof Const) {
+        if (e.getExprKindCase() == ExprKindCase.CONST_EXPR) {
           return String.format(
-              "^#%d:*expr.Constant_%s#", e.id, ((Const) e).value.getClass().getSimpleName());
+              "^#%d:*expr.Constant_%s#", e.getId(), e.getConstExpr().getConstantKindCase().name());
         } else {
-          return String.format("^#%d:*expr.Expr_%s#", e.id, e.getClass().getSimpleName());
+          return String.format("^#%d:*expr.Expr_%s#", e.getId(), e.getExprKindCase().name());
         }
-      } else if (elem instanceof StructExpr.Entry) {
-        StructExpr.Entry entry = (StructExpr.Entry) elem;
-        return String.format("^#%d:%s#", entry.id, "*expr.Expr_CreateStruct_Entry");
+      } else if (elem instanceof Entry) {
+        Entry entry = (Entry) elem;
+        return String.format("^#%d:%s#", entry.getId(), "*expr.Expr_CreateStruct_Entry");
       }
       return "";
     }
@@ -1374,10 +1377,10 @@ class TestParser {
     }
 
     public Location getLocation(long exprID) {
-      long pos = sourceInfo.getPosition(exprID);
+      long pos = sourceInfo.getPositionsOrDefault(exprID, -1);
       if (pos >= 0) {
         int line = 1;
-        for (int lineOffset : sourceInfo.getLineOffsets()) {
+        for (int lineOffset : sourceInfo.getLineOffsetsList()) {
           if (lineOffset > pos) {
             break;
           } else {
@@ -1386,7 +1389,7 @@ class TestParser {
         }
         long column = pos;
         if (line > 1) {
-          column = pos - sourceInfo.getLineOffset(line - 2);
+          column = pos - sourceInfo.getLineOffsets(line - 2);
         }
         return Location.newLocation(line, (int) column);
       }
@@ -1397,9 +1400,9 @@ class TestParser {
     public String getMetadata(Object elem) {
       long elemID;
       if (elem instanceof Expr) {
-        elemID = ((Expr) elem).id;
-      } else if (elem instanceof StructExpr.Entry) {
-        elemID = ((StructExpr.Entry) elem).id;
+        elemID = ((Expr) elem).getId();
+      } else if (elem instanceof Entry) {
+        elemID = ((Entry) elem).getId();
       } else {
         throw new IllegalArgumentException(elem.getClass().getName());
       }

@@ -20,8 +20,8 @@ import static org.projectnessie.cel.common.types.DurationT.DurationType;
 import static org.projectnessie.cel.common.types.DurationT.durationOf;
 import static org.projectnessie.cel.common.types.Err.errDurationOverflow;
 import static org.projectnessie.cel.common.types.Err.errTimestampOverflow;
-import static org.projectnessie.cel.common.types.Err.newErr;
-import static org.projectnessie.cel.common.types.Err.valOrErr;
+import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
+import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.IntT.IntNegOne;
 import static org.projectnessie.cel.common.types.IntT.IntOne;
 import static org.projectnessie.cel.common.types.IntT.IntType;
@@ -31,14 +31,26 @@ import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.TypeValue.TypeType;
 
+import com.google.protobuf.Any;
+import com.google.protobuf.Timestamp;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.temporal.ChronoField;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
+import java.util.TimeZone;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import org.projectnessie.cel.common.types.Overflow.OverflowException;
@@ -134,6 +146,12 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
     return timestampOf(inst);
   }
 
+  public static TimestampT timestampOf(Timestamp t) {
+    LocalDateTime ldt = LocalDateTime.ofEpochSecond(t.getSeconds(), t.getNanos(), ZoneOffset.UTC);
+    ZonedDateTime zdt = ZonedDateTime.of(ldt, ZoneIdZ);
+    return new TimestampT(zdt);
+  }
+
   public static TimestampT timestampOf(ZonedDateTime t) {
     // Note that this function does not valiate that time.Time is in our supported range.
     return new TimestampT(t);
@@ -145,14 +163,14 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
     if (other.type() == DurationType) {
       return ((DurationT) other).add(this);
     }
-    return valOrErr(other, "no such overload");
+    return noSuchOverload(this, "add", other);
   }
 
   /** Compare implements traits.Comparer.Compare. */
   @Override
   public Val compare(Val other) {
     if (TimestampType != other.type()) {
-      return valOrErr(other, "no such overload");
+      return noSuchOverload(this, "compare", other);
     }
     ZonedDateTime ts1 = t;
     ZonedDateTime ts2 = ((TimestampT) other).t;
@@ -166,8 +184,47 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
   }
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
+  @SuppressWarnings("unchecked")
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
+    if (typeDesc == ZonedDateTime.class) {
+      return (T) t;
+    }
+    if (typeDesc == Date.class) {
+      return (T) new Date(toEpochMillis());
+    }
+    if (typeDesc == Calendar.class) {
+      Calendar c = Calendar.getInstance(TimeZone.getTimeZone(ZoneIdZ.getId()));
+      c.setTimeInMillis(toEpochMillis());
+      return (T) c;
+    }
+    if (typeDesc == OffsetDateTime.class) {
+      return (T) t.toOffsetDateTime();
+    }
+    if (typeDesc == LocalDateTime.class) {
+      return (T) t.toLocalDateTime();
+    }
+    if (typeDesc == LocalDate.class) {
+      return (T) t.toLocalDate();
+    }
+    if (typeDesc == LocalTime.class) {
+      return (T) t.toLocalTime();
+    }
+
+    if (typeDesc == Any.class) {
+      return (T) Any.pack(toPbTimestamp());
+    }
+    if (typeDesc == Timestamp.class || typeDesc == Object.class) {
+      return (T) toPbTimestamp();
+    }
+
+    if (typeDesc == Val.class || typeDesc == TimestampT.class) {
+      return (T) this;
+    }
+
+    //    if (typeDesc == Value.class) { // jsonValueType
+    //      return (T) StringValue.of(jsonFormatter().format(t));
+    //    }
     //		// If the timestamp is already assignable to the desired type return it.
     //		if reflect.TypeOf(t.Time).AssignableTo(typeDesc) {
     //			return t.Time, nil
@@ -176,9 +233,6 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
     //			return t, nil
     //		}
     //		switch typeDesc {
-    //		case anyValueType:
-    //			// Pack the underlying time as a tpb.Timestamp into an Any value.
-    //			return anypb.New(tpb.New(t.Time))
     //		case jsonValueType:
     //			// CEL follows the proto3 to JSON conversion which formats as an RFC 3339 encoded JSON
     //			// string.
@@ -194,6 +248,15 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
     throw new RuntimeException(
         String.format(
             "native type conversion error from '%s' to '%s'", TimestampType, typeDesc.getName()));
+  }
+
+  private long toEpochMillis() {
+    return TimeUnit.SECONDS.toMillis(t.toEpochSecond())
+        + TimeUnit.NANOSECONDS.toMillis(t.getNano());
+  }
+
+  private Timestamp toPbTimestamp() {
+    return Timestamp.newBuilder().setSeconds(t.toEpochSecond()).setNanos(t.getNano()).build();
   }
 
   /** ConvertToType implements ref.Val.ConvertToType. */
@@ -213,8 +276,11 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
     if (typeValue == TypeType) {
       return TimestampType;
     }
-    return newErr("type conversion error from '%s' to '%s'", TimestampType, typeValue);
+    return newTypeConversionError(TimestampType, typeValue);
   }
+
+  private static final DateTimeFormatterBuilder jsonFormatterBuilder =
+      new DateTimeFormatterBuilder().appendPattern("yyyy-MM-dd'T'HH:mm:ss'Z'");
 
   private static final DateTimeFormatterBuilder rfc3339nanoFormatterBuilder =
       new DateTimeFormatterBuilder()
@@ -225,6 +291,10 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
           .optionalEnd()
           .appendPattern("XXX");
 
+  static DateTimeFormatter jsonFormatter() {
+    return jsonFormatterBuilder.toFormatter();
+  }
+
   static DateTimeFormatter rfc3339nanoFormatter() {
     return rfc3339nanoFormatterBuilder.toFormatter();
   }
@@ -233,7 +303,7 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
   @Override
   public Val equal(Val other) {
     if (TimestampType != other.type()) {
-      return Err.maybeNoSuchOverloadErr(other);
+      return noSuchOverload(this, "equal", other);
     }
     return boolOf(t.equals(((TimestampT) other).t));
   }
@@ -255,7 +325,7 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
         }
         break;
     }
-    return newErr("no such overload");
+    return noSuchOverload(this, function, overload, args);
   }
 
   /** Subtract implements traits.Subtractor.Subtract. */
@@ -277,7 +347,7 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
         return errDurationOverflow;
       }
     }
-    return valOrErr(other, "no such overload");
+    return noSuchOverload(this, "subtract", other);
   }
 
   /** Type implements ref.Val.Type. */
@@ -290,6 +360,23 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
   @Override
   public Object value() {
     return t;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    TimestampT that = (TimestampT) o;
+    return Objects.equals(t, that.t);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(super.hashCode(), t);
   }
 
   static Val timestampGetFullYear(ZonedDateTime t) {
@@ -376,7 +463,7 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
 
   private static Val timeZone(Val tz, Function<ZonedDateTime, Val> funct, ZonedDateTime t) {
     if (tz.type() != StringType) {
-      return valOrErr(tz, "no such overload");
+      return noSuchOverload(TimestampType, "_op_with_timezone", tz);
     }
     String val = (String) tz.value();
     try {

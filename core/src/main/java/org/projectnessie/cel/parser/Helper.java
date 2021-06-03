@@ -15,104 +15,132 @@
  */
 package org.projectnessie.cel.parser;
 
+import com.google.api.expr.v1alpha1.Constant;
+import com.google.api.expr.v1alpha1.Expr;
+import com.google.api.expr.v1alpha1.Expr.Builder;
+import com.google.api.expr.v1alpha1.Expr.Call;
+import com.google.api.expr.v1alpha1.Expr.Comprehension;
+import com.google.api.expr.v1alpha1.Expr.CreateList;
+import com.google.api.expr.v1alpha1.Expr.CreateStruct;
+import com.google.api.expr.v1alpha1.Expr.CreateStruct.Entry;
+import com.google.api.expr.v1alpha1.Expr.Ident;
+import com.google.api.expr.v1alpha1.Expr.Select;
+import com.google.api.expr.v1alpha1.SourceInfo;
+import com.google.protobuf.ByteString;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
-import org.agrona.collections.Long2LongHashMap;
+import java.util.Map;
 import org.agrona.collections.LongArrayList;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.Token;
 import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.Source;
-import org.projectnessie.cel.pb.Constant;
-import org.projectnessie.cel.pb.Expr;
-import org.projectnessie.cel.pb.Expr.StructExpr;
-import org.projectnessie.cel.pb.SourceInfo;
 
 final class Helper {
   private final Source source;
-  private final Long2LongHashMap positions;
+  private final Map<Long, Integer> positions;
   private long nextID;
 
   Helper(Source source) {
     this.source = source;
     this.nextID = 1;
-    this.positions = new Long2LongHashMap(-1);
+    this.positions = new HashMap<>();
   }
 
   SourceInfo getSourceInfo() {
-    return new SourceInfo(source.description(), positions, source.lineOffsets());
+    return SourceInfo.newBuilder()
+        .setLocation(source.description())
+        .putAllPositions(positions)
+        .addAllLineOffsets(source.lineOffsets())
+        .build();
   }
 
-  Expr newError(Object ctx) {
-    return Expr.error(newExprId(ctx));
-  }
-
-  Expr newLiteral(Object ctx, Constant value) {
-    return Expr.constExpr(newExprId(ctx), value);
+  Expr newLiteral(Object ctx, Constant.Builder value) {
+    return newExprBuilder(ctx).setConstExpr(value).build();
   }
 
   Expr newLiteralBool(Object ctx, boolean value) {
-    return newLiteral(ctx, Constant.boolValue(value));
+    return newLiteral(ctx, Constant.newBuilder().setBoolValue(value));
   }
 
   Expr newLiteralString(Object ctx, String value) {
-    return newLiteral(ctx, Constant.stringValue(value));
+    return newLiteral(ctx, Constant.newBuilder().setStringValue(value));
   }
 
   Expr newLiteralBytes(Object ctx, byte[] value) {
-    return newLiteral(ctx, Constant.bytesValue(value));
+    return newLiteral(ctx, Constant.newBuilder().setBytesValue(ByteString.copyFrom(value)));
   }
 
   Expr newLiteralInt(Object ctx, long value) {
-    return newLiteral(ctx, Constant.int64Value(value));
+    return newLiteral(ctx, Constant.newBuilder().setInt64Value(value));
   }
 
   Expr newLiteralUint(Object ctx, long value) {
-    return newLiteral(ctx, Constant.uint64Value(value));
+    return newLiteral(ctx, Constant.newBuilder().setUint64Value(value));
   }
 
   Expr newLiteralDouble(Object ctx, double value) {
-    return newLiteral(ctx, Constant.doubleValue(value));
+    return newLiteral(ctx, Constant.newBuilder().setDoubleValue(value));
   }
 
   Expr newIdent(Object ctx, String name) {
-    return Expr.ident(newExprId(ctx), name);
+    return newExprBuilder(ctx).setIdentExpr(Ident.newBuilder().setName(name)).build();
   }
 
   Expr newSelect(Object ctx, Expr operand, String field) {
-    return Expr.select(newExprId(ctx), operand, field, false);
+    return newExprBuilder(ctx)
+        .setSelectExpr(Select.newBuilder().setOperand(operand).setField(field))
+        .build();
   }
 
   Expr newPresenceTest(Object ctx, Expr operand, String field) {
-    return Expr.select(newExprId(ctx), operand, field, true);
+    return newExprBuilder(ctx)
+        .setSelectExpr(Select.newBuilder().setOperand(operand).setField(field).setTestOnly(true))
+        .build();
   }
 
   Expr newGlobalCall(Object ctx, String function, Expr... args) {
-    return Expr.call(newExprId(ctx), function, null, args);
+    return newGlobalCall(ctx, function, Arrays.asList(args));
   }
 
-  Expr newReceiverCall(Object ctx, String function, Expr target, Expr... args) {
-    return Expr.call(newExprId(ctx), function, target, args);
+  Expr newGlobalCall(Object ctx, String function, List<Expr> args) {
+    return newExprBuilder(ctx)
+        .setCallExpr(Call.newBuilder().setFunction(function).addAllArgs(args))
+        .build();
   }
 
-  Expr newList(Object ctx, Expr... elements) {
-    return Expr.list(newExprId(ctx), elements);
+  Expr newReceiverCall(Object ctx, String function, Expr target, List<Expr> args) {
+    return newExprBuilder(ctx)
+        .setCallExpr(Call.newBuilder().setFunction(function).setTarget(target).addAllArgs(args))
+        .build();
   }
 
-  Expr newMap(Object ctx, StructExpr.Entry... entries) {
-    return Expr.structExpr(newExprId(ctx), null, entries);
+  Expr newList(Object ctx, List<Expr> elements) {
+    return newExprBuilder(ctx)
+        .setListExpr(CreateList.newBuilder().addAllElements(elements))
+        .build();
   }
 
-  StructExpr.Entry newMapEntry(long entryID, Expr key, Expr value) {
-    return Expr.createStructEntry(entryID, Expr.createStructMapKey(key), value);
+  Expr newMap(Object ctx, List<Entry> entries) {
+    return newExprBuilder(ctx)
+        .setStructExpr(CreateStruct.newBuilder().addAllEntries(entries))
+        .build();
   }
 
-  Expr newObject(Object ctx, String typeName, StructExpr.Entry... entries) {
-    return Expr.structExpr(newExprId(ctx), typeName, entries);
+  Entry newMapEntry(long entryID, Expr key, Expr value) {
+    return Entry.newBuilder().setId(entryID).setMapKey(key).setValue(value).build();
   }
 
-  StructExpr.Entry newObjectField(long fieldID, String field, Expr value) {
-    return Expr.createStructEntry(fieldID, Expr.createStructFieldKey(field), value);
+  Expr newObject(Object ctx, String typeName, List<Entry> entries) {
+    return newExprBuilder(ctx)
+        .setStructExpr(CreateStruct.newBuilder().setMessageName(typeName).addAllEntries(entries))
+        .build();
+  }
+
+  Entry newObjectField(long fieldID, String field, Expr value) {
+    return Entry.newBuilder().setId(fieldID).setFieldKey(field).setValue(value).build();
   }
 
   Expr newComprehension(
@@ -124,16 +152,27 @@ final class Helper {
       Expr condition,
       Expr step,
       Expr result) {
-    return Expr.comprehensionExpr(
-        newExprId(ctx), accuVar, accuInit, iterVar, iterRange, condition, step, result);
+    return newExprBuilder(ctx)
+        .setComprehensionExpr(
+            Comprehension.newBuilder()
+                .setAccuVar(accuVar)
+                .setAccuInit(accuInit)
+                .setIterVar(iterVar)
+                .setIterRange(iterRange)
+                .setLoopCondition(condition)
+                .setLoopStep(step)
+                .setResult(result)
+                .build())
+        .build();
   }
 
-  long newExprId(Object ctx) {
-    if (ctx instanceof Long) {
-      return (Long) ctx;
-    } else {
-      return id(ctx);
-    }
+  Expr newExpr(Object ctx) {
+    return newExprBuilder(ctx).build();
+  }
+
+  private Builder newExprBuilder(Object ctx) {
+    long exprId = (ctx instanceof Long) ? ((Long) ctx) : id(ctx);
+    return Expr.newBuilder().setId(exprId);
   }
 
   long id(Object ctx) {
@@ -157,9 +196,8 @@ final class Helper {
   }
 
   Location getLocation(long id) {
-    int characterOffset = (int) positions.get(id);
-    Location location = source.offsetLocation(characterOffset);
-    return location;
+    int characterOffset = positions.get(id);
+    return source.offsetLocation(characterOffset);
   }
 
   // newBalancer creates a balancer instance bound to a specific function and its first term.

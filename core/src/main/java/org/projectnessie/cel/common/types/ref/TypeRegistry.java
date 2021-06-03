@@ -15,28 +15,31 @@
  */
 package org.projectnessie.cel.common.types.ref;
 
+import com.google.protobuf.Descriptors.FileDescriptor;
+import com.google.protobuf.Message;
+
 /**
  * TypeRegistry allows third-parties to add custom types to CEL. Not all `TypeProvider`
  * implementations support type-customization, so these features are optional. However, a
  * `TypeRegistry` should be a `TypeProvider` and a `TypeAdapter` to ensure that types which are
  * registered can be converted to CEL representations.
  */
-public interface TypeRegistry {}
-// public interface TypeRegistry extends TypeAdapter, TypeProvider {
-//
-//  /**RegisterDescriptor registers the contents of a protocol buffer `FileDescriptor`. */
-//  void registerDescriptor(protoreflect.FileDescriptor fileDesc),
-//
-//  /** RegisterMessage registers a protocol buffer message and its dependencies. */
-//  void RegisterMessage(proto.Message message);
-//
-//  /**RegisterType registers a type value with the provider which ensures the
-//   * provider is aware of how to map the type to an identifier.
-//   *
-//   * If a type is provided more than once with an alternative definition, the
-//   * call will result in an error. */
-//  void registerType(Type types);
-//
-//  /**Copy the TypeRegistry and return a new registry whose mutable state is isolated. */
-//  TypeRegistry copy();
-// }
+public interface TypeRegistry extends TypeAdapter, TypeProvider {
+  /** RegisterDescriptor registers the contents of a protocol buffer `FileDescriptor`. */
+  void registerDescriptor(FileDescriptor fileDesc);
+
+  /** RegisterMessage registers a protocol buffer message and its dependencies. */
+  void registerMessage(Message message);
+
+  /**
+   * RegisterType registers a type value with the provider which ensures the provider is aware of
+   * how to map the type to an identifier.
+   *
+   * <p>If a type is provided more than once with an alternative definition, the call will result in
+   * an error.
+   */
+  void registerType(Type... types);
+
+  /** Copy the TypeRegistry and return a new registry whose mutable state is isolated. */
+  TypeRegistry copy();
+}

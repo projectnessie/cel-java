@@ -14,22 +14,57 @@
  * limitations under the License.
  */
 
+import com.google.protobuf.gradle.protoc
+
 plugins {
     `java-library`
     antlr
     `maven-publish`
     id("com.diffplug.spotless")
+    id("com.google.protobuf")
+    id("me.champeau.jmh")
+}
+
+val versionAgrona = "1.10.0"
+val versionAntlr = "4.9.2"
+val versionAssertj = "3.19.0"
+val versionJmh = "1.32"
+val versionJunit = "5.7.2"
+val versionProtobuf = "3.17.3"
+
+sourceSets.named("main") {
+    java.srcDir(project.buildDir.resolve("generated/source/proto/main/java"))
+}
+sourceSets.named("test") {
+    java.srcDir(project.buildDir.resolve("generated/source/proto/test/java"))
 }
 
 dependencies {
-    antlr("org.antlr:antlr4:4.9.2") // TODO remove from runtime-classpath *sigh*
-    implementation("org.antlr:antlr4-runtime:4.9.2")
+    antlr("org.antlr:antlr4:$versionAntlr") // TODO remove from runtime-classpath *sigh*
+    implementation("org.antlr:antlr4-runtime:$versionAntlr")
 
-    implementation("com.google.protobuf:protobuf-java:3.17.1")
-    implementation("org.agrona:agrona:1.10.0")
+    implementation("com.google.protobuf:protobuf-java:$versionProtobuf")
+    implementation("org.agrona:agrona:$versionAgrona")
 
-    testImplementation("org.assertj:assertj-core:3.19.0")
-    testImplementation("org.junit.jupiter:junit-jupiter-api:5.7.2")
-    testImplementation("org.junit.jupiter:junit-jupiter-params:5.7.2")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.7.2")
+    testImplementation("org.assertj:assertj-core:$versionAssertj")
+    testImplementation("org.junit.jupiter:junit-jupiter-api:$versionJunit")
+    testImplementation("org.junit.jupiter:junit-jupiter-params:$versionJunit")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:$versionJunit")
+
+    jmhImplementation("org.openjdk.jmh:jmh-core:$versionJmh")
+    jmhAnnotationProcessor("org.openjdk.jmh:jmh-generator-annprocess:$versionJmh")
+}
+
+// *.proto files taken from https://github.com/googleapis/googleapis/ repo
+protobuf {
+    // Configure the protoc executable
+    protobuf.protoc {
+        // Download from repositories
+        artifact = "com.google.protobuf:protoc:3.0.0"
+    }
+//    protobuf.generatedFilesBaseDir = project.buildDir.resolve("generated-src/protobuf").toString()
+}
+
+jmh {
+    jmhVersion.set(versionJmh)
 }

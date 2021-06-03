@@ -142,18 +142,18 @@ public class Unescape {
               case 'u':
                 nHex = 4;
                 if (isBytes) {
-                  throw new IllegalArgumentException("unable to unescape string");
+                  throw unableToUnescapeString();
                 }
                 break;
               case 'U':
                 nHex = 8;
                 if (isBytes) {
-                  throw new IllegalArgumentException("unable to unescape string");
+                  throw unableToUnescapeString();
                 }
                 break;
             }
             if (n - nHex < i) {
-              throw new IllegalArgumentException("unable to unescape string");
+              throw unableToUnescapeString();
             }
             int v = 0;
             for (int j = 0; j < nHex; j++) {
@@ -161,7 +161,7 @@ public class Unescape {
               c = value.charAt(i);
               int nib = unhex(c);
               if (nib == -1) {
-                throw new IllegalArgumentException("unable to unescape string");
+                throw unableToUnescapeString();
               }
               v = (v << 4) | nib;
             }
@@ -174,14 +174,14 @@ public class Unescape {
           case '2':
           case '3':
             if (n - 3 < i) {
-              throw new IllegalArgumentException("unable to unescape octal sequence in string");
+              throw unableToUnescapeOctalSequence();
             }
             v = (c - '0');
             for (int j = 0; j < 2; j++) {
               i++;
               c = value.charAt(i);
               if (c < '0' || c > '7') {
-                throw new IllegalArgumentException("unable to unescape octal sequence in string");
+                throw unableToUnescapeOctalSequence();
               }
               v = (v << 3) | (c - '0');
             }
@@ -190,7 +190,7 @@ public class Unescape {
 
             // Unknown escape sequence.
           default:
-            throw new IllegalArgumentException("unable to unescape string");
+            throw unableToUnescapeString();
         }
       } else {
         // not an escape sequence
@@ -210,6 +210,14 @@ public class Unescape {
     buf.flip();
     CharBuffer cb = StandardCharsets.UTF_8.decode(buf);
     return cb.toString();
+  }
+
+  private static IllegalArgumentException unableToUnescapeOctalSequence() {
+    return new IllegalArgumentException("unable to unescape octal sequence in string");
+  }
+
+  private static IllegalArgumentException unableToUnescapeString() {
+    return new IllegalArgumentException("unable to unescape string");
   }
 
   private static void unescapedChar(boolean isBytes, ByteBuffer buf, int v) {

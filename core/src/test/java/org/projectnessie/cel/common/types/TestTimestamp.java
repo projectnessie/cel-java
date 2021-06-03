@@ -30,17 +30,23 @@ import static org.projectnessie.cel.common.types.TimestampT.minUnixTime;
 import static org.projectnessie.cel.common.types.TimestampT.timestampOf;
 import static org.projectnessie.cel.common.types.TypeValue.TypeType;
 
+import com.google.protobuf.Any;
+import com.google.protobuf.StringValue;
+import com.google.protobuf.Timestamp;
+import com.google.protobuf.Value;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
+import java.util.Date;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.common.types.ref.Val;
 
 public class TestTimestamp {
 
   @Test
-  void TimestampAdd() {
+  void timestampAdd() {
     TimestampT ts = defaultTS();
     Val val =
         ts.add(
@@ -54,7 +60,7 @@ public class TestTimestamp {
     assertThat(ts.add(expected))
         .isInstanceOf(Err.class)
         .extracting(Object::toString)
-        .isEqualTo("no such overload");
+        .isEqualTo("no such overload: google.protobuf.Timestamp.add(google.protobuf.Timestamp)");
 
     ZonedDateTime max999 = Instant.ofEpochSecond(maxUnixTime, 999999999).atZone(ZoneIdZ);
     ZonedDateTime max998 = Instant.ofEpochSecond(maxUnixTime, 999999998).atZone(ZoneIdZ);
@@ -72,74 +78,50 @@ public class TestTimestamp {
         .isSameAs(True);
   }
 
-  //  @Test
-  //	void TimestampConvertToNative_Any() {
-  //		// 1970-01-01T02:05:06Z
-  //		TimestampT ts = timestampOf(Instant.ofEpochSecond(7506));
-  //		val, err := ts.ConvertToNative(anyValueType)
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		want, err := anypb.New(tpb.New(ts.Time))
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		if !proto.Equal(val.(proto.Message), want) {
-  //			t.Errorf("Got '%v', expected '%v'", val, want)
-  //		}
-  //	}
-
-  //  @Test
-  //	void TimestampConvertToNative() {
-  //		// 1970-01-01T02:05:06Z
-  //		ts := Timestamp{Time: time.Unix(7506, 0).UTC()}
-  //		val, err := ts.ConvertToNative(timestampValueType)
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		var want interface{}
-  //		want = tpb.New(ts.Time)
-  //		if !proto.Equal(val.(proto.Message), want.(proto.Message)) {
-  //			t.Errorf("Got '%v', expected '%v'", val, want)
-  //		}
-  //		val, err = ts.ConvertToNative(jsonValueType)
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		want = structpb.NewStringValue("1970-01-01T02:05:06Z")
-  //		if !proto.Equal(val.(proto.Message), want.(proto.Message)) {
-  //			t.Errorf("Got '%v', expected '%v'", val, want)
-  //		}
-  //		val, err = ts.ConvertToNative(anyValueType)
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		want, err = anypb.New(tpb.New(ts.Time))
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		if !proto.Equal(val.(proto.Message), want.(proto.Message)) {
-  //			t.Errorf("Got '%v', expected '%v'", val, want)
-  //		}
-  //		val, err = ts.ConvertToNative(reflect.TypeOf(Timestamp{}))
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		if !reflect.DeepEqual(val, ts) {
-  //			t.Errorf("got %v wanted %v", val, ts)
-  //		}
-  //		val, err = ts.ConvertToNative(reflect.TypeOf(time.Now()))
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		want = time.Unix(7506, 0).UTC()
-  //		if !reflect.DeepEqual(val, want) {
-  //			t.Errorf("got %v wanted %v", val, want)
-  //		}
-  //	}
+  @Test
+  void timestampConvertToNative_Any() {
+    // 1970-01-01T02:05:06Z
+    TimestampT ts = timestampOf(Instant.ofEpochSecond(7506).atZone(ZoneIdZ));
+    Any val = ts.convertToNative(Any.class);
+    Any want = Any.pack(Timestamp.newBuilder().setSeconds(7506).build());
+    assertThat(val).isEqualTo(want);
+  }
 
   @Test
-  void TimestampSubtract() {
+  @Disabled("IMPLEMENT ME")
+  void timestampConvertToNative_JSON() {
+    TimestampT ts = timestampOf(Instant.ofEpochSecond(7506).atZone(ZoneIdZ));
+
+    // JSON
+    Object val = ts.convertToNative(Value.class);
+    Object want = StringValue.of("1970-01-01T02:05:06Z");
+    assertThat(val).isEqualTo(want);
+  }
+
+  @Test
+  void timestampConvertToNative() {
+    // 1970-01-01T02:05:06Z
+    TimestampT ts = timestampOf(Instant.ofEpochSecond(7506).atZone(ZoneIdZ));
+
+    Object val = ts.convertToNative(Timestamp.class);
+    Object want;
+    want = Timestamp.newBuilder().setSeconds(7506).build();
+    assertThat(val).isEqualTo(want);
+
+    val = ts.convertToNative(Any.class);
+    want = Any.pack(Timestamp.newBuilder().setSeconds(7506).build());
+    assertThat(val).isEqualTo(want);
+
+    val = ts.convertToNative(ZonedDateTime.class);
+    assertThat(val).isSameAs(ts.value());
+
+    val = ts.convertToNative(Date.class);
+    want = new Date(TimeUnit.SECONDS.toMillis(7506));
+    assertThat(val).isEqualTo(want);
+  }
+
+  @Test
+  void timestampSubtract() {
     TimestampT ts = defaultTS();
     Val val = ts.subtract(durationOf(Duration.ofSeconds(3600, 1000)));
     assertThat(val.convertToType(TypeType)).isSameAs(TimestampType);
@@ -155,7 +137,7 @@ public class TestTimestamp {
   }
 
   @Test
-  void TimestampGetDayOfYear() {
+  void timestampGetDayOfYear() {
     // 1970-01-01T02:05:06Z
     TimestampT ts = timestampOf(Instant.ofEpochSecond(7506).atZone(ZoneIdZ));
     Val hr = ts.receive(Overloads.TimeGetDayOfYear, Overloads.TimestampToDayOfYear);
@@ -174,7 +156,7 @@ public class TestTimestamp {
   }
 
   @Test
-  void TimestampGetMonth() {
+  void timestampGetMonth() {
     // 1970-01-01T02:05:06Z
     TimestampT ts = defaultTS();
     Val hr = ts.receive(Overloads.TimeGetMonth, Overloads.TimestampToMonth);
@@ -187,7 +169,7 @@ public class TestTimestamp {
   }
 
   @Test
-  void TimestampGetHours() {
+  void timestampGetHours() {
     // 1970-01-01T02:05:06Z
     TimestampT ts = defaultTS();
     Val hr = ts.receive(Overloads.TimeGetHours, Overloads.TimestampToHours);
@@ -200,7 +182,7 @@ public class TestTimestamp {
   }
 
   @Test
-  void TimestampGetMinutes() {
+  void timestampGetMinutes() {
     // 1970-01-01T02:05:06Z
     TimestampT ts = defaultTS();
     Val min = ts.receive(Overloads.TimeGetMinutes, Overloads.TimestampToMinutes);
@@ -215,7 +197,7 @@ public class TestTimestamp {
   }
 
   @Test
-  void TimestampGetSeconds() {
+  void timestampGetSeconds() {
     // 1970-01-01T02:05:06Z
     TimestampT ts = defaultTS();
     Val sec = ts.receive(Overloads.TimeGetSeconds, Overloads.TimestampToSeconds);

@@ -18,15 +18,23 @@ package org.projectnessie.cel.common.types;
 import static org.projectnessie.cel.common.types.BoolT.boolOf;
 import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
+import static org.projectnessie.cel.common.types.Err.divideByZero;
 import static org.projectnessie.cel.common.types.Err.errUintOverflow;
-import static org.projectnessie.cel.common.types.Err.newErr;
-import static org.projectnessie.cel.common.types.Err.valOrErr;
+import static org.projectnessie.cel.common.types.Err.modulusByZero;
+import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
+import static org.projectnessie.cel.common.types.Err.noSuchOverload;
+import static org.projectnessie.cel.common.types.Err.rangeError;
 import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.TypeValue.TypeType;
 
+import com.google.protobuf.Any;
+import com.google.protobuf.UInt32Value;
+import com.google.protobuf.UInt64Value;
+import java.util.Objects;
+import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.Overflow.OverflowException;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
@@ -63,6 +71,10 @@ public final class UintT extends BaseVal
     this.i = i;
   }
 
+  public static UintT uintOf(ULong i) {
+    return uintOf(i.longValue());
+  }
+
   public static UintT uintOf(long i) {
     if (i == 0L) {
       return UintZero;
@@ -79,7 +91,7 @@ public final class UintT extends BaseVal
   @Override
   public Val add(Val other) {
     if (!(other instanceof UintT)) {
-      return valOrErr(other, "no such overload");
+      return noSuchOverload(this, "add", other);
     }
     try {
       return uintOf(Overflow.addUint64Checked(i, ((UintT) other).i));
@@ -92,7 +104,7 @@ public final class UintT extends BaseVal
   @Override
   public Val compare(Val other) {
     if (!(other instanceof UintT)) {
-      return valOrErr(other, "no such overload");
+      return noSuchOverload(this, "compare", other);
     }
     return intOf(Long.compareUnsigned(i, ((UintT) other).i));
   }
@@ -101,7 +113,10 @@ public final class UintT extends BaseVal
   @SuppressWarnings("unchecked")
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
-    if (typeDesc == Long.class || typeDesc == long.class) {
+    if (typeDesc == ULong.class) {
+      return (T) ULong.valueOf(i);
+    }
+    if (typeDesc == Long.class || typeDesc == long.class || typeDesc == Object.class) {
       // TODO overflow check
       return (T) Long.valueOf(i);
     }
@@ -109,15 +124,23 @@ public final class UintT extends BaseVal
       // TODO overflow check
       return (T) Integer.valueOf((int) i);
     }
+    if (typeDesc == Any.class) {
+      return (T) Any.pack(UInt64Value.of(i));
+    }
+    if (typeDesc == UInt64Value.class) {
+      return (T) UInt64Value.of(i);
+    }
+    if (typeDesc == UInt32Value.class) {
+      return (T) UInt32Value.of((int) i);
+    }
+
+    if (typeDesc == Val.class || typeDesc == UintT.class) {
+      return (T) this;
+    }
 
     //		switch typeDesc.Kind() {
-    //		case reflect.Uint, reflect.Uint32, reflect.Uint64:
-    //			return reflect.ValueOf(i).Convert(typeDesc).Interface(), nil
     //		case reflect.Ptr:
     //			switch typeDesc {
-    //			case anyValueType:
-    //				// Primitives must be wrapped before being set on an Any field.
-    //				return anypb.New(wrapperspb.UInt64(uint64(i)))
     //			case jsonValueType:
     //				// JSON can accurately represent 32-bit uints as floating point values.
     //				if i.isJSONSafe() {
@@ -126,12 +149,6 @@ public final class UintT extends BaseVal
     //				// Proto3 to JSON conversion requires string-formatted uint64 values
     //				// since the conversion to floating point would result in truncation.
     //				return structpb.NewStringValue(strconv.FormatUint(uint64(i), 10)), nil
-    //			case uint32WrapperType:
-    //				// Convert the value to a wrapperspb.UInt32Value (with truncation).
-    //				return wrapperspb.UInt32(uint32(i)), nil
-    //			case uint64WrapperType:
-    //				// Convert the value to a wrapperspb.UInt64Value.
-    //				return wrapperspb.UInt64(uint64(i)), nil
     //			}
     //			switch typeDesc.Elem().Kind() {
     //			case reflect.Uint32:
@@ -164,7 +181,7 @@ public final class UintT extends BaseVal
   public Val convertToType(Type typeValue) {
     if (typeValue == IntType) {
       if (i < 0L) {
-        return newErr("range error converting %s to int", Long.toUnsignedString(i));
+        return rangeError(Long.toUnsignedString(i), "int");
       }
       return intOf(i);
     }
@@ -174,7 +191,7 @@ public final class UintT extends BaseVal
     if (typeValue == DoubleType) {
       if (i < 0L) {
         // same restriction in Java for uint-->double as uint-->int
-        return newErr("range error converting %s to double", Long.toUnsignedString(i));
+        return rangeError(Long.toUnsignedString(i), "double");
       }
       return doubleOf((double) i);
     }
@@ -184,18 +201,18 @@ public final class UintT extends BaseVal
     if (typeValue == TypeType) {
       return UintType;
     }
-    return newErr("type conversion error from '%s' to '%s'", UintType, typeValue);
+    return newTypeConversionError(UintType, typeValue);
   }
 
   /** Divide implements traits.Divider.Divide. */
   @Override
   public Val divide(Val other) {
     if (!(other instanceof UintT)) {
-      return valOrErr(other, "no such overload");
+      return noSuchOverload(this, "divide", other);
     }
     long otherInt = ((UintT) other).i;
     if (otherInt == 0L) {
-      return newErr("divide by zero");
+      return divideByZero();
     }
     return uintOf(i / otherInt);
   }
@@ -204,7 +221,7 @@ public final class UintT extends BaseVal
   @Override
   public Val equal(Val other) {
     if (!(other instanceof UintT)) {
-      return valOrErr(other, "no such overload");
+      return noSuchOverload(this, "equal", other);
     }
     return boolOf(i == ((UintT) other).i);
   }
@@ -213,11 +230,11 @@ public final class UintT extends BaseVal
   @Override
   public Val modulo(Val other) {
     if (!(other instanceof UintT)) {
-      return valOrErr(other, "no such overload");
+      return noSuchOverload(this, "modulo", other);
     }
     long otherInt = ((UintT) other).i;
     if (otherInt == 0L) {
-      return newErr("modulus by zero");
+      return modulusByZero();
     }
     return uintOf(i % otherInt);
   }
@@ -226,7 +243,7 @@ public final class UintT extends BaseVal
   @Override
   public Val multiply(Val other) {
     if (!(other instanceof UintT)) {
-      return valOrErr(other, "no such overload");
+      return noSuchOverload(this, "multiply", other);
     }
     try {
       return uintOf(Overflow.multiplyUint64Checked(i, ((UintT) other).i));
@@ -239,7 +256,7 @@ public final class UintT extends BaseVal
   @Override
   public Val subtract(Val other) {
     if (!(other instanceof UintT)) {
-      return valOrErr(other, "no such overload");
+      return noSuchOverload(this, "subtract", other);
     }
     try {
       return uintOf(Overflow.subtractUint64Checked(i, ((UintT) other).i));
@@ -258,6 +275,23 @@ public final class UintT extends BaseVal
   @Override
   public Object value() {
     return i;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    UintT uintT = (UintT) o;
+    return i == uintT.i;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(super.hashCode(), i);
   }
 
   /**

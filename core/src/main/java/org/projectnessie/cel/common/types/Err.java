@@ -15,8 +15,11 @@
  */
 package org.projectnessie.cel.common.types;
 
+import static java.lang.String.format;
 import static org.projectnessie.cel.common.types.UnknownT.UnknownType;
 
+import java.util.Arrays;
+import java.util.stream.Collectors;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.Val;
@@ -35,8 +38,6 @@ public class Err extends BaseVal {
   public static final Val errDurationOverflow = newErr("duration overflow");
   /** errTimestampOverflow is an error representing timestamp overflow. */
   public static final Val errTimestampOverflow = newErr("timestamp overflow");
-  /** NoSuchOverloadErr returns a new types.Err instance with a no such overload message. */
-  public static final Val noSuchOverloadErr = newErr("no such overload");
 
   private final String error;
 
@@ -44,12 +45,32 @@ public class Err extends BaseVal {
     this.error = error;
   }
 
+  public static Val noSuchOverload(Val val, String function, Val other) {
+    String otName =
+        (other != null) ? ((other instanceof Type) ? (Type) other : other.type()).typeName() : "*";
+    if (val != null) {
+      Type vt = (val instanceof Type) ? (Type) val : val.type();
+      return valOrErr(other, "no such overload: %s.%s(%s)", vt.typeName(), function, otName);
+    } else {
+      return valOrErr(other, "no such overload: *.%s(%s)", function, otName);
+    }
+  }
+
+  public static Val noSuchOverload(Val val, String function, String overload, Val[] args) {
+    return newErr(
+        "no such overload: %s.%s[%s](%s)",
+        val.type().typeName(),
+        function,
+        overload,
+        Arrays.stream(args).map(a -> a.type().typeName()).collect(Collectors.joining(", ")));
+  }
+
   /**
    * NewErr creates a new Err described by the format string and args. TODO: Audit the use of this
    * function and standardize the error messages and codes.
    */
   public static Val newErr(String format, Object... args) {
-    return new Err(String.format(format, args));
+    return new Err(format(format, args));
   }
 
   /**
@@ -58,14 +79,6 @@ public class Err extends BaseVal {
    */
   public static Val unsupportedRefValConversionErr(Object val) {
     return newErr("unsupported conversion to ref.Val: (%s)%s", val.getClass().getSimpleName(), val);
-  }
-
-  /**
-   * MaybeNoSuchOverloadErr returns the error or unknown if the input ref.Val is one of these types,
-   * else a new no such overload error.
-   */
-  public static Val maybeNoSuchOverloadErr(Val val) {
-    return valOrErr(val, "no such overload");
   }
 
   /**
@@ -80,6 +93,46 @@ public class Err extends BaseVal {
       return val;
     }
     return newErr(format, args);
+  }
+
+  public static Val noSuchField(Object field) {
+    return newErr("no such field '%s'", field);
+  }
+
+  public static Val unknownType(Object field) {
+    return newErr("unknown type '%s'", field);
+  }
+
+  public static Val divideByZero() {
+    return newErr("divide by zero");
+  }
+
+  public static Val noMoreElements() {
+    return newErr("no more elements");
+  }
+
+  public static Val modulusByZero() {
+    return newErr("modulus by zero");
+  }
+
+  public static Val rangeError(Object from, Object to) {
+    return newErr("range error converting %s to %s", from, to);
+  }
+
+  public static Val newTypeConversionError(Object from, Object to) {
+    return newErr("type conversion error from '%s' to '%s'", from, to);
+  }
+
+  public static RuntimeException noSuchAttribute(Object context) {
+    return new IllegalArgumentException(format("no such attribute: %s", context));
+  }
+
+  public static RuntimeException noSuchKey(Object key) {
+    return new IllegalArgumentException(format("no such key: %s", key));
+  }
+
+  public static RuntimeException indexOutOfBounds(Object i) {
+    return new IllegalStateException(format("index out of bounds: %s", i));
   }
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
@@ -118,6 +171,16 @@ public class Err extends BaseVal {
   @Override
   public Object value() {
     return error;
+  }
+
+  @Override
+  public boolean booleanValue() {
+    throw new UnsupportedOperationException();
+  }
+
+  @Override
+  public long intValue() {
+    throw new UnsupportedOperationException();
   }
 
   /**

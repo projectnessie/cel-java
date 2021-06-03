@@ -15,8 +15,9 @@
  */
 package org.projectnessie.cel.parser;
 
+import com.google.api.expr.v1alpha1.Expr;
+import java.util.List;
 import org.projectnessie.cel.common.ErrorWithLocation;
-import org.projectnessie.cel.pb.Expr;
 
 /**
  * MacroExpander converts the target and args of a function call that matches a Macro.
@@ -25,5 +26,5 @@ import org.projectnessie.cel.pb.Expr;
  */
 @FunctionalInterface
 public interface MacroExpander {
-  Expr func(ExprHelper eh, Expr target, Expr... args) throws ErrorWithLocation;
+  Expr func(ExprHelper eh, Expr target, List<Expr> args) throws ErrorWithLocation;
 }

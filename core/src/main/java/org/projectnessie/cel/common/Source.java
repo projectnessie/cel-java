@@ -15,6 +15,7 @@
  */
 package org.projectnessie.cel.common;
 
+import java.util.List;
 import org.agrona.collections.IntArrayList;
 import org.agrona.collections.Long2LongHashMap;
 
@@ -43,7 +44,7 @@ public interface Source {
       }
     }
 
-    return new SourceImpl(contents, description, offsets.toIntArray());
+    return new SourceImpl(contents, description, offsets);
   }
 
   /**
@@ -62,7 +63,7 @@ public interface Source {
    * LineOffsets gives the character offsets at which lines occur. The zero-th entry should refer to
    * the break between the first and second line, or EOF if there is only one line of source.
    */
-  int[] lineOffsets();
+  List<Integer> lineOffsets();
 
   /**
    * LocationOffset translates a Location to an offset. Given the line and column of the Location
@@ -92,10 +93,10 @@ class SourceImpl implements Source {
 
   private final String content;
   private final String description;
-  private final int[] lineOffsets;
+  private final List<Integer> lineOffsets;
   private final Long2LongHashMap idOffsets;
 
-  SourceImpl(String content, String description, int[] lineOffsets) {
+  SourceImpl(String content, String description, List<Integer> lineOffsets) {
     this.content = content;
     this.description = description;
     this.lineOffsets = lineOffsets;
@@ -113,7 +114,7 @@ class SourceImpl implements Source {
   }
 
   @Override
-  public int[] lineOffsets() {
+  public List<Integer> lineOffsets() {
     return lineOffsets;
   }
 
@@ -145,7 +146,7 @@ class SourceImpl implements Source {
     if (line == 1) {
       lineOffset = 0;
     } else {
-      lineOffset = lineOffsets[line - 2];
+      lineOffset = lineOffsets.get(line - 2);
     }
 
     return Location.newLocation(line, offset - lineOffset);
@@ -172,8 +173,8 @@ class SourceImpl implements Source {
     if (line == 1) {
       return 0;
     }
-    if (line > 1 && line <= lineOffsets.length) {
-      return lineOffsets[line - 2];
+    if (line > 1 && line <= lineOffsets.size()) {
+      return lineOffsets.get(line - 2);
     }
     return -1;
   }

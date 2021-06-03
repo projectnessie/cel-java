@@ -15,6 +15,7 @@
  */
 package org.projectnessie.cel.common.types;
 
+import java.util.Objects;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.Val;
@@ -27,16 +28,31 @@ public class UnknownT extends BaseVal {
   /** UnknownType singleton. */
   public static final TypeValue UnknownType = TypeValue.newTypeValue("unknown");
 
-  private final long[] value;
+  private final long value;
 
-  private UnknownT(long[] value) {
+  private UnknownT(long value) {
     this.value = value;
   }
 
+  public static UnknownT unknownOf(long value) {
+    return new UnknownT(value);
+  }
+
   /** ConvertToNative implements ref.Val.ConvertToNative. */
+  @SuppressWarnings("unchecked")
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
-    return (T) value;
+    if (Long.class.isAssignableFrom(typeDesc)
+        || long.class.isAssignableFrom(typeDesc)
+        || typeDesc == Object.class) {
+      return (T) (Long) value;
+    }
+    if (typeDesc == Val.class || typeDesc == UnknownT.class) {
+      return (T) this;
+    }
+    throw new RuntimeException(
+        String.format(
+            "native type conversion error from '%s' to '%s'", UnknownType, typeDesc.getName()));
   }
 
   /** ConvertToType implements ref.Val.ConvertToType. */
@@ -61,6 +77,23 @@ public class UnknownT extends BaseVal {
   @Override
   public Object value() {
     return value;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    UnknownT unknownT = (UnknownT) o;
+    return value == unknownT.value;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(super.hashCode(), value);
   }
 
   /**

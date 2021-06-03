@@ -21,6 +21,8 @@ pluginManagement {
   plugins {
     id("com.diffplug.spotless") version "5.12.5"
     id("org.jetbrains.gradle.plugin.idea-ext") version "1.0"
+    id("com.google.protobuf") version "0.8.16"
+    id("me.champeau.jmh") version "0.6.5"
   }
 }
 

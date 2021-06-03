@@ -16,6 +16,7 @@
 package org.projectnessie.cel.common.types;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
@@ -34,23 +35,29 @@ import static org.projectnessie.cel.common.types.UintT.UintType;
 import static org.projectnessie.cel.common.types.UintT.UintZero;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 
+import com.google.protobuf.Any;
+import com.google.protobuf.Int32Value;
+import com.google.protobuf.Int64Value;
+import com.google.protobuf.UInt32Value;
+import com.google.protobuf.UInt64Value;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 public class TestUint {
 
   @Test
-  void Uint_Add() {
+  void uintAdd() {
     assertThat(uintOf(4).add(uintOf(3)).equal(uintOf(7))).isSameAs(True);
     assertThat(uintOf(1).add(stringOf("-1")))
         .isInstanceOf(Err.class)
         .extracting(Object::toString)
-        .isEqualTo("no such overload");
+        .isEqualTo("no such overload: uint.add(string)");
     assertThat(uintOf(-1L).add(uintOf(1))).isSameAs(errUintOverflow);
     assertThat(uintOf(-2L).add(uintOf(1)).equal(uintOf(-1L))).isSameAs(True);
   }
 
   @Test
-  void Uint_Compare() {
+  void uintCompare() {
     UintT lt = uintOf(204);
     UintT gt = uintOf(1300);
     assertThat(lt.compare(gt).equal(IntNegOne)).isSameAs(True);
@@ -59,97 +66,80 @@ public class TestUint {
     assertThat(gt.compare(TypeType))
         .isInstanceOf(Err.class)
         .extracting(Object::toString)
-        .isEqualTo("no such overload");
+        .isEqualTo("no such overload: uint.compare(type)");
   }
 
-  //  @Test
-  //	void Uint_ConvertToNative_Any() {
-  //		val, err := uintOf(math.MaxUint64).ConvertToNative(anyValueType)
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		want, err := anypb.New(wrapperspb.UInt64(math.MaxUint64))
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		if !proto.equal(val.(proto.Message), want) {
-  //			t.Errorf("Got %v, wanted %v", val, want)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void Uint_ConvertToNative_Error() {
-  //		val, err := uintOf(10000).ConvertToNative(reflect.TypeOf(int(0)))
-  //		if err == nil {
-  //			t.Errorf("Got '%v', expected error", val)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void Uint_ConvertToNative_Json() {
-  //		// Value can be represented accurately as a JSON number.
-  //		val, err := uintOf(maxIntJSON).ConvertToNative(jsonValueType)
-  //		if err != nil {
-  //			t.Error(err)
-  //		} else if !proto.equal(val.(proto.Message),
-  //			structpb.NewNumberValue(9007199254740991.0)) {
-  //			t.Errorf("Got '%v', expected a json number for a 32-bit uint", val)
-  //		}
-  //
-  //		// Value converts to a JSON decimal string
-  //		val, err = Int(maxIntJSON + 1).ConvertToNative(jsonValueType)
-  //		if err != nil {
-  //			t.Error(err)
-  //		} else if !proto.equal(val.(proto.Message), structpb.NewStringValue("9007199254740992")) {
-  //			t.Errorf("Got '%v', expected a json string for a 64-bit uint", val)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void Uint_ConvertToNative_Ptr_Uint32() {
-  //		ptrType := uint32(0)
-  //		val, err := uintOf(10000).ConvertToNative(reflect.TypeOf(&ptrType))
-  //		if err != nil {
-  //			t.Error(err)
-  //		} else if *val.(*uint32) != uint32(10000) {
-  //			t.Errorf("Error converting uint to *uint32. Got '%v', expected 10000.", val)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void Uint_ConvertToNative_Ptr_Uint64() {
-  //		ptrType := uint64(0)
-  //		val, err := uintOf(18446744073709551612).ConvertToNative(reflect.TypeOf(&ptrType))
-  //		if err != nil {
-  //			t.Error(err)
-  //		} else if *val.(*uint64) != uint64(18446744073709551612) {
-  //			t.Errorf("Error converting uint to *uint64. Got '%v', expected 18446744073709551612.", val)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void Uint_ConvertToNative_Wrapper() {
-  //		val, err := uintOf(math.MaxUint32).ConvertToNative(uint32WrapperType)
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		want := wrapperspb.UInt32(math.MaxUint32)
-  //		if !proto.equal(val.(proto.Message), want) {
-  //			t.Errorf("Got %v, wanted %v", val, want)
-  //		}
-  //
-  //		val, err = uintOf(math.MaxUint64).ConvertToNative(uint64WrapperType)
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		want2 := wrapperspb.UInt64(math.MaxUint64)
-  //		if !proto.equal(val.(proto.Message), want2) {
-  //			t.Errorf("Got %v, wanted %v", val, want2)
-  //		}
-  //	}
+  @Test
+  void uintConvertToNative_Any() {
+    Any val = uintOf(-1L).convertToNative(Any.class);
+    Any want = Any.pack(UInt64Value.of(-1L));
+    assertThat(val).isEqualTo(want);
+  }
 
   @Test
-  void Uint_ConvertToType() {
+  @Disabled("CANNOT IMPLEMENT - JAVA VS GO - SIGNED VS UNSIGNED")
+  void uintConvertToNative_Error() {
+    assertThatThrownBy(() -> uintOf(10000).convertToNative(Integer.class));
+    assertThatThrownBy(() -> uintOf(10000).convertToNative(int.class));
+  }
+
+  @Test
+  void uintConvertToWrapper_Error() {
+    assertThatThrownBy(() -> uintOf(10000).convertToNative(Int32Value.class));
+    assertThatThrownBy(() -> uintOf(10000).convertToNative(Int64Value.class));
+  }
+
+  @Test
+  @Disabled("IMPLEMENT ME")
+  void uintConvertToNative_Json() {
+    //  		// Value can be represented accurately as a JSON number.
+    //  		val = uintOf(maxIntJSON).convertToNative(jsonValueType)
+    //  		if err != nil {
+    //  			t.Error(err)
+    //  		} else if !proto.equal(val.(proto.Message),
+    //  			structpb.NewNumberValue(9007199254740991.0)) {
+    //  			t.Errorf("Got '%v', expected a json number for a 32-bit uint", val)
+    //  		}
+    //
+    //  		// Value converts to a JSON decimal string
+    //  		val, err = Int(maxIntJSON + 1).convertToNative(jsonValueType)
+    //  		if err != nil {
+    //  			t.Error(err)
+    //  		} else if !proto.equal(val.(proto.Message), structpb.NewStringValue("9007199254740992")) {
+    //  			t.Errorf("Got '%v', expected a json string for a 64-bit uint", val)
+    //  		}
+  }
+
+  @Test
+  void uintConvertToNative_Ptr_Uint32() {
+    Integer val = uintOf(10000).convertToNative(Integer.class);
+    assertThat(val).isEqualTo(10000);
+  }
+
+  @Test
+  void uintConvertToNative_Ptr_Uint64() {
+    // 18446744073709551612 --> -4L
+    Long val = uintOf(-4L).convertToNative(Long.class);
+    assertThat(val).isEqualTo(-4L);
+  }
+
+  @Test
+  void uintConvertToNative_Wrapper() {
+    long uint32max = 0xffffffffL;
+
+    UInt32Value val = uintOf(uint32max).convertToNative(UInt32Value.class);
+    UInt32Value want = UInt32Value.of((int) uint32max);
+    assertThat(val).isEqualTo(want);
+
+    long uint64max = 0xffffffffffffffffL;
+
+    UInt64Value val2 = uintOf(uint64max).convertToNative(UInt64Value.class);
+    UInt64Value want2 = UInt64Value.of(uint64max);
+    assertThat(val2).isEqualTo(want2);
+  }
+
+  @Test
+  void uintConvertToType() {
     // 18446744073709551612L
     // --> 0xFFFFFFFFFFFFFFFCL
     assertThat(uintOf(0xFFFFFFFFFFFFFFFCL).convertToType(IntType))
@@ -168,7 +158,7 @@ public class TestUint {
   }
 
   @Test
-  void Uint_Divide() {
+  void uintDivide() {
     assertThat(uintOf(3).divide(uintOf(2)).equal(uintOf(1))).isSameAs(True);
     assertThat(UintZero.divide(UintZero))
         .isInstanceOf(Err.class)
@@ -177,19 +167,19 @@ public class TestUint {
     assertThat(uintOf(1).divide(doubleOf(-1)))
         .isInstanceOf(Err.class)
         .extracting(Object::toString)
-        .isEqualTo("no such overload");
+        .isEqualTo("no such overload: uint.divide(double)");
   }
 
   @Test
-  void Uint_Equal() {
+  void uintEqual() {
     assertThat(uintOf(0).equal(False))
         .isInstanceOf(Err.class)
         .extracting(Object::toString)
-        .isEqualTo("no such overload");
+        .isEqualTo("no such overload: uint.equal(bool)");
   }
 
   @Test
-  void Uint_Modulo() {
+  void uintModulo() {
     assertThat(uintOf(21).modulo(uintOf(2)).equal(uintOf(1))).isSameAs(True);
     assertThat(uintOf(21).modulo(UintZero))
         .isInstanceOf(Err.class)
@@ -198,16 +188,16 @@ public class TestUint {
     assertThat(uintOf(21).modulo(IntOne))
         .isInstanceOf(Err.class)
         .extracting(Object::toString)
-        .isEqualTo("no such overload");
+        .isEqualTo("no such overload: uint.modulo(int)");
   }
 
   @Test
-  void Uint_Multiply() {
+  void uintMultiply() {
     assertThat(uintOf(2).multiply(uintOf(2)).equal(uintOf(4))).isSameAs(True);
     assertThat(uintOf(1).multiply(doubleOf(-4.0)))
         .isInstanceOf(Err.class)
         .extracting(Object::toString)
-        .isEqualTo("no such overload");
+        .isEqualTo("no such overload: uint.multiply(double)");
     // maxUInt64 / 2 --> 0x7fffffffffffffffL
     assertThat(uintOf(0x7fffffffffffffffL).multiply(uintOf(3))).isSameAs(errUintOverflow);
     assertThat(uintOf(0x7fffffffffffffffL).multiply(uintOf(2)).equal(uintOf(0xfffffffffffffffeL)))
@@ -215,12 +205,12 @@ public class TestUint {
   }
 
   @Test
-  void Uint_Subtract() {
+  void uintSubtract() {
     assertThat(uintOf(4).subtract(uintOf(3)).equal(uintOf(1))).isSameAs(True);
     assertThat(uintOf(1).subtract(intOf(1)))
         .isInstanceOf(Err.class)
         .extracting(Object::toString)
-        .isEqualTo("no such overload");
+        .isEqualTo("no such overload: uint.subtract(int)");
     assertThat(uintOf(0xfffffffffffffffeL).subtract(uintOf(0xffffffffffffffffL)))
         .isSameAs(errUintOverflow);
     assertThat(uintOf(0xffffffffffffffffL).subtract(uintOf(0xffffffffffffffffL)).equal(uintOf(0)))

@@ -16,7 +16,9 @@
 package org.projectnessie.cel.common.types;
 
 import static org.projectnessie.cel.common.types.BoolT.boolOf;
-import static org.projectnessie.cel.common.types.Err.newErr;
+import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
+import static org.projectnessie.cel.common.types.Err.noSuchOverload;
+import static org.projectnessie.cel.common.types.Err.rangeError;
 import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.StringT.StringType;
@@ -25,6 +27,10 @@ import static org.projectnessie.cel.common.types.TypeValue.TypeType;
 import static org.projectnessie.cel.common.types.UintT.UintType;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 
+import com.google.protobuf.Any;
+import com.google.protobuf.DoubleValue;
+import com.google.protobuf.FloatValue;
+import java.util.Objects;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.Val;
@@ -64,7 +70,7 @@ public final class DoubleT extends BaseVal
   @Override
   public Val add(Val other) {
     if (!(other instanceof DoubleT)) {
-      return Err.valOrErr(other, "no such overload");
+      return noSuchOverload(this, "add", other);
     }
     return doubleOf(d + ((DoubleT) other).d);
   }
@@ -73,7 +79,7 @@ public final class DoubleT extends BaseVal
   @Override
   public Val compare(Val other) {
     if (!(other instanceof DoubleT)) {
-      return Err.valOrErr(other, "no such overload");
+      return noSuchOverload(this, "compare", other);
     }
     return intOf(Double.compare(d, ((DoubleT) other).d));
   }
@@ -82,26 +88,30 @@ public final class DoubleT extends BaseVal
   @SuppressWarnings("unchecked")
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
-    if (typeDesc == Double.class || typeDesc == double.class) {
+    if (typeDesc == Double.class || typeDesc == double.class || typeDesc == Object.class) {
       return (T) Double.valueOf(d);
     }
-    if (typeDesc == Double.class || typeDesc == double.class) {
+    if (typeDesc == Float.class || typeDesc == float.class) {
       // TODO needs overflow check
       return (T) Float.valueOf((float) d);
+    }
+    if (typeDesc == Any.class) {
+      return (T) Any.pack(DoubleValue.of(d));
+    }
+    if (typeDesc == DoubleValue.class) {
+      return (T) DoubleValue.of(d);
+    }
+    if (typeDesc == FloatValue.class) {
+      // TODO needs overflow check
+      return (T) FloatValue.of((float) d);
+    }
+    if (typeDesc == Val.class || typeDesc == DoubleT.class) {
+      return (T) this;
     }
 
     //		switch typeDesc.Kind() {
     //		case reflect.Ptr:
     //			switch typeDesc {
-    //			case anyValueType:
-    //				// Primitives must be wrapped before being set on an Any field.
-    //				return anypb.New(wrapperspb.Double(float64(d)))
-    //			case doubleWrapperType:
-    //				// Convert to a wrapperspb.DoubleValue
-    //				return wrapperspb.Double(float64(d)), nil
-    //			case floatWrapperType:
-    //				// Convert to a wrapperspb.FloatValue (with truncation).
-    //				return wrapperspb.Float(float32(d)), nil
     //			case jsonValueType:
     //				// Note, there are special cases for proto3 to json conversion that
     //				// expect the floating point value to be converted to a NaN,
@@ -141,14 +151,14 @@ public final class DoubleT extends BaseVal
     if (typeValue == IntType) {
       long r = Math.round(d);
       if (r == Long.MIN_VALUE || r == Long.MAX_VALUE) {
-        return Err.newErr("range error converting %s to int", d);
+        return rangeError(d, "int");
       }
       return intOf(r);
     }
     if (typeValue == UintType) {
       long r = Math.round(d);
       if (r < 0 || r == Long.MAX_VALUE) {
-        return Err.newErr("range error converting %s to int", d);
+        return rangeError(d, "int");
       }
       return uintOf(r);
     }
@@ -161,14 +171,14 @@ public final class DoubleT extends BaseVal
     if (typeValue == TypeType) {
       return DoubleType;
     }
-    return newErr("type conversion error from '%s' to '%s'", DoubleType, typeValue);
+    return newTypeConversionError(DoubleType, typeValue);
   }
 
   /** Divide implements traits.Divider.Divide. */
   @Override
   public Val divide(Val other) {
     if (!(other instanceof DoubleT)) {
-      return Err.valOrErr(other, "no such overload");
+      return noSuchOverload(this, "divide", other);
     }
     return doubleOf(d / ((DoubleT) other).d);
   }
@@ -177,7 +187,7 @@ public final class DoubleT extends BaseVal
   @Override
   public Val equal(Val other) {
     if (!(other instanceof DoubleT)) {
-      return Err.valOrErr(other, "no such overload");
+      return noSuchOverload(this, "equal", other);
     }
     /** TODO: Handle NaNs properly. */
     return boolOf(d == ((DoubleT) other).d);
@@ -187,7 +197,7 @@ public final class DoubleT extends BaseVal
   @Override
   public Val multiply(Val other) {
     if (!(other instanceof DoubleT)) {
-      return Err.valOrErr(other, "no such overload");
+      return noSuchOverload(this, "multiply", other);
     }
     return doubleOf(d * ((DoubleT) other).d);
   }
@@ -202,7 +212,7 @@ public final class DoubleT extends BaseVal
   @Override
   public Val subtract(Val other) {
     if (!(other instanceof DoubleT)) {
-      return Err.valOrErr(other, "no such overload");
+      return noSuchOverload(this, "subtract", other);
     }
     return doubleOf(d - ((DoubleT) other).d);
   }
@@ -217,5 +227,22 @@ public final class DoubleT extends BaseVal
   @Override
   public Object value() {
     return d;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    DoubleT doubleT = (DoubleT) o;
+    return Double.compare(doubleT.d, d) == 0;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(super.hashCode(), d);
   }
 }

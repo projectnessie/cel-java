@@ -15,12 +15,15 @@
  */
 package org.projectnessie.cel.common.types;
 
-import static org.projectnessie.cel.common.types.Err.newErr;
-import static org.projectnessie.cel.common.types.Err.valOrErr;
+import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
+import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.TypeValue.TypeType;
 
+import com.google.protobuf.Any;
+import com.google.protobuf.BoolValue;
+import java.util.Objects;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.Val;
@@ -59,7 +62,7 @@ public class BoolT extends BaseVal implements Comparer, Negater {
   @Override
   public Val compare(Val other) {
     if (!(other instanceof BoolT)) {
-      return valOrErr(other, "no such overload");
+      return noSuchOverload(this, "compare", other);
     }
     return IntT.intOf(Boolean.compare(b, ((BoolT) other).b));
   }
@@ -68,8 +71,18 @@ public class BoolT extends BaseVal implements Comparer, Negater {
   @SuppressWarnings("unchecked")
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
-    if (typeDesc == Boolean.class || typeDesc == boolean.class) {
+    if (typeDesc == Boolean.class || typeDesc == boolean.class || typeDesc == Object.class) {
       return (T) Boolean.valueOf(b);
+    }
+
+    if (typeDesc == Any.class) {
+      return (T) Any.pack(BoolValue.of(this.b));
+    }
+    if (typeDesc == BoolValue.class) {
+      return (T) BoolValue.of(this.b);
+    }
+    if (typeDesc == Val.class || typeDesc == BoolT.class) {
+      return (T) this;
     }
 
     //		switch typeDesc.Kind() {
@@ -77,12 +90,6 @@ public class BoolT extends BaseVal implements Comparer, Negater {
     //			return reflect.ValueOf(b).Convert(typeDesc).Interface(), nil
     //		case reflect.Ptr:
     //			switch typeDesc {
-    //			case anyValueType:
-    //				// Primitives must be wrapped to a wrapperspb.BoolValue before being packed into an Any.
-    //				return anypb.New(wrapperspb.Bool(bool(b)))
-    //			case boolWrapperType:
-    //				// Convert the bool to a wrapperspb.BoolValue.
-    //				return wrapperspb.Bool(bool(b)), nil
     //			case jsonValueType:
     //				// Return the bool as a new structpb.Value.
     //				return structpb.NewBoolValue(bool(b)), nil
@@ -118,14 +125,14 @@ public class BoolT extends BaseVal implements Comparer, Negater {
     if (typeVal == TypeType) {
       return BoolType;
     }
-    return newErr("type conversion error from '%s' to '%s'", BoolType, typeVal);
+    return newTypeConversionError(BoolType, typeVal);
   }
 
   /** Equal implements the ref.Val interface method. */
   @Override
   public Val equal(Val other) {
     if (!(other instanceof BoolT)) {
-      return valOrErr(other, "no such overload");
+      return noSuchOverload(this, "equal", other);
     }
     return boolOf(b == ((BoolT) other).b);
   }
@@ -146,6 +153,23 @@ public class BoolT extends BaseVal implements Comparer, Negater {
   @Override
   public Object value() {
     return b;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    BoolT boolT = (BoolT) o;
+    return b == boolT.b;
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(super.hashCode(), b);
   }
 
   /** IsBool returns whether the input ref.Val or ref.Type is equal to BoolType. */

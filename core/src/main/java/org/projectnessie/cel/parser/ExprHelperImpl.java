@@ -15,9 +15,11 @@
  */
 package org.projectnessie.cel.parser;
 
+import com.google.api.expr.v1alpha1.Expr;
+import com.google.api.expr.v1alpha1.Expr.CreateStruct.Entry;
+import java.util.Arrays;
+import java.util.List;
 import org.projectnessie.cel.common.Location;
-import org.projectnessie.cel.pb.Expr;
-import org.projectnessie.cel.pb.Expr.StructExpr;
 
 public class ExprHelperImpl implements ExprHelper {
 
@@ -71,31 +73,36 @@ public class ExprHelperImpl implements ExprHelper {
 
   // NewList implements the ExprHelper interface method.
   @Override
-  public Expr newList(Expr... elems) {
+  public Expr newList(List<Expr> elems) {
     return parserHelper.newList(nextMacroID(), elems);
+  }
+
+  @Override
+  public Expr newList(Expr... elems) {
+    return newList(Arrays.asList(elems));
   }
 
   // NewMap implements the ExprHelper interface method.
   @Override
-  public Expr newMap(StructExpr.Entry... entries) {
+  public Expr newMap(List<Entry> entries) {
     return parserHelper.newMap(nextMacroID(), entries);
   }
 
   // NewMapEntry implements the ExprHelper interface method.
   @Override
-  public StructExpr.Entry newMapEntry(Expr key, Expr val) {
+  public Entry newMapEntry(Expr key, Expr val) {
     return parserHelper.newMapEntry(nextMacroID(), key, val);
   }
 
   // NewObject implements the ExprHelper interface method.
   @Override
-  public Expr newObject(String typeName, StructExpr.Entry... fieldInits) {
+  public Expr newObject(String typeName, List<Entry> fieldInits) {
     return parserHelper.newObject(nextMacroID(), typeName, fieldInits);
   }
 
   // NewObjectFieldInit implements the ExprHelper interface method.
   @Override
-  public StructExpr.Entry newObjectFieldInit(String field, Expr init) {
+  public Entry newObjectFieldInit(String field, Expr init) {
     return parserHelper.newObjectField(nextMacroID(), field, init);
   }
 
@@ -121,13 +128,18 @@ public class ExprHelperImpl implements ExprHelper {
 
   // GlobalCall implements the ExprHelper interface method.
   @Override
-  public Expr globalCall(String function, Expr... args) {
+  public Expr globalCall(String function, List<Expr> args) {
     return parserHelper.newGlobalCall(nextMacroID(), function, args);
+  }
+
+  @Override
+  public Expr globalCall(String function, Expr... args) {
+    return globalCall(function, Arrays.asList(args));
   }
 
   // ReceiverCall implements the ExprHelper interface method.
   @Override
-  public Expr receiverCall(String function, Expr target, Expr... args) {
+  public Expr receiverCall(String function, Expr target, List<Expr> args) {
     return parserHelper.newReceiverCall(nextMacroID(), function, target, args);
   }
 

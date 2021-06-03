@@ -15,7 +15,16 @@
  */
 package org.projectnessie.cel.parser;
 
+import static org.projectnessie.cel.parser.Macro.AllMacros;
+
+import com.google.api.expr.v1alpha1.Constant;
+import com.google.api.expr.v1alpha1.Expr;
+import com.google.api.expr.v1alpha1.Expr.CreateStruct.Entry;
+import com.google.api.expr.v1alpha1.Expr.Select;
+import com.google.api.expr.v1alpha1.SourceInfo;
+import com.google.protobuf.NullValue;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collections;
@@ -75,13 +84,6 @@ import org.projectnessie.cel.parser.gen.CELParser.StartContext;
 import org.projectnessie.cel.parser.gen.CELParser.StringContext;
 import org.projectnessie.cel.parser.gen.CELParser.UintContext;
 import org.projectnessie.cel.parser.gen.CELParser.UnaryContext;
-import org.projectnessie.cel.pb.Constant;
-import org.projectnessie.cel.pb.Expr;
-import org.projectnessie.cel.pb.Expr.IdentExpr;
-import org.projectnessie.cel.pb.Expr.SelectExpr;
-import org.projectnessie.cel.pb.Expr.StructExpr;
-import org.projectnessie.cel.pb.Expr.StructExpr.Entry;
-import org.projectnessie.cel.pb.SourceInfo;
 
 public class Parser {
 
@@ -113,11 +115,19 @@ public class Parser {
 
   private final Options options;
 
-  public Parser(Options options) {
+  public static ParseResult parseAllMacros(Source source) {
+    return parse(Options.builder().macros(AllMacros).build(), source);
+  }
+
+  public static ParseResult parse(Options options, Source source) {
+    return new Parser(options).parse(source);
+  }
+
+  Parser(Options options) {
     this.options = options;
   }
 
-  public ParseResult parse(Source source) {
+  ParseResult parse(Source source) {
     StringCharStream charStream = new StringCharStream(source.content(), source.description());
     CELLexer lexer = new CELLexer(charStream);
     CELParser parser = new CELParser(new CommonTokenStream(lexer, 0));
@@ -145,13 +155,13 @@ public class Parser {
             charStream.size(),
             options.getExpressionSizeCodePointLimit());
       } else {
-        expr = inner.visit(parser.start());
+        expr = inner.exprVisit(parser.start());
       }
     } catch (RecoveryLimitError | RecursionError e) {
       errors.reportError(Location.NoLocation, "%s", e.getMessage());
     }
 
-    if (!errors.getErrors().isEmpty()) {
+    if (errors.hasErrors()) {
       expr = null;
     }
 
@@ -159,14 +169,30 @@ public class Parser {
   }
 
   public static class ParseResult {
-    public final Expr expr;
-    public final Errors errors;
-    public final SourceInfo sourceInfo;
+    private final Expr expr;
+    private final Errors errors;
+    private final SourceInfo sourceInfo;
 
     public ParseResult(Expr expr, Errors errors, SourceInfo sourceInfo) {
       this.expr = expr;
       this.errors = errors;
       this.sourceInfo = sourceInfo;
+    }
+
+    public Expr getExpr() {
+      return expr;
+    }
+
+    public Errors getErrors() {
+      return errors;
+    }
+
+    public SourceInfo getSourceInfo() {
+      return sourceInfo;
+    }
+
+    public boolean hasErrors() {
+      return errors.hasErrors();
     }
   }
 
@@ -204,13 +230,13 @@ public class Parser {
     }
   }
 
-  public static class RecursionError extends RuntimeException {
+  static class RecursionError extends RuntimeException {
     public RecursionError(String message) {
       super(message);
     }
   }
 
-  public static class RecoveryLimitError extends RecognitionException {
+  static class RecoveryLimitError extends RecognitionException {
     public RecoveryLimitError(
         String message, Recognizer<?, ?> recognizer, IntStream input, ParserRuleContext ctx) {
       super(message, recognizer, input, ctx);
@@ -248,7 +274,7 @@ public class Parser {
     }
   }
 
-  class InnerParser extends AbstractParseTreeVisitor<Expr> implements ANTLRErrorListener {
+  class InnerParser extends AbstractParseTreeVisitor<Object> implements ANTLRErrorListener {
 
     private final Helper helper;
     private final Errors errors;
@@ -312,19 +338,24 @@ public class Parser {
       if (ctx instanceof Location) {
         location = (Location) ctx;
       } else if (ctx instanceof Token || ctx instanceof ParserRuleContext) {
-        Expr err = helper.newError(ctx);
-        location = helper.getLocation(err.id);
+        Expr err = helper.newExpr(ctx);
+        location = helper.getLocation(err.getId());
       } else {
-        throw new IllegalArgumentException();
+        location = Location.NoLocation;
       }
-      Expr err = helper.newError(ctx);
+      Expr err = helper.newExpr(ctx);
       // Provide arguments to the report error.
       errors.reportError(location, format, args);
       return err;
     }
 
+    public Expr exprVisit(ParseTree tree) {
+      Object r = visit(tree);
+      return (Expr) r;
+    }
+
     @Override
-    public Expr visit(ParseTree tree) {
+    public Object visit(ParseTree tree) {
       if (tree instanceof StartContext) {
         return visitStart((StartContext) tree);
       } else if (tree instanceof ExprContext) {
@@ -346,8 +377,7 @@ public class Parser {
       } else if (tree instanceof SelectOrCallContext) {
         return visitSelectOrCall((SelectOrCallContext) tree);
       } else if (tree instanceof MapInitializerListContext) {
-        throw new UnsupportedOperationException();
-        // return visitMapInitializerList((MapInitializerListContext) tree);
+        return visitMapInitializerList((MapInitializerListContext) tree);
       } else if (tree instanceof NegateContext) {
         return visitNegate((NegateContext) tree);
       } else if (tree instanceof IndexContext) {
@@ -364,34 +394,34 @@ public class Parser {
 
       // Report at least one error if the parser reaches an unknown parse element.
       // Typically, this happens if the parser has already encountered a syntax error elsewhere.
-      if (errors.getErrors().isEmpty()) {
+      if (!errors.hasErrors()) {
         String txt = "<<nil>>";
         if (tree != null) {
           txt = String.format("<<%s>>", tree.getClass().getSimpleName());
         }
         return reportError(Location.NoLocation, "unknown parse element encountered: %s", txt);
       }
-      return helper.newError(Location.NoLocation);
+      return helper.newExpr(Location.NoLocation);
     }
 
-    private Expr visitStart(StartContext ctx) {
+    private Object visitStart(StartContext ctx) {
       return visit(ctx.expr());
     }
 
     private Expr visitExpr(ExprContext ctx) {
-      Expr result = visit(ctx.e);
+      Expr result = exprVisit(ctx.e);
       if (ctx.op == null) {
         return result;
       }
       long opID = helper.id(ctx.op);
-      Expr ifTrue = visit(ctx.e1);
-      Expr ifFalse = visit(ctx.e2);
+      Expr ifTrue = exprVisit(ctx.e1);
+      Expr ifFalse = exprVisit(ctx.e2);
       return globalCallOrMacro(opID, Operator.Conditional.id, result, ifTrue, ifFalse);
     }
 
     private Expr visitConditionalAnd(ConditionalAndContext ctx) {
-      Expr result = visit(ctx.e);
-      if (ctx.ops == null) {
+      Expr result = exprVisit(ctx.e);
+      if (ctx.ops == null || ctx.ops.isEmpty()) {
         return result;
       }
       Balancer b = helper.newBalancer(Operator.LogicalAnd.id, result);
@@ -401,7 +431,7 @@ public class Parser {
         if (i >= rest.size()) {
           return reportError(ctx, "unexpected character, wanted '&&'");
         }
-        Expr next = visit(rest.get(i));
+        Expr next = exprVisit(rest.get(i));
         long opID = helper.id(op);
         b.addTerm(opID, next);
       }
@@ -409,8 +439,8 @@ public class Parser {
     }
 
     private Expr visitConditionalOr(ConditionalOrContext ctx) {
-      Expr result = visit(ctx.e);
-      if (ctx.ops == null) {
+      Expr result = exprVisit(ctx.e);
+      if (ctx.ops == null || ctx.ops.isEmpty()) {
         return result;
       }
       Balancer b = helper.newBalancer(Operator.LogicalOr.id, result);
@@ -420,7 +450,7 @@ public class Parser {
         if (i >= rest.size()) {
           return reportError(ctx, "unexpected character, wanted '||'");
         }
-        Expr next = visit(rest.get(i));
+        Expr next = exprVisit(rest.get(i));
         long opID = helper.id(op);
         b.addTerm(opID, next);
       }
@@ -429,7 +459,7 @@ public class Parser {
 
     private Expr visitRelation(RelationContext ctx) {
       if (ctx.calc() != null) {
-        return visit(ctx.calc());
+        return exprVisit(ctx.calc());
       }
       String opText = "";
       if (ctx.op != null) {
@@ -437,9 +467,9 @@ public class Parser {
       }
       Operator op = Operator.find(opText);
       if (op != null) {
-        Expr lhs = visit(ctx.relation(0));
+        Expr lhs = exprVisit(ctx.relation(0));
         long opID = helper.id(ctx.op);
-        Expr rhs = visit(ctx.relation(1));
+        Expr rhs = exprVisit(ctx.relation(1));
         return globalCallOrMacro(opID, op.id, lhs, rhs);
       }
       return reportError(ctx, "operator not found");
@@ -447,7 +477,7 @@ public class Parser {
 
     private Expr visitCalc(CalcContext ctx) {
       if (ctx.unary() != null) {
-        return visit(ctx.unary());
+        return exprVisit(ctx.unary());
       }
       String opText = "";
       if (ctx.op != null) {
@@ -455,9 +485,9 @@ public class Parser {
       }
       Operator op = Operator.find(opText);
       if (op != null) {
-        Expr lhs = visit(ctx.calc(0));
+        Expr lhs = exprVisit(ctx.calc(0));
         long opID = helper.id(ctx.op);
-        Expr rhs = visit(ctx.calc(1));
+        Expr rhs = exprVisit(ctx.calc(1));
         return globalCallOrMacro(opID, op.id, lhs, rhs);
       }
       return reportError(ctx, "operator not found");
@@ -465,10 +495,10 @@ public class Parser {
 
     private Expr visitLogicalNot(LogicalNotContext ctx) {
       if (ctx.ops.size() % 2 == 0) {
-        return visit(ctx.member());
+        return exprVisit(ctx.member());
       }
       long opID = helper.id(ctx.ops.get(0));
-      Expr target = visit(ctx.member());
+      Expr target = exprVisit(ctx.member());
       return globalCallOrMacro(opID, Operator.LogicalNot.id, target);
     }
 
@@ -590,25 +620,24 @@ public class Parser {
     }
 
     private Expr visitNull(NullContext ctx) {
-      return helper.newLiteral(ctx, Constant.nullValue());
+      return helper.newLiteral(ctx, Constant.newBuilder().setNullValue(NullValue.NULL_VALUE));
     }
 
-    private Expr[] visitList(ExprListContext ctx) {
+    private List<Expr> visitList(ExprListContext ctx) {
       if (ctx == null) {
-        return new Expr[0];
+        return Collections.emptyList();
       }
       return visitSlice(ctx.e);
     }
 
-    private Expr[] visitSlice(List<ExprContext> expressions) {
+    private List<Expr> visitSlice(List<ExprContext> expressions) {
       if (expressions == null) {
-        return new Expr[0];
+        return Collections.emptyList();
       }
-      Expr[] result = new Expr[expressions.size()];
-      for (int i = 0; i < expressions.size(); i++) {
-        ExprContext e = expressions.get(i);
-        Expr ex = visit(e);
-        result[i] = ex;
+      List<Expr> result = new ArrayList<>(expressions.size());
+      for (ExprContext e : expressions) {
+        Expr ex = exprVisit(e);
+        result.add(ex);
       }
       return result;
     }
@@ -617,39 +646,40 @@ public class Parser {
       if (e == null) {
         return null;
       }
-      if (e instanceof IdentExpr) {
-        return ((IdentExpr) e).name;
-      } else if (e instanceof SelectExpr) {
-        SelectExpr s = (SelectExpr) e;
-        String prefix = extractQualifiedName(s.operand);
-        return prefix + "." + s.field;
+      switch (e.getExprKindCase()) {
+        case IDENT_EXPR:
+          return e.getIdentExpr().getName();
+        case SELECT_EXPR:
+          Select s = e.getSelectExpr();
+          String prefix = extractQualifiedName(s.getOperand());
+          return prefix + "." + s.getField();
       }
       // TODO: Add a method to Source to get location from character offset.
-      Location location = helper.getLocation(e.id);
+      Location location = helper.getLocation(e.getId());
       reportError(location, "expected a qualified name");
       return null;
     }
 
     // Visit a parse tree of field initializers.
-    StructExpr.Entry[] visitIFieldInitializerList(FieldInitializerListContext ctx) {
+    List<Entry> visitIFieldInitializerList(FieldInitializerListContext ctx) {
       if (ctx == null || ctx.fields == null) {
         // This is the result of a syntax error handled elswhere, return empty.
-        return new StructExpr.Entry[0];
+        return Collections.emptyList();
       }
 
-      StructExpr.Entry[] result = new StructExpr.Entry[ctx.fields.size()];
+      List<Entry> result = new ArrayList<>(ctx.fields.size());
       List<Token> cols = ctx.cols;
       List<ExprContext> vals = ctx.values;
       for (int i = 0; i < ctx.fields.size(); i++) {
         Token f = ctx.fields.get(i);
         if (i >= cols.size() || i >= vals.size()) {
           // This is the result of a syntax error detected elsewhere.
-          return new StructExpr.Entry[0];
+          return Collections.emptyList();
         }
         long initID = helper.id(cols.get(i));
-        Expr value = visit(vals.get(i));
+        Expr value = exprVisit(vals.get(i));
         Entry field = helper.newObjectField(initID, f.getText(), value);
-        result[i] = field;
+        result.add(field);
       }
       return result;
     }
@@ -661,7 +691,7 @@ public class Parser {
       }
       // Handle the error case where no valid identifier is specified.
       if (ctx.id == null) {
-        return helper.newError(ctx);
+        return helper.newExpr(ctx);
       }
       // Handle reserved identifiers.
       String id = ctx.id.getText();
@@ -677,14 +707,14 @@ public class Parser {
     }
 
     private Expr visitNested(NestedContext ctx) {
-      return visit(ctx.e);
+      return exprVisit(ctx.e);
     }
 
     private Expr visitSelectOrCall(SelectOrCallContext ctx) {
-      Expr operand = visit(ctx.member());
+      Expr operand = exprVisit(ctx.member());
       // Handle the error case where no valid identifier is specified.
       if (ctx.id == null) {
-        return helper.newError(ctx);
+        return helper.newExpr(ctx);
       }
       String id = ctx.id.getText();
       if (ctx.open != null) {
@@ -694,13 +724,13 @@ public class Parser {
       return helper.newSelect(ctx.op, operand, id);
     }
 
-    private StructExpr.Entry[] visitMapInitializerList(MapInitializerListContext ctx) {
-      if (ctx == null || ctx.keys == null) {
+    private List<Entry> visitMapInitializerList(MapInitializerListContext ctx) {
+      if (ctx == null || ctx.keys.isEmpty()) {
         // This is the result of a syntax error handled elswhere, return empty.
-        return new StructExpr.Entry[0];
+        return Collections.emptyList();
       }
 
-      StructExpr.Entry[] result = new StructExpr.Entry[ctx.cols.size()];
+      List<Entry> result = new ArrayList<>(ctx.cols.size());
       List<ExprContext> keys = ctx.keys;
       List<ExprContext> vals = ctx.values;
       for (int i = 0; i < ctx.cols.size(); i++) {
@@ -708,29 +738,29 @@ public class Parser {
         long colID = helper.id(col);
         if (i >= keys.size() || i >= vals.size()) {
           // This is the result of a syntax error detected elsewhere.
-          return new StructExpr.Entry[0];
+          return Collections.emptyList();
         }
-        Expr key = visit(keys.get(i));
-        Expr value = visit(vals.get(i));
-        StructExpr.Entry entry = helper.newMapEntry(colID, key, value);
-        result[i] = entry;
+        Expr key = exprVisit(keys.get(i));
+        Expr value = exprVisit(vals.get(i));
+        Entry entry = helper.newMapEntry(colID, key, value);
+        result.add(entry);
       }
       return result;
     }
 
     private Expr visitNegate(NegateContext ctx) {
       if (ctx.ops.size() % 2 == 0) {
-        return visit(ctx.member());
+        return exprVisit(ctx.member());
       }
       long opID = helper.id(ctx.ops.get(0));
-      Expr target = visit(ctx.member());
+      Expr target = exprVisit(ctx.member());
       return globalCallOrMacro(opID, Operator.Negate.id, target);
     }
 
     private Expr visitIndex(IndexContext ctx) {
-      Expr target = visit(ctx.member());
+      Expr target = exprVisit(ctx.member());
       long opID = helper.id(ctx.op);
-      Expr index = visit(ctx.index);
+      Expr index = exprVisit(ctx.index);
       return globalCallOrMacro(opID, Operator.Index.id, target, index);
     }
 
@@ -744,26 +774,30 @@ public class Parser {
     }
 
     private Expr visitCreateMessage(CreateMessageContext ctx) {
-      Expr target = visit(ctx.member());
+      Expr target = exprVisit(ctx.member());
       long objID = helper.id(ctx.op);
       String messageName = extractQualifiedName(target);
       if (messageName != null) {
-        StructExpr.Entry[] entries = visitIFieldInitializerList(ctx.entries);
+        List<Entry> entries = visitIFieldInitializerList(ctx.entries);
         return helper.newObject(objID, messageName, entries);
       }
-      return helper.newError(objID);
+      return helper.newExpr(objID);
     }
 
     private Expr visitCreateStruct(CreateStructContext ctx) {
       long structID = helper.id(ctx.op);
-      StructExpr.Entry[] entries = new StructExpr.Entry[0];
       if (ctx.entries != null) {
-        entries = visitMapInitializerList(ctx.entries);
+        return helper.newMap(structID, visitMapInitializerList(ctx.entries));
+      } else {
+        return helper.newMap(structID, Collections.emptyList());
       }
-      return helper.newMap(structID, entries);
     }
 
     Expr globalCallOrMacro(long exprID, String function, Expr... args) {
+      return globalCallOrMacro(exprID, function, Arrays.asList(args));
+    }
+
+    Expr globalCallOrMacro(long exprID, String function, List<Expr> args) {
       Expr expr = expandMacro(exprID, function, null, args);
       if (expr != null) {
         return expr;
@@ -771,7 +805,7 @@ public class Parser {
       return helper.newGlobalCall(exprID, function, args);
     }
 
-    Expr receiverCallOrMacro(long exprID, String function, Expr target, Expr... args) {
+    Expr receiverCallOrMacro(long exprID, String function, Expr target, List<Expr> args) {
       Expr expr = expandMacro(exprID, function, target, args);
       if (expr != null) {
         return expr;
@@ -779,8 +813,8 @@ public class Parser {
       return helper.newReceiverCall(exprID, function, target, args);
     }
 
-    Expr expandMacro(long exprID, String function, Expr target, Expr... args) {
-      Macro macro = options.getMacro(Macro.makeMacroKey(function, args.length, target != null));
+    Expr expandMacro(long exprID, String function, Expr target, List<Expr> args) {
+      Macro macro = options.getMacro(Macro.makeMacroKey(function, args.size(), target != null));
       if (macro == null) {
         macro = options.getMacro(Macro.makeVarArgMacroKey(function, target != null));
         if (macro == null) {

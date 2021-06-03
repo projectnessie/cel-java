@@ -17,13 +17,20 @@ package org.projectnessie.cel.common.types;
 
 import static org.projectnessie.cel.common.types.BoolT.boolOf;
 import static org.projectnessie.cel.common.types.Err.newErr;
+import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
+import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.TypeValue.TypeType;
 
+import com.google.api.expr.v1alpha1.Constant;
+import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
+import com.google.protobuf.BytesValue;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import org.projectnessie.cel.common.debug.Debug;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.Val;
@@ -48,11 +55,15 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
     return new BytesT(b);
   }
 
+  public static BytesT bytesOf(String s) {
+    return new BytesT(s.getBytes(StandardCharsets.UTF_8));
+  }
+
   /** Add implements traits.Adder interface method by concatenating byte sequences. */
   @Override
   public Val add(Val other) {
     if (!(other instanceof BytesT)) {
-      return Err.valOrErr(other, "no such overload");
+      return noSuchOverload(this, "add", other);
     }
     byte[] o = ((BytesT) other).b;
     byte[] n = Arrays.copyOf(b, b.length + o.length);
@@ -64,7 +75,7 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
   @Override
   public Val compare(Val other) {
     if (!(other instanceof BytesT)) {
-      return Err.valOrErr(other, "no such overload");
+      return noSuchOverload(this, "compare", other);
     }
     byte[] o = ((BytesT) other).b;
     return IntT.intOf(ByteBuffer.wrap(b).compareTo(ByteBuffer.wrap(o)));
@@ -84,6 +95,21 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
         throw new RuntimeException("invalid UTF-8 in bytes, cannot convert to string");
       }
     }
+    if (typeDesc == Any.class) {
+      return (T) Any.pack(BytesValue.of(ByteString.copyFrom(this.b)));
+    }
+    if (typeDesc == BytesValue.class) {
+      return (T) BytesValue.of(ByteString.copyFrom(this.b));
+    }
+    if (typeDesc == ByteString.class || typeDesc == Object.class) {
+      return (T) ByteString.copyFrom(this.b);
+    }
+    if (typeDesc == ByteBuffer.class) {
+      return (T) ByteBuffer.wrap(this.b);
+    }
+    if (typeDesc == Val.class || typeDesc == BytesT.class) {
+      return (T) this;
+    }
     throw new RuntimeException(
         String.format(
             "native type conversion error from '%s' to '%s'", BytesType, typeDesc.getName()));
@@ -92,12 +118,6 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
     //			return reflect.ValueOf(b).Convert(typeDesc).Interface(), nil
     //		case reflect.Ptr:
     //			switch typeDesc {
-    //			case anyValueType:
-    //				// Primitives must be wrapped before being set on an Any field.
-    //				return anypb.New(wrapperspb.Bytes([]byte(b)))
-    //			case byteWrapperType:
-    //				// Convert the bytes to a wrapperspb.BytesValue.
-    //				return wrapperspb.Bytes([]byte(b)), nil
     //			case jsonValueType:
     //				// CEL follows the proto3 to JSON conversion by encoding bytes to a string via base64.
     //				// The encoding below matches the golang 'encoding/json' behavior during marshaling,
@@ -132,14 +152,14 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
     if (typeValue == TypeType) {
       return BytesType;
     }
-    return newErr("type conversion error from '%s' to '%s'", BytesType, typeValue);
+    return newTypeConversionError(BytesType, typeValue);
   }
 
   /** Equal implements the ref.Val interface method. */
   @Override
   public Val equal(Val other) {
     if (!(other instanceof BytesT)) {
-      return Err.valOrErr(other, "no such overload");
+      return noSuchOverload(this, "equal", other);
     }
     return boolOf(Arrays.equals(b, ((BytesT) other).b));
   }
@@ -160,5 +180,31 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
   @Override
   public Object value() {
     return b;
+  }
+
+  @Override
+  public String toString() {
+    return "bytes{"
+        + Debug.formatLiteral(Constant.newBuilder().setBytesValue(ByteString.copyFrom(b)).build())
+        + "}";
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    BytesT bytesT = (BytesT) o;
+    return Arrays.equals(b, bytesT.b);
+  }
+
+  @Override
+  public int hashCode() {
+    int result = super.hashCode();
+    result = 31 * result + Arrays.hashCode(b);
+    return result;
   }
 }

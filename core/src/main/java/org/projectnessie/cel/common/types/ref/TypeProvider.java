@@ -15,6 +15,7 @@
  */
 package org.projectnessie.cel.common.types.ref;
 
+import com.google.api.expr.v1alpha1.Type;
 import java.util.Map;
 
 /**

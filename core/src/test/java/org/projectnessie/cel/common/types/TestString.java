@@ -16,6 +16,7 @@
 package org.projectnessie.cel.common.types;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.projectnessie.cel.common.types.BoolT.BoolType;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
@@ -40,16 +41,19 @@ import static org.projectnessie.cel.common.types.TypeValue.TypeType;
 import static org.projectnessie.cel.common.types.UintT.UintType;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 
+import com.google.protobuf.Any;
+import com.google.protobuf.StringValue;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.common.types.ref.Val;
 
 public class TestString {
 
   @Test
-  void String_Add() {
+  void stringAdd() {
     assertThat(stringOf("hello").add(stringOf(" world"))).isEqualTo(stringOf("hello world"));
     assertThat(stringOf("hello").add(stringOf(" world")).equal(stringOf("hello world")))
         .isEqualTo(True);
@@ -57,11 +61,11 @@ public class TestString {
     assertThat(stringOf("goodbye").add(IntT.intOf(1)))
         .isInstanceOf(Err.class)
         .extracting(Object::toString)
-        .isEqualTo("no such overload");
+        .isEqualTo("no such overload: string.add(int)");
   }
 
   @Test
-  void String_Compare() {
+  void stringCompare() {
     StringT a = stringOf("a");
     StringT a2 = stringOf("a");
     StringT b = stringOf("bbbb");
@@ -73,75 +77,55 @@ public class TestString {
     assertThat(a.compare(True))
         .isInstanceOf(Err.class)
         .extracting(Object::toString)
-        .isEqualTo("no such overload");
+        .isEqualTo("no such overload: string.compare(bool)");
   }
 
-  //  @Test
-  //	void String_ConvertToNative_Any() {
-  //		val, err := String("hello").ConvertToNative(anyValueType)
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		want, err := anypb.New(wrapperspb.String("hello"))
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		if !proto.Equal(val.(proto.Message), want) {
-  //			t.Errorf("Got '%v', expected '%v'", val, want)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void String_ConvertToNative_Error() {
-  //		val, err := String("hello").ConvertToNative(reflect.TypeOf(0))
-  //		if err == nil {
-  //			t.Errorf("Got '%v', expected error", val)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void String_ConvertToNative_Json() {
-  //		val, err := String("hello").ConvertToNative(jsonValueType)
-  //		pbVal := structpb.NewStringValue("hello")
-  //		if err != nil {
-  //			t.Error(err)
-  //		} else if !proto.Equal(val.(proto.Message), pbVal) {
-  //			t.Errorf("Got '%v', expected json Value type", val)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void String_ConvertToNative_Ptr() {
-  //		ptrType := ""
-  //		val, err := String("hello").ConvertToNative(reflect.TypeOf(&ptrType))
-  //		if err != nil {
-  //			t.Error(err)
-  //		} else if *val.(*string) != "hello" {
-  //			t.Errorf("Got '%v', expected 'hello'", val)
-  //		}
-  //	}
+  @Test
+  void stringConvertToNative_Any() {
+    Any val = stringOf("hello").convertToNative(Any.class);
+    Any want = Any.pack(StringValue.of("hello"));
+    assertThat(val).isEqualTo(want);
+  }
 
   @Test
-  void String_ConvertToNative_String() {
+  void stringConvertToNative_Error() {
+    assertThatThrownBy(() -> stringOf("hello").convertToNative(Integer.class));
+  }
+
+  @Test
+  @Disabled("IMPLEMENT ME")
+  void stringConvertToNative_Json() {
+    //  		val = stringOf("hello").convertToNative(jsonValueType)
+    //  		pbVal := structpb.NewStringValue("hello")
+    //  		if err != nil {
+    //  			t.Error(err)
+    //  		} else if !proto.equal(val.(proto.Message), pbVal) {
+    //  			t.Errorf("Got '%v', expected json Value type", val)
+    //  		}
+  }
+
+  @Test
+  void stringConvertToNative_Ptr() {
+    String val = stringOf("hello").convertToNative(String.class);
+    assertThat(val).isEqualTo("hello");
+  }
+
+  @Test
+  void stringConvertToNative_String() {
     assertThat(stringOf("hello").convertToNative(String.class))
         .isInstanceOf(String.class)
         .isEqualTo("hello");
   }
 
-  //  @Test
-  //	void String_ConvertToNative_Wrapper() {
-  //		val, err := String("hello").ConvertToNative(stringWrapperType)
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		want := wrapperspb.String("hello")
-  //		if !proto.Equal(val.(proto.Message), want) {
-  //			t.Errorf("Got '%v', expected '%v'", val, want)
-  //		}
-  //	}
+  @Test
+  void stringConvertToNative_Wrapper() {
+    StringValue val = stringOf("hello").convertToNative(StringValue.class);
+    StringValue want = StringValue.of("hello");
+    assertThat(val).isEqualTo(want);
+  }
 
   @Test
-  void String_ConvertToType() {
+  void stringConvertToType() {
     assertThat(stringOf("-1").convertToType(IntType).equal(IntNegOne)).isSameAs(True);
     assertThat(stringOf("false").convertToType(BoolType).equal(False)).isSameAs(True);
     assertThat(stringOf("1").convertToType(UintType).equal(uintOf(1))).isSameAs(True);
@@ -173,17 +157,17 @@ public class TestString {
   }
 
   @Test
-  void String_Equal() {
+  void stringEqual() {
     assertThat(stringOf("hello").equal(stringOf("hello"))).isSameAs(True);
     assertThat(stringOf("hello").equal(stringOf("hell"))).isSameAs(False);
     assertThat(stringOf("c").equal(intOf(99)))
         .isInstanceOf(Err.class)
         .extracting(Object::toString)
-        .isEqualTo("no such overload");
+        .isEqualTo("no such overload: string.equal(int)");
   }
 
   @Test
-  void String_Match() {
+  void stringMatch() {
     StringT str = stringOf("hello 1 world");
     assertThat(str.match(stringOf("^hello"))).isSameAs(True);
     assertThat(str.match(stringOf("llo 1 w"))).isSameAs(True);
@@ -193,11 +177,11 @@ public class TestString {
     assertThat(str.match(intOf(1)))
         .isInstanceOf(Err.class)
         .extracting(Object::toString)
-        .isEqualTo("no such overload");
+        .isEqualTo("no such overload: string.match(int)");
   }
 
   @Test
-  void String_Contains() {
+  void stringContains() {
     Val y =
         stringOf("goodbye").receive(Overloads.Contains, Overloads.ContainsString, stringOf("db"));
     assertThat(y).isSameAs(True);
@@ -209,7 +193,7 @@ public class TestString {
   }
 
   @Test
-  void String_EndsWith() {
+  void stringEndsWith() {
     Val y =
         stringOf("goodbye").receive(Overloads.EndsWith, Overloads.EndsWithString, stringOf("bye"));
     assertThat(y).isSameAs(True);
@@ -220,7 +204,7 @@ public class TestString {
   }
 
   @Test
-  void String_StartsWith() {
+  void stringStartsWith() {
     Val y =
         stringOf("goodbye")
             .receive(Overloads.StartsWith, Overloads.StartsWithString, stringOf("good"));
@@ -233,7 +217,7 @@ public class TestString {
   }
 
   @Test
-  void String_Size() {
+  void stringSize() {
     assertThat(stringOf("").size()).isSameAs(IntZero);
     assertThat(stringOf("hello world").size()).isEqualTo(intOf(11));
     assertThat(stringOf("\u65e5\u672c\u8a9e").size()).isEqualTo(intOf(3));

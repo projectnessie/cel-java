@@ -16,8 +16,8 @@
 package org.projectnessie.cel.common.types;
 
 import static org.projectnessie.cel.common.types.BoolT.boolOf;
-import static org.projectnessie.cel.common.types.Err.newErr;
-import static org.projectnessie.cel.common.types.Err.valOrErr;
+import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
+import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 
@@ -81,13 +81,13 @@ public class TypeValue implements Type, Val {
     if (typeVal.equals(StringType)) {
       return stringOf(typeName());
     }
-    return newErr("type conversion error from '%s' to '%s'", TypeType, typeVal);
+    return newTypeConversionError(TypeType, typeVal);
   }
 
   /** Equal implements ref.Val.Equal. */
   public Val equal(Val other) {
     if (!TypeType.equals(other.type())) {
-      return valOrErr(other, "no such overload");
+      return noSuchOverload(this, "equal", other);
     }
     return boolOf(typeName().equals(((Type) other).typeName()));
   }

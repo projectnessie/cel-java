@@ -15,24 +15,14 @@
  */
 package org.projectnessie.cel.common.debug;
 
-import org.projectnessie.cel.pb.Constant;
-import org.projectnessie.cel.pb.Constant.BoolValue;
-import org.projectnessie.cel.pb.Constant.BytesValue;
-import org.projectnessie.cel.pb.Constant.DoubleValue;
-import org.projectnessie.cel.pb.Constant.Int64Value;
-import org.projectnessie.cel.pb.Constant.NullValue;
-import org.projectnessie.cel.pb.Constant.StringValue;
-import org.projectnessie.cel.pb.Constant.Uint64Value;
-import org.projectnessie.cel.pb.Expr;
-import org.projectnessie.cel.pb.Expr.CallExpr;
-import org.projectnessie.cel.pb.Expr.ComprehensionExpr;
-import org.projectnessie.cel.pb.Expr.IdentExpr;
-import org.projectnessie.cel.pb.Expr.ListExpr;
-import org.projectnessie.cel.pb.Expr.SelectExpr;
-import org.projectnessie.cel.pb.Expr.StructExpr;
-import org.projectnessie.cel.pb.Expr.StructExpr.Entry;
-import org.projectnessie.cel.pb.Expr.StructExpr.FieldKey;
-import org.projectnessie.cel.pb.Expr.StructExpr.MapKey;
+import com.google.api.expr.v1alpha1.Constant;
+import com.google.api.expr.v1alpha1.Expr;
+import com.google.api.expr.v1alpha1.Expr.Call;
+import com.google.api.expr.v1alpha1.Expr.Comprehension;
+import com.google.api.expr.v1alpha1.Expr.CreateList;
+import com.google.api.expr.v1alpha1.Expr.CreateStruct;
+import com.google.api.expr.v1alpha1.Expr.CreateStruct.Entry;
+import com.google.api.expr.v1alpha1.Expr.Select;
 
 public class Debug {
   /** ToDebugString gives the unadorned string representation of the Expr. */
@@ -48,112 +38,113 @@ public class Debug {
   }
 
   public static String formatLiteral(Constant c) {
-    if (c instanceof Constant.BoolValue) {
-      return Boolean.toString(((BoolValue) c).value);
-    } else if (c instanceof BytesValue) {
-      StringBuilder sb = new StringBuilder();
-      sb.append("b\"");
-      byte[] bytes = ((BytesValue) c).value;
-      for (byte b : bytes) {
-        int i = b & 0xff;
-        if (i >= 32 && i <= 127 && i != 34) {
-          sb.append((char) i);
-        } else {
-          switch (i) {
-            case 7:
+    switch (c.getConstantKindCase()) {
+      case BOOL_VALUE:
+        return Boolean.toString(c.getBoolValue());
+      case BYTES_VALUE:
+        StringBuilder sb = new StringBuilder();
+        sb.append("b\"");
+        byte[] bytes = c.getBytesValue().toByteArray();
+        for (byte b : bytes) {
+          int i = b & 0xff;
+          if (i >= 32 && i <= 127 && i != 34) {
+            sb.append((char) i);
+          } else {
+            switch (i) {
+              case 7:
+                sb.append("\\a");
+                break;
+              case 8:
+                sb.append("\\b");
+                break;
+              case 9:
+                sb.append("\\t");
+                break;
+              case 10:
+                sb.append("\\n");
+                break;
+              case 11:
+                sb.append("\\v");
+                break;
+              case 12:
+                sb.append("\\f");
+                break;
+              case 13:
+                sb.append("\\r");
+                break;
+              case '"':
+                sb.append("\\\"");
+                break;
+              default:
+                sb.append(String.format("\\x%02x", i));
+                break;
+            }
+          }
+        }
+        sb.append("\"");
+        return sb.toString();
+      case DOUBLE_VALUE:
+        String s = Double.toString(c.getDoubleValue());
+        if (s.endsWith(".0")) {
+          return s.substring(0, s.length() - 2);
+        }
+        return s;
+      case INT64_VALUE:
+        return Long.toString(c.getInt64Value());
+      case STRING_VALUE:
+        sb = new StringBuilder();
+        sb.append('\"');
+        s = c.getStringValue();
+        for (int i = 0; i < s.length(); i++) {
+          char ch = s.charAt(i);
+          switch (ch) {
+            case 7: // BEL
               sb.append("\\a");
               break;
-            case 8:
-              sb.append("\\b");
-              break;
-            case 9:
-              sb.append("\\t");
-              break;
-            case 10:
-              sb.append("\\n");
-              break;
-            case 11:
+            case 11: // VT
               sb.append("\\v");
               break;
-            case 12:
-              sb.append("\\f");
+            case '\t':
+              sb.append("\\t");
               break;
-            case 13:
+            case '\b':
+              sb.append("\\b");
+              break;
+            case '\n':
+              sb.append("\\n");
+              break;
+            case '\r':
               sb.append("\\r");
               break;
-            case '"':
+            case '\f':
+              sb.append("\\f");
+              break;
+            case '\'':
+              sb.append("'");
+              break;
+            case '\"':
               sb.append("\\\"");
               break;
+            case '\\':
+              sb.append("\\\\");
+              break;
             default:
-              sb.append(String.format("\\x%02x", i));
+              if (Character.isDefined(ch)) {
+                sb.append(ch);
+              } else {
+                sb.append(String.format("\\u%04x", ((int) ch) & 0xffff));
+              }
               break;
           }
         }
-      }
-      sb.append("\"");
-      return sb.toString();
-    } else if (c instanceof DoubleValue) {
-      String s = Double.toString(((DoubleValue) c).value);
-      if (s.endsWith(".0")) {
-        return s.substring(0, s.length() - 2);
-      }
-      return s;
-    } else if (c instanceof Int64Value) {
-      return Long.toString(((Int64Value) c).value);
-    } else if (c instanceof StringValue) {
-      StringBuilder sb = new StringBuilder();
-      sb.append('\"');
-      String s = ((StringValue) c).value;
-      for (int i = 0; i < s.length(); i++) {
-        char ch = s.charAt(i);
-        switch (ch) {
-          case 7: // BEL
-            sb.append("\\a");
-            break;
-          case 11: // VT
-            sb.append("\\v");
-            break;
-          case '\t':
-            sb.append("\\t");
-            break;
-          case '\b':
-            sb.append("\\b");
-            break;
-          case '\n':
-            sb.append("\\n");
-            break;
-          case '\r':
-            sb.append("\\r");
-            break;
-          case '\f':
-            sb.append("\\f");
-            break;
-          case '\'':
-            sb.append("'");
-            break;
-          case '\"':
-            sb.append("\\\"");
-            break;
-          case '\\':
-            sb.append("\\\\");
-            break;
-          default:
-            if (Character.isDefined(ch)) {
-              sb.append(ch);
-            } else {
-              sb.append(String.format("\\u%04x", ((int) ch) & 0xffff));
-            }
-            break;
-        }
-      }
-      sb.append('\"');
-      return sb.toString();
-    } else if (c instanceof Uint64Value) {
-      return Long.toUnsignedString(((Uint64Value) c).value) + "u";
-    } else if (c instanceof NullValue) {
-      return null;
-    } else {
-      throw new IllegalArgumentException("" + c);
+        sb.append('\"');
+        return sb.toString();
+      case UINT64_VALUE:
+        return Long.toUnsignedString(c.getUint64Value()) + "u";
+      case NULL_VALUE:
+        return null;
+      default:
+        throw new IllegalArgumentException("" + c);
     }
   }
 
@@ -190,49 +181,59 @@ public class Debug {
       if (e == null) {
         return;
       }
-      if (e instanceof Expr.Const) {
-        append(formatLiteral(((Expr.Const) e).value));
-      } else if (e instanceof IdentExpr) {
-        append(((IdentExpr) e).name);
-      } else if (e instanceof SelectExpr) {
-        appendSelect(((SelectExpr) e));
-      } else if (e instanceof CallExpr) {
-        appendCall(((CallExpr) e));
-      } else if (e instanceof ListExpr) {
-        appendList(((ListExpr) e));
-      } else if (e instanceof StructExpr) {
-        appendStruct(((StructExpr) e));
-      } else if (e instanceof ComprehensionExpr) {
-        appendComprehension(((ComprehensionExpr) e));
+      switch (e.getExprKindCase()) {
+        case CONST_EXPR:
+          append(formatLiteral(e.getConstExpr()));
+          break;
+        case IDENT_EXPR:
+          append(e.getIdentExpr().getName());
+          break;
+        case SELECT_EXPR:
+          appendSelect(e.getSelectExpr());
+          break;
+        case CALL_EXPR:
+          appendCall(e.getCallExpr());
+          break;
+        case LIST_EXPR:
+          appendList(e.getListExpr());
+          break;
+        case STRUCT_EXPR:
+          appendStruct(e.getStructExpr());
+          break;
+        case COMPREHENSION_EXPR:
+          appendComprehension(e.getComprehensionExpr());
+          break;
+        case EXPRKIND_NOT_SET:
+          throw new IllegalStateException("Expr w/o kind");
       }
       adorn(e);
     }
 
-    void appendSelect(SelectExpr sel) {
-      buffer(sel.operand);
+    void appendSelect(Select sel) {
+      buffer(sel.getOperand());
       append(".");
-      append(sel.field);
-      if (sel.testOnly) {
+      append(sel.getField());
+      if (sel.getTestOnly()) {
         append("~test-only~");
       }
     }
 
-    void appendCall(CallExpr call) {
-      if (call.target != null) {
-        buffer(call.target);
+    void appendCall(Call call) {
+      if (call.hasTarget()) {
+        buffer(call.getTarget());
         append(".");
       }
-      append(call.function);
+      append(call.getFunction());
       append("(");
-      if (call.args.length > 0) {
+      if (call.getArgsCount() > 0) {
         addIndent();
         appendLine();
-        for (int i = 0; i < call.args.length; i++) {
+        for (int i = 0; i < call.getArgsCount(); i++) {
           if (i > 0) {
             append(",");
             appendLine();
           }
-          buffer(call.args[i]);
+          buffer(call.getArgs(i));
         }
         removeIndent();
         appendLine();
@@ -240,18 +241,18 @@ public class Debug {
       append(")");
     }
 
-    void appendList(ListExpr list) {
+    void appendList(CreateList list) {
       append("[");
-      if (list.elements.length > 0) {
+      if (list.getElementsCount() > 0) {
         appendLine();
         addIndent();
-        for (int i = 0; i < list.elements.length; i++) {
+        for (int i = 0; i < list.getElementsCount(); i++) {
 
           if (i > 0) {
             append(",");
             appendLine();
           }
-          buffer(list.elements[i]);
+          buffer(list.getElements(i));
         }
         removeIndent();
         appendLine();
@@ -259,29 +260,29 @@ public class Debug {
       append("]");
     }
 
-    void appendStruct(StructExpr obj) {
-      if (obj.messageName != null) {
+    void appendStruct(CreateStruct obj) {
+      if (!obj.getMessageName().isEmpty()) {
         appendObject(obj);
       } else {
         appendMap(obj);
       }
     }
 
-    void appendObject(StructExpr obj) {
-      append(obj.messageName);
+    void appendObject(CreateStruct obj) {
+      append(obj.getMessageName());
       append("{");
-      if (obj.entries.length > 0) {
+      if (obj.getEntriesCount() > 0) {
         appendLine();
         addIndent();
-        for (int i = 0; i < obj.entries.length; i++) {
+        for (int i = 0; i < obj.getEntriesCount(); i++) {
           if (i > 0) {
             append(",");
             appendLine();
           }
-          Entry entry = obj.entries[i];
-          append(((FieldKey) entry.key).field);
+          Entry entry = obj.getEntries(i);
+          append(entry.getFieldKey());
           append(":");
-          buffer(entry.value);
+          buffer(entry.getValue());
           adorn(entry);
         }
         removeIndent();
@@ -290,20 +291,20 @@ public class Debug {
       append("}");
     }
 
-    void appendMap(StructExpr obj) {
+    void appendMap(CreateStruct obj) {
       append("{");
-      if (obj.entries.length > 0) {
+      if (obj.getEntriesCount() > 0) {
         appendLine();
         addIndent();
-        for (int i = 0; i < obj.entries.length; i++) {
+        for (int i = 0; i < obj.getEntriesCount(); i++) {
           if (i > 0) {
             append(",");
             appendLine();
           }
-          Entry entry = obj.entries[i];
-          buffer(((MapKey) entry.key).mapKey);
+          Entry entry = obj.getEntries(i);
+          buffer(entry.getMapKey());
           append(":");
-          buffer(entry.value);
+          buffer(entry.getValue());
           adorn(entry);
         }
         removeIndent();
@@ -312,43 +313,43 @@ public class Debug {
       append("}");
     }
 
-    void appendComprehension(ComprehensionExpr comprehension) {
+    void appendComprehension(Comprehension comprehension) {
       append("__comprehension__(");
       addIndent();
       appendLine();
       append("// Variable");
       appendLine();
-      append(comprehension.iterVar);
+      append(comprehension.getIterVar());
       append(",");
       appendLine();
       append("// Target");
       appendLine();
-      buffer(comprehension.iterRange);
+      buffer(comprehension.getIterRange());
       append(",");
       appendLine();
       append("// Accumulator");
       appendLine();
-      append(comprehension.accuVar);
+      append(comprehension.getAccuVar());
       append(",");
       appendLine();
       append("// Init");
       appendLine();
-      buffer(comprehension.accuInit);
+      buffer(comprehension.getAccuInit());
       append(",");
       appendLine();
       append("// LoopCondition");
       appendLine();
-      buffer(comprehension.loopCondition);
+      buffer(comprehension.getLoopCondition());
       append(",");
       appendLine();
       append("// LoopStep");
       appendLine();
-      buffer(comprehension.loopStep);
+      buffer(comprehension.getLoopStep());
       append(",");
       appendLine();
       append("// Result");
       appendLine();
-      buffer(comprehension.result);
+      buffer(comprehension.getResult());
       append(")");
       removeIndent();
     }

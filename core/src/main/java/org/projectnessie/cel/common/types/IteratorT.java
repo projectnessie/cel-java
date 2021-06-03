@@ -16,13 +16,17 @@
 package org.projectnessie.cel.common.types;
 
 import static org.projectnessie.cel.common.types.BoolT.boolOf;
+import static org.projectnessie.cel.common.types.Err.noMoreElements;
 
 import java.util.Iterator;
+import java.util.NoSuchElementException;
+import org.projectnessie.cel.common.types.ref.BaseVal;
+import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 
 /** Iterator permits safe traversal over the contents of an aggregate type. */
-public interface IteratorT {
+public interface IteratorT extends Val {
 
   static IteratorT javaIterator(TypeAdapter adapter, Iterator<?> iterator) {
     return new JavaIteratorT(adapter, iterator);
@@ -33,7 +37,7 @@ public interface IteratorT {
   /** Next returns the next element. */
   Val next();
 
-  class JavaIteratorT implements IteratorT {
+  class JavaIteratorT extends BaseVal implements IteratorT {
     private final TypeAdapter adapter;
     private final Iterator<?> iterator;
 
@@ -49,7 +53,41 @@ public interface IteratorT {
 
     @Override
     public Val next() {
-      return adapter.nativeToValue(iterator.next());
+      Object n;
+      try {
+        n = iterator.next();
+      } catch (NoSuchElementException e) {
+        return noMoreElements();
+      }
+      if (n instanceof Val) {
+        return (Val) n;
+      }
+      return adapter.nativeToValue(n);
+    }
+
+    @Override
+    public <T> T convertToNative(Class<T> typeDesc) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Val convertToType(Type typeValue) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Val equal(Val other) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Type type() {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Object value() {
+      throw new UnsupportedOperationException();
     }
   }
 }

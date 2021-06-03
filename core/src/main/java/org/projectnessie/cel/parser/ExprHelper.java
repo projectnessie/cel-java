@@ -15,9 +15,10 @@
  */
 package org.projectnessie.cel.parser;
 
+import com.google.api.expr.v1alpha1.Expr;
+import com.google.api.expr.v1alpha1.Expr.CreateStruct.Entry;
+import java.util.List;
 import org.projectnessie.cel.common.Location;
-import org.projectnessie.cel.pb.Expr;
-import org.projectnessie.cel.pb.Expr.StructExpr;
 
 /**
  * ExprHelper assists with the manipulation of proto-based Expr values in a manner which is
@@ -48,25 +49,31 @@ interface ExprHelper {
    * NewList creates a CreateList instruction where the list is comprised of the optional set of
    * elements provided as arguments.
    */
+  Expr newList(List<Expr> elems);
+
+  /**
+   * NewList creates a CreateList instruction where the list is comprised of the optional set of
+   * elements provided as arguments.
+   */
   Expr newList(Expr... elems);
 
   /**
    * NewMap creates a CreateStruct instruction for a map where the map is comprised of the optional
    * set of key, value entries.
    */
-  Expr newMap(StructExpr.Entry... entries);
+  Expr newMap(List<Entry> entries);
 
   /** NewMapEntry creates a Map Entry for the key, value pair. */
-  StructExpr.Entry newMapEntry(Expr key, Expr val);
+  Entry newMapEntry(Expr key, Expr val);
 
   /**
    * NewObject creates a CreateStruct instruction for an object with a given type name and optional
    * set of field initializers.
    */
-  Expr newObject(String typeName, StructExpr.Entry... fieldInits);
+  Expr newObject(String typeName, List<Entry> fieldInits);
 
   /** NewObjectFieldInit creates a new Object field initializer from the field name and value. */
-  StructExpr.Entry newObjectFieldInit(String field, Expr init);
+  Entry newObjectFieldInit(String field, Expr init);
 
   /**
    * Fold creates a fold comprehension instruction.
@@ -96,10 +103,13 @@ interface ExprHelper {
   Expr ident(String name);
 
   /** GlobalCall creates a function call Expr value for a global (free) function. */
+  Expr globalCall(String function, List<Expr> args);
+
+  /** GlobalCall creates a function call Expr value for a global (free) function. */
   Expr globalCall(String function, Expr... args);
 
   /** ReceiverCall creates a function call Expr value for a receiver-style function. */
-  Expr receiverCall(String function, Expr target, Expr... args);
+  Expr receiverCall(String function, Expr target, List<Expr> args);
 
   /** PresenceTest creates a Select TestOnly Expr value for modelling has() semantics. */
   Expr presenceTest(Expr operand, String field);

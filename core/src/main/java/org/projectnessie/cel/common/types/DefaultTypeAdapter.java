@@ -19,35 +19,52 @@ import static org.projectnessie.cel.common.types.BoolT.boolOf;
 import static org.projectnessie.cel.common.types.BytesT.bytesOf;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.DurationT.durationOf;
+import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.ListT.newGenericArrayList;
 import static org.projectnessie.cel.common.types.ListT.newStringArrayList;
 import static org.projectnessie.cel.common.types.ListT.newValArrayList;
-import static org.projectnessie.cel.common.types.ListT.newWrappedList;
-import static org.projectnessie.cel.common.types.MapT.newWrappedMap;
+import static org.projectnessie.cel.common.types.MapT.newMaybeWrappedMap;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.TimestampT.ZoneIdZ;
 import static org.projectnessie.cel.common.types.TimestampT.timestampOf;
+import static org.projectnessie.cel.common.types.UintT.uintOf;
 
+import com.google.protobuf.Any;
+import com.google.protobuf.EnumValue;
+import com.google.protobuf.ListValue;
+import com.google.protobuf.Message;
+import com.google.protobuf.NullValue;
+import com.google.protobuf.Struct;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import org.projectnessie.cel.common.ULong;
+import org.projectnessie.cel.common.types.pb.Db;
+import org.projectnessie.cel.common.types.pb.TypeDescription;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 
 /** defaultTypeAdapter converts go native types to CEL values. */
 public class DefaultTypeAdapter implements TypeAdapter {
   /** DefaultTypeAdapter adapts canonical CEL types from their equivalent Go values. */
-  public static final DefaultTypeAdapter Instance = new DefaultTypeAdapter();
+  public static final DefaultTypeAdapter Instance = new DefaultTypeAdapter(Db.defaultDb);
+
+  private final Db db;
+
+  private DefaultTypeAdapter(Db db) {
+    this.db = db;
+  }
 
   /** NativeToValue implements the ref.TypeAdapter interface. */
   @Override
   public Val nativeToValue(Object value) {
-    Val val = nativeToValue(this, value);
+    Val val = nativeToValue(db, this, value);
     if (val != null) {
       return val;
     }
@@ -58,7 +75,7 @@ public class DefaultTypeAdapter implements TypeAdapter {
    * nativeToValue returns the converted (ref.Val, true) of a conversion is found, otherwise (nil,
    * false)
    */
-  public static Val nativeToValue(TypeAdapter a, Object value) {
+  public static Val nativeToValue(Db db, TypeAdapter a, Object value) {
     if (value == null) {
       return NullT.NullValue;
     }
@@ -83,6 +100,9 @@ public class DefaultTypeAdapter implements TypeAdapter {
     if (value instanceof Integer) {
       return intOf((Integer) value);
     }
+    if (value instanceof ULong) {
+      return uintOf(((ULong) value).longValue());
+    }
     if (value instanceof Long) {
       return intOf((Long) value);
     }
@@ -104,8 +124,20 @@ public class DefaultTypeAdapter implements TypeAdapter {
     if (value instanceof Calendar) {
       return timestampOf(((Calendar) value).toInstant().atZone(ZoneIdZ));
     }
-    if (value instanceof Val) {
-      return (Val) value;
+    if (value instanceof int[]) {
+      return newValArrayList(
+          DefaultTypeAdapter.Instance,
+          Arrays.stream((int[]) value).mapToObj(IntT::intOf).toArray(Val[]::new));
+    }
+    if (value instanceof long[]) {
+      return newValArrayList(
+          DefaultTypeAdapter.Instance,
+          Arrays.stream((long[]) value).mapToObj(IntT::intOf).toArray(Val[]::new));
+    }
+    if (value instanceof double[]) {
+      return newValArrayList(
+          DefaultTypeAdapter.Instance,
+          Arrays.stream((double[]) value).mapToObj(DoubleT::doubleOf).toArray(Val[]::new));
     }
     if (value instanceof String[]) {
       return newStringArrayList((String[]) value);
@@ -117,92 +149,103 @@ public class DefaultTypeAdapter implements TypeAdapter {
       return newGenericArrayList(a, (Object[]) value);
     }
     if (value instanceof List) {
-      return newWrappedList(a, (List<?>) value);
+      return newGenericArrayList(a, ((List<?>) value).toArray());
     }
     if (value instanceof Map) {
-      return newWrappedMap(a, (Map<?, ?>) value);
+      return newMaybeWrappedMap(a, (Map<?, ?>) value);
     }
-    return null;
+
+    // additional specializations may be added upon request / need.
+    if (value instanceof Any) {
+      Any v = (Any) value;
+      String typeUrl = v.getTypeUrl();
+      String typeName = TypeDescription.typeNameFromUrl(typeUrl);
+      TypeDescription type = db.describeType(typeName);
+      if (type == null) {
+        throw new IllegalStateException(String.format("unknown type: '%s'", typeName));
+      }
+      try {
+        Class<? extends Message> msgClass = (Class<? extends Message>) type.reflectType();
+        Message unwrapped = v.unpack(msgClass);
+        return nativeToValue(db, a, unwrapped);
+      } catch (Exception e) {
+        throw new RuntimeException(
+            String.format("Failed to unpack type '%s' from '%s': %s", typeUrl, typeName, e), e);
+      }
+    }
+    if (value instanceof NullValue) {
+      return NullT.NullValue;
+    }
+    if (value instanceof ListValue) {
+      throw new UnsupportedOperationException("IMPLEMENT ME");
+      // TODO
+      //      return newJSONList(a, (ListValue) value);
+    }
+    if (value instanceof Struct) {
+      throw new UnsupportedOperationException("IMPLEMENT ME");
+      // TODO
+      //      return newJSONStruct(a, (Struct) value);
+    }
+    if (value instanceof Val) {
+      return (Val) value;
+    }
+    if (value instanceof EnumValue) {
+      return intOf(((EnumValue) value).getNumber());
+    }
+    if (value instanceof Message) {
+      Message v = (Message) value;
+      String typeName = v.getDescriptorForType().getFullName();
+      TypeDescription td = Db.defaultDb.describeType(typeName);
+      if (td == null) {
+        return null;
+      }
+      Object val = td.maybeUnwrap(db, v);
+      if (val == null) {
+        return null;
+      }
+      return a.nativeToValue(val);
+    }
+    return newErr("unsupported conversion from '%s' to value", value.getClass());
+    // TODO
+    //        {
+    //          refValue := reflect.ValueOf(v)
+    //          if refValue.Kind() == reflect.Ptr {
+    //            if refValue.IsNil() {
+    //              return UnsupportedRefValConversionErr(v), true
+    //            }
+    //            refValue = refValue.Elem()
+    //          }
+    //          refKind := refValue.Kind()
+    //          switch refKind {
+    //          case reflect.Array, reflect.Slice:
+    //            return NewDynamicList(a, v), true
+    //          case reflect.Map:
+    //            return NewDynamicMap(a, v), true
+    //          // type aliases of primitive types cannot be asserted as that type, but rather need
+    //          // to be downcast to int32 before being converted to a CEL representation.
+    //          case reflect.Int32:
+    //            intType := reflect.TypeOf(int32(0))
+    //            return Int(refValue.Convert(intType).Interface().(int32)), true
+    //          case reflect.Int64:
+    //            intType := reflect.TypeOf(int64(0))
+    //            return Int(refValue.Convert(intType).Interface().(int64)), true
+    //          case reflect.Uint32:
+    //            uintType := reflect.TypeOf(uint32(0))
+    //            return Uint(refValue.Convert(uintType).Interface().(uint32)), true
+    //          case reflect.Uint64:
+    //            uintType := reflect.TypeOf(uint64(0))
+    //            return Uint(refValue.Convert(uintType).Interface().(uint64)), true
+    //          case reflect.Float32:
+    //            doubleType := reflect.TypeOf(float32(0))
+    //            return Double(refValue.Convert(doubleType).Interface().(float32)), true
+    //          case reflect.Float64:
+    //            doubleType := reflect.TypeOf(float64(0))
+    //            return Double(refValue.Convert(doubleType).Interface().(float64)), true
+    //          }
+    //        }
+    //    return null;
   }
 
-  //    // additional specializations may be added upon request / need.
-  //    case *anypb.Any:
-  //      if v == nil {
-  //        return UnsupportedRefValConversionErr(v), true
-  //      }
-  //      unpackedAny, err := v.UnmarshalNew()
-  //      if err != nil {
-  //        return NewErr("anypb.UnmarshalNew() failed for type %q: %v", v.GetTypeUrl(), err), true
-  //      }
-  //      return a.NativeToValue(unpackedAny), true
-  //    case *structpb.NullValue, structpb.NullValue:
-  //      return NullValue, true
-  //    case *structpb.ListValue:
-  //      return NewJSONList(a, v), true
-  //    case *structpb.Struct:
-  //      return NewJSONStruct(a, v), true
-  //    case ref.Val:
-  //      return v, true
-  //    case protoreflect.EnumNumber:
-  //      return Int(v), true
-  //    case proto.Message:
-  //      if v == nil {
-  //        return UnsupportedRefValConversionErr(v), true
-  //      }
-  //      typeName := string(v.ProtoReflect().Descriptor().FullName())
-  //      td, found := pb.DefaultDb.DescribeType(typeName)
-  //      if !found {
-  //        return nil, false
-  //      }
-  //      val, unwrapped := td.MaybeUnwrap(v)
-  //      if !unwrapped {
-  //        return nil, false
-  //      }
-  //      return a.NativeToValue(val), true
-  //    // Note: dynamicpb.Message implements the proto.Message _and_ protoreflect.Message
-  // interfaces
-  //    // which means that this case must appear after handling a proto.Message type.
-  //    case protoreflect.Message:
-  //      return a.NativeToValue(v.Interface()), true
-  //    default:
-  //      refValue := reflect.ValueOf(v)
-  //      if refValue.Kind() == reflect.Ptr {
-  //        if refValue.IsNil() {
-  //          return UnsupportedRefValConversionErr(v), true
-  //        }
-  //        refValue = refValue.Elem()
-  //      }
-  //      refKind := refValue.Kind()
-  //      switch refKind {
-  //      case reflect.Array, reflect.Slice:
-  //        return NewDynamicList(a, v), true
-  //      case reflect.Map:
-  //        return NewDynamicMap(a, v), true
-  //      // type aliases of primitive types cannot be asserted as that type, but rather need
-  //      // to be downcast to int32 before being converted to a CEL representation.
-  //      case reflect.Int32:
-  //        intType := reflect.TypeOf(int32(0))
-  //        return Int(refValue.Convert(intType).Interface().(int32)), true
-  //      case reflect.Int64:
-  //        intType := reflect.TypeOf(int64(0))
-  //        return Int(refValue.Convert(intType).Interface().(int64)), true
-  //      case reflect.Uint32:
-  //        uintType := reflect.TypeOf(uint32(0))
-  //        return Uint(refValue.Convert(uintType).Interface().(uint32)), true
-  //      case reflect.Uint64:
-  //        uintType := reflect.TypeOf(uint64(0))
-  //        return Uint(refValue.Convert(uintType).Interface().(uint64)), true
-  //      case reflect.Float32:
-  //        doubleType := reflect.TypeOf(float32(0))
-  //        return Double(refValue.Convert(doubleType).Interface().(float32)), true
-  //      case reflect.Float64:
-  //        doubleType := reflect.TypeOf(float64(0))
-  //        return Double(refValue.Convert(doubleType).Interface().(float64)), true
-  //      }
-  //    }
-  //    return nil, false
-  //  }
-  //
   //  func msgSetField(target protoreflect.Message, field *pb.FieldDescription, val ref.Val) error {
   //    if field.IsList() {
   //      lv := target.NewField(field.Descriptor())

@@ -35,7 +35,7 @@ import org.projectnessie.cel.common.types.ref.Val;
 public class TestType {
 
   @Test
-  void Type_ConvertToType() {
+  void typeConvertToType() {
     TypeValue[] stdTypes =
         new TypeValue[] {
           BoolType,
@@ -58,7 +58,7 @@ public class TestType {
   }
 
   @Test
-  void Type_Type() {
+  void typeType() {
     assertThat(TypeType.type()).isSameAs(TypeType);
   }
 }

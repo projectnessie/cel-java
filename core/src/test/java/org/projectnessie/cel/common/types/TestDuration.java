@@ -15,216 +15,193 @@
  */
 package org.projectnessie.cel.common.types;
 
+import static java.time.Duration.ofSeconds;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.projectnessie.cel.common.types.BoolT.False;
+import static org.projectnessie.cel.common.types.BoolT.True;
+import static org.projectnessie.cel.common.types.DurationT.DurationType;
+import static org.projectnessie.cel.common.types.DurationT.durationOf;
+import static org.projectnessie.cel.common.types.IntT.IntNegOne;
+import static org.projectnessie.cel.common.types.IntT.IntOne;
+import static org.projectnessie.cel.common.types.IntT.IntType;
+import static org.projectnessie.cel.common.types.IntT.IntZero;
+import static org.projectnessie.cel.common.types.IntT.intOf;
+import static org.projectnessie.cel.common.types.StringT.StringType;
+import static org.projectnessie.cel.common.types.TypeValue.TypeType;
+import static org.projectnessie.cel.common.types.UintT.UintType;
+
+import com.google.protobuf.Any;
+import java.time.Duration;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
+import org.projectnessie.cel.common.types.ref.Val;
+
 public class TestDuration {
 
-  //  @Test
-  //	void DurationAdd() {
-  //		dur := &dpb.Duration{Seconds: 7506}
-  //		d := Duration{Duration: dur.AsDuration()}
-  //		if !d.Add(d).Equal(Duration{(&dpb.Duration{Seconds: 15012}).AsDuration()}).(Bool) {
-  //			t.Error("Adding duration and itself did not double it.")
-  //		}
-  //		if lhs, rhs := time.Duration(math.MaxInt64), time.Duration(1);
-  // !IsError(durationOf(lhs).Add(durationOf(rhs))) {
-  //			t.Errorf("Expected adding %d and %d to result in overflow.", lhs, rhs)
-  //		}
-  //		if lhs, rhs := time.Duration(math.MinInt64), time.Duration(-1);
-  // !IsError(durationOf(lhs).Add(durationOf(rhs))) {
-  //			t.Errorf("Expected adding %d and %d to result in overflow.", lhs, rhs)
-  //		}
-  //		if lhs, rhs := time.Duration(math.MaxInt64-1), time.Duration(1);
-  // !durationOf(lhs).Add(durationOf(rhs)).Equal(durationOf(math.MaxInt64)).(Bool) {
-  //			t.Errorf("Expected adding %d and %d to yield %d", lhs, rhs, math.MaxInt64)
-  //		}
-  //		if lhs, rhs := time.Duration(math.MinInt64+1), time.Duration(-1);
-  // !durationOf(lhs).Add(durationOf(rhs)).Equal(durationOf(math.MinInt64)).(Bool) {
-  //			t.Errorf("Expected adding %d and %d to yield %d", lhs, rhs, math.MaxInt64)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DurationCompare() {
-  //		d := Duration{(&dpb.Duration{Seconds: 7506}).AsDuration()}
-  //		lt := Duration{(&dpb.Duration{Seconds: -10}).AsDuration()}
-  //		if d.Compare(lt).(Int) != IntOne {
-  //			t.Error("Larger duration was not considered greater than smaller one.")
-  //		}
-  //		if lt.Compare(d).(Int) != IntNegOne {
-  //			t.Error("Smaller duration was not less than larger one.")
-  //		}
-  //		if d.Compare(d).(Int) != IntZero {
-  //			t.Error("Durations were not considered equal.")
-  //		}
-  //		if !IsError(d.Compare(False)) {
-  //			t.Error("Got comparison result, expected error.")
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DurationConvertToNative() {
-  //		dur := Duration{Duration: duration(7506, 1000)}
-  //		val, err := dur.ConvertToNative(reflect.TypeOf(&dpb.Duration{}))
-  //		if err != nil ||
-  //			!proto.Equal(val.(proto.Message), &dpb.Duration{Seconds: 7506, Nanos: 1000}) {
-  //			t.Errorf("Got '%v', expected backing proto message value", err)
-  //		}
-  //		val, err = dur.ConvertToNative(reflect.TypeOf(Duration{}))
-  //		if err != nil {
-  //			t.Fatalf("ConvertToNative() failed: %v", err)
-  //		}
-  //		if !reflect.DeepEqual(val, dur) {
-  //			t.Errorf("got value %v, wanted %v", val, dur)
-  //		}
-  //		val, err = dur.ConvertToNative(reflect.TypeOf(time.Duration(0)))
-  //		if err != nil {
-  //			t.Fatalf("ConvertToNative() failed: %v", err)
-  //		}
-  //		if !reflect.DeepEqual(val, dur.Duration) {
-  //			t.Errorf("got value %v, wanted %v", val, dur.Duration)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DurationConvertToNative_Any() {
-  //		d := Duration{Duration: duration(7506, 1000)}
-  //		val, err := d.ConvertToNative(anyValueType)
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		want, err := anypb.New(dpb.New(d.Duration))
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		if !proto.Equal(val.(proto.Message), want) {
-  //			t.Errorf("Got '%v', wanted %v", val, want)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DurationConvertToNative_Error() {
-  //		val, err := Duration{Duration: duration(7506, 1000)}.ConvertToNative(jsonValueType)
-  //		if err != nil {
-  //			t.Errorf("Got error: '%v', expected value", err)
-  //		}
-  //		json := val.(*structpb.Value)
-  //		want := structpb.NewStringValue("7506.000001s")
-  //		if !proto.Equal(json, want) {
-  //			t.Errorf("Got %v, wanted %v", json, want)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DurationConvertToNative_Json() {
-  //		val, err := Duration{Duration: duration(7506, 1000)}.ConvertToNative(jsonValueType)
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		want := structpb.NewStringValue("7506.000001s")
-  //		if !proto.Equal(val.(proto.Message), want) {
-  //			t.Errorf("Got '%v', wanted %v", val, want)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DurationConvertToType_Identity() {
-  //		d := Duration{Duration: duration(7506, 1000)}
-  //		str := d.ConvertToType(StringType).(String)
-  //		if str != "7506.000001s" {
-  //			t.Errorf("Got '%v', wanted 7506.000001s", str)
-  //		}
-  //		i := d.ConvertToType(IntType).(Int)
-  //		if i != Int(7506000001000) {
-  //			t.Errorf("Got '%v', wanted 7506000001000", i)
-  //		}
-  //		if !d.ConvertToType(DurationType).Equal(d).(Bool) {
-  //			t.Errorf("Got '%v', wanted identity", d.ConvertToType(DurationType))
-  //		}
-  //		if d.ConvertToType(TypeType) != DurationType {
-  //			t.Errorf("Got '%v', expected duration type", d.ConvertToType(TypeType))
-  //		}
-  //		if !IsError(d.ConvertToType(UintType)) {
-  //			t.Errorf("Got value, expected error.")
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DurationNegate() {
-  //		neg := Duration{Duration: duration(1234, 1)}.Negate()
-  //		want := duration(-1234, -1)
-  //		if neg.Value().(time.Duration) != want {
-  //			t.Errorf("Got %v, expected %v", neg, want)
-  //		}
-  //		if v := time.Duration(math.MinInt64); !IsError(durationOf(v).Negate()) {
-  //			t.Errorf("Expected negating %d to result in overflow.", v)
-  //		}
-  //		if v := time.Duration(math.MaxInt64);
-  // !durationOf(v).Negate().Equal(durationOf(time.Duration(math.MinInt64 + 1))).(Bool) {
-  //			t.Errorf("Expected negating %d to yeild %d", v, time.Duration(math.MinInt64+1))
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DurationGetHours() {
-  //		d := Duration{Duration: duration(7506, 0)}
-  //		hr := d.Receive(overloads.TimeGetHours, overloads.DurationToHours, []ref.Val{})
-  //		if !hr.Equal(Int(2)).(Bool) {
-  //			t.Error("Expected 2 hours, got", hr)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DurationGetMinutes() {
-  //		d := Duration{Duration: duration(7506, 0)}
-  //		min := d.Receive(overloads.TimeGetMinutes, overloads.DurationToMinutes, []ref.Val{})
-  //		if !min.Equal(Int(125)).(Bool) {
-  //			t.Error("Expected 5 minutes, got", min)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DurationGetSeconds() {
-  //		d := Duration{Duration: duration(7506, 0)}
-  //		sec := d.Receive(overloads.TimeGetSeconds, overloads.DurationToSeconds, []ref.Val{})
-  //		if !sec.Equal(Int(7506)).(Bool) {
-  //			t.Error("Expected 6 seconds, got", sec)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DurationGetMilliseconds() {
-  //		d := Duration{Duration: duration(7506, 0)}
-  //		sec := d.Receive(overloads.TimeGetMilliseconds, overloads.DurationToMilliseconds, []ref.Val{})
-  //		if !sec.Equal(Int(7506000)).(Bool) {
-  //			t.Error("Expected 6 seconds, got", sec)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DurationSubtract() {
-  //		d := Duration{Duration: duration(7506, 0)}
-  //		if !d.Subtract(d).ConvertToType(IntType).Equal(IntZero).(Bool) {
-  //			t.Error("Subtracting a duration from itself did not equal zero.")
-  //		}
-  //		if lhs, rhs := time.Duration(math.MaxInt64), time.Duration(-1);
-  // !IsError(durationOf(lhs).Subtract(durationOf(rhs))) {
-  //			t.Errorf("Expected subtracting %d and %d to result in overflow.", lhs, rhs)
-  //		}
-  //		if lhs, rhs := time.Duration(math.MinInt64), time.Duration(1);
-  // !IsError(durationOf(lhs).Subtract(durationOf(rhs))) {
-  //			t.Errorf("Expected subtracting %d and %d to result in overflow.", lhs, rhs)
-  //		}
-  //		if lhs, rhs := time.Duration(math.MaxInt64-1), time.Duration(-1);
-  // !durationOf(lhs).Subtract(durationOf(rhs)).Equal(durationOf(math.MaxInt64)).(Bool) {
-  //			t.Errorf("Expected subtracting %d and %d to yield %d", lhs, rhs, math.MaxInt64)
-  //		}
-  //		if lhs, rhs := time.Duration(math.MinInt64+1), time.Duration(1);
-  // !durationOf(lhs).Subtract(durationOf(rhs)).Equal(durationOf(math.MinInt64)).(Bool) {
-  //			t.Errorf("Expected subtracting %d and %d to yield %d", lhs, rhs, math.MinInt64)
-  //		}
-  //	}
-  //
-  //	func duration(seconds, nanos int64) time.Duration {
-  //		return time.Duration(seconds)*time.Second + time.Duration(nanos)
-  //	}
+  @Test
+  void durationAdd() {
+    Duration dur = ofSeconds(7506);
+    DurationT d = durationOf(dur);
 
+    assertThat(d.add(d).equal(durationOf(ofSeconds(15012)))).isSameAs(True);
+
+    assertThat(durationOf(ofSeconds(Long.MAX_VALUE)).add(durationOf(ofSeconds(1L))))
+        .matches(Err::isError);
+
+    assertThat(durationOf(ofSeconds(Long.MIN_VALUE)).add(durationOf(ofSeconds(-1L))))
+        .matches(Err::isError);
+
+    assertThat(
+            durationOf(ofSeconds(Long.MAX_VALUE - 1))
+                .add(durationOf(Duration.ofSeconds(1L)))
+                .equal(durationOf(ofSeconds(Long.MAX_VALUE))))
+        .isSameAs(True);
+
+    assertThat(
+            durationOf(ofSeconds(Long.MIN_VALUE + 1))
+                .add(durationOf(ofSeconds(-1L)))
+                .equal(durationOf(ofSeconds(Long.MIN_VALUE))))
+        .isSameAs(True);
+  }
+
+  @Test
+  void durationCompare() {
+    DurationT d = durationOf(ofSeconds(7506));
+    DurationT lt = durationOf(ofSeconds(-10));
+    assertThat(d.compare(lt)).isSameAs(IntOne);
+    assertThat(lt.compare(d)).isSameAs(IntNegOne);
+    assertThat(d.compare(d)).isSameAs(IntZero);
+    assertThat(d.compare(False)).matches(Err::isError);
+  }
+
+  @Test
+  void durationConvertToNative() {
+    DurationT dur = durationOf(Duration.ofSeconds(7506, 1000));
+
+    com.google.protobuf.Duration val = dur.convertToNative(com.google.protobuf.Duration.class);
+    assertThat(val)
+        .isEqualTo(
+            com.google.protobuf.Duration.newBuilder().setSeconds(7506).setNanos(1000).build());
+
+    assertThat(val)
+        .extracting(
+            com.google.protobuf.Duration::getSeconds, com.google.protobuf.Duration::getNanos)
+        .containsExactly(((Duration) dur.value()).getSeconds(), ((Duration) dur.value()).getNano());
+
+    Duration valD = dur.convertToNative(Duration.class);
+    assertThat(valD).isEqualTo(dur.value());
+  }
+
+  @Test
+  void durationConvertToNative_Any() {
+    DurationT d = durationOf(Duration.ofSeconds(7506, 1000));
+    Any val = d.convertToNative(Any.class);
+    Any want =
+        Any.pack(com.google.protobuf.Duration.newBuilder().setSeconds(7506).setNanos(1000).build());
+    assertThat(val).isEqualTo(want);
+  }
+
+  @Test
+  @Disabled("IMPLEMENT ME")
+  void durationConvertToNative_Error() {
+    //		DurationT val = durationOf(Duration.ofSeconds(7506, 1000)).convertToNative(jsonValueType);
+    //      		if err != nil {
+    //      			t.Errorf("Got error: '%v', expected value", err)
+    //      		}
+    //      		json := val.(*structpb.Value)
+    //      		want := structpb.NewStringValue("7506.000001s")
+    //      		if !proto.equal(json, want) {
+    //      			t.Errorf("Got %v, wanted %v", json, want)
+    //      		}
+  }
+
+  @Test
+  @Disabled("IMPLEMENT ME")
+  void durationConvertToNative_Json() {
+    //		DurationT 	val = Duration{Duration: duration(7506, 1000)}.convertToNative(jsonValueType)
+    //      		if err != nil {
+    //      			t.Error(err)
+    //      		}
+    //      		want := structpb.NewStringValue("7506.000001s")
+    //      		if !proto.equal(val.(proto.Message), want) {
+    //      			t.Errorf("Got '%v', wanted %v", val, want)
+    //      		}
+  }
+
+  @Test
+  void durationConvertToType_Identity() {
+    DurationT d = durationOf(ofSeconds(7506, 1000));
+
+    assertThat(d.convertToType(IntType).value()).isEqualTo(7506000001000L);
+    assertThat(d.convertToType(DurationType).equal(d)).isSameAs(True);
+    assertThat(d.convertToType(TypeType)).isSameAs(DurationType);
+    assertThat(d.convertToType(UintType)).matches(Err::isError);
+    assertThat(d.convertToType(StringType).value().toString()).isEqualTo("7506.000001s");
+  }
+
+  @Test
+  void durationNegate() {
+    Val neg = durationOf(ofSeconds(1234, 1)).negate();
+    Duration want = ofSeconds(-1234, -1);
+    assertThat(neg.value()).isEqualTo(want);
+    assertThat(durationOf(ofSeconds(Long.MIN_VALUE)).negate()).matches(Err::isError);
+    assertThat(
+            durationOf(ofSeconds(Long.MAX_VALUE))
+                .negate()
+                .equal(durationOf(ofSeconds(Long.MIN_VALUE + 1))))
+        .isSameAs(True);
+  }
+
+  @Test
+  void durationGetHours() {
+    DurationT d = durationOf(ofSeconds(7506, 0));
+    Val hr = d.receive(Overloads.TimeGetHours, Overloads.DurationToHours);
+    assertThat(hr.equal(intOf(2))).isSameAs(True);
+  }
+
+  @Test
+  void durationGetMinutes() {
+    DurationT d = durationOf(ofSeconds(7506, 0));
+    Val min = d.receive(Overloads.TimeGetMinutes, Overloads.DurationToMinutes);
+    assertThat(min.equal(intOf(125))).isSameAs(True);
+  }
+
+  @Test
+  void durationGetSeconds() {
+    DurationT d = durationOf(ofSeconds(7506, 0));
+    Val sec = d.receive(Overloads.TimeGetSeconds, Overloads.DurationToSeconds);
+    assertThat(sec.equal(intOf(7506))).isSameAs(True);
+  }
+
+  @Test
+  void durationGetMilliseconds() {
+    DurationT d = durationOf(ofSeconds(7506, 0));
+    Val min = d.receive(Overloads.TimeGetMilliseconds, Overloads.DurationToMilliseconds);
+    assertThat(min.equal(intOf(7506000))).isSameAs(True);
+  }
+
+  @Test
+  void durationSubtract() {
+    DurationT d = durationOf(ofSeconds(7506, 0));
+
+    assertThat(d.subtract(d).convertToType(IntType).equal(IntZero)).isSameAs(True);
+
+    assertThat(durationOf(ofSeconds(Long.MAX_VALUE)).subtract(durationOf(ofSeconds(-1L))))
+        .matches(Err::isError);
+
+    assertThat(durationOf(ofSeconds(Long.MIN_VALUE)).subtract(durationOf(ofSeconds(1L))))
+        .matches(Err::isError);
+
+    assertThat(
+            durationOf(ofSeconds(Long.MAX_VALUE - 1))
+                .subtract(durationOf(ofSeconds(-1L)))
+                .equal(durationOf(ofSeconds(Long.MAX_VALUE))))
+        .isSameAs(True);
+
+    assertThat(
+            durationOf(ofSeconds(Long.MIN_VALUE + 1))
+                .subtract(durationOf(ofSeconds(1L)))
+                .equal(durationOf(ofSeconds(Long.MIN_VALUE))))
+        .isSameAs(True);
+  }
 }

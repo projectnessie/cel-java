@@ -15,76 +15,66 @@
  */
 package org.projectnessie.cel.common.types;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.projectnessie.cel.common.types.BoolT.True;
+import static org.projectnessie.cel.common.types.NullT.NullType;
+import static org.projectnessie.cel.common.types.StringT.StringType;
+import static org.projectnessie.cel.common.types.StringT.stringOf;
+import static org.projectnessie.cel.common.types.TypeValue.TypeType;
+
+import com.google.protobuf.Any;
+import com.google.protobuf.NullValue;
+import com.google.protobuf.Value;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
+
 public class TestNull {
 
-  //  @Test
-  //	void NullConvertToNative() {
-  //		expected := structpb.NewNullValue()
-  //		// Json Value
-  //		val, err := NullValue.ConvertToNative(jsonValueType)
-  //		if err != nil {
-  //			t.Error("Fail to convert Null to jsonValueType")
-  //		}
-  //		if !proto.Equal(expected, val.(proto.Message)) {
-  //			t.Errorf("Messages were not equal, got '%v'", val)
-  //		}
-  //
-  //		// google.protobuf.Any
-  //		val, err = NullValue.ConvertToNative(anyValueType)
-  //		if err != nil {
-  //			t.Fatalf("NullValue.ConvertToNative(%v) failed: %v", anyValueType, err)
-  //		}
-  //		data, err := val.(*anypb.Any).UnmarshalNew()
-  //		if err != nil {
-  //			t.Fatalf("val.UnmarshalNew() failed: %v", err)
-  //		}
-  //		if !proto.Equal(expected, data) {
-  //			t.Errorf("Messages were not equal, got '%v'", data)
-  //		}
-  //
-  //		// NullValue
-  //		val, err = NullValue.ConvertToNative(reflect.TypeOf(structpb.NullValue_NULL_VALUE))
-  //		if err != nil {
-  //			t.Error("Fail to convert Null to strcutpb.NullValue")
-  //		}
-  //		if val != structpb.NullValue_NULL_VALUE {
-  //			t.Errorf("Messages were not equal, got '%v'", val)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void NullConvertToType() {
-  //		if !NullValue.ConvertToType(NullType).Equal(NullValue).(Bool) {
-  //			t.Error("Failed to get NullType of NullValue.")
-  //		}
-  //
-  //		if !NullValue.ConvertToType(StringType).Equal(String("null")).(Bool) {
-  //			t.Error("Failed to get StringType of NullValue.")
-  //		}
-  //		if !NullValue.ConvertToType(TypeType).Equal(NullType).(Bool) {
-  //			t.Error("Failed to convert NullValue to type.")
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void NullEqual() {
-  //		if !NullValue.Equal(NullValue).(Bool) {
-  //			t.Error("NullValue does not equal to itself.")
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void NullType() {
-  //		if NullValue.Type() != NullType {
-  //			t.Error("NullValue gets incorrect type.")
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void NullValue() {
-  //		if NullValue.Value() != structpb.NullValue_NULL_VALUE {
-  //			t.Error("NullValue gets incorrect value.")
-  //		}
-  //	}
+  @Test
+  @Disabled("IMPLEMENT ME")
+  void nullConvertToNative_Json() {
+    //    NullValue expected = NullValue.NULL_VALUE;
+    //
+    //    		// Json Value
+    //    		Object val = NullT.NullValue.convertToNative(jsonValueType);
+    //    		assertThat(expected).isEqualTo(val);
+  }
 
+  @Test
+  void nullConvertToNative() throws Exception {
+    Value expected = Value.newBuilder().setNullValue(NullValue.NULL_VALUE).build();
+
+    // google.protobuf.Any
+    Any val = NullT.NullValue.convertToNative(Any.class);
+
+    Value data = val.unpack(Value.class);
+    assertThat(expected).isEqualTo(data);
+
+    // NullValue
+    NullValue val2 = NullT.NullValue.convertToNative(NullValue.class);
+    assertThat(val2).isEqualTo(NullValue.NULL_VALUE);
+  }
+
+  @Test
+  void nullConvertToType() {
+    assertThat(NullT.NullValue.convertToType(NullType).equal(NullT.NullValue)).isSameAs(True);
+
+    assertThat(NullT.NullValue.convertToType(StringType).equal(stringOf("null"))).isSameAs(True);
+    assertThat(NullT.NullValue.convertToType(TypeType).equal(NullType)).isSameAs(True);
+  }
+
+  @Test
+  void nullEqual() {
+    assertThat(NullT.NullValue.equal(NullT.NullValue)).isSameAs(True);
+  }
+
+  @Test
+  void nullType() {
+    assertThat(NullT.NullValue.type()).isSameAs(NullType);
+  }
+
+  @Test
+  void nullValue() {
+    assertThat(NullT.NullValue.value()).isSameAs(NullValue.NULL_VALUE);
+  }
 }

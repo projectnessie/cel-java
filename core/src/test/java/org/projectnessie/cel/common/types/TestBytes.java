@@ -15,110 +15,105 @@
  */
 package org.projectnessie.cel.common.types;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.projectnessie.cel.common.types.BoolT.True;
+import static org.projectnessie.cel.common.types.BytesT.BytesType;
+import static org.projectnessie.cel.common.types.BytesT.bytesOf;
+import static org.projectnessie.cel.common.types.IntT.IntNegOne;
+import static org.projectnessie.cel.common.types.IntT.IntOne;
+import static org.projectnessie.cel.common.types.IntT.IntType;
+import static org.projectnessie.cel.common.types.IntT.IntZero;
+import static org.projectnessie.cel.common.types.IntT.intOf;
+import static org.projectnessie.cel.common.types.StringT.StringType;
+import static org.projectnessie.cel.common.types.StringT.stringOf;
+import static org.projectnessie.cel.common.types.TypeValue.TypeType;
+
+import com.google.protobuf.Any;
+import com.google.protobuf.ByteString;
+import com.google.protobuf.BytesValue;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
+
 public class TestBytes {
 
-  //  @Test
-  //	void BytesAdd() {
-  //		if !Bytes("hello").Add(Bytes("world")).Equal(Bytes("helloworld")).(Bool) {
-  //			t.Error("Byte ranges were not successfully added.")
-  //		}
-  //		if !IsError(Bytes("hello").Add(String("world"))) {
-  //			t.Error("Types combined without conversion.")
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void BytesCompare() {
-  //		if !Bytes("1234").Compare(Bytes("2345")).Equal(IntNegOne).(Bool) {
-  //			t.Error("Comparison did not yield -1")
-  //		}
-  //		if !Bytes("2345").Compare(Bytes("1234")).Equal(IntOne).(Bool) {
-  //			t.Error("Comparison did not yield 1")
-  //		}
-  //		if !Bytes("2345").Compare(Bytes("2345")).Equal(IntZero).(Bool) {
-  //			t.Error("Comparison did not yield 0")
-  //		}
-  //		if !IsError(Bytes("1").Compare(String("1"))) {
-  //			t.Error("Comparison permitted without type conversion")
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void BytesConvertToNative_Any() {
-  //		val, err := Bytes("123").ConvertToNative(anyValueType)
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		want, err := anypb.New(wrapperspb.Bytes([]byte("123")))
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		if !proto.Equal(val.(proto.Message), want) {
-  //			t.Errorf("Got %v, wanted %v", val, want)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void BytesConvertToNative_ByteSlice() {
-  //		val, err := Bytes("123").ConvertToNative(reflect.TypeOf([]byte{}))
-  //		if err != nil || !bytes.Equal(val.([]byte), []byte{49, 50, 51}) {
-  //			t.Error("Got unexpected value, wanted []byte{49, 50, 51}", err, val)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void BytesConvertToNative_Error() {
-  //		val, err := Bytes("123").ConvertToNative(reflect.TypeOf(""))
-  //		if err == nil {
-  //			t.Errorf("Got '%v', expected error", val)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void BytesConvertToNative_Json() {
-  //		val, err := Bytes("123").ConvertToNative(jsonValueType)
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		want := structpb.NewStringValue("MTIz")
-  //		if !proto.Equal(val.(proto.Message), want) {
-  //			t.Errorf("Got %v, wanted %v", val, want)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void BytesConvertToNative_Wrapper() {
-  //		val, err := Bytes("123").ConvertToNative(byteWrapperType)
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		want := wrapperspb.Bytes([]byte("123"))
-  //		if !proto.Equal(val.(proto.Message), want) {
-  //			t.Errorf("Got %v, wanted %v", val, want)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void BytesConvertToType() {
-  //		if !Bytes("hello world").ConvertToType(BytesType).Equal(Bytes("hello world")).(Bool) {
-  //			t.Error("Unsupported type conversion to bytes")
-  //		}
-  //		if !Bytes("hello world").ConvertToType(StringType).Equal(String("hello world")).(Bool) {
-  //			t.Error("Unsupported type conversion to string")
-  //		}
-  //		if !Bytes("hello world").ConvertToType(TypeType).Equal(BytesType).(Bool) {
-  //			t.Error("Unsupported type conversion to type")
-  //		}
-  //		if !IsError(Bytes("hello").ConvertToType(IntType)) {
-  //			t.Errorf("Got value, expected error")
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void BytesSize() {
-  //		if !Bytes("1234567890").Size().Equal(Int(10)).(Bool) {
-  //			t.Error("Unexpected byte count.")
-  //		}
-  //	}
+  @Test
+  void bytesAdd() {
+    assertThat(bytesOf("hello").add(bytesOf("world")).equal(bytesOf("helloworld"))).isSameAs(True);
+    assertThat(bytesOf("hello").add(stringOf("world"))).matches(Err::isError);
+  }
 
+  @Test
+  void bytesCompare() {
+    assertThat(bytesOf("1234").compare(bytesOf("2345")).equal(IntNegOne)).isSameAs(True);
+    assertThat(bytesOf("2345").compare(bytesOf("1234")).equal(IntOne)).isSameAs(True);
+    assertThat(bytesOf("2345").compare(bytesOf("2345")).equal(IntZero)).isSameAs(True);
+    assertThat(bytesOf("1").compare(stringOf("1"))).matches(Err::isError);
+  }
+
+  @Test
+  void bytesConvertToNative_Any() {
+    Any val = bytesOf("123").convertToNative(Any.class);
+    Any want = Any.pack(BytesValue.of(ByteString.copyFrom("123".getBytes(StandardCharsets.UTF_8))));
+    assertThat(val).isEqualTo(want);
+  }
+
+  @Test
+  void bytesConvertToNative_ByteSlice() {
+    byte[] val = bytesOf("123").convertToNative(byte[].class);
+    assertThat(val).containsExactly(49, 50, 51);
+  }
+
+  @Test
+  void bytesConvertToNative_ByteString() {
+    ByteString val = bytesOf("123").convertToNative(ByteString.class);
+    assertThat(val).isEqualTo(ByteString.copyFrom(new byte[] {49, 50, 51}));
+  }
+
+  @Test
+  void bytesConvertToNative_ByteBuffer() {
+    ByteBuffer val = bytesOf("123").convertToNative(ByteBuffer.class);
+    assertThat(val).isEqualTo(ByteBuffer.wrap(new byte[] {49, 50, 51}));
+  }
+
+  @Test
+  void bytesConvertToNative_Error() {
+    assertThat(bytesOf("123").convertToNative(String.class)).isEqualTo("123");
+  }
+
+  @Test
+  @Disabled("IMPLEMENT ME")
+  void bytesConvertToNative_Json() {
+    //  		val = bytesOf("123").convertToNative(jsonValueType)
+    //  		if err != nil {
+    //  			t.Error(err)
+    //  		}
+    //  		want := structpb.NewStringValue("MTIz")
+    //  		if !proto.equal(val.(proto.Message), want) {
+    //  			t.Errorf("Got %v, wanted %v", val, want)
+    //  		}
+  }
+
+  @Test
+  void bytesConvertToNative_Wrapper() {
+    byte[] val = bytesOf("123").convertToNative(byte[].class);
+    byte[] want = "123".getBytes(StandardCharsets.UTF_8);
+    assertThat(val).containsExactly(want);
+  }
+
+  @Test
+  void bytesConvertToType() {
+    assertThat(bytesOf("hello world").convertToType(BytesType).equal(bytesOf("hello world")))
+        .isSameAs(True);
+    assertThat(bytesOf("hello world").convertToType(StringType).equal(stringOf("hello world")))
+        .isSameAs(True);
+    assertThat(bytesOf("hello world").convertToType(TypeType).equal(BytesType)).isSameAs(True);
+    assertThat(bytesOf("hello").convertToType(IntType)).matches(Err::isError);
+  }
+
+  @Test
+  void bytesSize() {
+    assertThat(bytesOf("1234567890").size().equal(intOf(10))).isSameAs(True);
+  }
 }

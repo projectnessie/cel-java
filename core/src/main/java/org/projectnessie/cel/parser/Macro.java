@@ -15,13 +15,14 @@
  */
 package org.projectnessie.cel.parser;
 
+import com.google.api.expr.v1alpha1.Expr;
+import com.google.api.expr.v1alpha1.Expr.ExprKindCase;
+import com.google.api.expr.v1alpha1.Expr.Select;
+import java.util.List;
 import java.util.function.Supplier;
 import org.projectnessie.cel.common.ErrorWithLocation;
 import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.operators.Operator;
-import org.projectnessie.cel.pb.Expr;
-import org.projectnessie.cel.pb.Expr.IdentExpr;
-import org.projectnessie.cel.pb.Expr.SelectExpr;
 
 public class Macro {
   /** AccumulatorName is the traditional variable name assigned to the fold accumulator variable. */
@@ -115,22 +116,22 @@ public class Macro {
     return new Macro(function, true, true, 0, expander);
   }
 
-  static Expr makeAll(ExprHelper eh, Expr target, Expr[] args) {
+  static Expr makeAll(ExprHelper eh, Expr target, List<Expr> args) {
     return makeQuantifier(QuantifierKind.quantifierAll, eh, target, args);
   }
 
-  static Expr makeExists(ExprHelper eh, Expr target, Expr[] args) {
+  static Expr makeExists(ExprHelper eh, Expr target, List<Expr> args) {
     return makeQuantifier(QuantifierKind.quantifierExists, eh, target, args);
   }
 
-  static Expr makeExistsOne(ExprHelper eh, Expr target, Expr[] args) {
+  static Expr makeExistsOne(ExprHelper eh, Expr target, List<Expr> args) {
     return makeQuantifier(QuantifierKind.quantifierExistsOne, eh, target, args);
   }
 
-  static Expr makeQuantifier(QuantifierKind kind, ExprHelper eh, Expr target, Expr[] args) {
-    String v = extractIdent(args[0]);
+  static Expr makeQuantifier(QuantifierKind kind, ExprHelper eh, Expr target, List<Expr> args) {
+    String v = extractIdent(args.get(0));
     if (v == null) {
-      Location location = eh.offsetLocation(args[0].id);
+      Location location = eh.offsetLocation(args.get(0).getId());
       throw new ErrorWithLocation(location, "argument must be a simple name");
     }
 
@@ -144,7 +145,7 @@ public class Macro {
       case quantifierAll:
         init = eh.literalBool(true);
         condition = eh.globalCall(Operator.NotStrictlyFalse.id, accuIdent.get());
-        step = eh.globalCall(Operator.LogicalAnd.id, accuIdent.get(), args[1]);
+        step = eh.globalCall(Operator.LogicalAnd.id, accuIdent.get(), args.get(1));
         result = accuIdent.get();
         break;
       case quantifierExists:
@@ -153,7 +154,7 @@ public class Macro {
             eh.globalCall(
                 Operator.NotStrictlyFalse.id,
                 eh.globalCall(Operator.LogicalNot.id, accuIdent.get()));
-        step = eh.globalCall(Operator.LogicalOr.id, accuIdent.get(), args[1]);
+        step = eh.globalCall(Operator.LogicalOr.id, accuIdent.get(), args.get(1));
         result = accuIdent.get();
         break;
       case quantifierExistsOne:
@@ -164,7 +165,7 @@ public class Macro {
         step =
             eh.globalCall(
                 Operator.Conditional.id,
-                args[1],
+                args.get(1),
                 eh.globalCall(Operator.Add.id, accuIdent.get(), oneExpr),
                 accuIdent.get());
         result = eh.globalCall(Operator.Equals.id, accuIdent.get(), oneExpr);
@@ -175,8 +176,8 @@ public class Macro {
     return eh.fold(v, target, AccumulatorName, init, condition, step, result);
   }
 
-  static Expr makeMap(ExprHelper eh, Expr target, Expr[] args) {
-    String v = extractIdent(args[0]);
+  static Expr makeMap(ExprHelper eh, Expr target, List<Expr> args) {
+    String v = extractIdent(args.get(0));
     if (v == null) {
       throw new ErrorWithLocation(null, "argument is not an identifier");
     }
@@ -184,12 +185,12 @@ public class Macro {
     Expr fn;
     Expr filter;
 
-    if (args.length == 3) {
-      filter = args[1];
-      fn = args[2];
+    if (args.size() == 3) {
+      filter = args.get(1);
+      fn = args.get(2);
     } else {
       filter = null;
-      fn = args[1];
+      fn = args.get(1);
     }
 
     Expr accuExpr = eh.ident(AccumulatorName);
@@ -204,33 +205,33 @@ public class Macro {
     return eh.fold(v, target, AccumulatorName, init, condition, step, accuExpr);
   }
 
-  static Expr makeFilter(ExprHelper eh, Expr target, Expr[] args) {
-    String v = extractIdent(args[0]);
+  static Expr makeFilter(ExprHelper eh, Expr target, List<Expr> args) {
+    String v = extractIdent(args.get(0));
     if (v == null) {
       throw new ErrorWithLocation(null, "argument is not an identifier");
     }
 
-    Expr filter = args[1];
+    Expr filter = args.get(1);
     Expr accuExpr = eh.ident(AccumulatorName);
     Expr init = eh.newList();
     Expr condition = eh.literalBool(true);
     // TODO: use compiler internal method for faster, stateful add.
-    Expr step = eh.globalCall(Operator.Add.id, accuExpr, eh.newList(args[0]));
+    Expr step = eh.globalCall(Operator.Add.id, accuExpr, eh.newList(args.get(0)));
     step = eh.globalCall(Operator.Conditional.id, filter, step, accuExpr);
     return eh.fold(v, target, AccumulatorName, init, condition, step, accuExpr);
   }
 
   static String extractIdent(Expr e) {
-    if (e instanceof IdentExpr) {
-      return ((IdentExpr) e).name;
+    if (e.getExprKindCase() == ExprKindCase.IDENT_EXPR) {
+      return e.getIdentExpr().getName();
     }
     return null;
   }
 
-  static Expr makeHas(ExprHelper eh, Expr target, Expr[] args) {
-    if (args[0] instanceof SelectExpr) {
-      SelectExpr s = (SelectExpr) args[0];
-      return eh.presenceTest(s.operand, s.field);
+  static Expr makeHas(ExprHelper eh, Expr target, List<Expr> args) {
+    if (args.get(0).getExprKindCase() == ExprKindCase.SELECT_EXPR) {
+      Select s = args.get(0).getSelectExpr();
+      return eh.presenceTest(s.getOperand(), s.getField());
     }
     throw new ErrorWithLocation(null, "invalid argument to has() macro");
   }

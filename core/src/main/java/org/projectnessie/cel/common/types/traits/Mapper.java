@@ -15,10 +15,11 @@
  */
 package org.projectnessie.cel.common.types.traits;
 
+import org.projectnessie.cel.common.types.IterableT;
 import org.projectnessie.cel.common.types.ref.Val;
 
 /** Mapper interface which aggregates the traits of a maps. */
-public interface Mapper extends Val, Container, Indexer, Iterable<Val>, Sizer {
+public interface Mapper extends Val, Container, Indexer, IterableT, Sizer {
 
   /**
    * Find returns a value, if one exists, for the input key.

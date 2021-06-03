@@ -96,10 +96,7 @@ class TestSource {
   void locationOffset() {
     String contents = "c.d &&\n\t b.c.arg(10) &&\n\t test(10)";
     Source source = Source.newStringSource(contents, "offset-test");
-    int[] expectedLineOffsets = new int[] {7, 24, 35};
-    assertThat(source.lineOffsets())
-        .containsExactly(expectedLineOffsets)
-        .hasSize(expectedLineOffsets.length);
+    assertThat(source.lineOffsets()).containsExactly(7, 24, 35);
 
     // Ensure that selecting a set of characters across multiple lines works as
     // expected.

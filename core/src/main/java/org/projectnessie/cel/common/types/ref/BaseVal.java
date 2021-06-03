@@ -16,6 +16,7 @@
 package org.projectnessie.cel.common.types.ref;
 
 import static org.projectnessie.cel.common.types.BoolT.BoolType;
+import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.IntT.IntType;
 
 public abstract class BaseVal implements Val {
@@ -28,7 +29,7 @@ public abstract class BaseVal implements Val {
   @Override
   public boolean equals(Object obj) {
     if (obj instanceof Val) {
-      return equal((Val) obj).booleanValue();
+      return equal((Val) obj) == True;
     }
     return value().equals(obj);
   }

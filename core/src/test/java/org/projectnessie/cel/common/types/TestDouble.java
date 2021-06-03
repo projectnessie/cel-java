@@ -15,226 +15,176 @@
  */
 package org.projectnessie.cel.common.types;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.projectnessie.cel.common.types.BoolT.False;
+import static org.projectnessie.cel.common.types.BoolT.True;
+import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
+import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
+import static org.projectnessie.cel.common.types.IntT.IntNegOne;
+import static org.projectnessie.cel.common.types.IntT.IntOne;
+import static org.projectnessie.cel.common.types.IntT.IntType;
+import static org.projectnessie.cel.common.types.IntT.IntZero;
+import static org.projectnessie.cel.common.types.IntT.intOf;
+import static org.projectnessie.cel.common.types.StringT.StringType;
+import static org.projectnessie.cel.common.types.StringT.stringOf;
+import static org.projectnessie.cel.common.types.TimestampT.TimestampType;
+import static org.projectnessie.cel.common.types.TypeValue.TypeType;
+import static org.projectnessie.cel.common.types.UintT.UintType;
+
+import com.google.protobuf.Any;
+import com.google.protobuf.DoubleValue;
+import com.google.protobuf.FloatValue;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
+
 public class TestDouble {
 
-  //  @Test
-  //	void DoubleAdd() {
-  //		if !Double(4).Add(Double(-3.5)).Equal(Double(0.5)).(Bool) {
-  //			t.Error("Adding two doubles did not match expected value.")
-  //		}
-  //		if !IsError(Double(-1).Add(String("-1"))) {
-  //			t.Error("Adding non-double to double was not an error.")
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DoubleCompare() {
-  //		lt := Double(-1300)
-  //		gt := Double(204)
-  //		if !lt.Compare(gt).Equal(IntNegOne).(Bool) {
-  //			t.Error("Comparison did not yield - 1")
-  //		}
-  //		if !gt.Compare(lt).Equal(IntOne).(Bool) {
-  //			t.Error("Comparison did not yield 1")
-  //		}
-  //		if !gt.Compare(gt).Equal(IntZero).(Bool) {
-  //			t.Error(("Comparison did not yield 0"))
-  //		}
-  //		if !IsError(gt.Compare(TypeType)) {
-  //			t.Error("Types not comparable")
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DoubleConvertToNative_Any() {
-  //		val, err := Double(math.MaxFloat64).ConvertToNative(anyValueType)
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		want, err := anypb.New(wrapperspb.Double(1.7976931348623157e+308))
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		if !proto.Equal(val.(proto.Message), want) {
-  //			t.Errorf("Got '%v', wanted %v", val, want)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DoubleConvertToNative_Error() {
-  //		val, err := Double(-10000).ConvertToNative(reflect.TypeOf(""))
-  //		if err == nil {
-  //			t.Errorf("Got '%v', expected error", val)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DoubleConvertToNative_Float32() {
-  //		val, err := Double(3.1415).ConvertToNative(reflect.TypeOf(float32(0)))
-  //		if err != nil {
-  //			t.Error(err)
-  //		} else if val.(float32) != 3.1415 {
-  //			t.Errorf("Got '%v', wanted 3.1415", val)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DoubleConvertToNative_Float64() {
-  //		val, err := Double(30000000.1).ConvertToNative(reflect.TypeOf(float64(0)))
-  //		if err != nil {
-  //			t.Error(err)
-  //		} else if val.(float64) != 30000000.1 {
-  //			t.Errorf("Got '%v', wanted 330000000.1", val)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DoubleConvertToNative_Json() {
-  //		val, err := Double(-1.4).ConvertToNative(jsonValueType)
-  //		pbVal := structpb.NewNumberValue(-1.4)
-  //		if err != nil {
-  //			t.Error(err)
-  //		} else if !proto.Equal(val.(proto.Message), pbVal) {
-  //			t.Errorf("Got '%v', expected -1.4", val)
-  //		}
-  //
-  //		val, err = Double(math.NaN()).ConvertToNative(jsonValueType)
-  //		if err != nil {
-  //			t.Error(err)
-  //		} else {
-  //			v := val.(*structpb.Value)
-  //			if !math.IsNaN(v.GetNumberValue()) {
-  //				t.Errorf("Got '%v', expected NaN", val)
-  //			}
-  //		}
-  //
-  //		val, err = Double(math.Inf(-1)).ConvertToNative(jsonValueType)
-  //		pbVal = structpb.NewNumberValue(math.Inf(-1))
-  //		if err != nil {
-  //			t.Error(err)
-  //		} else if !proto.Equal(val.(proto.Message), pbVal) {
-  //			t.Errorf("Got '%v', expected -Infinity", val)
-  //		}
-  //		val, err = Double(math.Inf(0)).ConvertToNative(jsonValueType)
-  //		pbVal = structpb.NewNumberValue(math.Inf(0))
-  //		if err != nil {
-  //			t.Error(err)
-  //		} else if !proto.Equal(val.(proto.Message), pbVal) {
-  //			t.Errorf("Got '%v', expected Infinity", val)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DoubleConvertToNative_Ptr_Float32() {
-  //		ptrType := float32(0)
-  //		val, err := Double(3.1415).ConvertToNative(reflect.TypeOf(&ptrType))
-  //		if err != nil {
-  //			t.Error(err)
-  //		} else if *val.(*float32) != 3.1415 {
-  //			t.Errorf("Got '%v', wanted 3.1415", val)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DoubleConvertToNative_Ptr_Float64() {
-  //		ptrType := float64(0)
-  //		val, err := Double(30000000.1).ConvertToNative(reflect.TypeOf(&ptrType))
-  //		if err != nil {
-  //			t.Error(err)
-  //		} else if *val.(*float64) != 30000000.1 {
-  //			t.Errorf("Got '%v', wanted 330000000.1", val)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DoubleConvertToNative_Wrapper() {
-  //		val, err := Double(3.1415).ConvertToNative(floatWrapperType)
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		want := wrapperspb.Float(3.1415)
-  //		if !proto.Equal(val.(proto.Message), want) {
-  //			t.Errorf("Got '%v', wanted %v", val, want)
-  //		}
-  //
-  //		val, err = Double(math.MaxFloat64).ConvertToNative(doubleWrapperType)
-  //		if err != nil {
-  //			t.Error(err)
-  //		}
-  //		want2 := wrapperspb.Double(1.7976931348623157e+308)
-  //		if !proto.Equal(val.(proto.Message), want2) {
-  //			t.Errorf("Got '%v', wanted %v", val, want2)
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DoubleConvertToType() {
-  //		if !Double(-4.5).ConvertToType(IntType).Equal(Int(-5)).(Bool) {
-  //			t.Error("Unsuccessful type conversion to int")
-  //		}
-  //		if !IsError(Double(-4.5).ConvertToType(UintType)) {
-  //			t.Error("Got uint, expected error")
-  //		}
-  //		if !Double(-4.5).ConvertToType(DoubleType).Equal(Double(-4.5)).(Bool) {
-  //			t.Error("Unsuccessful type conversion to double")
-  //		}
-  //		if !Double(-4.5).ConvertToType(StringType).Equal(String("-4.5")).(Bool) {
-  //			t.Error("Unsuccessful type conversion to string")
-  //		}
-  //		if !Double(-4.5).ConvertToType(TypeType).Equal(DoubleType).(Bool) {
-  //			t.Error("Unsuccessful type conversion to type")
-  //		}
-  //		if !IsError(Double(-4.5).ConvertToType(TimestampType)) {
-  //			t.Error("Got value, expected error")
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DoubleDivide() {
-  //		if !Double(3).Divide(Double(1.5)).Equal(Double(2)).(Bool) {
-  //			t.Error("Dividing two doubles did not match expectations.")
-  //		}
-  //		var z float64 // Avoid 0.0 since const div by zero is an error.
-  //		if !Double(1.1).Divide(Double(0)).Equal(Double(1.1 / z)).(Bool) {
-  //			t.Error("Division by zero did not match infinity.")
-  //		}
-  //		if !IsError(Double(1.1).Divide(IntNegOne)) {
-  //			t.Error("Division permitted without express type-conversion.")
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DoubleEqual() {
-  //		if !IsError(Double(0).Equal(False)) {
-  //			t.Error("Double equal to non-double resulted in non-error.")
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DoubleMultiply() {
-  //		if !Double(1.1).Multiply(Double(-1.2)).Equal(Double(-1.32)).(Bool) {
-  //			t.Error("Multiplying two doubles did not match expectations.")
-  //		}
-  //		if !IsError(Double(1.1).Multiply(IntNegOne)) {
-  //			t.Error("Multiplication permitted without express type-conversion.")
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DoubleNegate() {
-  //		if !Double(1.1).Negate().Equal(Double(-1.1)).(Bool) {
-  //			t.Error("Negating double value did not succeed")
-  //		}
-  //	}
-  //
-  //  @Test
-  //	void DoubleSubtract() {
-  //		if !Double(4).Subtract(Double(-3.5)).Equal(Double(7.5)).(Bool) {
-  //			t.Error("Subtracting two doubles did not match expected value.")
-  //		}
-  //		if !IsError(Double(1.1).Subtract(IntNegOne)) {
-  //			t.Error("Subtraction permitted without express type-conversion.")
-  //		}
-  //	}
+  @Test
+  void doubleAdd() {
+    assertThat(doubleOf(4).add(doubleOf(-3.5)).equal(doubleOf(0.5))).isSameAs(True);
+    assertThat(doubleOf(-1).add(stringOf("-1"))).matches(Err::isError);
+  }
 
+  @Test
+  void doubleCompare() {
+    DoubleT lt = doubleOf(-1300);
+    DoubleT gt = doubleOf(204);
+    assertThat(lt.compare(gt).equal(IntNegOne)).isSameAs(True);
+    assertThat(gt.compare(lt).equal(IntOne)).isSameAs(True);
+    assertThat(gt.compare(gt).equal(IntZero)).isSameAs(True);
+    assertThat(gt.compare(TypeType)).matches(Err::isError);
+  }
+
+  @Test
+  void doubleConvertToNative_Any() {
+    Any val = doubleOf(Double.MAX_VALUE).convertToNative(Any.class);
+    Any want = Any.pack(DoubleValue.of(1.7976931348623157e+308));
+    assertThat(val).isEqualTo(want);
+  }
+
+  @Test
+  void doubleConvertToNative_Error() {
+    assertThatThrownBy(() -> doubleOf(-10000).convertToNative(String.class))
+        .isInstanceOf(RuntimeException.class)
+        .hasMessage("native type conversion error from 'double' to 'java.lang.String'");
+  }
+
+  @Test
+  void doubleConvertToNative_Float32() {
+    Float val = doubleOf(3.1415).convertToNative(Float.class);
+    assertThat(val).isEqualTo(3.1415f);
+  }
+
+  @Test
+  void doubleConvertToNative_Float64() {
+    Double val = doubleOf(30000000.1).convertToNative(Double.class);
+    assertThat(val).isEqualTo(30000000.1d);
+  }
+
+  @Test
+  @Disabled("IMPLEMENT ME")
+  void doubleConvertToNative_Json() {
+    //  		DoubleT val = doubleOf(-1.4).convertToNative(jsonValueType)
+    //  		pbVal := structpb.NewNumberValue(-1.4)
+    //  		if err != nil {
+    //  			t.Error(err)
+    //  		} else if !proto.equal(val.(proto.Message), pbVal) {
+    //  			t.Errorf("Got '%v', expected -1.4", val)
+    //  		}
+    //
+    //  		val, err = doubleOf(math.NaN()).convertToNative(jsonValueType)
+    //  		if err != nil {
+    //  			t.Error(err)
+    //  		} else {
+    //  			v := val.(*structpb.Value)
+    //  			if !math.IsNaN(v.GetNumberValue()) {
+    //  				t.Errorf("Got '%v', expected NaN", val)
+    //  			}
+    //  		}
+    //
+    //  		val, err = doubleOf(math.Inf(-1)).convertToNative(jsonValueType)
+    //  		pbVal = structpb.NewNumberValue(math.Inf(-1))
+    //  		if err != nil {
+    //  			t.Error(err)
+    //  		} else if !proto.equal(val.(proto.Message), pbVal) {
+    //  			t.Errorf("Got '%v', expected -Infinity", val)
+    //  		}
+    //  		val, err = doubleOf(math.Inf(0)).convertToNative(jsonValueType)
+    //  		pbVal = structpb.NewNumberValue(math.Inf(0))
+    //  		if err != nil {
+    //  			t.Error(err)
+    //  		} else if !proto.equal(val.(proto.Message), pbVal) {
+    //  			t.Errorf("Got '%v', expected Infinity", val)
+    //  		}
+  }
+
+  @Test
+  void doubleConvertToNative_Ptr_Float32() {
+    Float val = doubleOf(3.1415).convertToNative(Float.class);
+    assertThat(val).isEqualTo(3.1415f);
+  }
+
+  @Test
+  void doubleConvertToNative_Ptr_Float64() {
+    Double val = doubleOf(30000000.1).convertToNative(Double.class);
+    assertThat(val).isEqualTo(30000000.1d);
+  }
+
+  @Test
+  void doubleConvertToNative_Wrapper() {
+    FloatValue val = doubleOf(3.1415d).convertToNative(FloatValue.class);
+    FloatValue want = FloatValue.of(3.1415f);
+    assertThat(val).isEqualTo(want);
+
+    DoubleValue val2 = doubleOf(Double.MAX_VALUE).convertToNative(DoubleValue.class);
+    DoubleValue want2 = DoubleValue.of(1.7976931348623157e+308d);
+    assertThat(val2).isEqualTo(want2);
+  }
+
+  @Test
+  void doubleConvertToType() {
+    assertThat(doubleOf(-4.5d).convertToType(UintType)).matches(Err::isError);
+    assertThat(doubleOf(-4.5d).convertToType(DoubleType).equal(doubleOf(-4.5))).isSameAs(True);
+    assertThat(doubleOf(-4.5d).convertToType(StringType).equal(stringOf("-4.5"))).isSameAs(True);
+    assertThat(doubleOf(-4.5d).convertToType(TypeType).equal(DoubleType)).isSameAs(True);
+    assertThat(doubleOf(-4.5d).convertToType(TimestampType)).matches(Err::isError);
+    assertThat(doubleOf(-4.49d).convertToType(IntType).equal(intOf(-4))).isSameAs(True);
+    assertThat(doubleOf(-4.51d).convertToType(IntType).equal(intOf(-5))).isSameAs(True);
+    // TODO DOCUMENT: Java rounds the following to -4, but Go rounds it to -5 !!!
+    assertThat(doubleOf(-4.5d).convertToType(IntType).equal(intOf(-4))).isSameAs(True);
+    assertThat(doubleOf(4.49d).convertToType(IntType).equal(intOf(4))).isSameAs(True);
+    assertThat(doubleOf(4.51d).convertToType(IntType).equal(intOf(5))).isSameAs(True);
+    assertThat(doubleOf(4.5d).convertToType(IntType).equal(intOf(5))).isSameAs(True);
+  }
+
+  @Test
+  void doubleDivide() {
+    assertThat(doubleOf(3).divide(doubleOf(1.5)).equal(doubleOf(2))).isSameAs(True);
+    double z = 0.0d; // Avoid 0.0 since const div by zero is an error.
+    assertThat(doubleOf(1.1).divide(doubleOf(0)).equal(doubleOf(1.1 / z))).isSameAs(True);
+    assertThat(doubleOf(1.1).divide(IntNegOne)).matches(Err::isError);
+  }
+
+  @Test
+  void doubleEqual() {
+    assertThat(doubleOf(0).equal(False)).matches(Err::isError);
+  }
+
+  @Test
+  void doubleMultiply() {
+    assertThat(doubleOf(1.1).multiply(doubleOf(-1.2)).equal(doubleOf(-1.32))).isSameAs(True);
+    assertThat(doubleOf(1.1).multiply(IntNegOne)).matches(Err::isError);
+  }
+
+  @Test
+  void doubleNegate() {
+    assertThat(doubleOf(1.1).negate().equal(doubleOf(-1.1))).isSameAs(True);
+  }
+
+  @Test
+  void doubleSubtract() {
+    assertThat(doubleOf(4).subtract(doubleOf(-3.5)).equal(doubleOf(7.5))).isSameAs(True);
+    assertThat(doubleOf(1.1).subtract(IntNegOne)).matches(Err::isError);
+  }
 }

@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
-public final class Errors {
+public class Errors {
   private final List<Error> errors = new ArrayList<>();
   private final Source source;
 
@@ -36,6 +36,10 @@ public final class Errors {
   /** GetErrors returns the list of observed errors. */
   public List<Error> getErrors() {
     return errors;
+  }
+
+  public boolean hasErrors() {
+    return !errors.isEmpty();
   }
 
   /**

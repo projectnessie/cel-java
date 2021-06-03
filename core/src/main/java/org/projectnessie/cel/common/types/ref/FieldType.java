@@ -18,11 +18,17 @@ package org.projectnessie.cel.common.types.ref;
 /** FieldType represents a field's type value and whether that field supports presence detection. */
 public class FieldType {
   /** Type of the field. */
-  Type type;
+  public final com.google.api.expr.v1alpha1.Type type;
 
   /** IsSet indicates whether the field is set on an input object. */
-  FieldTester isSet;
+  public final FieldTester isSet;
 
   /** GetFrom retrieves the field value on the input object, if set. */
-  FieldGetter getFrom;
+  public final FieldGetter getFrom;
+
+  public FieldType(com.google.api.expr.v1alpha1.Type type, FieldTester isSet, FieldGetter getFrom) {
+    this.type = type;
+    this.isSet = isSet;
+    this.getFrom = getFrom;
+  }
 }

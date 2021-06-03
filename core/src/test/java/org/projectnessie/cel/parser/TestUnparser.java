@@ -18,11 +18,11 @@ package org.projectnessie.cel.parser;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import com.google.api.expr.v1alpha1.Expr;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.projectnessie.cel.common.Source;
 import org.projectnessie.cel.parser.Parser.ParseResult;
-import org.projectnessie.cel.pb.Expr;
 
 class TestUnparser {
   @SuppressWarnings("unused")
@@ -103,20 +103,20 @@ class TestUnparser {
     Parser parser = new Parser(Options.builder().build());
 
     ParseResult p = parser.parse(Source.newTextSource(in));
-    if (!p.errors.getErrors().isEmpty()) {
-      fail(p.errors.toDisplayString());
+    if (p.hasErrors()) {
+      fail(p.getErrors().toDisplayString());
     }
 
-    String out = Unparser.unparse(p.expr, p.sourceInfo);
+    String out = Unparser.unparse(p.getExpr(), p.getSourceInfo());
     assertThat(out).isEqualTo(in);
 
     ParseResult p2 = parser.parse(Source.newTextSource(out));
-    if (!p2.errors.getErrors().isEmpty()) {
-      fail(p2.errors.toDisplayString());
+    if (p2.hasErrors()) {
+      fail(p2.getErrors().toDisplayString());
     }
 
-    Expr before = p.expr;
-    Expr after = p2.expr;
+    Expr before = p.getExpr();
+    Expr after = p2.getExpr();
     assertThat(before).isEqualTo(after);
   }
 
@@ -152,18 +152,18 @@ class TestUnparser {
     Parser parser = new Parser(Options.builder().build());
 
     ParseResult p = parser.parse(Source.newTextSource(in[0]));
-    if (!p.errors.getErrors().isEmpty()) {
-      fail(p.errors.toDisplayString());
+    if (p.hasErrors()) {
+      fail(p.getErrors().toDisplayString());
     }
-    String out = Unparser.unparse(p.expr, p.sourceInfo);
+    String out = Unparser.unparse(p.getExpr(), p.getSourceInfo());
     assertThat(out).isEqualTo(in[1]);
 
     ParseResult p2 = parser.parse(Source.newTextSource(out));
-    if (!p2.errors.getErrors().isEmpty()) {
-      fail(p2.errors.toDisplayString());
+    if (p2.hasErrors()) {
+      fail(p2.getErrors().toDisplayString());
     }
-    Expr before = p.expr;
-    Expr after = p2.expr;
+    Expr before = p.getExpr();
+    Expr after = p2.getExpr();
     assertThat(before).isEqualTo(after);
   }
 }
