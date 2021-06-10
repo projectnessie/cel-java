@@ -19,17 +19,20 @@ import static org.projectnessie.cel.common.types.BoolT.boolOf;
 import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
+import static org.projectnessie.cel.common.types.IntT.intOfCompare;
 import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
-import static org.projectnessie.cel.common.types.TypeValue.TypeType;
+import static org.projectnessie.cel.common.types.TypeT.TypeType;
 
 import com.google.api.expr.v1alpha1.Constant;
 import com.google.protobuf.Any;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.BytesValue;
+import com.google.protobuf.Value;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Base64;
 import org.projectnessie.cel.common.debug.Debug;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
@@ -38,12 +41,13 @@ import org.projectnessie.cel.common.types.traits.Adder;
 import org.projectnessie.cel.common.types.traits.Comparer;
 import org.projectnessie.cel.common.types.traits.Sizer;
 import org.projectnessie.cel.common.types.traits.Trait;
+import org.projectnessie.cel.parser.Unescape;
 
 /** Bytes type that implements ref.Val and supports add, compare, and size operations. */
 public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
   /** BytesType singleton. */
-  public static final TypeValue BytesType =
-      TypeValue.newTypeValue("bytes", Trait.AdderType, Trait.ComparerType, Trait.SizerType);
+  public static final TypeT BytesType =
+      TypeT.newTypeValue("bytes", Trait.AdderType, Trait.ComparerType, Trait.SizerType);
 
   private final byte[] b;
 
@@ -53,6 +57,10 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
 
   public static BytesT bytesOf(byte[] b) {
     return new BytesT(b);
+  }
+
+  public static Val bytesOf(ByteString value) {
+    return bytesOf(value.toByteArray());
   }
 
   public static BytesT bytesOf(String s) {
@@ -78,7 +86,19 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
       return noSuchOverload(this, "compare", other);
     }
     byte[] o = ((BytesT) other).b;
-    return IntT.intOf(ByteBuffer.wrap(b).compareTo(ByteBuffer.wrap(o)));
+    // unsigned !!!
+    int l = b.length;
+    int ol = o.length;
+    int cl = Math.min(l, ol);
+    for (int i = 0; i < cl; i++) {
+      byte b1 = b[i];
+      byte b2 = o[i];
+      int cmpUns = Byte.toUnsignedInt(b1) - Byte.toUnsignedInt(b2);
+      if (cmpUns != 0) {
+        return intOfCompare(cmpUns);
+      }
+    }
+    return intOfCompare(l - ol);
   }
 
   /** ConvertToNative implements the ref.Val interface method. */
@@ -90,7 +110,7 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
     }
     if (typeDesc == String.class) {
       try {
-        return (T) new String(b, StandardCharsets.UTF_8);
+        return (T) Unescape.toUtf8(ByteBuffer.wrap(b));
       } catch (Exception e) {
         throw new RuntimeException("invalid UTF-8 in bytes, cannot convert to string");
       }
@@ -110,30 +130,16 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
     if (typeDesc == Val.class || typeDesc == BytesT.class) {
       return (T) this;
     }
+    if (typeDesc == Value.class) {
+      // CEL follows the proto3 to JSON conversion by encoding bytes to a string via base64.
+      // The encoding below matches the golang 'encoding/json' behavior during marshaling,
+      // which uses base64.StdEncoding.
+      return (T)
+          Value.newBuilder().setStringValue(Base64.getEncoder().encodeToString(this.b)).build();
+    }
     throw new RuntimeException(
         String.format(
             "native type conversion error from '%s' to '%s'", BytesType, typeDesc.getName()));
-    //		switch typeDesc.Kind() {
-    //		case reflect.Array, reflect.Slice:
-    //			return reflect.ValueOf(b).Convert(typeDesc).Interface(), nil
-    //		case reflect.Ptr:
-    //			switch typeDesc {
-    //			case jsonValueType:
-    //				// CEL follows the proto3 to JSON conversion by encoding bytes to a string via base64.
-    //				// The encoding below matches the golang 'encoding/json' behavior during marshaling,
-    //				// which uses base64.StdEncoding.
-    //				str := base64.StdEncoding.EncodeToString([]byte(b))
-    //				return structpb.NewStringValue(str), nil
-    //			}
-    //		case reflect.Interface:
-    //			bv := b.Value()
-    //			if reflect.TypeOf(bv).Implements(typeDesc) {
-    //				return bv, nil
-    //			}
-    //			if reflect.TypeOf(b).Implements(typeDesc) {
-    //				return b, nil
-    //			}
-    //		}
   }
 
   /** ConvertToType implements the ref.Val interface method. */
@@ -141,9 +147,9 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
   public Val convertToType(Type typeValue) {
     if (typeValue == StringType) {
       try {
-        return stringOf(new String(b, StandardCharsets.UTF_8));
+        return stringOf(Unescape.toUtf8(ByteBuffer.wrap(b)));
       } catch (Exception e) {
-        return newErr("invalid UTF-8 in bytes, cannot convert to string");
+        return newErr(e, "invalid UTF-8 in bytes, cannot convert to string");
       }
     }
     if (typeValue == BytesType) {

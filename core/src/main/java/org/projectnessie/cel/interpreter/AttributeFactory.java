@@ -18,10 +18,14 @@ package org.projectnessie.cel.interpreter;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.BoolT.boolOf;
-import static org.projectnessie.cel.common.types.Err.indexOutOfBounds;
+import static org.projectnessie.cel.common.types.Err.indexOutOfBoundsException;
 import static org.projectnessie.cel.common.types.Err.isError;
-import static org.projectnessie.cel.common.types.Err.noSuchAttribute;
+import static org.projectnessie.cel.common.types.Err.maybeNoSuchOverloadErr;
+import static org.projectnessie.cel.common.types.Err.noSuchAttributeException;
 import static org.projectnessie.cel.common.types.Err.noSuchKey;
+import static org.projectnessie.cel.common.types.Err.noSuchKeyException;
+import static org.projectnessie.cel.common.types.Err.noSuchOverload;
+import static org.projectnessie.cel.common.types.Err.throwErrorAsIllegalStateException;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
@@ -38,6 +42,7 @@ import java.util.Objects;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.types.BoolT;
+import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.StringT;
@@ -159,7 +164,7 @@ public interface AttributeFactory {
      * attribute cannot be resolved within the Activation, the result must be: `nil`, `false`,
      * `nil`.
      */
-    Object tryResolve(Activation a); // TODO (interface{}, bool, error)
+    Object tryResolve(Activation a);
   }
 
   /**
@@ -340,7 +345,7 @@ public interface AttributeFactory {
     public Object resolve(org.projectnessie.cel.interpreter.Activation vars) {
       Object obj = tryResolve(vars);
       if (obj == null) {
-        throw noSuchAttribute(this);
+        throw noSuchAttributeException(this);
       }
       return obj;
     }
@@ -361,6 +366,9 @@ public interface AttributeFactory {
         if (op != null) {
           for (Qualifier qual : qualifiers) {
             Object op2 = qual.qualify(vars, op);
+            if (op2 instanceof Err) {
+              return op2;
+            }
             if (op2 == null) {
               break;
             }
@@ -374,7 +382,7 @@ public interface AttributeFactory {
           if (qualifiers.isEmpty()) {
             return typ;
           }
-          throw noSuchAttribute(this);
+          throw noSuchAttributeException(this);
         }
       }
       return null;
@@ -458,10 +466,10 @@ public interface AttributeFactory {
     public Object resolve(org.projectnessie.cel.interpreter.Activation vars) {
       Val val = expr.eval(vars);
       if (val == null) {
-        throw noSuchAttribute(this);
+        throw noSuchAttributeException(this);
       }
       if (isError(val)) {
-        return null; // TODO ???!? throw new IllegalStateException(val.toString());
+        return null;
       }
       if (val == True) {
         return truthy.resolve(vars);
@@ -469,7 +477,10 @@ public interface AttributeFactory {
       if (val == False) {
         return falsy.resolve(vars);
       }
-      return val;
+      if (isUnknown(val) || isError(val)) {
+        return val;
+      }
+      return maybeNoSuchOverloadErr(val);
     }
 
     /** String is an implementation of the Stringer interface method. */
@@ -610,7 +621,7 @@ public interface AttributeFactory {
         }
       }
       // Else, produce a no such attribute error.
-      throw noSuchAttribute(this);
+      throw noSuchAttributeException(this);
     }
 
     /** String is an implementation of the Stringer interface method. */
@@ -693,12 +704,15 @@ public interface AttributeFactory {
       Object obj = v;
       for (Qualifier qual : qualifiers) {
         if (obj == null) {
-          throw noSuchAttribute(this);
+          throw noSuchAttributeException(this);
         }
         obj = qual.qualify(vars, obj);
+        if (obj instanceof Err) {
+          return obj;
+        }
       }
       if (obj == null) {
-        throw noSuchAttribute(this);
+        throw noSuchAttributeException(this);
       }
       return obj;
     }
@@ -714,36 +728,40 @@ public interface AttributeFactory {
     if (v instanceof Attribute) {
       return new AttrQualifier(id, (Attribute) v);
     }
-    if (v instanceof String) {
+
+    Class<?> c = v.getClass();
+
+    if (v instanceof Val) {
+      if (c == StringT.class) {
+        return new StringQualifier(id, (String) ((StringT) v).value(), (Val) v, adapter);
+      }
+      if (c == IntT.class) {
+        return new IntQualifier(id, ((IntT) v).intValue(), (Val) v, adapter);
+      }
+      if (c == UintT.class) {
+        return new UintQualifier(id, ((UintT) v).intValue(), (Val) v, adapter);
+      }
+      if (c == BoolT.class) {
+        return new BoolQualifier(id, ((BoolT) v).booleanValue(), (Val) v, adapter);
+      }
+    }
+
+    if (c == String.class) {
       return new StringQualifier(id, (String) v, stringOf((String) v), adapter);
     }
-    if (v instanceof ULong) {
+    if (c == ULong.class) {
       long l = ((ULong) v).longValue();
       return new UintQualifier(id, l, uintOf(l), adapter);
     }
-    if ((v instanceof Byte)
-        || (v instanceof Short)
-        || (v instanceof Integer)
-        || (v instanceof Long)) {
+    if ((c == Byte.class) || (c == Short.class) || (c == Integer.class) || (c == Long.class)) {
       long i = ((Number) v).longValue();
       return new IntQualifier(id, i, intOf(i), adapter);
     }
-    if (v instanceof Boolean) {
+    if (c == Boolean.class) {
       boolean b = (Boolean) v;
       return new BoolQualifier(id, b, boolOf(b), adapter);
     }
-    if (v instanceof StringT) {
-      return new StringQualifier(id, (String) ((StringT) v).value(), (Val) v, adapter);
-    }
-    if (v instanceof IntT) {
-      return new IntQualifier(id, ((IntT) v).intValue(), (Val) v, adapter);
-    }
-    if (v instanceof UintT) {
-      return new UintQualifier(id, ((UintT) v).intValue(), (Val) v, adapter);
-    }
-    if (v instanceof BoolT) {
-      return new BoolQualifier(id, ((BoolT) v).booleanValue(), (Val) v, adapter);
-    }
+
     throw new IllegalStateException(
         String.format("invalid qualifier type: %s", v.getClass().getName()));
   }
@@ -789,7 +807,7 @@ public interface AttributeFactory {
     }
   }
 
-  class StringQualifier implements Coster, ConstantQualifier, QualifierValueEquator {
+  class StringQualifier implements Coster, ConstantQualifierEquator, QualifierValueEquator {
     final long id;
     final String value;
     final Val celValue;
@@ -809,6 +827,7 @@ public interface AttributeFactory {
     }
 
     /** Qualify implements the Qualifier interface method. */
+    @SuppressWarnings("rawtypes")
     @Override
     public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
       String s = value;
@@ -819,13 +838,12 @@ public interface AttributeFactory {
           if (m.containsKey(s)) {
             return NullT.NullValue;
           }
-          throw noSuchKey(s);
+          throw noSuchKeyException(s);
         }
       } else if (obj instanceof UnknownT) {
         return obj;
       } else {
-        Val elem = refResolve(adapter, celValue, obj);
-        return elem;
+        return refResolve(adapter, celValue, obj);
       }
       return obj;
     }
@@ -886,6 +904,7 @@ public interface AttributeFactory {
     }
 
     /** Qualify implements the Qualifier interface method. */
+    @SuppressWarnings("rawtypes")
     @Override
     public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
       long i = value;
@@ -899,16 +918,25 @@ public interface AttributeFactory {
           if (m.containsKey(i) || m.containsKey((int) i)) {
             return null;
           }
-          throw noSuchKey(i);
+          throw noSuchKeyException(i);
         }
         return obj;
       }
       if (obj.getClass().isArray()) {
         int l = Array.getLength(obj);
-        if (i < 0 && i >= l) {
-          throw indexOutOfBounds(i);
+        if (i < 0 || i >= l) {
+          throw indexOutOfBoundsException(i);
         }
         obj = Array.get(obj, (int) i);
+        return obj;
+      }
+      if (obj instanceof List) {
+        List list = (List) obj;
+        int l = list.size();
+        if (i < 0 || i >= l) {
+          throw indexOutOfBoundsException(i);
+        }
+        obj = list.get((int) i);
         return obj;
       }
       if (obj instanceof UnknownT) {
@@ -931,8 +959,6 @@ public interface AttributeFactory {
 
     @Override
     public boolean qualifierValueEquals(Object value) {
-      // TODO this matches _unsigned_ uint64 as well - the Go implementation does *not* match
-      // unsigned ints
       if (value instanceof ULong) {
         return false;
       }
@@ -977,6 +1003,7 @@ public interface AttributeFactory {
     }
 
     /** Qualify implements the Qualifier interface method. */
+    @SuppressWarnings("rawtypes")
     @Override
     public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
       long i = value;
@@ -984,23 +1011,14 @@ public interface AttributeFactory {
         Map m = (Map) obj;
         obj = m.get(ULong.valueOf(i));
         if (obj == null) {
-          obj = m.get(i);
-        }
-        if (obj == null) {
-          obj = m.get((int) i);
-        }
-        if (obj == null) {
-          if (m.containsKey(i) || m.containsKey((int) i)) {
-            return NullT.NullValue;
-          }
-          throw noSuchKey(i);
+          throw noSuchKeyException(i);
         }
         return obj;
       }
       if (obj.getClass().isArray()) {
         int l = Array.getLength(obj);
         if (i < 0 && i >= l) {
-          throw indexOutOfBounds(i);
+          throw indexOutOfBoundsException(i);
         }
         obj = Array.get(obj, (int) i);
         return obj;
@@ -1025,10 +1043,8 @@ public interface AttributeFactory {
 
     @Override
     public boolean qualifierValueEquals(Object value) {
-      // TODO this matches _signed_ int64 as well - the Go implementation does *not* match signed
-      // ints
-      if (value instanceof Number) {
-        return this.value == ((Number) value).longValue();
+      if (value instanceof ULong) {
+        return this.value == ((ULong) value).longValue();
       }
       return false;
     }
@@ -1068,6 +1084,7 @@ public interface AttributeFactory {
     }
 
     /** Qualify implements the Qualifier interface method. */
+    @SuppressWarnings("rawtypes")
     @Override
     public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
       boolean b = value;
@@ -1078,13 +1095,12 @@ public interface AttributeFactory {
           if (m.containsKey(b)) {
             return null;
           }
-          throw noSuchKey(b);
+          throw noSuchKeyException(b);
         }
       } else if (obj instanceof UnknownT) {
         return obj;
       } else {
-        Val elem = refResolve(adapter, celValue, obj);
-        return elem;
+        return refResolve(adapter, celValue, obj);
       }
       return obj;
     }
@@ -1104,7 +1120,7 @@ public interface AttributeFactory {
     @Override
     public boolean qualifierValueEquals(Object value) {
       if (value instanceof Boolean) {
-        return this.value == ((Boolean) value).booleanValue();
+        return this.value == (Boolean) value;
       }
       return false;
     }
@@ -1154,7 +1170,7 @@ public interface AttributeFactory {
       if (obj instanceof Val) {
         obj = ((Val) obj).value();
       }
-      return fieldType.getFrom.func(obj);
+      return fieldType.getFrom.getFrom(obj);
     }
 
     /** Value implements the ConstantQualifier interface */
@@ -1203,30 +1219,21 @@ public interface AttributeFactory {
       Mapper mapper = (Mapper) celVal;
       Val elem = mapper.find(idx);
       if (elem == null) {
-        throw noSuchKey(idx);
-      }
-      if (isError(elem)) {
-        throw new IllegalStateException(elem.toString());
+        return noSuchKey(idx);
       }
       return elem;
     }
     if (celVal instanceof Indexer) {
       Indexer indexer = (Indexer) celVal;
-      Val elem = indexer.get(idx);
-      if (isError(elem)) {
-        throw new IllegalStateException(elem.toString());
-      }
-      return elem;
+      return indexer.get(idx);
     }
     if (isUnknown(celVal)) {
       return celVal;
     }
     // TODO: If the types.Err value contains more than just an error message at some point in the
-    // future, then it would be reasonable to return error values as ref.Val types rather than
-    // simple go error types.
-    if (isError(celVal)) {
-      throw new IllegalStateException(celVal.toString());
-    }
-    return null; // noSuchOverload(celVal, "ref-resolve", null);
+    //  future, then it would be reasonable to return error values as ref.Val types rather than
+    //  simple go error types.
+    throwErrorAsIllegalStateException(celVal);
+    return noSuchOverload(celVal, "ref-resolve", null);
   }
 }

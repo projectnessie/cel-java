@@ -19,9 +19,11 @@ import static org.projectnessie.cel.common.types.BoolT.BoolType;
 import static org.projectnessie.cel.common.types.BytesT.BytesType;
 import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
 import static org.projectnessie.cel.common.types.DurationT.DurationType;
+import static org.projectnessie.cel.common.types.Err.anyWithEmptyType;
 import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.noSuchField;
 import static org.projectnessie.cel.common.types.Err.unknownType;
+import static org.projectnessie.cel.common.types.Err.unsupportedRefValConversionErr;
 import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.ListT.ListType;
@@ -30,15 +32,20 @@ import static org.projectnessie.cel.common.types.NullT.NullType;
 import static org.projectnessie.cel.common.types.ObjectT.newObject;
 import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.TimestampT.TimestampType;
-import static org.projectnessie.cel.common.types.TypeValue.TypeType;
-import static org.projectnessie.cel.common.types.TypeValue.newObjectTypeValue;
+import static org.projectnessie.cel.common.types.TypeT.TypeType;
+import static org.projectnessie.cel.common.types.TypeT.newObjectTypeValue;
 import static org.projectnessie.cel.common.types.UintT.UintType;
 import static org.projectnessie.cel.common.types.pb.Db.newDb;
+import static org.projectnessie.cel.common.types.pb.TypeDescription.typeNameFromMessage;
 
 import com.google.api.expr.v1alpha1.Type;
 import com.google.protobuf.Any;
 import com.google.protobuf.BoolValue;
 import com.google.protobuf.BytesValue;
+import com.google.protobuf.Descriptors.Descriptor;
+import com.google.protobuf.Descriptors.EnumDescriptor;
+import com.google.protobuf.Descriptors.EnumValueDescriptor;
+import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor.JavaType;
 import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.DoubleValue;
@@ -48,6 +55,7 @@ import com.google.protobuf.FloatValue;
 import com.google.protobuf.Int32Value;
 import com.google.protobuf.Int64Value;
 import com.google.protobuf.ListValue;
+import com.google.protobuf.MapEntry;
 import com.google.protobuf.Message;
 import com.google.protobuf.Message.Builder;
 import com.google.protobuf.StringValue;
@@ -56,9 +64,13 @@ import com.google.protobuf.Timestamp;
 import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
 import com.google.protobuf.Value;
+import com.google.protobuf.WireFormat;
+import java.lang.reflect.Array;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
@@ -206,6 +218,15 @@ public final class ProtoTypeRegistry implements TypeRegistry {
       return unknownType(typeName);
     }
     Builder builder = td.newMessageBuilder();
+    Val err = newValueSetFields(fields, td, builder);
+    if (err != null) {
+      return err;
+    }
+    Message msg = builder.build();
+    return nativeToValue(msg);
+  }
+
+  private Val newValueSetFields(Map<String, Val> fields, TypeDescription td, Builder builder) {
     Map<String, FieldDescription> fieldMap = td.fieldMap();
     for (Entry<String, Val> nv : fields.entrySet()) {
       String name = nv.getKey();
@@ -213,23 +234,93 @@ public final class ProtoTypeRegistry implements TypeRegistry {
       if (field == null) {
         return noSuchField(name);
       }
-      // TODO this approach (convertToNative passing the rather badly guessed reflectType)
-      //  does not work properly.
-      //  A proper solution requires recursion with both the current 'Val' and the current
-      //  "reflect type" (i.e. traversing the 'Val' structure with the type/field-descriptors.
-      //  see org.projectnessie.cel.common.types.pb.FieldDescription.reflectType
+
+      // TODO resolve inefficiency for maps: first converted from a MapT to a native Java map and
+      //  then to a protobuf struct. The intermediate step (the Java map) could be omitted.
+
       Object value = nv.getValue().convertToNative(field.reflectType());
       if (value.getClass().isArray()) {
-        // TODO remove this once a proper type-recursion is in place
         value = Arrays.asList((Object[]) value);
       }
-      if (field.descriptor().getJavaType() == JavaType.ENUM) {
-        value = field.descriptor().getEnumType().getValues().get((Integer) value);
+
+      FieldDescriptor pbDesc = field.descriptor();
+
+      if (pbDesc.getJavaType() == JavaType.ENUM) {
+        value = intToProtoEnumValues(field, value);
       }
-      builder.setField(field.descriptor(), value);
+
+      if (pbDesc.isMapField()) {
+        value = toProtoMapStructure(pbDesc, value);
+      }
+
+      builder.setField(pbDesc, value);
     }
-    Message msg = builder.build();
-    return nativeToValue(msg);
+    return null;
+  }
+
+  /**
+   * Converts {@code value}, of the map-field {@code fieldDesc} from its Java {@link Map}
+   * representation to the protobuf-y {@code {@link List}<{@link MapEntry}>} representation.
+   */
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  private Object toProtoMapStructure(FieldDescriptor fieldDesc, Object value) {
+    Descriptor mesgType = fieldDesc.getMessageType();
+    FieldDescriptor keyType = mesgType.findFieldByNumber(1);
+    FieldDescriptor valueType = mesgType.findFieldByNumber(2);
+    WireFormat.FieldType keyFieldType = WireFormat.FieldType.valueOf(keyType.getType().name());
+    WireFormat.FieldType valueFieldType = WireFormat.FieldType.valueOf(valueType.getType().name());
+    if (value instanceof Map) {
+      List newList = new ArrayList();
+      for (Map.Entry e : ((Map<?, ?>) value).entrySet()) {
+        Object v = e.getValue();
+        Object k = e.getKey();
+
+        // TODO improve the type-A-to-B-conversion
+        // if (!(k instanceof String)) {
+        //   return Err.newTypeConversionError(k.getClass().getName(), String.class.getName());
+        // }
+        if (valueFieldType == WireFormat.FieldType.MESSAGE && !(v instanceof Message)) {
+          v = nativeToValue(v).convertToNative(Value.class);
+        }
+
+        MapEntry newEntry =
+            MapEntry.newDefaultInstance(mesgType, keyFieldType, k, valueFieldType, v);
+        newList.add(newEntry);
+      }
+      value = newList;
+    }
+
+    return value;
+  }
+
+  /**
+   * Converts a value of type {@link Number} to {@link EnumValueDescriptor}, also works for arrays
+   * and {@link List}s containing {@link Number}s.
+   */
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private Object intToProtoEnumValues(FieldDescription field, Object value) {
+    EnumDescriptor enumType = field.descriptor().getEnumType();
+    if (value instanceof Number) {
+      int enumValue = ((Number) value).intValue();
+      value = enumType.findValueByNumberCreatingIfUnknown(enumValue);
+    } else if (value instanceof List) {
+      List list = (List) value;
+      List newList = new ArrayList(list.size());
+      for (Object o : list) {
+        int enumValue = ((Number) o).intValue();
+        newList.add(enumType.findValueByNumberCreatingIfUnknown(enumValue));
+      }
+      value = newList;
+    } else if (value.getClass().isArray()) {
+      int l = Array.getLength(value);
+      EnumValueDescriptor[] newArr = new EnumValueDescriptor[l];
+      for (int i = 0; i < l; i++) {
+        int enumValue = ((Number) Array.get(value, i)).intValue();
+        newArr[i] = enumType.findValueByNumberCreatingIfUnknown(enumValue);
+      }
+      value = newArr;
+    }
+    return value;
   }
 
   @Override
@@ -260,45 +351,45 @@ public final class ProtoTypeRegistry implements TypeRegistry {
    */
   @Override
   public Val nativeToValue(Object value) {
-    Val val = DefaultTypeAdapter.nativeToValue(pbdb, this, value);
-    if (val != null) {
-      return val;
-    }
     if (value instanceof Message) {
       Message v = (Message) value;
-      String typeName = v.getDescriptorForType().getFullName();
+      String typeName = typeNameFromMessage(v);
+      if (typeName.isEmpty()) {
+        return anyWithEmptyType();
+      }
       TypeDescription td = pbdb.describeType(typeName);
       if (td == null) {
         return unknownType(typeName);
       }
       Object unwrapped = td.maybeUnwrap(pbdb, v);
-      if (unwrapped != null && unwrapped != v) {
-        return nativeToValue(unwrapped);
+      if (unwrapped != null) {
+        Object further = DefaultTypeAdapter.maybeUnwrapValue(unwrapped);
+        if (further != unwrapped) {
+          return nativeToValue(further);
+        }
+
+        Val val = DefaultTypeAdapter.maybeNativeToValue(this, unwrapped);
+        if (val != null) {
+          return val;
+        }
+        if (unwrapped instanceof Message) {
+          v = (Message) unwrapped;
+        }
       }
       Val typeVal = findIdent(typeName);
       if (typeVal == null) {
         return unknownType(typeName);
       }
-      return newObject(this, td, (TypeValue) typeVal, v);
+
+      return newObject(this, td, (TypeT) typeVal, v);
     }
-    // TODO implement more cases
-    throw new UnsupportedOperationException("IMPLEMENT ME FOR " + value.getClass());
-    //    if (value instanceof pb.Map) {
-    //      return NewProtoMap(p, v)
-    //    }
-    //    if (value instanceof pb.Map) {
-    //    case protoreflect.List:
-    //      return NewProtoList(p, v)
-    //    }
-    //    if (value instanceof pb.Map) {
-    //    case protoreflect.Message:
-    //      return nativeToValue(v.Interface());
-    //    }
-    //    if (value instanceof pb.Map) {
-    //    case protoreflect.Value:
-    //      return nativeToValue(v.Interface());
-    //    }
-    //    return unsupportedRefValConversionErr(value);
+
+    Val val = DefaultTypeAdapter.nativeToValue(pbdb, this, value);
+    if (val != null) {
+      return val;
+    }
+
+    return unsupportedRefValConversionErr(value);
   }
 
   void registerAllTypes(FileDescription fd) {

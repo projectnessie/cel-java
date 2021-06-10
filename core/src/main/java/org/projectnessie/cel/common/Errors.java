@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 public class Errors {
-  private final List<Error> errors = new ArrayList<>();
+  private final List<CELError> errors = new ArrayList<>();
   private final Source source;
 
   public Errors(Source source) {
@@ -29,12 +29,12 @@ public class Errors {
 
   /** ReportError records an error at a source location. */
   public void reportError(Location l, String format, Object... args) {
-    Error err = new Error(l, String.format(format, args));
+    CELError err = new CELError(l, String.format(format, args));
     errors.add(err);
   }
 
   /** GetErrors returns the list of observed errors. */
-  public List<Error> getErrors() {
+  public List<CELError> getErrors() {
     return errors;
   }
 
@@ -46,7 +46,7 @@ public class Errors {
    * Append takes an Errors object as input creates a new Errors object with the current and input
    * errors.
    */
-  public Errors append(List<Error> errors) {
+  public Errors append(List<CELError> errors) {
     Errors errs = new Errors(source);
     errs.errors.addAll(this.errors);
     errs.errors.addAll(errors);

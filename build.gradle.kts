@@ -24,6 +24,9 @@ plugins {
   `maven-publish`
   id("org.jetbrains.gradle.plugin.idea-ext")
   id("com.diffplug.spotless")
+  id("org.caffinitas.gradle.aggregatetestresults")
+  id("org.caffinitas.gradle.testsummary")
+  id("org.caffinitas.gradle.testrerun")
 }
 
 allprojects {
@@ -43,6 +46,12 @@ allprojects {
   }
 
   tasks.withType<JavaCompile>().configureEach { options.encoding = "UTF-8" }
+
+  tasks.withType<Javadoc>().configureEach {
+    val opt = options as CoreJavadocOptions
+    // don't spam log w/ "warning: no @param/@return"
+    opt.addStringOption("Xdoclint:-reference", "-quiet")
+  }
 
   plugins.withType<JavaPlugin>().configureEach {
     configure<JavaPluginExtension> {

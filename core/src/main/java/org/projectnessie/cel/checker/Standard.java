@@ -29,10 +29,10 @@ import org.projectnessie.cel.common.types.Overloads;
 
 final class Standard {
 
-  static final List<Decl> StandardDeclarations = makeStandardDeclarations();
+  private Standard() {}
 
   // StandardDeclarations returns the Decls for all functions and constants in the evaluator.
-  private static List<Decl> makeStandardDeclarations() {
+  static List<Decl> makeStandardDeclarations() {
     // Some shortcuts we use when building declarations.
     Type paramA = Decls.newTypeParamType("A");
     List<String> typeParamAList = singletonList("A");

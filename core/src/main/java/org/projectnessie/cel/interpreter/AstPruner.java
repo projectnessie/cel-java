@@ -16,8 +16,8 @@
 package org.projectnessie.cel.interpreter;
 
 // TODO Consider having a separate walk of the AST that finds common
-// subexpressions. This can be called before or after constant folding to find
-// common subexpressions.
+//  subexpressions. This can be called before or after constant folding to find
+//  common subexpressions.
 
 import static org.projectnessie.cel.common.types.BoolT.BoolType;
 import static org.projectnessie.cel.common.types.BoolT.True;
@@ -95,7 +95,7 @@ public class AstPruner {
     this.nextExprID = nextExprID;
   }
 
-  static Expr pruneAst(Expr expr, EvalState state) {
+  public static Expr pruneAst(Expr expr, EvalState state) {
     AstPruner pruner = new AstPruner(expr, state, 1);
     Expr newExpr = pruner.prune(expr);
     return newExpr;
@@ -179,7 +179,7 @@ public class AstPruner {
     }
 
     // TODO(issues/377) To construct message literals, the type provider will need to support
-    // the enumeration the fields for a given message.
+    //  the enumeration the fields for a given message.
     return null;
   }
 

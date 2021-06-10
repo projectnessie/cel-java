@@ -42,7 +42,7 @@ public class Container {
   public static Container newContainer(ContainerOption... opts) {
     Container c = defaultContainer;
     for (ContainerOption opt : opts) {
-      c = opt.func(c);
+      c = opt.apply(c);
       if (c == null) {
         return null;
       }
@@ -80,7 +80,7 @@ public class Container {
 
     // Apply the new options to the container.
     for (ContainerOption opt : opts) {
-      ext = opt.func(ext);
+      ext = opt.apply(ext);
       if (ext == null) {
         return null;
       }
@@ -195,7 +195,7 @@ public class Container {
    */
   @FunctionalInterface
   public interface ContainerOption {
-    Container func(Container c);
+    Container apply(Container c);
   }
 
   /**
@@ -233,7 +233,7 @@ public class Container {
                   "invalid qualified name: %s, wanted name of the form 'qualified.name'", qn));
         }
         String alias = qn.substring(ind + 1);
-        c = aliasAs("abbreviation", qn, alias).func(c);
+        c = aliasAs("abbreviation", qn, alias).apply(c);
         if (c == null) {
           return null;
         }

@@ -18,12 +18,19 @@ package org.projectnessie.cel.common.types;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.BoolT.boolOf;
+import static org.projectnessie.cel.common.types.Err.isError;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
-import static org.projectnessie.cel.common.types.TypeValue.TypeType;
+import static org.projectnessie.cel.common.types.Err.noSuchOverload;
+import static org.projectnessie.cel.common.types.StringT.StringType;
+import static org.projectnessie.cel.common.types.TypeT.TypeType;
 
+import com.google.protobuf.Any;
+import com.google.protobuf.Struct;
+import com.google.protobuf.Value;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
@@ -36,8 +43,8 @@ import org.projectnessie.cel.common.types.traits.Trait;
 
 public abstract class MapT extends BaseVal implements Mapper, Container, Indexer, IterableT, Sizer {
   /** MapType singleton. */
-  public static final TypeValue MapType =
-      TypeValue.newTypeValue(
+  public static final TypeT MapType =
+      TypeT.newTypeValue(
           "map", Trait.ContainerType, Trait.IndexerType, Trait.IterableType, Trait.SizerType);
 
   public static Val newWrappedMap(TypeAdapter adapter, Map<Val, Val> value) {
@@ -69,13 +76,47 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
     @Override
     public <T> T convertToNative(Class<T> typeDesc) {
       if (Map.class.isAssignableFrom(typeDesc) || typeDesc == Object.class) {
-        Map r = new HashMap();
-        map.forEach((k, v) -> r.put(k.value(), v.value()));
-        return (T) r;
+        return (T) toJavaMap();
+      }
+      if (typeDesc == Struct.class) {
+        return (T) toPbStruct();
+      }
+      if (typeDesc == Value.class) {
+        return (T) toPbValue();
+      }
+      if (typeDesc == Any.class) {
+        Struct v = toPbStruct();
+        //        DynamicMessage dyn = DynamicMessage.newBuilder(v).build();
+        //        return (T) Any.newBuilder().mergeFrom(dyn).build();
+        return (T)
+            Any.newBuilder()
+                .setTypeUrl("type.googleapis.com/google.protobuf.Struct")
+                .setValue(v.toByteString())
+                .build();
       }
       throw new RuntimeException(
           String.format(
               "native type conversion error from '%s' to '%s'", MapType, typeDesc.getName()));
+    }
+
+    private Value toPbValue() {
+      return Value.newBuilder().setStructValue(toPbStruct()).build();
+    }
+
+    private Struct toPbStruct() {
+      Struct.Builder struct = Struct.newBuilder();
+      map.forEach(
+          (k, v) ->
+              struct.putFields(
+                  k.convertToType(StringType).value().toString(), v.convertToNative(Value.class)));
+      return struct.build();
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private Map toJavaMap() {
+      Map r = new HashMap();
+      map.forEach((k, v) -> r.put(k.value(), v.value()));
+      return r;
     }
 
     @Override
@@ -107,16 +148,26 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
       IteratorT myIter = iterator();
       while (myIter.hasNext() == True) {
         Val key = myIter.next();
+
         Val val = get(key);
         Val oVal = o.find(key);
-        if (val == null || oVal == null) {
+        if (oVal == null) {
           return False;
+        }
+        if (isError(val)) {
+          return val;
+        }
+        if (isError(oVal)) {
+          return val;
+        }
+        if (val.type() != oVal.type()) {
+          return noSuchOverload(val, Operator.Equals.id, oVal);
         }
         Val eq = val.equal(oVal);
         if (eq instanceof Err) {
           return eq;
         }
-        if (val.equal(oVal) != True) {
+        if (eq != True) {
           return False;
         }
       }
@@ -126,8 +177,7 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
     @Override
     public Object value() {
       // TODO this is expensive :(
-      Map<Object, Object> nativeMap = new HashMap<>();
-      map.forEach((k, v) -> nativeMap.put(k.value(), v.value()));
+      Map<Object, Object> nativeMap = toJavaMap();
       return nativeMap;
     }
 
@@ -172,5 +222,16 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
     public String toString() {
       return "JavaMapT{" + "adapter=" + adapter + ", map=" + map + '}';
     }
+  }
+
+  /**
+   * NewJSONStruct creates a traits.Mapper implementation backed by a JSON struct that has been
+   * encoded in protocol buffer form.
+   *
+   * <p>The `adapter` argument provides type adaptation capabilities from proto to CEL.
+   */
+  public static Val newJSONStruct(TypeAdapter adapter, Struct value) {
+    Map<String, Value> fields = value.getFieldsMap();
+    return newMaybeWrappedMap(adapter, fields);
   }
 }

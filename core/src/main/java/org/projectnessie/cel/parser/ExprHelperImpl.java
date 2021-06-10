@@ -17,6 +17,7 @@ package org.projectnessie.cel.parser;
 
 import com.google.api.expr.v1alpha1.Expr;
 import com.google.api.expr.v1alpha1.Expr.CreateStruct.Entry;
+import com.google.protobuf.ByteString;
 import java.util.Arrays;
 import java.util.List;
 import org.projectnessie.cel.common.Location;
@@ -43,7 +44,7 @@ public class ExprHelperImpl implements ExprHelper {
 
   // LiteralBytes implements the ExprHelper interface method.
   @Override
-  public Expr literalBytes(byte[] value) {
+  public Expr literalBytes(ByteString value) {
     return parserHelper.newLiteralBytes(nextMacroID(), value);
   }
 

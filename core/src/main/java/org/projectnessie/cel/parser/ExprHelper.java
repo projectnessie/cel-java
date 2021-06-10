@@ -17,6 +17,7 @@ package org.projectnessie.cel.parser;
 
 import com.google.api.expr.v1alpha1.Expr;
 import com.google.api.expr.v1alpha1.Expr.CreateStruct.Entry;
+import com.google.protobuf.ByteString;
 import java.util.List;
 import org.projectnessie.cel.common.Location;
 
@@ -25,13 +26,13 @@ import org.projectnessie.cel.common.Location;
  * consistent with the source position and expression id generation code leveraged by both the
  * parser and type-checker.
  */
-interface ExprHelper {
+public interface ExprHelper {
 
   /** LiteralBool creates an Expr value for a bool literal. */
   Expr literalBool(boolean value);
 
   /** LiteralBytes creates an Expr value for a byte literal. */
-  Expr literalBytes(byte[] value);
+  Expr literalBytes(ByteString value);
 
   /** LiteralDouble creates an Expr value for double literal. */
   Expr literalDouble(double value);

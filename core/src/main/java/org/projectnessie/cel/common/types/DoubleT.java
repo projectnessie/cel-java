@@ -20,16 +20,21 @@ import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.Err.rangeError;
 import static org.projectnessie.cel.common.types.IntT.IntType;
+import static org.projectnessie.cel.common.types.IntT.IntZero;
 import static org.projectnessie.cel.common.types.IntT.intOf;
+import static org.projectnessie.cel.common.types.IntT.intOfCompare;
 import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
-import static org.projectnessie.cel.common.types.TypeValue.TypeType;
+import static org.projectnessie.cel.common.types.TypeT.TypeType;
 import static org.projectnessie.cel.common.types.UintT.UintType;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.DoubleValue;
 import com.google.protobuf.FloatValue;
+import com.google.protobuf.Value;
+import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.util.Objects;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
@@ -46,8 +51,8 @@ import org.projectnessie.cel.common.types.traits.Trait;
 public final class DoubleT extends BaseVal
     implements Adder, Comparer, Divider, Multiplier, Negater, Subtractor {
   /** DoubleType singleton. */
-  public static final TypeValue DoubleType =
-      TypeValue.newTypeValue(
+  public static final TypeT DoubleType =
+      TypeT.newTypeValue(
           "double",
           Trait.AdderType,
           Trait.ComparerType,
@@ -81,7 +86,12 @@ public final class DoubleT extends BaseVal
     if (!(other instanceof DoubleT)) {
       return noSuchOverload(this, "compare", other);
     }
-    return intOf(Double.compare(d, ((DoubleT) other).d));
+    double od = ((DoubleT) other).d;
+    if (d == od) {
+      // work around for special case of -0.0d == 0.0d (IEEE 754)
+      return IntZero;
+    }
+    return intOfCompare(Double.compare(d, od));
   }
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
@@ -108,59 +118,45 @@ public final class DoubleT extends BaseVal
     if (typeDesc == Val.class || typeDesc == DoubleT.class) {
       return (T) this;
     }
-
-    //		switch typeDesc.Kind() {
-    //		case reflect.Ptr:
-    //			switch typeDesc {
-    //			case jsonValueType:
-    //				// Note, there are special cases for proto3 to json conversion that
-    //				// expect the floating point value to be converted to a NaN,
-    //				// Infinity, or -Infinity string values, but the jsonpb string
-    //				// marshaling of the protobuf.Value will handle this conversion.
-    //				return structpb.NewNumberValue(float64(d)), nil
-    //			}
-    //			switch typeDesc.Elem().Kind() {
-    //			case reflect.Float32:
-    //				v := float32(d)
-    //				p := reflect.New(typeDesc.Elem())
-    //				p.Elem().Set(reflect.ValueOf(v).Convert(typeDesc.Elem()))
-    //				return p.Interface(), nil
-    //			case reflect.Float64:
-    //				v := float64(d)
-    //				p := reflect.New(typeDesc.Elem())
-    //				p.Elem().Set(reflect.ValueOf(v).Convert(typeDesc.Elem()))
-    //				return p.Interface(), nil
-    //			}
-    //		case reflect.Interface:
-    //			dv := d.Value()
-    //			if reflect.TypeOf(dv).Implements(typeDesc) {
-    //				return dv, nil
-    //			}
-    //			if reflect.TypeOf(d).Implements(typeDesc) {
-    //				return d, nil
-    //			}
-    //		}
+    if (typeDesc == Value.class) {
+      return (T) Value.newBuilder().setNumberValue(d).build();
+    }
     throw new RuntimeException(
         String.format(
             "native type conversion error from '%s' to '%s'", DoubleType, typeDesc.getName()));
   }
 
+  private static final BigInteger MAX_UINT64 =
+      BigInteger.ONE.shiftLeft(64).subtract(BigInteger.ONE);
+
   /** ConvertToType implements ref.Val.ConvertToType. */
   @Override
   public Val convertToType(Type typeValue) {
+    // NOTE: the original Go test assert on `intOf(-5)`, because Go's implementation uses
+    // the Go `math.Round(float64)` function. The implementation of Go's `math.Round(float64)`
+    // behaves differently to Java's `Math.round(double)` (or `Math.rint()`).
+    // Further, the CEL-spec conformance tests assert on a different behavior and therefore those
+    // conformance-tests fail against the Go implementation.
+    // Even more complicated: the CEL-spec says: "CEL provides no way to control the finer points
+    // of floating-point arithmetic, such as expression evaluation, rounding mode, or exception
+    // handling. However, any two not-a-number values will compare equal even if their underlying
+    // properties are different."
+    // (see https://github.com/google/cel-spec/blob/master/doc/langdef.md#numeric-values)
     if (typeValue == IntType) {
-      long r = Math.round(d);
+      long r = (long) d; // ?? Math.round(d);
       if (r == Long.MIN_VALUE || r == Long.MAX_VALUE) {
         return rangeError(d, "int");
       }
       return intOf(r);
     }
     if (typeValue == UintType) {
-      long r = Math.round(d);
-      if (r < 0 || r == Long.MAX_VALUE) {
+      // hack to support uint64
+      BigDecimal dec = new BigDecimal(d);
+      BigInteger bi = dec.toBigInteger();
+      if (d < 0 || bi.compareTo(MAX_UINT64) > 0) {
         return rangeError(d, "int");
       }
-      return uintOf(r);
+      return uintOf(bi.longValue());
     }
     if (typeValue == DoubleType) {
       return this;
@@ -238,6 +234,11 @@ public final class DoubleT extends BaseVal
       return false;
     }
     DoubleT doubleT = (DoubleT) o;
+    double od = ((DoubleT) o).d;
+    if (d == od) {
+      // work around for special case of -0.0d == 0.0d (IEEE 754)
+      return true;
+    }
     return Double.compare(doubleT.d, d) == 0;
   }
 

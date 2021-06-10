@@ -15,9 +15,9 @@
  */
 package org.projectnessie.cel.checker;
 
-import static org.projectnessie.cel.checker.Env.dynElementType;
-import static org.projectnessie.cel.checker.Env.getObjectWellKnownType;
-import static org.projectnessie.cel.checker.Env.isObjectWellKnownType;
+import static org.projectnessie.cel.checker.CheckerEnv.dynElementType;
+import static org.projectnessie.cel.checker.CheckerEnv.getObjectWellKnownType;
+import static org.projectnessie.cel.checker.CheckerEnv.isObjectWellKnownType;
 import static org.projectnessie.cel.checker.Mapping.newMapping;
 import static org.projectnessie.cel.checker.Types.isDyn;
 import static org.projectnessie.cel.checker.Types.isDynOrError;
@@ -29,6 +29,7 @@ import static org.projectnessie.cel.common.Location.newLocation;
 
 import com.google.api.expr.v1alpha1.CheckedExpr;
 import com.google.api.expr.v1alpha1.Constant;
+import com.google.api.expr.v1alpha1.Constant.ConstantKindCase;
 import com.google.api.expr.v1alpha1.Decl;
 import com.google.api.expr.v1alpha1.Decl.FunctionDecl.Overload;
 import com.google.api.expr.v1alpha1.Decl.IdentDecl;
@@ -53,12 +54,15 @@ import org.projectnessie.cel.checker.Types.Kind;
 import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.Source;
 import org.projectnessie.cel.common.containers.Container;
+import org.projectnessie.cel.common.types.Err.ErrException;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.parser.Parser.ParseResult;
 
 public class Checker {
 
-  private Env env;
+  public static final List<Decl> StandardDeclarations = Standard.makeStandardDeclarations();
+
+  private CheckerEnv env;
   private final TypeErrors errors;
   private Mapping mappings;
   private int freeTypeVarCounter;
@@ -67,7 +71,11 @@ public class Checker {
   private final Map<Long, Reference> references = new HashMap<>();
 
   private Checker(
-      Env env, TypeErrors errors, Mapping mappings, int freeTypeVarCounter, SourceInfo sourceInfo) {
+      CheckerEnv env,
+      TypeErrors errors,
+      Mapping mappings,
+      int freeTypeVarCounter,
+      SourceInfo sourceInfo) {
     this.env = env;
     this.errors = errors;
     this.mappings = mappings;
@@ -108,7 +116,7 @@ public class Checker {
    * of protocol buffers, and a registry for errors. Returns a CheckedExpr proto, which might not be
    * usable if there are errors in the error registry.
    */
-  public static CheckResult Check(ParseResult parsedExpr, Source source, Env env) {
+  public static CheckResult Check(ParseResult parsedExpr, Source source, CheckerEnv env) {
     TypeErrors errors = new TypeErrors(source);
     Checker c = new Checker(env, errors, newMapping(), 0, parsedExpr.getSourceInfo());
 
@@ -377,10 +385,19 @@ public class Checker {
 
     List<Type> argTypes = new ArrayList<>();
     if (target != null) {
-      argTypes.add(getType(target));
+      Type argType = getType(target);
+      if (argType == null) {
+        throw new ErrException("Could not resolve type for target '%s'", target);
+      }
+      argTypes.add(argType);
     }
-    for (Expr.Builder arg : args) {
-      argTypes.add(getType(arg));
+    for (int i = 0; i < args.size(); i++) {
+      Expr.Builder arg = args.get(i);
+      Type argType = getType(arg);
+      if (argType == null) {
+        throw new ErrException("Could not resolve type for argument %d '%s'", i, arg);
+      }
+      argTypes.add(argType);
     }
 
     Type resultType = null;
@@ -706,7 +723,7 @@ public class Checker {
 
   static Reference newIdentReference(String name, Constant value) {
     Reference.Builder refBuilder = Reference.newBuilder().setName(name);
-    if (value != null) {
+    if (value != null && value.getConstantKindCase() != ConstantKindCase.CONSTANTKIND_NOT_SET) {
       refBuilder = refBuilder.setValue(value);
     }
     return refBuilder.build();

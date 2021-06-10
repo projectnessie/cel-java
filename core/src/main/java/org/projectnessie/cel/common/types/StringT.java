@@ -30,14 +30,16 @@ import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.IntT.intOf;
+import static org.projectnessie.cel.common.types.IntT.intOfCompare;
 import static org.projectnessie.cel.common.types.TimestampT.TimestampType;
 import static org.projectnessie.cel.common.types.TimestampT.timestampOf;
-import static org.projectnessie.cel.common.types.TypeValue.TypeType;
+import static org.projectnessie.cel.common.types.TypeT.TypeType;
 import static org.projectnessie.cel.common.types.UintT.UintType;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.StringValue;
+import com.google.protobuf.Value;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -58,8 +60,8 @@ import org.projectnessie.cel.common.types.traits.Trait;
 public class StringT extends BaseVal implements Adder, Comparer, Matcher, Receiver, Sizer {
 
   /** StringType singleton. */
-  public static final TypeValue StringType =
-      TypeValue.newTypeValue(
+  public static final TypeT StringType =
+      TypeT.newTypeValue(
           "string",
           Trait.AdderType,
           Trait.ComparerType,
@@ -102,7 +104,7 @@ public class StringT extends BaseVal implements Adder, Comparer, Matcher, Receiv
       return noSuchOverload(this, "compare", other);
     }
 
-    return intOf(s.compareTo(((StringT) other).s));
+    return intOfCompare(s.compareTo(((StringT) other).s));
   }
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
@@ -124,27 +126,9 @@ public class StringT extends BaseVal implements Adder, Comparer, Matcher, Receiv
     if (typeDesc == Val.class || typeDesc == StringT.class) {
       return (T) this;
     }
-    // TODO implemeng the following as well?
-    //		switch typeDesc.Kind() {
-    //		case reflect.Ptr:
-    //			switch typeDesc {
-    //			case jsonValueType:
-    //				// Convert to a protobuf representation of a JSON String.
-    //				return structpb.NewStringValue(string(s)), nil
-    //			}
-    //			if typeDesc.Elem().Kind() == reflect.String {
-    //				p := s.Value().(string)
-    //				return &p, nil
-    //			}
-    //		case reflect.Interface:
-    //			sv := s.Value()
-    //			if reflect.TypeOf(sv).Implements(typeDesc) {
-    //				return sv, nil
-    //			}
-    //			if reflect.TypeOf(s).Implements(typeDesc) {
-    //				return s, nil
-    //			}
-    //		}
+    if (typeDesc == Value.class) {
+      return (T) Value.newBuilder().setStringValue(s).build();
+    }
     throw new RuntimeException(
         String.format(
             "native type conversion error from '%s' to '%s'", StringType, typeDesc.getName()));
@@ -170,9 +154,9 @@ public class StringT extends BaseVal implements Adder, Comparer, Matcher, Receiv
       } else if (typeVal == BytesType) {
         return bytesOf(s.getBytes(StandardCharsets.UTF_8));
       } else if (typeVal == DurationType) {
-        return durationOf(s);
+        return durationOf(s).rangeCheck();
       } else if (typeVal == TimestampType) {
-        return timestampOf(s);
+        return timestampOf(s).rangeCheck();
       }
       if (typeVal == StringType) {
         return this;
@@ -182,7 +166,7 @@ public class StringT extends BaseVal implements Adder, Comparer, Matcher, Receiv
       return newTypeConversionError(StringType, typeVal);
     } catch (Exception e) {
       return newErr(
-          "error during type conversion from '%s' to %s: %s", StringType, typeVal, e.toString());
+          e, "error during type conversion from '%s' to %s: %s", StringType, typeVal, e.toString());
     }
   }
 
@@ -206,7 +190,7 @@ public class StringT extends BaseVal implements Adder, Comparer, Matcher, Receiv
       java.util.regex.Matcher m = p.matcher(s);
       return boolOf(m.find());
     } catch (Exception e) {
-      return newErr("%s", e.getMessage());
+      return newErr(e, "%s", e.getMessage());
     }
   }
 

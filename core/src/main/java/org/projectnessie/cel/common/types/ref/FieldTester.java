@@ -18,5 +18,5 @@ package org.projectnessie.cel.common.types.ref;
 /** FieldTester is used to test field presence on an input object. */
 @FunctionalInterface
 public interface FieldTester {
-  boolean func(Object target);
+  boolean isSet(Object target);
 }

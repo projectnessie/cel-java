@@ -17,7 +17,7 @@ package org.projectnessie.cel.interpreter;
 
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
-import static org.projectnessie.cel.common.types.Err.isError;
+import static org.projectnessie.cel.common.types.Err.throwErrorAsIllegalStateException;
 import static org.projectnessie.cel.common.types.IntT.IntZero;
 import static org.projectnessie.cel.interpreter.Activation.emptyActivation;
 import static org.projectnessie.cel.interpreter.Interpretable.newConstValue;
@@ -54,12 +54,12 @@ import org.projectnessie.cel.interpreter.Interpretable.InterpretableConst;
  */
 @FunctionalInterface
 public interface InterpretableDecorator {
-  Interpretable func(Interpretable i);
+  Interpretable decorate(Interpretable i);
 
   /** evalObserver is a functional interface that accepts an expression id and an observed value. */
   @FunctionalInterface
   interface EvalObserver {
-    void func(long id, Val v);
+    void observe(long id, Val v);
   }
 
   /** decObserveEval records evaluation state into an EvalState object. */
@@ -157,9 +157,7 @@ public interface InterpretableDecorator {
       return i;
     }
     Val val = call.eval(emptyActivation());
-    if (isError(val)) {
-      throw new IllegalStateException(val.toString());
-    }
+    throwErrorAsIllegalStateException(val);
     return newConstValue(call.id(), val);
   }
 

@@ -30,25 +30,44 @@ jobs:
         java-version: [8, 11, 16]
     steps:
       - uses: actions/checkout@v2
+        with:
+          submodules: 'true'
       - name: Set up JDK ${{ matrix.java-version }}
         uses: actions/setup-java@v1
         with:
           java-version: ${{ matrix.java-version }}
+
       - name: Cache Gradle packages
         uses: actions/cache@v2
         with:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ matrix.java-version }}-${{ hashFiles('**/*.gradle.kts') }}
+            ~/.cache/bazel
+          key: gradle-${{ matrix.java-version }}-${{ hashFiles('**/*.gradle.kts') }}-${{ hashFiles('**/.gitmodules') }}
           restore-keys: gradle-${{ matrix.java-version }}
+
+      - name: Setup bazel
+        uses: jwlawson/actions-setup-bazel@v1.6.1
+        with:
+          bazel-version: '3.5.1'
+
       - name: Build with Gradle
         # Java 8 and 16+ don't run spotless, because google-java-format requires Java 11+ (but doesn't run w/ Java 16)
         run: |
           if [[ ${{ matrix.java-version }} -ge 16 || ${{ matrix.java-version }} -eq 8 ]] ; then
             ADDITIONAL_ARGS="-x spotlessCheck"
           fi
-          ./gradlew --rerun-tasks --no-daemon --info jar check publishToMavenLocal ${ADDITIONAL_ARGS}
+          ./gradlew --rerun-tasks --no-daemon --info assemble check publishToMavenLocal -x jmh ${ADDITIONAL_ARGS}
+
+      - name: Microbenchmarks
+        run: |
+          ./gradlew jmh
+
+      - name: Conformance tests
+        run: |
+          conformance/run-conformance-tests.sh
+
       - name: Capture test results
         uses: actions/upload-artifact@v2
         if: failure()

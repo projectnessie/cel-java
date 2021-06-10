@@ -32,10 +32,10 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 
-@Warmup(iterations = 3, time = 1)
-@Measurement(iterations = 3, time = 1)
+@Warmup(iterations = 1, time = 1500, timeUnit = TimeUnit.MILLISECONDS)
+@Measurement(iterations = 5, time = 300, timeUnit = TimeUnit.MILLISECONDS)
+@Fork(1)
 @Threads(2)
-@Fork(2)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class TypeDescriptionBench {
@@ -43,7 +43,16 @@ public class TypeDescriptionBench {
   @State(Scope.Benchmark)
   public static class Case {
 
-    @Param public UnwrapTestCase testCase;
+    @Param({
+      "msgDesc_zero",
+      "structpb_NewBoolValue_false",
+      "structpb_NewStringValue",
+      "wrapperspb_Int64",
+      "wrapperspb_UInt64",
+      "timestamp",
+      "proto3pb_TestAllTypes"
+    })
+    public UnwrapTestCase testCase;
 
     TypeDescription td;
     Message msg;

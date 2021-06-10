@@ -39,7 +39,7 @@ public class TypeErrors extends Errors {
   }
 
   void typeDoesNotSupportFieldSelection(Location l, Type t) {
-    reportError(l, "type '%s' does not support field selection", t);
+    reportError(l, "type '%s' does not support field selection", formatCheckedType(t));
   }
 
   void undefinedField(Location l, String field) {

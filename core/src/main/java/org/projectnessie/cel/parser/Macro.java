@@ -15,6 +15,9 @@
  */
 package org.projectnessie.cel.parser;
 
+import static java.util.Arrays.asList;
+import static java.util.Collections.emptyList;
+
 import com.google.api.expr.v1alpha1.Expr;
 import com.google.api.expr.v1alpha1.Expr.ExprKindCase;
 import com.google.api.expr.v1alpha1.Expr.Select;
@@ -28,44 +31,43 @@ public class Macro {
   /** AccumulatorName is the traditional variable name assigned to the fold accumulator variable. */
   public static final String AccumulatorName = "__result__";
   /** AllMacros includes the list of all spec-supported macros. */
-  public static final Macro[] AllMacros =
-      new Macro[] {
-        /* The macro "has(m.f)" which tests the presence of a field, avoiding the need to specify
-         * the field as a string.
-         */
-        newGlobalMacro(Operator.Has.id, 1, Macro::makeHas),
+  public static final List<Macro> AllMacros =
+      asList(
+          /* The macro "has(m.f)" which tests the presence of a field, avoiding the need to specify
+           * the field as a string.
+           */
+          newGlobalMacro(Operator.Has.id, 1, Macro::makeHas),
 
-        /* The macro "range.all(var, predicate)", which is true if for all elements in range the
-         * predicate holds.
-         */
-        newReceiverMacro(Operator.All.id, 2, Macro::makeAll),
+          /* The macro "range.all(var, predicate)", which is true if for all elements in range the
+           * predicate holds.
+           */
+          newReceiverMacro(Operator.All.id, 2, Macro::makeAll),
 
-        /* The macro "range.exists(var, predicate)", which is true if for at least one element in
-         * range the predicate holds.
-         */
-        newReceiverMacro(Operator.Exists.id, 2, Macro::makeExists),
+          /* The macro "range.exists(var, predicate)", which is true if for at least one element in
+           * range the predicate holds.
+           */
+          newReceiverMacro(Operator.Exists.id, 2, Macro::makeExists),
 
-        /* The macro "range.exists_one(var, predicate)", which is true if for exactly one element
-         * in range the predicate holds.
-         */
-        newReceiverMacro(Operator.ExistsOne.id, 2, Macro::makeExistsOne),
+          /* The macro "range.exists_one(var, predicate)", which is true if for exactly one element
+           * in range the predicate holds.
+           */
+          newReceiverMacro(Operator.ExistsOne.id, 2, Macro::makeExistsOne),
 
-        /* The macro "range.map(var, function)", applies the function to the vars in the range. */
-        newReceiverMacro(Operator.Map.id, 2, Macro::makeMap),
+          /* The macro "range.map(var, function)", applies the function to the vars in the range. */
+          newReceiverMacro(Operator.Map.id, 2, Macro::makeMap),
 
-        /* The macro "range.map(var, predicate, function)", applies the function to the vars in
-         * the range for which the predicate holds true. The other variables are filtered out.
-         */
-        newReceiverMacro(Operator.Map.id, 3, Macro::makeMap),
+          /* The macro "range.map(var, predicate, function)", applies the function to the vars in
+           * the range for which the predicate holds true. The other variables are filtered out.
+           */
+          newReceiverMacro(Operator.Map.id, 3, Macro::makeMap),
 
-        /* The macro "range.filter(var, predicate)", filters out the variables for which the
-         * predicate is false.
-         */
-        newReceiverMacro(Operator.Filter.id, 2, Macro::makeFilter),
-      };
+          /* The macro "range.filter(var, predicate)", filters out the variables for which the
+           * predicate is false.
+           */
+          newReceiverMacro(Operator.Filter.id, 2, Macro::makeFilter));
 
   /** NoMacros list. */
-  public static Macro[] MoMacros = new Macro[0];
+  public static List<Macro> MoMacros = emptyList();
 
   private final String function;
   private final boolean receiverStyle;
@@ -86,6 +88,21 @@ public class Macro {
     this.expander = expander;
   }
 
+  @Override
+  public String toString() {
+    return "Macro{"
+        + "function='"
+        + function
+        + '\''
+        + ", receiverStyle="
+        + receiverStyle
+        + ", varArgStyle="
+        + varArgStyle
+        + ", argCount="
+        + argCount
+        + '}';
+  }
+
   static String makeMacroKey(String name, int args, boolean receiverStyle) {
     return String.format("%s:%d:%s", name, args, receiverStyle);
   }
@@ -100,7 +117,7 @@ public class Macro {
   }
 
   /** NewReceiverMacro creates a Macro for a receiver function matching the specified arg count. */
-  static Macro newReceiverMacro(String function, int argCount, MacroExpander expander) {
+  public static Macro newReceiverMacro(String function, int argCount, MacroExpander expander) {
     return new Macro(function, true, false, argCount, expander);
   }
 
@@ -196,7 +213,6 @@ public class Macro {
     Expr accuExpr = eh.ident(AccumulatorName);
     Expr init = eh.newList();
     Expr condition = eh.literalBool(true);
-    // TODO: use compiler internal method for faster, stateful add.
     Expr step = eh.globalCall(Operator.Add.id, accuExpr, eh.newList(fn));
 
     if (filter != null) {
@@ -215,7 +231,6 @@ public class Macro {
     Expr accuExpr = eh.ident(AccumulatorName);
     Expr init = eh.newList();
     Expr condition = eh.literalBool(true);
-    // TODO: use compiler internal method for faster, stateful add.
     Expr step = eh.globalCall(Operator.Add.id, accuExpr, eh.newList(args.get(0)));
     step = eh.globalCall(Operator.Conditional.id, filter, step, accuExpr);
     return eh.fold(v, target, AccumulatorName, init, condition, step, accuExpr);

@@ -26,5 +26,5 @@ import org.projectnessie.cel.common.ErrorWithLocation;
  */
 @FunctionalInterface
 public interface MacroExpander {
-  Expr func(ExprHelper eh, Expr target, List<Expr> args) throws ErrorWithLocation;
+  Expr expand(ExprHelper eh, Expr target, List<Expr> args) throws ErrorWithLocation;
 }

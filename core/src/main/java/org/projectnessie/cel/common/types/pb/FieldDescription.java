@@ -27,8 +27,12 @@ import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor.JavaType;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.EnumValue;
+import com.google.protobuf.MapEntry;
 import com.google.protobuf.Message;
+import com.google.protobuf.NullValue;
 import java.lang.reflect.Array;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.projectnessie.cel.common.ULong;
@@ -52,14 +56,14 @@ public class FieldDescription extends Description {
     Message zeroMsg = null;
     switch (fieldDesc.getJavaType()) {
       case ENUM:
-        reflectType = Enum.class; // TODO correct? - Go: reflectTypeOf(protoreflect.EnumNumber(0));
+        reflectType = Enum.class;
         break;
       case MESSAGE:
         zeroMsg = DynamicMessage.getDefaultInstance(fieldDesc.getMessageType());
         reflectType = reflectTypeOf(zeroMsg);
         break;
       default:
-        reflectType = reflectTypeOf(fieldDesc.getDefaultValue());
+        reflectType = reflectTypeOfField(fieldDesc);
         if (fieldDesc.isRepeated() && !fieldDesc.isMapField()) {
           FieldDescriptor.Type t = fieldDesc.getType();
           switch (t.getJavaType()) {
@@ -83,34 +87,30 @@ public class FieldDescription extends Description {
               reflectType = Float.class;
               break;
             case INT:
-              reflectType = Integer.class;
+              if (t == FieldDescriptor.Type.UINT32 || t == FieldDescriptor.Type.FIXED32) {
+                reflectType = ULong.class;
+              } else {
+                reflectType = Integer.class;
+              }
               break;
             case LONG:
-              reflectType = Long.class;
+              if (t == FieldDescriptor.Type.UINT64 || t == FieldDescriptor.Type.FIXED64) {
+                reflectType = ULong.class;
+              } else {
+                reflectType = Long.class;
+              }
               break;
             case STRING:
               reflectType = String.class;
               break;
           }
-          // TODO is the above actually correct??
-          //          Message parentMsg =
-          // DynamicMessage.getDefaultInstance(fieldDesc.getContainingType());
-          //          Message elem =
-          // parentMsg.newBuilderForType().getFieldBuilder(fieldDesc).getDefaultInstanceForType();
-          //          listField = parentMsg.NewField(fieldDesc).List()
-          //          elem := listField.NewElement().Interface()
-          //          switch elemType := elem.(type) {
-          //          case protoreflect.Message:
-          //            elem = elemType.Interface()
-          //          }
-          //          reflectType = reflectTypeOf(elem);
         }
         break;
     }
     // Ensure the list type is appropriately reflected as a Go-native list.
     if (fieldDesc.isRepeated() && !fieldDesc.isMapField()) { // IsList()
       // TODO j.u.List or array???
-      reflectType = Array.newInstance(reflectType, 0).getClass(); // reflect.SliceOf(reflectType)
+      reflectType = Array.newInstance(reflectType, 0).getClass();
     }
     FieldDescription keyType = null;
     FieldDescription valType = null;
@@ -119,6 +119,37 @@ public class FieldDescription extends Description {
       valType = newFieldDescription(fieldDesc.getMessageType().findFieldByNumber(2));
     }
     return new FieldDescription(keyType, valType, fieldDesc, reflectType, zeroMsg);
+  }
+
+  private static Class<?> reflectTypeOfField(FieldDescriptor fieldDesc) {
+    switch (fieldDesc.getType()) {
+      case DOUBLE:
+        return Double.class;
+      case FLOAT:
+        return Float.class;
+      case STRING:
+        return String.class;
+      case BOOL:
+        return Boolean.class;
+      case BYTES:
+        return ByteString.class;
+      case INT32:
+      case SFIXED32:
+      case SINT32:
+      case FIXED32:
+        return Integer.class;
+      case INT64:
+      case SFIXED64:
+      case SINT64:
+        return Long.class;
+      case UINT32:
+      case UINT64:
+      case FIXED64:
+        return ULong.class;
+      case ENUM:
+        return Enum.class;
+    }
+    return reflectTypeOf(fieldDesc.getDefaultValue());
   }
 
   private FieldDescription(
@@ -172,11 +203,11 @@ public class FieldDescription extends Description {
       if (pbDesc == desc.getContainingType()) {
         // When the target protobuf shares the same message descriptor instance as the field
         // descriptor, use the cached field descriptor value.
-        return v.hasField(desc);
+        return FieldDescription.hasValueForField(desc, v);
       }
       // Otherwise, fallback to a dynamic lookup of the field descriptor from the target
       // instance as an attempt to use the cached field descriptor will result in a panic.
-      return v.hasField(pbDesc.findFieldByName(name()));
+      return FieldDescription.hasValueForField(pbDesc.findFieldByName(name()), v);
     }
     return false;
   }
@@ -211,7 +242,7 @@ public class FieldDescription extends Description {
       // instance as an attempt to use the cached field descriptor will result in a panic.
       fd = pbDesc.findFieldByName(name());
     }
-    fieldVal = v.getField(fd);
+    fieldVal = getValueFromField(fd, v);
 
     Class<?> fieldType = fieldVal.getClass();
     if (fd.getJavaType() != JavaType.MESSAGE
@@ -305,8 +336,6 @@ public class FieldDescription extends Description {
     if (r && desc.isMapField()) {
       return Map.class;
     }
-    // TODO the actual reflect-field computation is more a rather uneducated guess...
-    //  see org.projectnessie.cel.common.types.ProtoTypeRegistry.newValue
     switch (desc.getJavaType()) {
       case ENUM:
       case MESSAGE:
@@ -359,17 +388,24 @@ public class FieldDescription extends Description {
       case BYTE_STRING:
         return Checked.checkedBytes;
       case DOUBLE:
-        return Checked.checkedDouble;
       case FLOAT:
         return Checked.checkedDouble;
       case INT:
+        if (desc.getType() == FieldDescriptor.Type.UINT32
+            || desc.getType() == FieldDescriptor.Type.FIXED32) {
+          return Checked.checkedUint;
+        }
         return Checked.checkedInt;
       case LONG:
+        if (desc.getType() == FieldDescriptor.Type.UINT64
+            || desc.getType() == FieldDescriptor.Type.FIXED64) {
+          return Checked.checkedUint;
+        }
         return Checked.checkedInt;
       case STRING:
         return Checked.checkedString;
     }
-    throw new UnsupportedOperationException("IMPLEMENT ME");
+    throw new UnsupportedOperationException("Unknown JavaType " + desc.getJavaType());
   }
 
   @Override
@@ -395,15 +431,67 @@ public class FieldDescription extends Description {
   }
 
   public boolean hasField(Object target) {
-    Message m = (Message) target;
-    if (desc.isRepeated()) {
-      return m.getRepeatedFieldCount(desc) > 0;
-    }
-    return m.hasField(desc);
+    return hasValueForField(desc, (Message) target);
   }
 
   public Object getField(Object target) {
-    Message m = (Message) target;
-    return m.getField(desc);
+    return getValueFromField(desc, (Message) target);
+  }
+
+  @SuppressWarnings({"unchecked", "rawtypes"})
+  public static Object getValueFromField(FieldDescriptor desc, Message message) {
+
+    if (isWellKnownType(desc) && !message.hasField(desc)) {
+      return NullValue.NULL_VALUE;
+    }
+
+    Object v = message.getField(desc);
+
+    if (!desc.isMapField()) {
+      FieldDescriptor.Type type = desc.getType();
+      if (v != null
+          && (type == FieldDescriptor.Type.UINT32
+              || type == FieldDescriptor.Type.UINT64
+              || type == FieldDescriptor.Type.FIXED32
+              || type == FieldDescriptor.Type.FIXED64)) {
+        v = ULong.valueOf(((Number) v).longValue());
+      }
+    } else {
+      // TODO protobuf-java inefficiency
+      //  protobuf-java does NOT have a generic way to retrieve the underlying map, but instead
+      //  getField() returns a list of com.google.protobuf.MapEntry. It's not great that we have
+      //  to have this workaround here to re-build a j.u.Map.
+      //  I.e. to access a single map entry we *HAVE TO* touch and re-build the whole map. This
+      //  is very inefficient.
+      //  There is no way to do a "message.getMapField(desc, key)" (aka a "reflective counterpart"
+      //  for the generated map accessor methods like 'getXXXTypeOrThrow()'), too.
+      if (v instanceof List) {
+        List<MapEntry> lst = (List) v;
+        Map map = new HashMap(lst.size() * 4 / 3 + 1);
+        for (MapEntry e : lst) {
+          map.put(e.getKey(), e.getValue());
+        }
+        v = map;
+      }
+    }
+    return v;
+  }
+
+  private static boolean isWellKnownType(FieldDescriptor desc) {
+    if (desc.getJavaType() != JavaType.MESSAGE) {
+      return false;
+    }
+    Type wellKnown = Checked.CheckedWellKnowns.get(desc.getMessageType().getFullName());
+    if (wellKnown == null) {
+      return false;
+    }
+    return wellKnown.hasWrapper();
+  }
+
+  public static boolean hasValueForField(FieldDescriptor desc, Message message) {
+    if (desc.isRepeated()) {
+      return message.getRepeatedFieldCount(desc) > 0;
+    }
+    return message.hasField(desc);
   }
 }

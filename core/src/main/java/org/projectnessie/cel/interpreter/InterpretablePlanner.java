@@ -182,7 +182,7 @@ public interface InterpretablePlanner {
      */
     Interpretable decorate(Interpretable i) {
       for (InterpretableDecorator dec : decorators) {
-        i = dec.func(i);
+        i = dec.decorate(i);
         if (i == null) {
           return null;
         }
@@ -591,12 +591,13 @@ public interface InterpretablePlanner {
     }
 
     /** constValue converts a proto Constant value to a ref.Val. */
+    @SuppressWarnings("deprecation")
     Val constValue(Constant c) {
       switch (c.getConstantKindCase()) {
         case BOOL_VALUE:
           return boolOf(c.getBoolValue());
         case BYTES_VALUE:
-          return bytesOf(c.getBytesValue().toByteArray());
+          return bytesOf(c.getBytesValue());
         case DOUBLE_VALUE:
           return doubleOf(c.getDoubleValue());
         case DURATION_VALUE:
@@ -612,7 +613,8 @@ public interface InterpretablePlanner {
         case UINT64_VALUE:
           return uintOf(c.getUint64Value());
       }
-      throw new IllegalArgumentException(String.format("unknown constant type: %s", c));
+      throw new IllegalArgumentException(
+          String.format("unknown constant type: '%s' of kind '%s'", c, c.getConstantKindCase()));
     }
 
     /**

@@ -20,6 +20,5 @@ import org.projectnessie.cel.common.types.ref.Val;
 /** BinaryOp is a function that takes two values and produces an output. */
 @FunctionalInterface
 public interface BinaryOp {
-
-  Val func(Val lhs, Val rhs);
+  Val invoke(Val lhs, Val rhs);
 }

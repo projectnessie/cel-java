@@ -18,7 +18,7 @@ package org.projectnessie.cel.common.types.pb;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.projectnessie.cel.common.types.pb.Db.newDb;
 
-import google.expr.proto3.test.TestAllTypesOuterClass.TestAllTypes;
+import com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes;
 
 /** Required by {@link UnwrapTestCase} et al. */
 class UnwrapContext {

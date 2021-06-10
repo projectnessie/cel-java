@@ -16,17 +16,20 @@
 package org.projectnessie.cel.common.types;
 
 import static org.projectnessie.cel.common.types.BoolT.boolOf;
+import static org.projectnessie.cel.common.types.Err.errDurationOutOfRange;
 import static org.projectnessie.cel.common.types.Err.errDurationOverflow;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.IntT.IntType;
+import static org.projectnessie.cel.common.types.IntT.intOfCompare;
 import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.TimestampT.TimestampType;
 import static org.projectnessie.cel.common.types.TimestampT.timestampOf;
-import static org.projectnessie.cel.common.types.TypeValue.TypeType;
+import static org.projectnessie.cel.common.types.TypeT.TypeType;
 
 import com.google.protobuf.Any;
+import com.google.protobuf.Value;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
@@ -54,8 +57,8 @@ public final class DurationT extends BaseVal
     implements Adder, Comparer, Negater, Receiver, Subtractor {
 
   /** DurationType singleton. */
-  public static final TypeValue DurationType =
-      TypeValue.newTypeValue(
+  public static final TypeT DurationType =
+      TypeT.newTypeValue(
           "google.protobuf.Duration",
           Trait.AdderType,
           Trait.ComparerType,
@@ -79,6 +82,14 @@ public final class DurationT extends BaseVal
     this.d = d;
   }
 
+  // Go's Duration represents the number of nanoseconds as an int64
+  // 	minDuration Duration = -1 << 63
+  //	maxDuration Duration = 1<<63 - 1
+  // This equates to:
+  //  minDuration in seconds:
+  public static final long minDurationSeconds = -9223372036L;
+  public static final long maxDurationSeconds = 9223372035L;
+
   public static DurationT durationOf(String s) {
     Duration dur;
     try {
@@ -95,6 +106,16 @@ public final class DurationT extends BaseVal
 
   public static DurationT durationOf(Duration d) {
     return new DurationT(d);
+  }
+
+  /**
+   * Verifies that the range of this duration conforms to Go's constraints, see above code comment.
+   */
+  public Val rangeCheck() {
+    if (d.getSeconds() < minDurationSeconds || d.getSeconds() > maxDurationSeconds) {
+      return errDurationOutOfRange;
+    }
+    return this;
   }
 
   /** Add implements traits.Adder.Add. */
@@ -124,7 +145,7 @@ public final class DurationT extends BaseVal
       return noSuchOverload(this, "compare", other);
     }
     Duration o = ((DurationT) other).d;
-    return IntT.intOf(d.compareTo(o));
+    return intOfCompare(d.compareTo(o));
   }
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
@@ -144,28 +165,16 @@ public final class DurationT extends BaseVal
       return (T) Long.valueOf(toJavaLong());
     }
     if (String.class == typeDesc) {
+      // CEL follows the proto3 to JSON conversion.
       return (T) toPbString();
     }
     if (typeDesc == Val.class || typeDesc == DurationT.class) {
       return (T) this;
     }
-    //		// If the duration is already assignable to the desired type return it.
-    //		if reflect.TypeOf(d.Duration).AssignableTo(typeDesc) {
-    //			return d.Duration, nil
-    //		}
-    //		if reflect.TypeOf(d).AssignableTo(typeDesc) {
-    //			return d, nil
-    //		}
-    //		switch typeDesc {
-    //		case jsonValueType:
-    //			// CEL follows the proto3 to JSON conversion.
-    //			// Note, using jsonpb would wrap the result in extra double quotes.
-    //			v := d.ConvertToType(StringType)
-    //			if IsError(v) {
-    //				return nil, v.(*Err)
-    //			}
-    //			return structpb.NewStringValue(string(v.(String))), nil
-    //		}
+    if (typeDesc == Value.class) {
+      // CEL follows the proto3 to JSON conversion.
+      return (T) Value.newBuilder().setStringValue(toPbString()).build();
+    }
     throw new RuntimeException(
         String.format(
             "native type conversion error from '%s' to '%s'", DurationType, typeDesc.getName()));
@@ -184,6 +193,10 @@ public final class DurationT extends BaseVal
 
   private String toPbString() {
     // 7506.000001s
+    long nanos = TimeUnit.NANOSECONDS.toMicros(d.getNano());
+    if (nanos == 0L) {
+      return String.format("%ds", d.getSeconds());
+    }
     return String.format("%d.%06ds", d.getSeconds(), TimeUnit.NANOSECONDS.toMicros(d.getNano()));
   }
 

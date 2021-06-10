@@ -26,7 +26,7 @@ import org.projectnessie.cel.common.types.ref.Val;
  */
 public class UnknownT extends BaseVal {
   /** UnknownType singleton. */
-  public static final TypeValue UnknownType = TypeValue.newTypeValue("unknown");
+  public static final TypeT UnknownType = TypeT.newTypeValue("unknown");
 
   private final long value;
 
@@ -53,6 +53,11 @@ public class UnknownT extends BaseVal {
     throw new RuntimeException(
         String.format(
             "native type conversion error from '%s' to '%s'", UnknownType, typeDesc.getName()));
+  }
+
+  @Override
+  public long intValue() {
+    return value;
   }
 
   /** ConvertToType implements ref.Val.ConvertToType. */

@@ -15,7 +15,7 @@
  */
 package org.projectnessie.cel.interpreter;
 
-import static org.projectnessie.cel.common.types.Err.noSuchAttribute;
+import static org.projectnessie.cel.common.types.Err.noSuchAttributeException;
 import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
 import static org.projectnessie.cel.interpreter.AttributeFactory.newAttributeFactory;
 
@@ -73,7 +73,7 @@ public class AttributePattern {
   }
 
   /** NewAttributePattern produces a new mutable AttributePattern based on a variable name. */
-  static AttributePattern newAttributePattern(String variable) {
+  public static AttributePattern newAttributePattern(String variable) {
     return new AttributePattern(variable, new ArrayList<>());
   }
 
@@ -203,7 +203,7 @@ public class AttributePattern {
    * NewPartialAttributeFactory returns an AttributeFactory implementation capable of performing
    * AttributePattern matches with PartialActivation inputs.
    */
-  static AttributeFactory newPartialAttributeFactory(
+  public static AttributeFactory newPartialAttributeFactory(
       Container container, TypeAdapter adapter, TypeProvider provider) {
     AttributeFactory fac = newAttributeFactory(container, adapter, provider);
     return new PartialAttributeFactory(fac, container, adapter, provider);
@@ -411,7 +411,7 @@ public class AttributePattern {
     public Object resolve(org.projectnessie.cel.interpreter.Activation vars) {
       Object obj = tryResolve(vars);
       if (obj == null) {
-        throw noSuchAttribute(this);
+        throw noSuchAttributeException(this);
       }
       return obj;
     }

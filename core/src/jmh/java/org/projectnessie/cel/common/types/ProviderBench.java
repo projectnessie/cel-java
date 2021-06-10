@@ -37,17 +37,18 @@ import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 
-@Warmup(iterations = 3, time = 1)
-@Measurement(iterations = 3, time = 1)
+@Warmup(iterations = 1, time = 1500, timeUnit = TimeUnit.MILLISECONDS)
+@Measurement(iterations = 5, time = 300, timeUnit = TimeUnit.MILLISECONDS)
+@Fork(1)
 @Threads(2)
-@Fork(2)
 @BenchmarkMode(Mode.AverageTime)
-@OutputTimeUnit(TimeUnit.NANOSECONDS)
+@OutputTimeUnit(TimeUnit.MICROSECONDS)
 public class ProviderBench {
 
   @State(Scope.Benchmark)
   public static class NativeToValueState {
-    @Param public ProviderBenchNativeToValue value;
+    @Param({"v_true", "v_int64", "v_stringT"})
+    public ProviderBenchNativeToValue value;
 
     TypeRegistry reg;
 

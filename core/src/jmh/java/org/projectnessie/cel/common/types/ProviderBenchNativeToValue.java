@@ -17,6 +17,7 @@ package org.projectnessie.cel.common.types;
 
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 
+@SuppressWarnings("unused")
 public enum ProviderBenchNativeToValue {
   v_true(true),
   v_false(false),

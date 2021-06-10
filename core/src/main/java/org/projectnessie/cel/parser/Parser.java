@@ -22,8 +22,9 @@ import com.google.api.expr.v1alpha1.Expr;
 import com.google.api.expr.v1alpha1.Expr.CreateStruct.Entry;
 import com.google.api.expr.v1alpha1.Expr.Select;
 import com.google.api.expr.v1alpha1.SourceInfo;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.NullValue;
-import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
@@ -38,6 +39,7 @@ import org.antlr.v4.runtime.IntStream;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.RecognitionException;
 import org.antlr.v4.runtime.Recognizer;
+import org.antlr.v4.runtime.RuleContext;
 import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.atn.ATNConfigSet;
 import org.antlr.v4.runtime.dfa.DFA;
@@ -117,6 +119,10 @@ public class Parser {
 
   public static ParseResult parseAllMacros(Source source) {
     return parse(Options.builder().macros(AllMacros).build(), source);
+  }
+
+  public static ParseResult parseWithMacros(Source source, List<Macro> macros) {
+    return parse(Options.builder().macros(macros).build(), source);
   }
 
   public static ParseResult parse(Options options, Source source) {
@@ -304,7 +310,7 @@ public class Parser {
         boolean exact,
         BitSet ambigAlts,
         ATNConfigSet configs) {
-      // TODO implement ??
+      // empty
     }
 
     @Override
@@ -315,7 +321,7 @@ public class Parser {
         int stopIndex,
         BitSet conflictingAlts,
         ATNConfigSet configs) {
-      // TODO implement ??
+      // empty
     }
 
     @Override
@@ -326,7 +332,7 @@ public class Parser {
         int stopIndex,
         int prediction,
         ATNConfigSet configs) {
-      // TODO implement ??
+      // empty
     }
 
     Expr reportError(Object ctx, String message) {
@@ -356,40 +362,57 @@ public class Parser {
 
     @Override
     public Object visit(ParseTree tree) {
-      if (tree instanceof StartContext) {
-        return visitStart((StartContext) tree);
-      } else if (tree instanceof ExprContext) {
-        return visitExpr((ExprContext) tree);
-      } else if (tree instanceof ConditionalAndContext) {
-        return visitConditionalAnd((ConditionalAndContext) tree);
-      } else if (tree instanceof ConditionalOrContext) {
-        return visitConditionalOr((ConditionalOrContext) tree);
-      } else if (tree instanceof RelationContext) {
-        return visitRelation((RelationContext) tree);
-      } else if (tree instanceof CalcContext) {
-        return visitCalc((CalcContext) tree);
-      } else if (tree instanceof LogicalNotContext) {
-        return visitLogicalNot((LogicalNotContext) tree);
-      } else if (tree instanceof MemberExprContext) {
-        return visitMemberExpr((MemberExprContext) tree);
-      } else if (tree instanceof PrimaryExprContext) {
-        return visitPrimaryExpr((PrimaryExprContext) tree);
-      } else if (tree instanceof SelectOrCallContext) {
-        return visitSelectOrCall((SelectOrCallContext) tree);
-      } else if (tree instanceof MapInitializerListContext) {
-        return visitMapInitializerList((MapInitializerListContext) tree);
-      } else if (tree instanceof NegateContext) {
-        return visitNegate((NegateContext) tree);
-      } else if (tree instanceof IndexContext) {
-        return visitIndex((IndexContext) tree);
-      } else if (tree instanceof UnaryContext) {
-        return visitUnary((UnaryContext) tree);
-      } else if (tree instanceof CreateListContext) {
-        return visitCreateList((CreateListContext) tree);
-      } else if (tree instanceof CreateMessageContext) {
-        return visitCreateMessage((CreateMessageContext) tree);
-      } else if (tree instanceof CreateStructContext) {
-        return visitCreateStruct((CreateStructContext) tree);
+      if (tree instanceof RuleContext) {
+        RuleContext ruleContext = (RuleContext) tree;
+        int ruleIndex = ruleContext.getRuleIndex();
+        switch (ruleIndex) {
+          case CELParser.RULE_start:
+            return visitStart((StartContext) tree);
+          case CELParser.RULE_expr:
+            return visitExpr((ExprContext) tree);
+          case CELParser.RULE_conditionalOr:
+            return visitConditionalOr((ConditionalOrContext) tree);
+          case CELParser.RULE_conditionalAnd:
+            return visitConditionalAnd((ConditionalAndContext) tree);
+          case CELParser.RULE_relation:
+            return visitRelation((RelationContext) tree);
+          case CELParser.RULE_calc:
+            return visitCalc((CalcContext) tree);
+          case CELParser.RULE_unary:
+            if (tree instanceof LogicalNotContext) {
+              return visitLogicalNot((LogicalNotContext) tree);
+            } else if (tree instanceof NegateContext) {
+              return visitNegate((NegateContext) tree);
+            } else if (tree instanceof MemberExprContext) {
+              return visitMemberExpr((MemberExprContext) tree);
+            }
+            return visitUnary((UnaryContext) tree);
+          case CELParser.RULE_member:
+            if (tree instanceof CreateMessageContext) {
+              return visitCreateMessage((CreateMessageContext) tree);
+            } else if (tree instanceof PrimaryExprContext) {
+              return visitPrimaryExpr((PrimaryExprContext) tree);
+            } else if (tree instanceof SelectOrCallContext) {
+              return visitSelectOrCall((SelectOrCallContext) tree);
+            } else if (tree instanceof IndexContext) {
+              return visitIndex((IndexContext) tree);
+            }
+            break;
+          case CELParser.RULE_primary:
+            if (tree instanceof CreateListContext) {
+              return visitCreateList((CreateListContext) tree);
+            } else if (tree instanceof CreateStructContext) {
+              return visitCreateStruct((CreateStructContext) tree);
+            }
+            break;
+          case CELParser.RULE_fieldInitializerList:
+          case CELParser.RULE_mapInitializerList:
+            return visitMapInitializerList((MapInitializerListContext) tree);
+            // case CELParser.RULE_exprList:
+            // case CELParser.RULE_literal:
+          default:
+            return reportError(tree, "parser rule '%d'", ruleIndex);
+        }
       }
 
       // Report at least one error if the parser reaches an unknown parse element.
@@ -601,13 +624,12 @@ public class Parser {
     }
 
     private Expr visitString(StringContext ctx) {
-      String s = unquote(ctx, ctx.getText(), false);
+      String s = unquoteString(ctx, ctx.getText());
       return helper.newLiteralString(ctx, s);
     }
 
     private Expr visitBytes(BytesContext ctx) {
-      byte[] b =
-          unquote(ctx, ctx.tok.getText().substring(1), true).getBytes(StandardCharsets.UTF_8);
+      ByteString b = unquoteBytes(ctx, ctx.tok.getText().substring(1));
       return helper.newLiteralBytes(ctx, b);
     }
 
@@ -824,7 +846,7 @@ public class Parser {
 
       ExprHelperImpl eh = new ExprHelperImpl(helper, exprID);
       try {
-        return macro.expander().func(eh, target, args);
+        return macro.expander().expand(eh, target, args);
       } catch (ErrorWithLocation err) {
         Location loc = err.getLocation();
         if (loc == null) {
@@ -832,16 +854,26 @@ public class Parser {
         }
         return reportError(loc, err.getMessage());
       } catch (Exception e) {
-        e.printStackTrace(); // TODO do what exactly with the exception here
         return reportError(helper.getLocation(exprID), e.getMessage());
       }
     }
 
-    String unquote(Object ctx, String value, boolean isBytes) {
+    ByteString unquoteBytes(Object ctx, String value) {
       try {
-        return Unescape.unescape(value, isBytes);
+        ByteBuffer buf = Unescape.unescape(value, true);
+        return ByteString.copyFrom(buf);
       } catch (Exception e) {
-        // TODO this can probably be done better
+        reportError(ctx, e.toString());
+        return ByteString.copyFromUtf8(value);
+      }
+    }
+
+    String unquoteString(Object ctx, String value) {
+      try {
+        ByteBuffer buf = Unescape.unescape(value, false);
+
+        return Unescape.toUtf8(buf);
+      } catch (Exception e) {
         reportError(ctx, e.toString());
         return value;
       }

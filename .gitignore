@@ -6,3 +6,5 @@ build/
 # IDE
 /.idea
 out/
+
+conformance/conformance-server.pid

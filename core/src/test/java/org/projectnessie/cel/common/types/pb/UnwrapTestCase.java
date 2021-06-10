@@ -15,6 +15,7 @@
  */
 package org.projectnessie.cel.common.types.pb;
 
+import com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes;
 import com.google.protobuf.BoolValue;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.BytesValue;
@@ -32,18 +33,18 @@ import com.google.protobuf.Timestamp;
 import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
 import com.google.protobuf.Value;
-import google.expr.proto3.test.TestAllTypesOuterClass.TestAllTypes;
 import java.util.function.Supplier;
 
 /**
  * Test cases for {@link
- * TestTypeDescriptor#benchmarkTypeDescriptionMaybeUnwrap(org.projectnessie.cel.common.types.pb.UnwrapTestCase)}
+ * TypeDescriptorTest#benchmarkTypeDescriptionMaybeUnwrap(org.projectnessie.cel.common.types.pb.UnwrapTestCase)}
  * and {@code TypeDescriptorBnch} JMH benchmark, latter requires this class to be a top-level public
  * enum.
  */
 public enum UnwrapTestCase {
   msgDesc_zero(() -> UnwrapContext.get().msgDesc.zero()),
-  // TODO msgDesc_new_interface(() -> UnwrapContext.get().msgDesc.New().Interface(),
+  // Not implemented in Java:
+  // msgDesc_new_interface(() -> UnwrapContext.get().msgDesc.New().Interface(),
   dynamicpb_NewMessage(() -> DynamicMessage.newBuilder(ListValue.getDefaultInstance()).build()),
   structpb_NewBoolValue_true(() -> BoolValue.of(true)),
   structpb_NewBoolValue_false(() -> BoolValue.of(false)),

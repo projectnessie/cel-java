@@ -62,8 +62,8 @@ public interface Interpreter {
     InterpretableDecorator ex = decDisableShortcircuits();
     InterpretableDecorator obs = trackState(state);
     return i -> {
-      Interpretable iDec = ex.func(i);
-      return obs.func(iDec);
+      Interpretable iDec = ex.decorate(i);
+      return obs.decorate(iDec);
     };
   }
 

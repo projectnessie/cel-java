@@ -15,7 +15,10 @@
  */
 package org.projectnessie.cel.parser;
 
+import static java.util.Arrays.asList;
+
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class Options {
@@ -102,6 +105,10 @@ public class Options {
     }
 
     public Builder macros(Macro... macros) {
+      return macros(asList(macros));
+    }
+
+    public Builder macros(List<Macro> macros) {
       for (Macro macro : macros) {
         this.macros.put(macro.macroKey(), macro);
       }

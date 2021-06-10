@@ -18,7 +18,11 @@ package org.projectnessie.cel.common;
 import java.math.BigInteger;
 
 /**
- * Represents a 64 bit unsigned long.
+ * Represents a 64 bit unsigned long for the CEL {@code uint} type.
+ *
+ * <p>According to the CEL spec, the {@code uint} and {@code int} types are, loosely speaking,
+ * "incompatible. This means, that these two types are not comparable in operators (for example
+ * _equal_, _less-than_, etc) not do function overloads match across both types.
  *
  * <p>This class is mostly there to let the unit tests ported from CEL-Go pass.
  */

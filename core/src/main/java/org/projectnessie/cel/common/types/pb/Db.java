@@ -29,9 +29,11 @@ import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * Db maps from file / message / enum name to file description.
@@ -56,12 +58,12 @@ public class Db {
     // The following subset of message types is enough to ensure that all well-known types can
     // resolved in the runtime, since describing the value results in describing the whole file
     // where the message is declared.
-    defaultDb.registerMessage(Any.newBuilder().build());
-    defaultDb.registerMessage(Duration.newBuilder().build());
-    defaultDb.registerMessage(Empty.newBuilder().build());
-    defaultDb.registerMessage(Timestamp.newBuilder().build());
-    defaultDb.registerMessage(Value.newBuilder().build());
-    defaultDb.registerMessage(BoolValue.newBuilder().build());
+    defaultDb.registerMessage(Any.getDefaultInstance());
+    defaultDb.registerMessage(Duration.getDefaultInstance());
+    defaultDb.registerMessage(Empty.getDefaultInstance());
+    defaultDb.registerMessage(Timestamp.getDefaultInstance());
+    defaultDb.registerMessage(Value.getDefaultInstance());
+    defaultDb.registerMessage(BoolValue.getDefaultInstance());
   }
 
   private Db(Map<String, FileDescription> revFileDescriptorMap, List<FileDescription> files) {
@@ -145,7 +147,7 @@ public class Db {
       fd = registerDescriptor(msgDesc.getFile());
       revFileDescriptorMap.put(typeName, fd);
     }
-    describeType(typeName).updateReflectType(message.getClass());
+    describeType(typeName).updateReflectType(message);
     return fd;
   }
 
@@ -170,10 +172,14 @@ public class Db {
    * CollectFileDescriptorSet builds a file descriptor set associated with the file where the input
    * message is declared.
    */
-  public static Map<String, FileDescriptor> collectFileDescriptorSet(Message message) {
-    throw new UnsupportedOperationException("IMPLEMENT ME");
-    //    Map<String, FileDescriptor> fdMap = new HashMap<>();
-    //    parentFile := message.ProtoReflect().Descriptor().ParentFile()
+  public static Set<FileDescriptor> collectFileDescriptorSet(Message message) {
+    Set<FileDescriptor> fdMap = new LinkedHashSet<>();
+    Descriptor messageDesc = message.getDescriptorForType();
+    FileDescriptor messageFile = messageDesc.getFile();
+    fdMap.add(messageFile);
+    fdMap.addAll(messageFile.getPublicDependencies());
+
+    //    parentFile = message.ProtoReflect().Descriptor().ParentFile()
     //    fdMap[parentFile.Path()] = parentFile
     //    // Initialize list of dependencies
     //    deps := make([]protoreflect.FileImport, parentFile.Imports().Len())
@@ -191,7 +197,7 @@ public class Db {
     //        deps = append(deps, dep.FileDescriptor.Imports().Get(j))
     //      }
     //    }
-    //    return fdMap
+    return fdMap;
   }
 
   @Override

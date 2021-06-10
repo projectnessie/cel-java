@@ -69,8 +69,8 @@ final class Helper {
     return newLiteral(ctx, Constant.newBuilder().setStringValue(value));
   }
 
-  Expr newLiteralBytes(Object ctx, byte[] value) {
-    return newLiteral(ctx, Constant.newBuilder().setBytesValue(ByteString.copyFrom(value)));
+  Expr newLiteralBytes(Object ctx, ByteString value) {
+    return newLiteral(ctx, Constant.newBuilder().setBytesValue(value));
   }
 
   Expr newLiteralInt(Object ctx, long value) {

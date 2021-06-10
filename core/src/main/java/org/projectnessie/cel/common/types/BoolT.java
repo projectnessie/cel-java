@@ -17,12 +17,14 @@ package org.projectnessie.cel.common.types;
 
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
+import static org.projectnessie.cel.common.types.IntT.intOfCompare;
 import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
-import static org.projectnessie.cel.common.types.TypeValue.TypeType;
+import static org.projectnessie.cel.common.types.TypeT.TypeType;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.BoolValue;
+import com.google.protobuf.Value;
 import java.util.Objects;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
@@ -35,8 +37,8 @@ import org.projectnessie.cel.common.types.traits.Trait;
 public class BoolT extends BaseVal implements Comparer, Negater {
 
   /** BoolType singleton. */
-  public static final TypeValue BoolType =
-      TypeValue.newTypeValue("bool", Trait.ComparerType, Trait.NegatorType);
+  public static final TypeT BoolType =
+      TypeT.newTypeValue("bool", Trait.ComparerType, Trait.NegatorType);
 
   private final boolean b;
 
@@ -64,7 +66,7 @@ public class BoolT extends BaseVal implements Comparer, Negater {
     if (!(other instanceof BoolT)) {
       return noSuchOverload(this, "compare", other);
     }
-    return IntT.intOf(Boolean.compare(b, ((BoolT) other).b));
+    return intOfCompare(Boolean.compare(b, ((BoolT) other).b));
   }
 
   /** ConvertToNative implements the ref.Val interface method. */
@@ -84,30 +86,10 @@ public class BoolT extends BaseVal implements Comparer, Negater {
     if (typeDesc == Val.class || typeDesc == BoolT.class) {
       return (T) this;
     }
+    if (typeDesc == Value.class) {
+      return (T) Value.newBuilder().setBoolValue(b).build();
+    }
 
-    //		switch typeDesc.Kind() {
-    //		case reflect.Bool:
-    //			return reflect.ValueOf(b).Convert(typeDesc).Interface(), nil
-    //		case reflect.Ptr:
-    //			switch typeDesc {
-    //			case jsonValueType:
-    //				// Return the bool as a new structpb.Value.
-    //				return structpb.NewBoolValue(bool(b)), nil
-    //			default:
-    //				if typeDesc.Elem().Kind() == reflect.Bool {
-    //					p := bool(b)
-    //					return &p, nil
-    //				}
-    //			}
-    //		case reflect.Interface:
-    //			bv := b.Value()
-    //			if reflect.TypeOf(bv).Implements(typeDesc) {
-    //				return bv, nil
-    //			}
-    //			if reflect.TypeOf(b).Implements(typeDesc) {
-    //				return b, nil
-    //			}
-    //		}
     throw new RuntimeException(
         String.format(
             "native type conversion error from '%s' to '%s'", BoolType, typeDesc.getName()));

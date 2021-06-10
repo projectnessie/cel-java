@@ -29,7 +29,7 @@ import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.IntT.IntZero;
 import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.TimestampT.TimestampType;
-import static org.projectnessie.cel.common.types.TypeValue.TypeType;
+import static org.projectnessie.cel.common.types.TypeT.TypeType;
 import static org.projectnessie.cel.common.types.UintT.UintType;
 
 import org.projectnessie.cel.common.operators.Operator;

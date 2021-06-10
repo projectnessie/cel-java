@@ -31,13 +31,12 @@ import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
-import org.projectnessie.cel.interpreter.TestInterpreter.Program;
-import org.projectnessie.cel.interpreter.TestInterpreter.TestCase;
+import org.projectnessie.cel.interpreter.InterpreterTest.Program;
+import org.projectnessie.cel.interpreter.InterpreterTest.TestCase;
 
-@Warmup(iterations = 3, time = 1)
-@Measurement(iterations = 3, time = 1)
-@Threads(2)
-@Fork(2)
+@Warmup(iterations = 1, time = 1500, timeUnit = TimeUnit.MILLISECONDS)
+@Measurement(iterations = 5, time = 300, timeUnit = TimeUnit.MILLISECONDS)
+@Fork(1)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 public class InterpreterBench {
@@ -46,16 +45,35 @@ public class InterpreterBench {
   public static class Case {
     Program program;
 
-    @Param public TestInterpreterCase testCase;
+    @Param({
+      "and_false_2nd",
+      "call_no_args",
+      "call_one_arg",
+      "call_two_arg",
+      "call_varargs",
+      "call_ns_func",
+      "call_ns_func_unchecked",
+      "call_ns_func_in_pkg",
+      "call_ns_func_unchecked_in_pkg",
+      "timestamp_eq_timestamp",
+      "timestamp_le_timestamp",
+      "macro_has_pb3_field",
+      "nested_proto_field_with_index",
+      "parse_nest_message_literal",
+      "select_pb3_wrapper_fields",
+      "select_pb3_compare",
+      "select_custom_pb3_compare"
+    })
+    public InterpreterTestCase testCase;
 
     @Setup
     public void init() {
       TestCase test =
-          Arrays.stream(TestInterpreter.testCases())
+          Arrays.stream(InterpreterTest.testCases())
               .filter(tc -> tc.name == testCase)
               .findFirst()
               .orElseThrow(() -> new RuntimeException("No test case named '" + testCase + '\''));
-      this.program = TestInterpreter.program(test, optimize());
+      this.program = InterpreterTest.program(test, optimize());
     }
   }
 

@@ -18,5 +18,5 @@ package org.projectnessie.cel.common.types.ref;
 /** FieldGetter is used to get the field value from an input object, if set. */
 @FunctionalInterface
 public interface FieldGetter {
-  Object func(Object target);
+  Object getFrom(Object target);
 }

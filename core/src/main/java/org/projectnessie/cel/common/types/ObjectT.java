@@ -19,7 +19,7 @@ import static org.projectnessie.cel.common.types.BoolT.boolOf;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchField;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
-import static org.projectnessie.cel.common.types.TypeValue.TypeType;
+import static org.projectnessie.cel.common.types.TypeT.TypeType;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.DynamicMessage;
@@ -39,10 +39,9 @@ public final class ObjectT extends BaseVal implements FieldTester, Indexer, Type
   private final TypeAdapter adapter;
   private final Message value;
   private final TypeDescription typeDesc;
-  private final TypeValue typeValue;
+  private final TypeT typeValue;
 
-  private ObjectT(
-      TypeAdapter adapter, Message value, TypeDescription typeDesc, TypeValue typeValue) {
+  private ObjectT(TypeAdapter adapter, Message value, TypeDescription typeDesc, TypeT typeValue) {
     this.adapter = adapter;
     this.value = value;
     this.typeDesc = typeDesc;
@@ -58,7 +57,7 @@ public final class ObjectT extends BaseVal implements FieldTester, Indexer, Type
    * within the type adapter / provider.
    */
   public static Val newObject(
-      TypeAdapter adapter, TypeDescription typeDesc, TypeValue typeValue, Message value) {
+      TypeAdapter adapter, TypeDescription typeDesc, TypeT typeValue, Message value) {
     return new ObjectT(adapter, value, typeDesc, typeValue);
   }
 
@@ -108,15 +107,6 @@ public final class ObjectT extends BaseVal implements FieldTester, Indexer, Type
       }
       return (T) value;
     }
-    // TODO this the following as well??
-    //		if typeDesc.Kind() == reflect.Ptr {
-    //			val := reflect.New(typeDesc.Elem()).Interface()
-    //			dstPB, ok := val.(proto.Message)
-    //			if ok {
-    //				proto.Merge(dstPB, pb)
-    //				return dstPB, nil
-    //			}
-    //		}
 
     if (Message.class.isAssignableFrom(typeDesc)) {
       return buildFrom(typeDesc);
@@ -131,6 +121,7 @@ public final class ObjectT extends BaseVal implements FieldTester, Indexer, Type
         newTypeConversionError(value.getClass().getName(), typeDesc).toString());
   }
 
+  @SuppressWarnings("unchecked")
   private <T> T buildFrom(Class<T> typeDesc) {
     try {
       Message.Builder builder =
@@ -172,7 +163,7 @@ public final class ObjectT extends BaseVal implements FieldTester, Indexer, Type
     if (fd == null) {
       return noSuchField(protoFieldStr);
     }
-    return boolOf(value.hasField(fd.descriptor()));
+    return boolOf(FieldDescription.hasValueForField(fd.descriptor(), value));
   }
 
   @Override
@@ -185,7 +176,7 @@ public final class ObjectT extends BaseVal implements FieldTester, Indexer, Type
     if (fd == null) {
       return noSuchField(protoFieldStr);
     }
-    Object fv = value.getField(fd.descriptor());
+    Object fv = FieldDescription.getValueFromField(fd.descriptor(), value);
     return nativeToValue(fv);
   }
 

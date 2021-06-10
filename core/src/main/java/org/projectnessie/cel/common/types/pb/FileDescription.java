@@ -22,6 +22,7 @@ import com.google.protobuf.Descriptors.FileDescriptor;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /** FileDescription holds a map of all types and enum values declared within a proto file. */
 public class FileDescription {
@@ -33,6 +34,23 @@ public class FileDescription {
       Map<String, TypeDescription> types, Map<String, EnumValueDescription> enums) {
     this.types = types;
     this.enums = enums;
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    FileDescription that = (FileDescription) o;
+    return Objects.equals(types, that.types) && Objects.equals(enums, that.enums);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(types, enums);
   }
 
   /**

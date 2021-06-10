@@ -15,10 +15,12 @@
  */
 package org.projectnessie.cel.common.types.pb;
 
+import static org.projectnessie.cel.common.types.Err.anyWithEmptyType;
 import static org.projectnessie.cel.common.types.pb.FieldDescription.newFieldDescription;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.BoolValue;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.BytesValue;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FieldDescriptor;
@@ -28,6 +30,7 @@ import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.FloatValue;
 import com.google.protobuf.Int32Value;
 import com.google.protobuf.Int64Value;
+import com.google.protobuf.InvalidProtocolBufferException;
 import com.google.protobuf.ListValue;
 import com.google.protobuf.Message;
 import com.google.protobuf.NullValue;
@@ -41,9 +44,12 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
+import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.TimestampT;
 
 /**
@@ -53,28 +59,26 @@ public class TypeDescription extends Description {
 
   private final String typeName;
   private final Descriptor desc;
-  // TODO private final protoreflect.MessageType msgType;
   private final Map<String, FieldDescription> fieldMap;
   private Class<?> reflectType;
-  private final Message zeroMsg;
+  private Message zeroMsg;
 
   private TypeDescription(
       String typeName,
       Descriptor desc,
-      //	TODO protoreflect.MessageType msgType,
       Map<String, FieldDescription> fieldMap,
       Class<?> reflectType,
       Message zeroMsg) {
     this.typeName = typeName;
     this.desc = desc;
-    // TODO this.msgType = msgType;
     this.fieldMap = fieldMap;
     this.reflectType = reflectType;
     this.zeroMsg = zeroMsg;
   }
 
-  void updateReflectType(Class<? extends Message> reflectType) {
-    this.reflectType = reflectType;
+  void updateReflectType(Message zeroMsg) {
+    this.zeroMsg = zeroMsg;
+    this.reflectType = zeroMsg.getClass();
   }
 
   /**
@@ -82,7 +86,6 @@ public class TypeDescription extends Description {
    * with a given descriptor.
    */
   public static TypeDescription newTypeDescription(String typeName, Descriptor desc) {
-    // TODO msgType = dynamicpb.NewMessageType(desc);
     DynamicMessage msgZero = DynamicMessage.getDefaultInstance(desc);
     Map<String, FieldDescription> fieldMap = new HashMap<>();
     List<FieldDescriptor> fields = desc.getFields();
@@ -90,12 +93,7 @@ public class TypeDescription extends Description {
       fieldMap.put(f.getName(), newFieldDescription(f));
     }
     return new TypeDescription(
-        typeName,
-        desc,
-        // TODO msgType,
-        fieldMap,
-        reflectTypeOf(msgZero),
-        zeroValueOf(msgZero));
+        typeName, desc, fieldMap, reflectTypeOf(msgZero), zeroValueOf(msgZero));
   }
 
   /** FieldMap returns a string field name to FieldDescription map. */
@@ -115,6 +113,45 @@ public class TypeDescription extends Description {
    * <p>This method returns the unwrapped value and 'true', else the original value and 'false'.
    */
   public Object maybeUnwrap(Db db, Message msg) {
+    try {
+      if (this.reflectType == Any.class) {
+        String realTypeUrl;
+        ByteString realValue;
+        if (msg instanceof DynamicMessage) {
+          DynamicMessage dyn = (DynamicMessage) msg;
+          Descriptor dynDesc = dyn.getDescriptorForType();
+          FieldDescriptor fTypeUrl = dynDesc.findFieldByName("type_url");
+          FieldDescriptor fValue = dynDesc.findFieldByName("value");
+          realTypeUrl = (String) dyn.getField(fTypeUrl);
+          realValue = (ByteString) dyn.getField(fValue);
+        } else if (msg instanceof Any) {
+          Any any = (Any) msg;
+          realTypeUrl = any.getTypeUrl();
+          realValue = any.getValue();
+        } else {
+          return anyWithEmptyType();
+        }
+        String realTypeName = typeNameFromUrl(realTypeUrl);
+        if (realTypeName.isEmpty() || realTypeName.equals(typeName)) {
+          return anyWithEmptyType();
+        }
+        TypeDescription realTypeDescriptor = db.describeType(realTypeName);
+        Message realMsg = realTypeDescriptor.zeroMsg.getParserForType().parseFrom(realValue);
+        return realTypeDescriptor.maybeUnwrap(db, realMsg);
+      }
+
+      if (!(zeroMsg instanceof DynamicMessage)) {
+        if (msg instanceof Any) {
+          Any any = (Any) msg;
+          msg = zeroMsg.getParserForType().parseFrom(any.getValue());
+        } else if (msg instanceof DynamicMessage) {
+          DynamicMessage dyn = (DynamicMessage) msg;
+          msg = zeroMsg.getParserForType().parseFrom(dyn.toByteString());
+        }
+      }
+    } catch (InvalidProtocolBufferException e) {
+      throw new RuntimeException(e);
+    }
     return unwrap(db, this, msg);
   }
 
@@ -124,14 +161,8 @@ public class TypeDescription extends Description {
   }
 
   /** New returns a mutable proto message */
-  // TODO ???
-  //  public protoreflect.Message newReflect() {
-  //    return msgType.New()
-  //  }
-
-  /** New returns a mutable proto message */
   public Message.Builder newMessageBuilder() {
-    return DynamicMessage.newBuilder(desc);
+    return zeroMsg.newBuilderForType();
   }
 
   public Descriptor getDescriptor() {
@@ -178,6 +209,25 @@ public class TypeDescription extends Description {
     return Objects.hash(typeName, desc);
   }
 
+  private static final Map<Class<?>, Function<Message, Object>> MessageToObjectExact =
+      new IdentityHashMap<>();
+
+  static {
+    MessageToObjectExact.put(BoolValue.class, msg -> ((BoolValue) msg).getValue());
+    MessageToObjectExact.put(BytesValue.class, msg -> ((BytesValue) msg).getValue());
+    MessageToObjectExact.put(DoubleValue.class, msg -> ((DoubleValue) msg).getValue());
+    MessageToObjectExact.put(FloatValue.class, msg -> ((FloatValue) msg).getValue());
+    MessageToObjectExact.put(Int32Value.class, msg -> ((Int32Value) msg).getValue());
+    MessageToObjectExact.put(Int64Value.class, msg -> ((Int64Value) msg).getValue());
+    MessageToObjectExact.put(StringValue.class, msg -> ((StringValue) msg).getValue());
+    MessageToObjectExact.put(
+        UInt32Value.class, msg -> ULong.valueOf(((UInt32Value) msg).getValue()));
+    MessageToObjectExact.put(
+        UInt64Value.class, msg -> ULong.valueOf(((UInt64Value) msg).getValue()));
+    MessageToObjectExact.put(Duration.class, msg -> asJavaDuration((Duration) msg));
+    MessageToObjectExact.put(Timestamp.class, msg -> asJavaTimestamp((Timestamp) msg));
+  }
+
   /**
    * unwrap unwraps the provided proto.Message value, potentially based on the description if the
    * input message is a *dynamicpb.Message which obscures the typing information from Go.
@@ -185,6 +235,11 @@ public class TypeDescription extends Description {
    * <p>Returns the unwrapped value and 'true' if unwrapped, otherwise the input value and 'false'.
    */
   static Object unwrap(Db db, Description desc, Message msg) {
+    Function<Message, Object> conv = MessageToObjectExact.get(msg.getClass());
+    if (conv != null) {
+      return conv.apply(msg);
+    }
+
     if (msg instanceof Any) {
       Any v = (Any) msg;
       DynamicMessage dyn = DynamicMessage.newBuilder(v).build();
@@ -192,14 +247,6 @@ public class TypeDescription extends Description {
     }
     if (msg instanceof DynamicMessage) {
       return unwrapDynamic(db, desc, msg);
-    }
-    if (msg instanceof Duration) {
-      Duration d = (Duration) msg;
-      return asJavaDuration(d);
-    }
-    if (msg instanceof Timestamp) {
-      Timestamp t = (Timestamp) msg;
-      return asJavaTimestamp(t);
     }
     if (msg instanceof Value) {
       Value v = (Value) msg;
@@ -220,33 +267,7 @@ public class TypeDescription extends Description {
           return NullValue.NULL_VALUE;
       }
     }
-    if (msg instanceof BoolValue) {
-      return ((BoolValue) msg).getValue();
-    }
-    if (msg instanceof BytesValue) {
-      return ((BytesValue) msg).getValue();
-    }
-    if (msg instanceof DoubleValue) {
-      return ((DoubleValue) msg).getValue();
-    }
-    if (msg instanceof FloatValue) {
-      return ((FloatValue) msg).getValue();
-    }
-    if (msg instanceof Int32Value) {
-      return ((Int32Value) msg).getValue();
-    }
-    if (msg instanceof Int64Value) {
-      return ((Int64Value) msg).getValue();
-    }
-    if (msg instanceof StringValue) {
-      return ((StringValue) msg).getValue();
-    }
-    if (msg instanceof UInt32Value) {
-      return ((UInt32Value) msg).getValue();
-    }
-    if (msg instanceof UInt64Value) {
-      return ((UInt64Value) msg).getValue();
-    }
+
     return msg;
   }
 
@@ -276,46 +297,7 @@ public class TypeDescription extends Description {
     String typeName = refMsg.getDescriptorForType().getFullName();
     switch (typeName) {
       case "google.protobuf.Any":
-        {
-          // Note, Any values require further unwrapping; however, this unwrapping may or may not
-          // be to a well-known type. If the unwrapped value is a well-known type it will be further
-          // unwrapped before being returned to the caller. Otherwise, the dynamic protobuf object
-          // represented by the Any will be returned.
-          Any.Builder unwrappedAny = Any.newBuilder();
-          unwrappedAny.mergeFrom(msg);
-          Any dynMsg = unwrappedAny.build();
-          // TODO this is the original code of the above
-          //      dynMsg, err := unwrappedAny.UnmarshalNew()
-          //      if err != nil {
-          //        // Allow the error to move further up the stack as it should result in an type
-          //        // conversion error if the caller does not recover it somehow.
-          //        return unwrappedAny;
-          //      }
-          // Attempt to unwrap the dynamic type, otherwise return the dynamic message.
-          // TODO this would recurse endlessly (stack-overflow):
-          //    Object unwrapped = unwrapDynamic(desc, dynMsg);
-          try {
-            String innerTypeName = typeNameFromUrl(dynMsg.getTypeUrl());
-            TypeDescription innerType = db.describeType(innerTypeName);
-            if (innerType == null) {
-              return dynMsg; // throw new RuntimeException(String.format("unknown type '%s'",
-              // innerTypeName));
-            }
-            Class<? extends Message> msgClass = (Class<? extends Message>) innerType.reflectType();
-            Message unwrapped = dynMsg.unpack(msgClass);
-            return unwrapDynamic(db, desc, unwrapped);
-          } catch (Exception e) {
-            throw new RuntimeException(
-                String.format(
-                    "Failed to unpack type '%s' from '%s': %s", dynMsg.getTypeUrl(), typeName, e),
-                e);
-          }
-          // TODO this is the original code of the above
-          //      Object unwrapped = unwrapDynamic(desc, dynMsg);
-          //      if (unwrapped != null) {
-          //        return unwrapped;
-          //      }
-        }
+        return unwrapDynamicAny(db, desc, refMsg);
       case "google.protobuf.BoolValue":
       case "google.protobuf.BytesValue":
       case "google.protobuf.DoubleValue":
@@ -323,15 +305,23 @@ public class TypeDescription extends Description {
       case "google.protobuf.Int32Value":
       case "google.protobuf.Int64Value":
       case "google.protobuf.StringValue":
-      case "google.protobuf.UInt32Value":
-      case "google.protobuf.UInt64Value":
         // The msg value is ignored when dealing with wrapper types as they have a null or value
         // behavior, rather than the standard zero value behavior of other proto message types.
-        if (!msg.isInitialized()) {
+        if (msg == msg.getDefaultInstanceForType()) {
           return NullValue.NULL_VALUE;
         }
         FieldDescriptor valueField = msg.getDescriptorForType().findFieldByName("value");
         return msg.getField(valueField);
+      case "google.protobuf.UInt32Value":
+      case "google.protobuf.UInt64Value":
+        // The msg value is ignored when dealing with wrapper types as they have a null or value
+        // behavior, rather than the standard zero value behavior of other proto message types.
+        if (msg == msg.getDefaultInstanceForType()) {
+          return NullValue.NULL_VALUE;
+        }
+        valueField = msg.getDescriptorForType().findFieldByName("value");
+        Number value = (Number) msg.getField(valueField);
+        return ULong.valueOf(value.longValue());
       case "google.protobuf.Duration":
         return asJavaDuration(Duration.newBuilder().mergeFrom(msg).build());
       case "google.protobuf.ListValue":
@@ -348,6 +338,49 @@ public class TypeDescription extends Description {
         return unwrap(db, desc, Value.newBuilder().mergeFrom(msg).build());
     }
     return msg;
+  }
+
+  @SuppressWarnings("unchecked")
+  private static Object unwrapDynamicAny(Db db, Description desc, Message refMsg) {
+    // Note, Any values require further unwrapping; however, this unwrapping may or may not
+    // be to a well-known type. If the unwrapped value is a well-known type it will be further
+    // unwrapped before being returned to the caller. Otherwise, the dynamic protobuf object
+    // represented by the Any will be returned.
+    DynamicMessage dyn = (DynamicMessage) refMsg;
+    Any any = Any.newBuilder().mergeFrom(dyn).build();
+    String typeUrl = any.getTypeUrl();
+    if (typeUrl.isEmpty()) {
+      return anyWithEmptyType();
+    }
+    String innerTypeName = typeNameFromUrl(typeUrl);
+    TypeDescription innerType = db.describeType(innerTypeName);
+    if (innerType == null) {
+      return refMsg;
+    }
+    try {
+      Class<? extends Message> msgClass = (Class<? extends Message>) innerType.reflectType();
+      Message unwrapped = any.unpack(msgClass);
+      return unwrapDynamic(db, desc, unwrapped);
+    } catch (Exception e) {
+      return refMsg;
+    }
+  }
+
+  public static String typeNameFromMessage(Message message) {
+    if (message instanceof DynamicMessage) {
+      DynamicMessage dyn = (DynamicMessage) message;
+      Descriptor dynDesc = dyn.getDescriptorForType();
+      if (dynDesc.getFullName().equals("google.protobuf.Any")) {
+        FieldDescriptor f = dynDesc.findFieldByName("type_url");
+        String typeUrl = (String) dyn.getField(f);
+        return typeNameFromUrl(typeUrl);
+      }
+    } else if (message instanceof Any) {
+      Any any = (Any) message;
+      String typeUrl = any.getTypeUrl();
+      return typeNameFromUrl(typeUrl);
+    }
+    return message.getDescriptorForType().getFullName();
   }
 
   public static String typeNameFromUrl(String typeUrl) {
@@ -380,21 +413,20 @@ public class TypeDescription extends Description {
   private static final Map<String, Message> zeroValueMap = new HashMap<>();
 
   static {
-    // TODO verify these are correct
-    zeroValueMap.put("google.protobuf.Any", Any.newBuilder().build());
-    zeroValueMap.put("google.protobuf.Duration", Duration.newBuilder().build());
-    zeroValueMap.put("google.protobuf.ListValue", ListValue.newBuilder().build());
-    zeroValueMap.put("google.protobuf.Struct", Struct.newBuilder().build());
-    zeroValueMap.put("google.protobuf.Value", Value.newBuilder().build());
-    zeroValueMap.put("google.protobuf.Timestamp", Timestamp.newBuilder().build());
-    zeroValueMap.put("google.protobuf.BoolValue", BoolValue.newBuilder().build());
-    zeroValueMap.put("google.protobuf.BytesValue", BytesValue.newBuilder().build());
-    zeroValueMap.put("google.protobuf.DoubleValue", DoubleValue.newBuilder().build());
-    zeroValueMap.put("google.protobuf.FloatValue", FloatValue.newBuilder().build());
-    zeroValueMap.put("google.protobuf.Int32Value", Int32Value.newBuilder().build());
-    zeroValueMap.put("google.protobuf.Int64Value", Int64Value.newBuilder().build());
-    zeroValueMap.put("google.protobuf.StringValue", StringValue.newBuilder().build());
-    zeroValueMap.put("google.protobuf.UInt32Value", UInt32Value.newBuilder().build());
-    zeroValueMap.put("google.protobuf.UInt64Value", UInt64Value.newBuilder().build());
+    zeroValueMap.put("google.protobuf.Any", Any.getDefaultInstance());
+    zeroValueMap.put("google.protobuf.Duration", Duration.getDefaultInstance());
+    zeroValueMap.put("google.protobuf.ListValue", ListValue.getDefaultInstance());
+    zeroValueMap.put("google.protobuf.Struct", Struct.getDefaultInstance());
+    zeroValueMap.put("google.protobuf.Value", Value.getDefaultInstance());
+    zeroValueMap.put("google.protobuf.Timestamp", Timestamp.getDefaultInstance());
+    zeroValueMap.put("google.protobuf.BoolValue", BoolValue.getDefaultInstance());
+    zeroValueMap.put("google.protobuf.BytesValue", BytesValue.getDefaultInstance());
+    zeroValueMap.put("google.protobuf.DoubleValue", DoubleValue.getDefaultInstance());
+    zeroValueMap.put("google.protobuf.FloatValue", FloatValue.getDefaultInstance());
+    zeroValueMap.put("google.protobuf.Int32Value", Int32Value.getDefaultInstance());
+    zeroValueMap.put("google.protobuf.Int64Value", Int64Value.getDefaultInstance());
+    zeroValueMap.put("google.protobuf.StringValue", StringValue.getDefaultInstance());
+    zeroValueMap.put("google.protobuf.UInt32Value", UInt32Value.getDefaultInstance());
+    zeroValueMap.put("google.protobuf.UInt64Value", UInt64Value.getDefaultInstance());
   }
 }

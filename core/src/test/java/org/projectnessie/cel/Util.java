@@ -27,14 +27,19 @@ import org.projectnessie.cel.common.types.ref.Val;
 
 public class Util {
 
-  @SuppressWarnings("rawtypes")
-  public static <K, V> Map<K, V> mapOf(Object... kvPairs) {
-    Map map = new HashMap<>();
+  @SuppressWarnings({"unchecked"})
+  public static <K, V> Map<K, V> mapOf(K k, V v, Object... kvPairs) {
+    Map<K, V> map = new HashMap<>();
     assertThat(kvPairs.length % 2).isEqualTo(0);
+    map.put(k, v);
     for (int i = 0; i < kvPairs.length; i += 2) {
-      map.put(kvPairs[i], kvPairs[i + 1]);
+      map.put((K) kvPairs[i], (V) kvPairs[i + 1]);
     }
     return map;
+  }
+
+  public static <K, V> Map<K, V> mapOf() {
+    return new HashMap<>();
   }
 
   @SuppressWarnings("rawtypes")

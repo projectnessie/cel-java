@@ -66,5 +66,13 @@ public interface Coster {
     public String toString() {
       return "Cost{" + "min=" + min + ", max=" + max + '}';
     }
+
+    public Cost add(Cost c) {
+      return new Cost(min + c.min, max + c.max);
+    }
+
+    public Cost multiply(long multiplier) {
+      return new Cost(min * multiplier, max * multiplier);
+    }
   }
 }

@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+import com.google.protobuf.gradle.generateProtoTasks
+import com.google.protobuf.gradle.plugins
 import com.google.protobuf.gradle.protoc
 
 plugins {
@@ -23,17 +25,22 @@ plugins {
     id("com.diffplug.spotless")
     id("com.google.protobuf")
     id("me.champeau.jmh")
+    id("org.caffinitas.gradle.aggregatetestresults")
+    id("org.caffinitas.gradle.testsummary")
+    id("org.caffinitas.gradle.testrerun")
 }
 
 val versionAgrona = "1.10.0"
 val versionAntlr = "4.9.2"
 val versionAssertj = "3.19.0"
+val versionGrpc = "1.38.0"
 val versionJmh = "1.32"
 val versionJunit = "5.7.2"
 val versionProtobuf = "3.17.3"
 
 sourceSets.named("main") {
     java.srcDir(project.buildDir.resolve("generated/source/proto/main/java"))
+    java.srcDir(project.buildDir.resolve("generated/source/proto/main/grpc"))
 }
 sourceSets.named("test") {
     java.srcDir(project.buildDir.resolve("generated/source/proto/test/java"))
@@ -45,6 +52,12 @@ dependencies {
 
     implementation("com.google.protobuf:protobuf-java:$versionProtobuf")
     implementation("org.agrona:agrona:$versionAgrona")
+
+    // Since we need the protobuf stuff in this cel-core module, it's easy to generate the
+    // gRPC code as well. But do not expose the gRPC dependencies "publicly".
+    compileOnly("io.grpc:grpc-protobuf:$versionGrpc")
+    compileOnly("io.grpc:grpc-stub:$versionGrpc")
+    compileOnly("org.apache.tomcat:annotations-api:6.0.53")
 
     testImplementation("org.assertj:assertj-core:$versionAssertj")
     testImplementation("org.junit.jupiter:junit-jupiter-api:$versionJunit")
@@ -60,10 +73,47 @@ protobuf {
     // Configure the protoc executable
     protobuf.protoc {
         // Download from repositories
-        artifact = "com.google.protobuf:protoc:3.0.0"
+        artifact = "com.google.protobuf:protoc:$versionProtobuf"
+    }
+    protobuf.plugins {
+        this.create("grpc") {
+            artifact = "io.grpc:protoc-gen-grpc-java:$versionGrpc"
+        }
+    }
+    protobuf.generateProtoTasks {
+        all().configureEach {
+            this.plugins.create("grpc") {}
+        }
     }
 }
 
 jmh {
     jmhVersion.set(versionJmh)
+}
+
+val testJar by configurations.creating {
+    isCanBeResolved = true
+    isCanBeConsumed = true
+}
+tasks.register<Jar>("testJar") {
+    val testClasses = tasks.getByName<JavaCompile>("compileTestJava")
+    val baseJar = tasks.getByName<Jar>("jar")
+    from(testClasses.destinationDirectory)
+    archiveBaseName.set(baseJar.archiveBaseName)
+    destinationDirectory.set(baseJar.destinationDirectory)
+    archiveClassifier.set("tests")
+}
+artifacts {
+    val testJar = tasks.getByName<Jar>("testJar")
+    add("testJar", testJar.archiveFile) {
+        builtBy(testJar)
+    }
+}
+
+tasks.named("check") {
+    dependsOn(tasks.named("jmh"))
+}
+
+tasks.named("assemble") {
+    dependsOn(tasks.named("jmhJar"))
 }

@@ -20,7 +20,7 @@ import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
-import static org.projectnessie.cel.common.types.TypeValue.TypeType;
+import static org.projectnessie.cel.common.types.TypeT.TypeType;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.Value;
@@ -32,13 +32,13 @@ import org.projectnessie.cel.common.types.ref.Val;
 public final class NullT extends BaseVal {
 
   /** NullType singleton. */
-  public static TypeValue NullType = TypeValue.newTypeValue("null_type");
+  public static TypeT NullType = TypeT.newTypeValue("null_type");
   /** NullValue singleton. */
   public static NullT NullValue = new NullT();
 
-  private static Value PbValue =
+  private static final Value PbValue =
       Value.newBuilder().setNullValue(com.google.protobuf.NullValue.NULL_VALUE).build();
-  private static Any PbAny = Any.pack(PbValue);
+  private static final Any PbAny = Any.pack(PbValue);
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
   @SuppressWarnings("unchecked")
@@ -76,10 +76,6 @@ public final class NullT extends BaseVal {
     throw new RuntimeException(
         String.format(
             "native type conversion error from '%s' to '%s'", NullType, typeDesc.getName()));
-  }
-
-  private Value asPbValue() {
-    return Value.newBuilder().setNullValue(com.google.protobuf.NullValue.NULL_VALUE).build();
   }
 
   /** ConvertToType implements ref.Val.ConvertToType. */

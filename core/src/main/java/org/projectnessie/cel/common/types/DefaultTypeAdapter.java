@@ -15,35 +15,57 @@
  */
 package org.projectnessie.cel.common.types;
 
+import static org.projectnessie.cel.common.types.BoolT.BoolType;
 import static org.projectnessie.cel.common.types.BoolT.boolOf;
+import static org.projectnessie.cel.common.types.BytesT.BytesType;
 import static org.projectnessie.cel.common.types.BytesT.bytesOf;
+import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.DurationT.durationOf;
+import static org.projectnessie.cel.common.types.Err.anyWithEmptyType;
 import static org.projectnessie.cel.common.types.Err.newErr;
+import static org.projectnessie.cel.common.types.Err.unknownType;
+import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.IntT.intOf;
+import static org.projectnessie.cel.common.types.ListT.ListType;
 import static org.projectnessie.cel.common.types.ListT.newGenericArrayList;
+import static org.projectnessie.cel.common.types.ListT.newJSONList;
 import static org.projectnessie.cel.common.types.ListT.newStringArrayList;
 import static org.projectnessie.cel.common.types.ListT.newValArrayList;
+import static org.projectnessie.cel.common.types.MapT.MapType;
+import static org.projectnessie.cel.common.types.MapT.newJSONStruct;
 import static org.projectnessie.cel.common.types.MapT.newMaybeWrappedMap;
+import static org.projectnessie.cel.common.types.NullT.NullType;
+import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.TimestampT.ZoneIdZ;
 import static org.projectnessie.cel.common.types.TimestampT.timestampOf;
+import static org.projectnessie.cel.common.types.TypeT.TypeType;
+import static org.projectnessie.cel.common.types.UintT.UintType;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
+import static org.projectnessie.cel.common.types.pb.TypeDescription.typeNameFromMessage;
 
-import com.google.protobuf.Any;
+import com.google.api.expr.v1alpha1.Value;
+import com.google.protobuf.ByteString;
+import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.EnumValue;
 import com.google.protobuf.ListValue;
 import com.google.protobuf.Message;
 import com.google.protobuf.NullValue;
 import com.google.protobuf.Struct;
+import com.google.protobuf.UInt32Value;
+import com.google.protobuf.UInt64Value;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiFunction;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.pb.Db;
 import org.projectnessie.cel.common.types.pb.TypeDescription;
@@ -71,47 +93,117 @@ public class DefaultTypeAdapter implements TypeAdapter {
     return Err.unsupportedRefValConversionErr(value);
   }
 
+  private static final Map<Class<?>, BiFunction<TypeAdapter, Object, Val>> NativeToValueExact =
+      new IdentityHashMap<>();
+
+  static {
+    NativeToValueExact.put(Boolean.class, (a, value) -> boolOf((Boolean) value));
+    NativeToValueExact.put(byte[].class, (a, value) -> bytesOf(((byte[]) value)));
+    NativeToValueExact.put(Float.class, (a, value) -> doubleOf(((Float) value).doubleValue()));
+    NativeToValueExact.put(Double.class, (a, value) -> doubleOf((Double) value));
+    NativeToValueExact.put(Byte.class, (a, value) -> intOf((Byte) value));
+    NativeToValueExact.put(Short.class, (a, value) -> intOf((Short) value));
+    NativeToValueExact.put(Integer.class, (a, value) -> intOf((Integer) value));
+    NativeToValueExact.put(ULong.class, (a, value) -> uintOf(((ULong) value).longValue()));
+    NativeToValueExact.put(Long.class, (a, value) -> intOf((Long) value));
+    NativeToValueExact.put(String.class, (a, value) -> stringOf((String) value));
+    NativeToValueExact.put(Duration.class, (a, value) -> durationOf((Duration) value));
+    NativeToValueExact.put(
+        // TODO maybe add specialized ListT for int[]
+        int[].class,
+        (a, value) ->
+            newValArrayList(
+                DefaultTypeAdapter.Instance,
+                Arrays.stream((int[]) value).mapToObj(IntT::intOf).toArray(Val[]::new)));
+    NativeToValueExact.put(
+        // TODO maybe add specialized ListT for long[]
+        long[].class,
+        (a, value) ->
+            newValArrayList(
+                DefaultTypeAdapter.Instance,
+                Arrays.stream((long[]) value).mapToObj(IntT::intOf).toArray(Val[]::new)));
+    NativeToValueExact.put(
+        // TODO maybe add specialized ListT for double[]
+        double[].class,
+        (a, value) ->
+            newValArrayList(
+                DefaultTypeAdapter.Instance,
+                Arrays.stream((double[]) value).mapToObj(DoubleT::doubleOf).toArray(Val[]::new)));
+    NativeToValueExact.put(String[].class, (a, value) -> newStringArrayList((String[]) value));
+    NativeToValueExact.put(Val[].class, (a, value) -> newValArrayList(a, (Val[]) value));
+    NativeToValueExact.put(NullValue.class, (a, value) -> NullT.NullValue);
+    NativeToValueExact.put(ListValue.class, (a, value) -> newJSONList(a, (ListValue) value));
+    NativeToValueExact.put(
+        UInt32Value.class, (a, value) -> uintOf(((UInt32Value) value).getValue()));
+    NativeToValueExact.put(
+        UInt64Value.class, (a, value) -> uintOf(((UInt64Value) value).getValue()));
+    NativeToValueExact.put(Struct.class, (a, value) -> newJSONStruct(a, (Struct) value));
+    NativeToValueExact.put(EnumValue.class, (a, value) -> intOf(((EnumValue) value).getNumber()));
+    NativeToValueExact.put(
+        EnumValueDescriptor.class,
+        (a, value) -> {
+          EnumValueDescriptor e = (EnumValueDescriptor) value;
+          return intOf(e.getNumber());
+        });
+  }
+
   /**
    * nativeToValue returns the converted (ref.Val, true) of a conversion is found, otherwise (nil,
    * false)
    */
   public static Val nativeToValue(Db db, TypeAdapter a, Object value) {
+    Val v = maybeNativeToValue(a, value);
+    if (v != null) {
+      return v;
+    }
+
+    // additional specializations may be added upon request / need.
+    if (value instanceof Val) {
+      return (Val) value;
+    }
+    if (value instanceof Message) {
+      Message msg = (Message) value;
+      String typeName = typeNameFromMessage(msg);
+      if (typeName.isEmpty()) {
+        return anyWithEmptyType();
+      }
+      TypeDescription type = db.describeType(typeName);
+      if (type == null) {
+        return unknownType(typeName);
+      }
+      value = type.maybeUnwrap(db, msg);
+      if (value instanceof Message) {
+        value = type.maybeUnwrap(db, (Message) value);
+      }
+      return a.nativeToValue(value);
+    }
+    return newErr("unsupported conversion from '%s' to value", value.getClass());
+  }
+
+  static Val maybeNativeToValue(TypeAdapter a, Object value) {
     if (value == null) {
       return NullT.NullValue;
     }
-    if (value instanceof Boolean) {
-      return boolOf((Boolean) value);
+
+    BiFunction<TypeAdapter, Object, Val> conv = NativeToValueExact.get(value.getClass());
+    if (conv != null) {
+      return conv.apply(a, value);
     }
-    if (value instanceof byte[]) {
-      return bytesOf(((byte[]) value));
+
+    if (value instanceof Object[]) {
+      return newGenericArrayList(a, (Object[]) value);
     }
-    if (value instanceof Float) {
-      return doubleOf(((Float) value).doubleValue());
+    if (value instanceof List) {
+      return newGenericArrayList(a, ((List<?>) value).toArray());
     }
-    if (value instanceof Double) {
-      return doubleOf((Double) value);
+    if (value instanceof Map) {
+      return newMaybeWrappedMap(a, (Map<?, ?>) value);
     }
-    if (value instanceof Byte) {
-      return intOf((Byte) value);
+
+    if (value instanceof ByteString) {
+      return bytesOf((ByteString) value);
     }
-    if (value instanceof Short) {
-      return intOf((Short) value);
-    }
-    if (value instanceof Integer) {
-      return intOf((Integer) value);
-    }
-    if (value instanceof ULong) {
-      return uintOf(((ULong) value).longValue());
-    }
-    if (value instanceof Long) {
-      return intOf((Long) value);
-    }
-    if (value instanceof String) {
-      return stringOf((String) value);
-    }
-    if (value instanceof Duration) {
-      return durationOf((Duration) value);
-    }
+
     if (value instanceof Instant) {
       return timestampOf(((Instant) value).atZone(ZoneIdZ));
     }
@@ -124,219 +216,54 @@ public class DefaultTypeAdapter implements TypeAdapter {
     if (value instanceof Calendar) {
       return timestampOf(((Calendar) value).toInstant().atZone(ZoneIdZ));
     }
-    if (value instanceof int[]) {
-      return newValArrayList(
-          DefaultTypeAdapter.Instance,
-          Arrays.stream((int[]) value).mapToObj(IntT::intOf).toArray(Val[]::new));
-    }
-    if (value instanceof long[]) {
-      return newValArrayList(
-          DefaultTypeAdapter.Instance,
-          Arrays.stream((long[]) value).mapToObj(IntT::intOf).toArray(Val[]::new));
-    }
-    if (value instanceof double[]) {
-      return newValArrayList(
-          DefaultTypeAdapter.Instance,
-          Arrays.stream((double[]) value).mapToObj(DoubleT::doubleOf).toArray(Val[]::new));
-    }
-    if (value instanceof String[]) {
-      return newStringArrayList((String[]) value);
-    }
-    if (value instanceof Val[]) {
-      return newValArrayList(a, (Val[]) value);
-    }
-    if (value instanceof Object[]) {
-      return newGenericArrayList(a, (Object[]) value);
-    }
-    if (value instanceof List) {
-      return newGenericArrayList(a, ((List<?>) value).toArray());
-    }
-    if (value instanceof Map) {
-      return newMaybeWrappedMap(a, (Map<?, ?>) value);
-    }
 
-    // additional specializations may be added upon request / need.
-    if (value instanceof Any) {
-      Any v = (Any) value;
-      String typeUrl = v.getTypeUrl();
-      String typeName = TypeDescription.typeNameFromUrl(typeUrl);
-      TypeDescription type = db.describeType(typeName);
-      if (type == null) {
-        throw new IllegalStateException(String.format("unknown type: '%s'", typeName));
-      }
-      try {
-        Class<? extends Message> msgClass = (Class<? extends Message>) type.reflectType();
-        Message unwrapped = v.unpack(msgClass);
-        return nativeToValue(db, a, unwrapped);
-      } catch (Exception e) {
-        throw new RuntimeException(
-            String.format("Failed to unpack type '%s' from '%s': %s", typeUrl, typeName, e), e);
-      }
-    }
-    if (value instanceof NullValue) {
-      return NullT.NullValue;
-    }
-    if (value instanceof ListValue) {
-      throw new UnsupportedOperationException("IMPLEMENT ME");
-      // TODO
-      //      return newJSONList(a, (ListValue) value);
-    }
-    if (value instanceof Struct) {
-      throw new UnsupportedOperationException("IMPLEMENT ME");
-      // TODO
-      //      return newJSONStruct(a, (Struct) value);
-    }
-    if (value instanceof Val) {
-      return (Val) value;
-    }
-    if (value instanceof EnumValue) {
-      return intOf(((EnumValue) value).getNumber());
-    }
-    if (value instanceof Message) {
-      Message v = (Message) value;
-      String typeName = v.getDescriptorForType().getFullName();
-      TypeDescription td = Db.defaultDb.describeType(typeName);
-      if (td == null) {
-        return null;
-      }
-      Object val = td.maybeUnwrap(db, v);
-      if (val == null) {
-        return null;
-      }
-      return a.nativeToValue(val);
-    }
-    return newErr("unsupported conversion from '%s' to value", value.getClass());
-    // TODO
-    //        {
-    //          refValue := reflect.ValueOf(v)
-    //          if refValue.Kind() == reflect.Ptr {
-    //            if refValue.IsNil() {
-    //              return UnsupportedRefValConversionErr(v), true
-    //            }
-    //            refValue = refValue.Elem()
-    //          }
-    //          refKind := refValue.Kind()
-    //          switch refKind {
-    //          case reflect.Array, reflect.Slice:
-    //            return NewDynamicList(a, v), true
-    //          case reflect.Map:
-    //            return NewDynamicMap(a, v), true
-    //          // type aliases of primitive types cannot be asserted as that type, but rather need
-    //          // to be downcast to int32 before being converted to a CEL representation.
-    //          case reflect.Int32:
-    //            intType := reflect.TypeOf(int32(0))
-    //            return Int(refValue.Convert(intType).Interface().(int32)), true
-    //          case reflect.Int64:
-    //            intType := reflect.TypeOf(int64(0))
-    //            return Int(refValue.Convert(intType).Interface().(int64)), true
-    //          case reflect.Uint32:
-    //            uintType := reflect.TypeOf(uint32(0))
-    //            return Uint(refValue.Convert(uintType).Interface().(uint32)), true
-    //          case reflect.Uint64:
-    //            uintType := reflect.TypeOf(uint64(0))
-    //            return Uint(refValue.Convert(uintType).Interface().(uint64)), true
-    //          case reflect.Float32:
-    //            doubleType := reflect.TypeOf(float32(0))
-    //            return Double(refValue.Convert(doubleType).Interface().(float32)), true
-    //          case reflect.Float64:
-    //            doubleType := reflect.TypeOf(float64(0))
-    //            return Double(refValue.Convert(doubleType).Interface().(float64)), true
-    //          }
-    //        }
-    //    return null;
+    return null;
   }
 
-  //  func msgSetField(target protoreflect.Message, field *pb.FieldDescription, val ref.Val) error {
-  //    if field.IsList() {
-  //      lv := target.NewField(field.Descriptor())
-  //      list, ok := val.(traits.Lister)
-  //      if !ok {
-  //        return unsupportedTypeConversionError(field, val)
-  //      }
-  //      err := msgSetListField(lv.List(), field, list)
-  //      if err != nil {
-  //        return err
-  //      }
-  //      target.Set(field.Descriptor(), lv)
-  //      return nil
-  //    }
-  //    if field.IsMap() {
-  //      mv := target.NewField(field.Descriptor())
-  //      mp, ok := val.(traits.Mapper)
-  //      if !ok {
-  //        return unsupportedTypeConversionError(field, val)
-  //      }
-  //      err := msgSetMapField(mv.Map(), field, mp)
-  //      if err != nil {
-  //        return err
-  //      }
-  //      target.Set(field.Descriptor(), mv)
-  //      return nil
-  //    }
-  //    v, err := val.ConvertToNative(field.ReflectType())
-  //    if err != nil {
-  //      return fieldTypeConversionError(field, err)
-  //    }
-  //    switch v.(type) {
-  //    case proto.Message:
-  //      v = v.(proto.Message).ProtoReflect()
-  //    }
-  //    target.Set(field.Descriptor(), protoreflect.ValueOf(v))
-  //    return nil
-  //  }
-  //
-  //  func msgSetListField(target protoreflect.List, listField *pb.FieldDescription, listVal
-  // traits.Lister) error {
-  //    elemReflectType := listField.ReflectType().Elem()
-  //    for i := Int(0); i < listVal.Size().(Int); i++ {
-  //      elem := listVal.Get(i)
-  //      elemVal, err := elem.ConvertToNative(elemReflectType)
-  //      if err != nil {
-  //        return fieldTypeConversionError(listField, err)
-  //      }
-  //      switch ev := elemVal.(type) {
-  //      case proto.Message:
-  //        elemVal = ev.ProtoReflect()
-  //      }
-  //      target.Append(protoreflect.ValueOf(elemVal))
-  //    }
-  //    return nil
-  //  }
-  //
-  //  func msgSetMapField(target protoreflect.Map, mapField *pb.FieldDescription, mapVal
-  // traits.Mapper) error {
-  //    targetKeyType := mapField.KeyType.ReflectType()
-  //    targetValType := mapField.ValueType.ReflectType()
-  //    it := mapVal.Iterator()
-  //    for it.HasNext() == True {
-  //      key := it.Next()
-  //      val := mapVal.Get(key)
-  //      k, err := key.ConvertToNative(targetKeyType)
-  //      if err != nil {
-  //        return fieldTypeConversionError(mapField, err)
-  //      }
-  //      v, err := val.ConvertToNative(targetValType)
-  //      if err != nil {
-  //        return fieldTypeConversionError(mapField, err)
-  //      }
-  //      switch v.(type) {
-  //      case proto.Message:
-  //        v = v.(proto.Message).ProtoReflect()
-  //      }
-  //      target.Set(protoreflect.ValueOf(k).MapKey(), protoreflect.ValueOf(v))
-  //    }
-  //    return nil
-  //  }
-  //
-  //  func unsupportedTypeConversionError(field *pb.FieldDescription, val ref.Val) error {
-  //    msgName := field.Descriptor().ContainingMessage().FullName()
-  //    return fmt.Errorf("unsupported field type for %v.%v: %v", msgName, field.Name(), val.Type())
-  //  }
-  //
-  //  func fieldTypeConversionError(field *pb.FieldDescription, err error) error {
-  //    msgName := field.Descriptor().ContainingMessage().FullName()
-  //    return fmt.Errorf("field type conversion error for %v.%v value type: %v", msgName,
-  // field.Name(), err)
-  //  }
+  static Object maybeUnwrapValue(Object value) {
+    if (value instanceof Value) {
+      Value v = (Value) value;
+      switch (v.getKindCase()) {
+        case BOOL_VALUE:
+          return v.getBoolValue();
+        case BYTES_VALUE:
+          return v.getBytesValue();
+        case DOUBLE_VALUE:
+          return v.getDoubleValue();
+        case INT64_VALUE:
+          return v.getInt64Value();
+        case LIST_VALUE:
+          return v.getListValue();
+        case NULL_VALUE:
+          return v.getNullValue();
+        case MAP_VALUE:
+          return v.getMapValue();
+        case STRING_VALUE:
+          return v.getStringValue();
+        case TYPE_VALUE:
+          return typeNameToTypeValue.get(v.getTypeValue());
+        case UINT64_VALUE:
+          return ULong.valueOf(v.getUint64Value());
+        case OBJECT_VALUE:
+          return v.getObjectValue();
+      }
+    }
 
+    return value;
+  }
+
+  private static final Map<String, TypeT> typeNameToTypeValue = new HashMap<>();
+
+  static {
+    typeNameToTypeValue.put("bool", BoolType);
+    typeNameToTypeValue.put("bytes", BytesType);
+    typeNameToTypeValue.put("double", DoubleType);
+    typeNameToTypeValue.put("null_type", NullType);
+    typeNameToTypeValue.put("int", IntType);
+    typeNameToTypeValue.put("list", ListType);
+    typeNameToTypeValue.put("map", MapType);
+    typeNameToTypeValue.put("string", StringType);
+    typeNameToTypeValue.put("type", TypeType);
+    typeNameToTypeValue.put("uint", UintType);
+  }
 }

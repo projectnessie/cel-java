@@ -16,6 +16,7 @@
 package org.projectnessie.cel.common.types.pb;
 
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
+import java.util.Objects;
 
 /** EnumValueDescription maps a fully-qualified enum value name to its numeric value. */
 public class EnumValueDescription {
@@ -45,5 +46,22 @@ public class EnumValueDescription {
   /** Value returns the (numeric) value of the enum. */
   public int value() {
     return desc.getIndex();
+  }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    EnumValueDescription that = (EnumValueDescription) o;
+    return Objects.equals(enumValueName, that.enumValueName) && Objects.equals(desc, that.desc);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(enumValueName, desc);
   }
 }

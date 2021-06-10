@@ -23,6 +23,5 @@ import org.projectnessie.cel.common.types.ref.Val;
  */
 @FunctionalInterface
 public interface FunctionOp {
-
-  Val func(Val... values);
+  Val invoke(Val... values);
 }

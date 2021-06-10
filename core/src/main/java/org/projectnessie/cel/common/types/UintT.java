@@ -26,13 +26,16 @@ import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.Err.rangeError;
 import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.IntT.intOf;
+import static org.projectnessie.cel.common.types.IntT.maxIntJSON;
 import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
-import static org.projectnessie.cel.common.types.TypeValue.TypeType;
+import static org.projectnessie.cel.common.types.TypeT.TypeType;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
+import com.google.protobuf.Value;
+import java.math.BigInteger;
 import java.util.Objects;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.Overflow.OverflowException;
@@ -52,8 +55,8 @@ public final class UintT extends BaseVal
     implements Adder, Comparer, Divider, Modder, Multiplier, Subtractor {
 
   /** UintType singleton. */
-  public static final TypeValue UintType =
-      TypeValue.newTypeValue(
+  public static final TypeT UintType =
+      TypeT.newTypeValue(
           "uint",
           Trait.AdderType,
           Trait.ComparerType,
@@ -133,44 +136,20 @@ public final class UintT extends BaseVal
     if (typeDesc == UInt32Value.class) {
       return (T) UInt32Value.of((int) i);
     }
-
     if (typeDesc == Val.class || typeDesc == UintT.class) {
       return (T) this;
     }
+    if (typeDesc == Value.class) {
+      if (i <= maxIntJSON) {
+        // JSON can accurately represent 32-bit uints as floating point values.
+        return (T) Value.newBuilder().setNumberValue(i).build();
+      } else {
+        // Proto3 to JSON conversion requires string-formatted uint64 values
+        // since the conversion to floating point would result in truncation.
+        return (T) Value.newBuilder().setStringValue(Long.toUnsignedString(i)).build();
+      }
+    }
 
-    //		switch typeDesc.Kind() {
-    //		case reflect.Ptr:
-    //			switch typeDesc {
-    //			case jsonValueType:
-    //				// JSON can accurately represent 32-bit uints as floating point values.
-    //				if i.isJSONSafe() {
-    //					return structpb.NewNumberValue(float64(i)), nil
-    //				}
-    //				// Proto3 to JSON conversion requires string-formatted uint64 values
-    //				// since the conversion to floating point would result in truncation.
-    //				return structpb.NewStringValue(strconv.FormatUint(uint64(i), 10)), nil
-    //			}
-    //			switch typeDesc.Elem().Kind() {
-    //			case reflect.Uint32:
-    //				v := uint32(i)
-    //				p := reflect.New(typeDesc.Elem())
-    //				p.Elem().Set(reflect.ValueOf(v).Convert(typeDesc.Elem()))
-    //				return p.Interface(), nil
-    //			case reflect.Uint64:
-    //				v := uint64(i)
-    //				p := reflect.New(typeDesc.Elem())
-    //				p.Elem().Set(reflect.ValueOf(v).Convert(typeDesc.Elem()))
-    //				return p.Interface(), nil
-    //			}
-    //		case reflect.Interface:
-    //			iv := i.Value()
-    //			if reflect.TypeOf(iv).Implements(typeDesc) {
-    //				return iv, nil
-    //			}
-    //			if reflect.TypeOf(i).Implements(typeDesc) {
-    //				return i, nil
-    //			}
-    //		}
     throw new RuntimeException(
         String.format(
             "native type conversion error from '%s' to '%s'", UintType, typeDesc.getName()));
@@ -190,10 +169,9 @@ public final class UintT extends BaseVal
     }
     if (typeValue == DoubleType) {
       if (i < 0L) {
-        // same restriction in Java for uint-->double as uint-->int
-        return rangeError(Long.toUnsignedString(i), "double");
+        return doubleOf(new BigInteger(Long.toUnsignedString(i)).doubleValue());
       }
-      return doubleOf((double) i);
+      return doubleOf(i);
     }
     if (typeValue == StringType) {
       return stringOf(Long.toUnsignedString(i));

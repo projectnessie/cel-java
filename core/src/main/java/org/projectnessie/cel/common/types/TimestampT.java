@@ -19,7 +19,9 @@ import static org.projectnessie.cel.common.types.BoolT.boolOf;
 import static org.projectnessie.cel.common.types.DurationT.DurationType;
 import static org.projectnessie.cel.common.types.DurationT.durationOf;
 import static org.projectnessie.cel.common.types.Err.errDurationOverflow;
+import static org.projectnessie.cel.common.types.Err.errTimestampOutOfRange;
 import static org.projectnessie.cel.common.types.Err.errTimestampOverflow;
+import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.IntT.IntNegOne;
@@ -29,10 +31,13 @@ import static org.projectnessie.cel.common.types.IntT.IntZero;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
-import static org.projectnessie.cel.common.types.TypeValue.TypeType;
+import static org.projectnessie.cel.common.types.TypeT.TypeType;
 
 import com.google.protobuf.Any;
+import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
+import com.google.protobuf.Value;
+import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -43,7 +48,9 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
+import java.time.format.SignStyle;
 import java.time.temporal.ChronoField;
+import java.time.zone.ZoneRulesException;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashMap;
@@ -121,8 +128,8 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
   }
 
   /** TimestampType singleton. */
-  public static final TypeValue TimestampType =
-      TypeValue.newTypeValue(
+  public static final TypeT TimestampType =
+      TypeT.newTypeValue(
           "google.protobuf.Timestamp",
           Trait.AdderType,
           Trait.ComparerType,
@@ -136,14 +143,7 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
   }
 
   public static TimestampT timestampOf(String s) {
-    // TODO is this correct??
-    ZonedDateTime inst = TimestampT.rfc3339nanoFormatter().parse(s, ZonedDateTime::from);
-    // TODO want this??
-    //    long unitTime = TimeUnit.MILLISECONDS.toSeconds(inst.toEpochMilli());
-    //    if (unitTime < minUnixTime || unitTime > maxUnixTime) {
-    //      return errTimestampOverflow;
-    //    }
-    return timestampOf(inst);
+    return timestampOf(TimestampT.rfc3339nanoFormatter().parse(s, ZonedDateTime::from));
   }
 
   public static TimestampT timestampOf(Timestamp t) {
@@ -153,8 +153,16 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
   }
 
   public static TimestampT timestampOf(ZonedDateTime t) {
-    // Note that this function does not valiate that time.Time is in our supported range.
+    // Note that this function does not validate that time.Time is in our supported range.
     return new TimestampT(t);
+  }
+
+  public Val rangeCheck() {
+    long unitTime = t.toEpochSecond();
+    if (unitTime < minUnixTime || unitTime > maxUnixTime) {
+      return errTimestampOutOfRange;
+    }
+    return this;
   }
 
   /** Add implements traits.Adder.Add. */
@@ -217,34 +225,14 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
     if (typeDesc == Timestamp.class || typeDesc == Object.class) {
       return (T) toPbTimestamp();
     }
-
     if (typeDesc == Val.class || typeDesc == TimestampT.class) {
       return (T) this;
     }
+    if (typeDesc == Value.class) {
+      // CEL follows the proto3 to JSON conversion which formats as an RFC 3339 encoded JSON string.
+      return (T) StringValue.of(jsonFormatter().format(t));
+    }
 
-    //    if (typeDesc == Value.class) { // jsonValueType
-    //      return (T) StringValue.of(jsonFormatter().format(t));
-    //    }
-    //		// If the timestamp is already assignable to the desired type return it.
-    //		if reflect.TypeOf(t.Time).AssignableTo(typeDesc) {
-    //			return t.Time, nil
-    //		}
-    //		if reflect.TypeOf(t).AssignableTo(typeDesc) {
-    //			return t, nil
-    //		}
-    //		switch typeDesc {
-    //		case jsonValueType:
-    //			// CEL follows the proto3 to JSON conversion which formats as an RFC 3339 encoded JSON
-    //			// string.
-    //			v := t.ConvertToType(StringType)
-    //			if IsError(v) {
-    //				return nil, v.(*Err)
-    //			}
-    //			return structpb.NewStringValue(string(v.(String))), nil
-    //		case timestampValueType:
-    //			// Unwrap the underlying tpb.Timestamp.
-    //			return tpb.New(t.Time), nil
-    //		}
     throw new RuntimeException(
         String.format(
             "native type conversion error from '%s' to '%s'", TimestampType, typeDesc.getName()));
@@ -263,8 +251,7 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
   @Override
   public Val convertToType(Type typeValue) {
     if (typeValue == StringType) {
-      // TODO verify the pattern is the same as Go's time.RFC3339Nano
-      DateTimeFormatter df = rfc3339nanoFormatter();
+      DateTimeFormatter df = (t.getNano() > 0L) ? rfc3339nanoFormatter() : rfc3339formatter();
       return stringOf(df.format(t));
     }
     if (typeValue == IntType) {
@@ -280,16 +267,58 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
   }
 
   private static final DateTimeFormatterBuilder jsonFormatterBuilder =
-      new DateTimeFormatterBuilder().appendPattern("yyyy-MM-dd'T'HH:mm:ss'Z'");
+      new DateTimeFormatterBuilder()
+          .appendValue(ChronoField.YEAR, 4, 5, SignStyle.EXCEEDS_PAD)
+          .appendLiteral('-')
+          .appendValue(ChronoField.MONTH_OF_YEAR, 2)
+          .appendLiteral('-')
+          .appendValue(ChronoField.DAY_OF_MONTH, 2)
+          .appendLiteral('T')
+          .appendValue(ChronoField.HOUR_OF_DAY, 2)
+          .appendLiteral(':')
+          .appendValue(ChronoField.MINUTE_OF_HOUR, 2)
+          .appendLiteral(':')
+          .appendValue(ChronoField.SECOND_OF_MINUTE, 2)
+          .appendLiteral('Z');
+
+  private static final DateTimeFormatterBuilder rfc3339formatterBuilder =
+      new DateTimeFormatterBuilder()
+          .parseLenient()
+          .appendValue(ChronoField.YEAR, 4, 5, SignStyle.EXCEEDS_PAD)
+          .parseLenient()
+          .appendLiteral('-')
+          .appendValue(ChronoField.MONTH_OF_YEAR, 2)
+          .appendLiteral('-')
+          .appendValue(ChronoField.DAY_OF_MONTH, 2)
+          .appendLiteral('T')
+          .appendValue(ChronoField.HOUR_OF_DAY, 2)
+          .appendLiteral(':')
+          .appendValue(ChronoField.MINUTE_OF_HOUR, 2)
+          .appendLiteral(':')
+          .appendValue(ChronoField.SECOND_OF_MINUTE, 2)
+          .appendOffset("+HH:MM", "Z");
 
   private static final DateTimeFormatterBuilder rfc3339nanoFormatterBuilder =
       new DateTimeFormatterBuilder()
-          .appendPattern("yyyy-MM-dd'T'HH:mm:ss")
+          .parseLenient()
+          .appendValue(ChronoField.YEAR, 4, 5, SignStyle.EXCEEDS_PAD)
+          .parseLenient()
+          .appendLiteral('-')
+          .appendValue(ChronoField.MONTH_OF_YEAR, 2)
+          .appendLiteral('-')
+          .appendValue(ChronoField.DAY_OF_MONTH, 2)
+          .appendLiteral('T')
+          .appendValue(ChronoField.HOUR_OF_DAY, 2)
+          .appendLiteral(':')
+          .appendValue(ChronoField.MINUTE_OF_HOUR, 2)
+          .appendLiteral(':')
+          .appendValue(ChronoField.SECOND_OF_MINUTE, 2)
           .parseLenient()
           .optionalStart()
-          .appendPattern(".nnnnnnnnn")
+          .appendLiteral('.')
+          .appendValue(ChronoField.NANO_OF_SECOND, 1, 9, SignStyle.NOT_NEGATIVE)
           .optionalEnd()
-          .appendPattern("XXX");
+          .appendOffset("+HH:MM", "Z");
 
   static DateTimeFormatter jsonFormatter() {
     return jsonFormatterBuilder.toFormatter();
@@ -297,6 +326,10 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
 
   static DateTimeFormatter rfc3339nanoFormatter() {
     return rfc3339nanoFormatterBuilder.toFormatter();
+  }
+
+  static DateTimeFormatter rfc3339formatter() {
+    return rfc3339formatterBuilder.toFormatter();
   }
 
   /** Equal implements ref.Val.Equal. */
@@ -342,7 +375,7 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
     if (other.type() == TimestampType) {
       ZonedDateTime o = (ZonedDateTime) other.value();
       try {
-        return durationOf(Overflow.subtractTimeChecked(t, o));
+        return durationOf(Overflow.subtractTimeChecked(t, o)).rangeCheck();
       } catch (OverflowException e) {
         return errDurationOverflow;
       }
@@ -380,45 +413,45 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
   }
 
   static Val timestampGetFullYear(ZonedDateTime t) {
-    return intOf(t.get(ChronoField.YEAR));
+    return intOf(t.getYear());
   }
 
   static Val timestampGetMonth(ZonedDateTime t) {
     // CEL spec indicates that the month should be 0-based, but the Time value
     // for Month() is 1-based. */
-    return intOf(t.get(ChronoField.MONTH_OF_YEAR) - 1);
+    return intOf(t.getMonthValue() - 1);
   }
 
   static Val timestampGetDayOfYear(ZonedDateTime t) {
-    return intOf(t.get(ChronoField.DAY_OF_YEAR) - 1);
+    return intOf(t.getDayOfYear() - 1);
   }
 
   static Val timestampGetDayOfMonthZeroBased(ZonedDateTime t) {
-    return intOf(t.get(ChronoField.DAY_OF_MONTH) - 1);
+    return intOf(t.getDayOfMonth() - 1);
   }
 
   static Val timestampGetDayOfMonthOneBased(ZonedDateTime t) {
-    return intOf(t.get(ChronoField.DAY_OF_MONTH));
+    return intOf(t.getDayOfMonth());
   }
 
   static Val timestampGetDayOfWeek(ZonedDateTime t) {
-    return intOf(t.get(ChronoField.DAY_OF_WEEK));
+    return intOf(t.getDayOfWeek().getValue());
   }
 
   static Val timestampGetHours(ZonedDateTime t) {
-    return intOf(t.get(ChronoField.HOUR_OF_DAY));
+    return intOf(t.getHour());
   }
 
   static Val timestampGetMinutes(ZonedDateTime t) {
-    return intOf(t.get(ChronoField.MINUTE_OF_HOUR));
+    return intOf(t.getMinute());
   }
 
   static Val timestampGetSeconds(ZonedDateTime t) {
-    return intOf(t.get(ChronoField.SECOND_OF_MINUTE));
+    return intOf(t.getSecond());
   }
 
   static Val timestampGetMilliseconds(ZonedDateTime t) {
-    return intOf(t.get(ChronoField.MILLI_OF_SECOND));
+    return intOf(TimeUnit.NANOSECONDS.toMillis(t.getNano()));
   }
 
   static Val timestampGetFullYearWithTz(ZonedDateTime t, Val tz) {
@@ -467,11 +500,92 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
     }
     String val = (String) tz.value();
     try {
-      ZoneId zoneId = ZoneId.of(val);
+      ZoneId zoneId = parseTz(val);
       ZonedDateTime z = t.withZoneSameInstant(zoneId);
       return funct.apply(z);
     } catch (Exception e) {
-      return Err.newErr("no conversion of '%s' to time-zone '%s': %s", t, val, e);
+      return newErr(e, "no conversion of '%s' to time-zone '%s': %s", t, val, e);
     }
+  }
+
+  static ZoneId parseTz(String tz) {
+    if (tz.isEmpty()) {
+      throw new DateTimeException("time-zone must not be empty");
+    }
+
+    char first = tz.charAt(0);
+    if (first == '-' || first == '+' || (first >= '0' && first <= '9')) {
+      boolean negate = false;
+
+      int[] i = new int[] {0};
+
+      if (first == '-') {
+        negate = true;
+        i[0]++;
+      } else if (first == '+') {
+        i[0]++;
+      }
+
+      int hours = parseNumber(tz, i, false);
+      int minutes = parseNumber(tz, i, true);
+      int seconds = parseNumber(tz, i, true);
+
+      if (hours > 18 || minutes > 59 || seconds > 59) {
+        throw new DateTimeException(
+            String.format("invalid hour/minute/second value in time zone: '%s'", tz));
+      }
+
+      int totalSeconds = hours * 60 * 60 + minutes * 60 + seconds;
+      if (negate) {
+        totalSeconds = -totalSeconds;
+      }
+
+      return ZoneId.ofOffset("UTC", ZoneOffset.ofTotalSeconds(totalSeconds));
+    }
+
+    try {
+      return ZoneId.of(tz);
+    } catch (ZoneRulesException e) {
+      // Some time-zones (CST, AST, etc) are not known to ZoneId, so fallback to TimeZone here.
+      return TimeZone.getTimeZone(tz).toZoneId();
+    }
+  }
+
+  private static int parseNumber(String tz, int[] i, boolean skipColon) {
+    if (skipColon) {
+      if (i[0] < tz.length()) {
+        char c = tz.charAt(i[0]);
+        if (c == ':') {
+          i[0]++;
+        }
+      }
+    }
+
+    if (i[0] < tz.length()) {
+      char c = tz.charAt(i[0]);
+      if (c >= '0' && c <= '9') {
+        int dig1 = c - '0';
+        i[0]++;
+
+        if (i[0] < tz.length()) {
+          c = tz.charAt(i[0]);
+          if (c >= '0' && c <= '9') {
+            i[0]++;
+            int dig2 = c - '0';
+            return dig1 * 10 + dig2;
+          } else if (c != ':') {
+            throw new DateTimeException(
+                String.format("unexpected character '%s' at index %d", c, i[0]));
+          }
+        }
+
+        return dig1;
+      } else {
+        throw new DateTimeException(
+            String.format("unexpected character '%s' at index %d", c, i[0]));
+      }
+    }
+
+    return 0;
   }
 }

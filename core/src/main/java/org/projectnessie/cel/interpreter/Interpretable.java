@@ -24,6 +24,7 @@ import static org.projectnessie.cel.common.types.Err.valOrErr;
 import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.common.types.Util.isUnknownOrError;
 import static org.projectnessie.cel.interpreter.Activation.emptyActivation;
+import static org.projectnessie.cel.interpreter.Coster.Cost.OneOne;
 import static org.projectnessie.cel.interpreter.Coster.Cost.estimateCost;
 import static org.projectnessie.cel.interpreter.Coster.costOf;
 
@@ -77,7 +78,7 @@ public interface Interpretable {
   }
 
   /** InterpretableAttribute interface for tracking whether the Interpretable is an attribute. */
-  interface InterpretableAttribute extends Interpretable, Qualifier {
+  interface InterpretableAttribute extends Interpretable, Qualifier, Attribute {
     /** Attr returns the Attribute value. */
     Attribute attr();
 
@@ -163,7 +164,7 @@ public interface Interpretable {
             Val refVal = (Val) opVal;
             opVal = refVal.value();
           }
-          if (fieldType.isSet.func(opVal)) {
+          if (fieldType.isSet.isSet(opVal)) {
             return True;
           }
           return False;
@@ -187,7 +188,12 @@ public interface Interpretable {
     @Override
     public Cost cost() {
       Cost c = estimateCost(op);
-      return costOf(c.min + 1, c.max + 1);
+      return c.add(OneOne);
+    }
+
+    @Override
+    public String toString() {
+      return "EvalTestOnly{" + "id=" + id + ", field=" + field + '}';
     }
   }
 
@@ -208,6 +214,11 @@ public interface Interpretable {
     public long id() {
       return id;
     }
+
+    @Override
+    public String toString() {
+      return "id=" + id;
+    }
   }
 
   abstract class AbstractEvalLhsRhs extends AbstractEval implements Coster {
@@ -218,6 +229,11 @@ public interface Interpretable {
       super(id);
       this.lhs = Objects.requireNonNull(lhs);
       this.rhs = Objects.requireNonNull(rhs);
+    }
+
+    @Override
+    public String toString() {
+      return "AbstractEvalLhsRhs{" + "id=" + id + ", lhs=" + lhs + ", rhs=" + rhs + '}';
     }
   }
 
@@ -245,6 +261,11 @@ public interface Interpretable {
     @Override
     public Val value() {
       return val;
+    }
+
+    @Override
+    public String toString() {
+      return "EvalConst{" + "id=" + id + ", val=" + val + '}';
     }
   }
 
@@ -294,6 +315,11 @@ public interface Interpretable {
     public Cost cost() {
       return calShortCircuitBinaryOpsCost(lhs, rhs);
     }
+
+    @Override
+    public String toString() {
+      return "EvalOr{" + "id=" + id + ", lhs=" + lhs + ", rhs=" + rhs + '}';
+    }
   }
 
   class EvalAnd extends AbstractEvalLhsRhs {
@@ -342,6 +368,11 @@ public interface Interpretable {
     public Cost cost() {
       return calShortCircuitBinaryOpsCost(lhs, rhs);
     }
+
+    @Override
+    public String toString() {
+      return "EvalAnd{" + "id=" + id + ", lhs=" + lhs + ", rhs=" + rhs + '}';
+    }
   }
 
   static Cost calShortCircuitBinaryOpsCost(Interpretable lhs, Interpretable rhs) {
@@ -385,6 +416,11 @@ public interface Interpretable {
     @Override
     public Interpretable[] args() {
       return new Interpretable[] {lhs, rhs};
+    }
+
+    @Override
+    public String toString() {
+      return "EvalEq{" + "id=" + id + ", lhs=" + lhs + ", rhs=" + rhs + '}';
     }
   }
 
@@ -430,6 +466,11 @@ public interface Interpretable {
     public Interpretable[] args() {
       return new Interpretable[] {lhs, rhs};
     }
+
+    @Override
+    public String toString() {
+      return "EvalNe{" + "id=" + id + ", lhs=" + lhs + ", rhs=" + rhs + '}';
+    }
   }
 
   class EvalZeroArity extends AbstractEval implements InterpretableCall, Coster {
@@ -447,7 +488,7 @@ public interface Interpretable {
     /** Eval implements the Interpretable interface method. */
     @Override
     public Val eval(org.projectnessie.cel.interpreter.Activation activation) {
-      return impl.func();
+      return impl.invoke();
     }
 
     /** Cost returns 1 representing the heuristic cost of the function. */
@@ -472,6 +513,22 @@ public interface Interpretable {
     @Override
     public Interpretable[] args() {
       return new Interpretable[0];
+    }
+
+    @Override
+    public String toString() {
+      return "EvalZeroArity{"
+          + "id="
+          + id
+          + ", function='"
+          + function
+          + '\''
+          + ", overload='"
+          + overload
+          + '\''
+          + ", impl="
+          + impl
+          + '}';
     }
   }
 
@@ -503,7 +560,7 @@ public interface Interpretable {
       // If the implementation is bound and the argument value has the right traits required to
       // invoke it, then call the implementation.
       if (impl != null && (trait == null || argVal.type().hasTrait(trait))) {
-        return impl.func(argVal);
+        return impl.invoke(argVal);
       }
       // Otherwise, if the argument is a ReceiverType attempt to invoke the receiver method on the
       // operand (arg0).
@@ -517,7 +574,7 @@ public interface Interpretable {
     @Override
     public Cost cost() {
       Cost c = estimateCost(arg);
-      return costOf(c.min + 1, c.max + 1); // add cost for function
+      return Cost.OneOne.add(c); // add cost for function
     }
 
     /** Function implements the InterpretableCall interface method. */
@@ -536,6 +593,26 @@ public interface Interpretable {
     @Override
     public Interpretable[] args() {
       return new Interpretable[] {arg};
+    }
+
+    @Override
+    public String toString() {
+      return "EvalUnary{"
+          + "id="
+          + id
+          + ", function='"
+          + function
+          + '\''
+          + ", overload='"
+          + overload
+          + '\''
+          + ", arg="
+          + arg
+          + ", trait="
+          + trait
+          + ", impl="
+          + impl
+          + '}';
     }
   }
 
@@ -575,7 +652,7 @@ public interface Interpretable {
       // If the implementation is bound and the argument value has the right traits required to
       // invoke it, then call the implementation.
       if (impl != null && (trait == null || lVal.type().hasTrait(trait))) {
-        return impl.func(lVal, rVal);
+        return impl.invoke(lVal, rVal);
       }
       // Otherwise, if the argument is a ReceiverType attempt to invoke the receiver method on the
       // operand (arg0).
@@ -607,6 +684,28 @@ public interface Interpretable {
     @Override
     public Interpretable[] args() {
       return new Interpretable[] {lhs, rhs};
+    }
+
+    @Override
+    public String toString() {
+      return "EvalBinary{"
+          + "id="
+          + id
+          + ", lhs="
+          + lhs
+          + ", rhs="
+          + rhs
+          + ", function='"
+          + function
+          + '\''
+          + ", overload='"
+          + overload
+          + '\''
+          + ", trait="
+          + trait
+          + ", impl="
+          + impl
+          + '}';
     }
   }
 
@@ -648,7 +747,7 @@ public interface Interpretable {
       // invoke it, then call the implementation.
       Val arg0 = argVals[0];
       if (impl != null && (trait == null || arg0.type().hasTrait(trait))) {
-        return impl.func(argVals);
+        return impl.invoke(argVals);
       }
       // Otherwise, if the argument is a ReceiverType attempt to invoke the receiver method on the
       // operand (arg0).
@@ -663,7 +762,7 @@ public interface Interpretable {
     @Override
     public Cost cost() {
       Cost c = sumOfCost(args);
-      return costOf(c.min + 1, c.max + 1); // add cost for function
+      return c.add(OneOne); // add cost for function
     }
 
     /** Function implements the InterpretableCall interface method. */
@@ -682,6 +781,26 @@ public interface Interpretable {
     @Override
     public Interpretable[] args() {
       return args;
+    }
+
+    @Override
+    public String toString() {
+      return "EvalVarArgs{"
+          + "id="
+          + id
+          + ", function='"
+          + function
+          + '\''
+          + ", overload='"
+          + overload
+          + '\''
+          + ", args="
+          + Arrays.toString(args)
+          + ", trait="
+          + trait
+          + ", impl="
+          + impl
+          + '}';
     }
   }
 
@@ -715,6 +834,11 @@ public interface Interpretable {
     @Override
     public Cost cost() {
       return sumOfCost(elems);
+    }
+
+    @Override
+    public String toString() {
+      return "EvalList{" + "id=" + id + ", elems=" + Arrays.toString(elems) + '}';
     }
   }
 
@@ -755,7 +879,19 @@ public interface Interpretable {
     public Cost cost() {
       Cost k = sumOfCost(keys);
       Cost v = sumOfCost(vals);
-      return costOf(k.min + v.min, k.max + v.max);
+      return k.add(v);
+    }
+
+    @Override
+    public String toString() {
+      return "EvalMap{"
+          + "id="
+          + id
+          + ", keys="
+          + Arrays.toString(keys)
+          + ", vals="
+          + Arrays.toString(vals)
+          + '}';
     }
   }
 
@@ -794,6 +930,23 @@ public interface Interpretable {
     @Override
     public Cost cost() {
       return sumOfCost(vals);
+    }
+
+    @Override
+    public String toString() {
+      return "EvalObj{"
+          + "id="
+          + id
+          + ", typeName='"
+          + typeName
+          + '\''
+          + ", fields="
+          + Arrays.toString(fields)
+          + ", vals="
+          + Arrays.toString(vals)
+          + ", provider="
+          + provider
+          + '}';
     }
   }
 
@@ -897,9 +1050,34 @@ public interface Interpretable {
 
       // The cond and step costs are multiplied by size(iterRange). The minimum possible cost incurs
       // when the evaluation result can be determined by the first iteration.
-      return costOf(
-          i.min + a.min + c.min + s.min + r.min,
-          i.max + a.max + c.max * rangeCnt + s.max * rangeCnt + r.max);
+      return i.add(a)
+          .add(r)
+          .add(costOf(c.min, c.max * rangeCnt))
+          .add(costOf(s.min, s.max * rangeCnt));
+    }
+
+    @Override
+    public String toString() {
+      return "EvalFold{"
+          + "id="
+          + id
+          + ", accuVar='"
+          + accuVar
+          + '\''
+          + ", iterVar='"
+          + iterVar
+          + '\''
+          + ", iterRange="
+          + iterRange
+          + ", accu="
+          + accu
+          + ", cond="
+          + cond
+          + ", step="
+          + step
+          + ", result="
+          + result
+          + '}';
     }
   }
 
@@ -940,6 +1118,23 @@ public interface Interpretable {
     public Cost cost() {
       return estimateCost(arg);
     }
+
+    @Override
+    public String toString() {
+      return "EvalSetMembership{"
+          + "id="
+          + id
+          + ", inst="
+          + inst
+          + ", arg="
+          + arg
+          + ", argTypeName='"
+          + argTypeName
+          + '\''
+          + ", valueSet="
+          + valueSet
+          + '}';
+    }
   }
 
   /**
@@ -964,7 +1159,7 @@ public interface Interpretable {
     @Override
     public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
       Val val = i.eval(ctx);
-      observer.func(id(), val);
+      observer.observe(id(), val);
       return val;
     }
 
@@ -972,6 +1167,11 @@ public interface Interpretable {
     @Override
     public Cost cost() {
       return estimateCost(i);
+    }
+
+    @Override
+    public String toString() {
+      return "EvalWatch{" + i + '}';
     }
   }
 
@@ -1044,8 +1244,13 @@ public interface Interpretable {
     @Override
     public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
       Val val = attr.eval(ctx);
-      observer.func(id(), val);
+      observer.observe(id(), val);
       return val;
+    }
+
+    @Override
+    public String toString() {
+      return "EvalWatchAttr{" + attr + '}';
     }
   }
 
@@ -1072,7 +1277,7 @@ public interface Interpretable {
       } else {
         val = newErr(String.format("qualify failed, vars=%s, obj=%s", vars, obj));
       }
-      observer.func(id(), val);
+      observer.observe(id(), val);
       return out;
     }
 
@@ -1107,6 +1312,11 @@ public interface Interpretable {
     public boolean qualifierValueEquals(Object value) {
       return delegate.qualifierValueEquals(value);
     }
+
+    @Override
+    public String toString() {
+      return "EvalWatchConstQualEquat{" + delegate + '}';
+    }
   }
 
   /**
@@ -1128,6 +1338,11 @@ public interface Interpretable {
     public Val value() {
       return delegate.value();
     }
+
+    @Override
+    public String toString() {
+      return "EvalWatchConstQual{" + delegate + '}';
+    }
   }
 
   /** evalWatchQual observes the qualification of an object by a value computed at runtime. */
@@ -1139,6 +1354,11 @@ public interface Interpretable {
     @Override
     public Val eval(Activation activation) {
       throw new UnsupportedOperationException("WTF?");
+    }
+
+    @Override
+    public String toString() {
+      return "EvalWatchQual{" + delegate + '}';
     }
   }
 
@@ -1160,7 +1380,7 @@ public interface Interpretable {
     @Override
     public Val eval(org.projectnessie.cel.interpreter.Activation activation) {
       Val val = value();
-      observer.func(id(), val);
+      observer.observe(id(), val);
       return val;
     }
 
@@ -1173,6 +1393,11 @@ public interface Interpretable {
     @Override
     public Cost cost() {
       return estimateCost(c);
+    }
+
+    @Override
+    public String toString() {
+      return "EvalWatchConst{" + c + '}';
     }
   }
 
@@ -1216,6 +1441,11 @@ public interface Interpretable {
     public Cost cost() {
       return calExhaustiveBinaryOpsCost(lhs, rhs);
     }
+
+    @Override
+    public String toString() {
+      return "EvalExhaustiveOr{" + "id=" + id + ", lhs=" + lhs + ", rhs=" + rhs + '}';
+    }
   }
 
   /** evalExhaustiveAnd is just like evalAnd, but does not short-circuit argument evaluation. */
@@ -1256,12 +1486,17 @@ public interface Interpretable {
     public Cost cost() {
       return calExhaustiveBinaryOpsCost(lhs, rhs);
     }
+
+    @Override
+    public String toString() {
+      return "EvalExhaustiveAnd{" + "id=" + id + ", lhs=" + lhs + ", rhs=" + rhs + '}';
+    }
   }
 
   static Cost calExhaustiveBinaryOpsCost(Interpretable lhs, Interpretable rhs) {
     Cost l = estimateCost(lhs);
     Cost r = estimateCost(rhs);
-    return costOf(l.min + r.min + 1, l.max + r.max + 1);
+    return Cost.OneOne.add(l).add(r);
   }
 
   /**
@@ -1300,6 +1535,11 @@ public interface Interpretable {
     @Override
     public Cost cost() {
       return attr.cost();
+    }
+
+    @Override
+    public String toString() {
+      return "EvalExhaustiveConditional{" + "id=" + id + ", attr=" + attr + '}';
     }
   }
 
@@ -1390,14 +1630,37 @@ public interface Interpretable {
       Cost r = estimateCost(result);
 
       // The cond and step costs are multiplied by size(iterRange).
-      return costOf(
-          i.min + a.min + c.min * rangeCnt + s.min * rangeCnt + r.min,
-          i.max + a.max + c.max * rangeCnt + s.max * rangeCnt + r.max);
+      return i.add(a).add(c.multiply(rangeCnt)).add(s.multiply(rangeCnt)).add(r);
+    }
+
+    @Override
+    public String toString() {
+      return "EvalExhaustiveFold{"
+          + "id="
+          + id
+          + ", accuVar='"
+          + accuVar
+          + '\''
+          + ", iterVar='"
+          + iterVar
+          + '\''
+          + ", iterRange="
+          + iterRange
+          + ", accu="
+          + accu
+          + ", cond="
+          + cond
+          + ", step="
+          + step
+          + ", result="
+          + result
+          + '}';
     }
   }
 
   /** evalAttr evaluates an Attribute value. */
-  class EvalAttr extends AbstractEval implements InterpretableAttribute, Coster {
+  class EvalAttr extends AbstractEval
+      implements InterpretableAttribute, Coster, Qualifier, Attribute {
     private final TypeAdapter adapter;
     private Attribute attr;
 
@@ -1442,7 +1705,7 @@ public interface Interpretable {
         }
         return newErr(String.format("eval failed, ctx: %s", ctx));
       } catch (Exception e) {
-        return newErr(e.toString());
+        return newErr(e, e.toString());
       }
     }
 
@@ -1456,6 +1719,11 @@ public interface Interpretable {
     @Override
     public Object resolve(org.projectnessie.cel.interpreter.Activation ctx) {
       return attr.resolve(ctx);
+    }
+
+    @Override
+    public String toString() {
+      return "EvalAttr{" + "id=" + id + ", attr=" + attr + '}';
     }
   }
 }

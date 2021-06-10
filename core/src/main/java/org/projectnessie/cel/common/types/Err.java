@@ -28,7 +28,7 @@ import org.projectnessie.cel.common.types.ref.Val;
 public class Err extends BaseVal {
 
   /** ErrType singleton. */
-  public static final TypeValue ErrType = TypeValue.newTypeValue("error");
+  public static final TypeT ErrType = TypeT.newTypeValue("error");
 
   /** errIntOverflow is an error representing integer overflow. */
   public static final Val errIntOverflow = newErr("integer overflow");
@@ -36,13 +36,23 @@ public class Err extends BaseVal {
   public static final Val errUintOverflow = newErr("unsigned integer overflow");
   /** errDurationOverflow is an error representing duration overflow. */
   public static final Val errDurationOverflow = newErr("duration overflow");
+  /** errDurationOutOfRange is an error representing duration out of range. */
+  public static final Val errDurationOutOfRange = newErr("duration out of range");
   /** errTimestampOverflow is an error representing timestamp overflow. */
   public static final Val errTimestampOverflow = newErr("timestamp overflow");
+  /** errTimestampOutOfRange is an error representing duration out of range. */
+  public static final Val errTimestampOutOfRange = newErr("timestamp out of range");
 
   private final String error;
+  private final Throwable cause;
 
   private Err(String error) {
+    this(error, null);
+  }
+
+  private Err(String error, Throwable cause) {
     this.error = error;
+    this.cause = cause;
   }
 
   public static Val noSuchOverload(Val val, String function, Val other) {
@@ -56,6 +66,11 @@ public class Err extends BaseVal {
     }
   }
 
+  public static Val noSuchOverload(Val val, String function, Type argA, Type argB) {
+    return newErr(
+        "no such overload: %s.%s(%s,%s,...)", val.type().typeName(), function, argA, argB);
+  }
+
   public static Val noSuchOverload(Val val, String function, String overload, Val[] args) {
     return newErr(
         "no such overload: %s.%s[%s](%s)",
@@ -66,11 +81,30 @@ public class Err extends BaseVal {
   }
 
   /**
+   * MaybeNoSuchOverloadErr returns the error or unknown if the input ref.Val is one of these types,
+   * else a new no such overload error.
+   */
+  public static Val maybeNoSuchOverloadErr(Val val) {
+    return valOrErr(val, "no such overload");
+  }
+
+  /**
    * NewErr creates a new Err described by the format string and args. TODO: Audit the use of this
    * function and standardize the error messages and codes.
    */
   public static Val newErr(String format, Object... args) {
     return new Err(format(format, args));
+  }
+
+  /**
+   * NewErr creates a new Err described by the format string and args. TODO: Audit the use of this
+   * function and standardize the error messages and codes.
+   */
+  public static Val newErr(Throwable cause, String format, Object... args) {
+    if (cause instanceof ErrException) {
+      return ((ErrException) cause).getErr();
+    }
+    return new Err(format(format, args), cause);
   }
 
   /**
@@ -103,6 +137,10 @@ public class Err extends BaseVal {
     return newErr("unknown type '%s'", field);
   }
 
+  public static Val anyWithEmptyType() {
+    return newErr("conversion error: got Any with empty type-url");
+  }
+
   public static Val divideByZero() {
     return newErr("divide by zero");
   }
@@ -123,16 +161,35 @@ public class Err extends BaseVal {
     return newErr("type conversion error from '%s' to '%s'", from, to);
   }
 
-  public static RuntimeException noSuchAttribute(Object context) {
-    return new IllegalArgumentException(format("no such attribute: %s", context));
+  public static RuntimeException noSuchAttributeException(Object context) {
+    return new ErrException("undeclared reference to '%s' (in container '')", context);
   }
 
-  public static RuntimeException noSuchKey(Object key) {
-    return new IllegalArgumentException(format("no such key: %s", key));
+  public static Val noSuchKey(Object key) {
+    return newErr("no such key: %s", key);
   }
 
-  public static RuntimeException indexOutOfBounds(Object i) {
+  public static RuntimeException noSuchKeyException(Object key) {
+    return new ErrException("no such key: %s", key);
+  }
+
+  public static RuntimeException indexOutOfBoundsException(Object i) {
     return new IllegalStateException(format("index out of bounds: %s", i));
+  }
+
+  public static class ErrException extends IllegalArgumentException {
+    private final String format;
+    private final Object[] args;
+
+    public ErrException(String format, Object... args) {
+      super(format(format, args));
+      this.format = format;
+      this.args = args;
+    }
+
+    public Val getErr() {
+      return newErr(format, args);
+    }
   }
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
@@ -189,5 +246,25 @@ public class Err extends BaseVal {
    */
   public static boolean isError(Val val) {
     return val.type() == ErrType;
+  }
+
+  public boolean hasCause() {
+    return cause != null;
+  }
+
+  public RuntimeException toRuntimeException() {
+    if (cause != null) throw new RuntimeException(this.error, this.cause);
+    throw new RuntimeException(this.error);
+  }
+
+  public static void throwErrorAsIllegalStateException(Val val) {
+    if (val instanceof Err) {
+      Err e = (Err) val;
+      if (e.cause != null) {
+        throw new IllegalStateException(e.error, e.cause);
+      } else {
+        throw new IllegalStateException(e.error);
+      }
+    }
   }
 }

@@ -48,7 +48,7 @@ public class Types {
   }
 
   /** FormatCheckedType converts a type message into a string representation. */
-  static String formatCheckedType(Type t) {
+  public static String formatCheckedType(Type t) {
     if (t == null) {
       return "(type not known)";
     }

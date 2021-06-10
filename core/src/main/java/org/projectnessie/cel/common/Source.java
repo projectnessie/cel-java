@@ -15,9 +15,11 @@
  */
 package org.projectnessie.cel.common;
 
+import com.google.api.expr.v1alpha1.SourceInfo;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.agrona.collections.IntArrayList;
-import org.agrona.collections.Long2LongHashMap;
 
 /** Source interface for filter source contents. */
 public interface Source {
@@ -45,6 +47,12 @@ public interface Source {
     }
 
     return new SourceImpl(contents, description, offsets);
+  }
+
+  /** NewInfoSource creates a new Source from a SourceInfo. */
+  static Source newInfoSource(SourceInfo info) {
+    return new SourceImpl(
+        "", info.getLocation(), info.getLineOffsetsList(), info.getPositionsMap());
   }
 
   /**
@@ -94,13 +102,18 @@ class SourceImpl implements Source {
   private final String content;
   private final String description;
   private final List<Integer> lineOffsets;
-  private final Long2LongHashMap idOffsets;
+  private final Map<Long, Integer> idOffsets;
 
   SourceImpl(String content, String description, List<Integer> lineOffsets) {
+    this(content, description, lineOffsets, new HashMap<>());
+  }
+
+  SourceImpl(
+      String content, String description, List<Integer> lineOffsets, Map<Long, Integer> idOffsets) {
     this.content = content;
     this.description = description;
     this.lineOffsets = lineOffsets;
-    this.idOffsets = new Long2LongHashMap(-1);
+    this.idOffsets = idOffsets;
   }
 
   @Override

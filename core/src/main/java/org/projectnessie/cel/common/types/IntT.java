@@ -20,6 +20,7 @@ import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.Err.divideByZero;
 import static org.projectnessie.cel.common.types.Err.errIntOverflow;
+import static org.projectnessie.cel.common.types.Err.errTimestampOverflow;
 import static org.projectnessie.cel.common.types.Err.modulusByZero;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
@@ -28,14 +29,17 @@ import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.TimestampT.TimestampType;
 import static org.projectnessie.cel.common.types.TimestampT.ZoneIdZ;
+import static org.projectnessie.cel.common.types.TimestampT.maxUnixTime;
+import static org.projectnessie.cel.common.types.TimestampT.minUnixTime;
 import static org.projectnessie.cel.common.types.TimestampT.timestampOf;
-import static org.projectnessie.cel.common.types.TypeValue.TypeType;
+import static org.projectnessie.cel.common.types.TypeT.TypeType;
 import static org.projectnessie.cel.common.types.UintT.UintType;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.Int32Value;
 import com.google.protobuf.Int64Value;
+import com.google.protobuf.Value;
 import java.time.Instant;
 import java.util.Objects;
 import org.projectnessie.cel.common.types.Overflow.OverflowException;
@@ -61,13 +65,13 @@ public final class IntT extends BaseVal
   public static final IntT IntOne = new IntT(1);
   public static final IntT IntNegOne = new IntT(-1);
   /** maxIntJSON is defined as the Number.MAX_SAFE_INTEGER value per EcmaScript 6. */
-  public static final long maxIntJSON = 1L << 53 - 1;
+  public static final long maxIntJSON = (1L << 53) - 1;
   /** minIntJSON is defined as the Number.MIN_SAFE_INTEGER value per EcmaScript 6. */
   public static final long minIntJSON = -maxIntJSON;
 
   /** IntType singleton. */
-  public static final TypeValue IntType =
-      TypeValue.newTypeValue(
+  public static final TypeT IntType =
+      TypeT.newTypeValue(
           "int",
           Trait.AdderType,
           Trait.ComparerType,
@@ -81,6 +85,16 @@ public final class IntT extends BaseVal
 
   private IntT(long i) {
     this.i = i;
+  }
+
+  public static IntT intOfCompare(int compareToResult) {
+    if (compareToResult < 0) {
+      return IntNegOne;
+    } else if (compareToResult > 0) {
+      return IntOne;
+    } else {
+      return IntZero;
+    }
   }
 
   public static IntT intOf(long i) {
@@ -146,56 +160,32 @@ public final class IntT extends BaseVal
     if (typeDesc == Val.class || typeDesc == IntT.class) {
       return (T) this;
     }
+    if (typeDesc == Value.class) {
+      // The proto-to-JSON conversion rules would convert all 64-bit integer values to JSON
+      // decimal strings. Because CEL ints might come from the automatic widening of 32-bit
+      // values in protos, the JSON type is chosen dynamically based on the value.
+      //
+      // - Integers -2^53-1 < n < 2^53-1 are encoded as JSON numbers.
+      // - Integers outside this range are encoded as JSON strings.
+      //
+      // The integer to float range represents the largest interval where such a conversion
+      // can round-trip accurately. Thus, conversions from a 32-bit source can expect a JSON
+      // number as with protobuf. Those consuming JSON from a 64-bit source must be able to
+      // handle either a JSON number or a JSON decimal string. To handle these cases safely
+      // the string values must be explicitly converted to int() within a CEL expression;
+      // however, it is best to simply stay within the JSON number range when building JSON
+      // objects in CEL.
+      if (i >= minIntJSON && i <= maxIntJSON) {
+        return (T) Value.newBuilder().setNumberValue(i).build();
+      }
+      // Proto3 to JSON conversion requires string-formatted int64 values
+      // since the conversion to floating point would result in truncation.
+      return (T) Value.newBuilder().setStringValue(Long.toString(i)).build();
+    }
     if (typeDesc == Enum.class) {
       return (T) (Integer) (int) i;
     }
 
-    //		switch typeDesc.Kind() {
-    //		case reflect.Ptr:
-    //			switch typeDesc {
-    //			case jsonValueType:
-    //				// The proto-to-JSON conversion rules would convert all 64-bit integer values to JSON
-    //				// decimal strings. Because CEL ints might come from the automatic widening of 32-bit
-    //				// values in protos, the JSON type is chosen dynamically based on the value.
-    //				//
-    //				// - Integers -2^53-1 < n < 2^53-1 are encoded as JSON numbers.
-    //				// - Integers outside this range are encoded as JSON strings.
-    //				//
-    //				// The integer to float range represents the largest interval where such a conversion
-    //				// can round-trip accurately. Thus, conversions from a 32-bit source can expect a JSON
-    //				// number as with protobuf. Those consuming JSON from a 64-bit source must be able to
-    //				// handle either a JSON number or a JSON decimal string. To handle these cases safely
-    //				// the string values must be explicitly converted to int() within a CEL expression;
-    //				// however, it is best to simply stay within the JSON number range when building JSON
-    //				// objects in CEL.
-    //				if i.isJSONSafe() {
-    //					return structpb.NewNumberValue(float64(i)), nil
-    //				}
-    //				// Proto3 to JSON conversion requires string-formatted int64 values
-    //				// since the conversion to floating point would result in truncation.
-    //				return structpb.NewStringValue(strconv.FormatInt(int64(i), 10)), nil
-    //			}
-    //			switch typeDesc.Elem().Kind() {
-    //			case reflect.Int32:
-    //				v := int32(i)
-    //				p := reflect.New(typeDesc.Elem())
-    //				p.Elem().Set(reflect.ValueOf(v).Convert(typeDesc.Elem()))
-    //				return p.Interface(), nil
-    //			case reflect.Int64:
-    //				v := int64(i)
-    //				p := reflect.New(typeDesc.Elem())
-    //				p.Elem().Set(reflect.ValueOf(v).Convert(typeDesc.Elem()))
-    //				return p.Interface(), nil
-    //			}
-    //		case reflect.Interface:
-    //			iv := i.Value()
-    //			if reflect.TypeOf(iv).Implements(typeDesc) {
-    //				return iv, nil
-    //			}
-    //			if reflect.TypeOf(i).Implements(typeDesc) {
-    //				return i, nil
-    //			}
-    //		}
     throw new RuntimeException(
         String.format(
             "native type conversion error from '%s' to '%s'", IntType, typeDesc.getName()));
@@ -221,8 +211,10 @@ public final class IntT extends BaseVal
     }
     if (typeValue == TimestampType) {
       // The maximum positive value that can be passed to time.Unix is math.MaxInt64 minus the
-      // number
-      // of seconds between year 1 and year 1970. See comments on unixToInternal.
+      // number of seconds between year 1 and year 1970. See comments on unixToInternal.
+      if (i < minUnixTime || i > maxUnixTime) {
+        return errTimestampOverflow;
+      }
       return timestampOf(Instant.ofEpochSecond(i).atZone(ZoneIdZ));
     }
     if (typeValue == TypeType) {

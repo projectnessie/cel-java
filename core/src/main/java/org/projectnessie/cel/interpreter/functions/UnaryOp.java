@@ -20,5 +20,5 @@ import org.projectnessie.cel.common.types.ref.Val;
 /** UnaryOp is a function that takes a single value and produces an output. */
 @FunctionalInterface
 public interface UnaryOp {
-  Val func(Val val);
+  Val invoke(Val val);
 }
