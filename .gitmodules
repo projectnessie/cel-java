@@ -1,0 +1,6 @@
+[submodule "submodules/googleapis"]
+	path = submodules/googleapis
+	url = https://github.com/googleapis/googleapis/
+[submodule "submodules/cel-spec"]
+	path = submodules/cel-spec
+	url = https://github.com/google/cel-spec

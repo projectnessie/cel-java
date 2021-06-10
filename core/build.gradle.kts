@@ -55,14 +55,13 @@ dependencies {
     jmhAnnotationProcessor("org.openjdk.jmh:jmh-generator-annprocess:$versionJmh")
 }
 
-// *.proto files taken from https://github.com/googleapis/googleapis/ repo
+// *.proto files taken from https://github.com/googleapis/googleapis/ repo, available as a git submodule
 protobuf {
     // Configure the protoc executable
     protobuf.protoc {
         // Download from repositories
         artifact = "com.google.protobuf:protoc:3.0.0"
     }
-//    protobuf.generatedFilesBaseDir = project.buildDir.resolve("generated-src/protobuf").toString()
 }
 
 jmh {
