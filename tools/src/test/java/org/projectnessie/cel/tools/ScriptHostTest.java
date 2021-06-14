@@ -15,14 +15,16 @@
  */
 package org.projectnessie.cel.tools;
 
+import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
-import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.google.api.expr.v1alpha1.Decl;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.checker.Decls;
 
@@ -31,15 +33,22 @@ class ScriptHostTest {
   void basic() throws Exception {
     ScriptHost scriptHost = ScriptHost.newBuilder().build();
 
-    // define variable 'x'
-    List<Decl> declarations = singletonList(Decls.newVar("x", Decls.String));
+    // Variable declarations - we need `x` and `y` in this example
+    List<Decl> declarations =
+        asList(Decls.newVar("x", Decls.String), Decls.newVar("y", Decls.String));
+
     // no custom types
     List<Object> types = emptyList();
 
     // create the script, will be parsed and checked
-    Script script = scriptHost.getOrCreateScript("x", declarations, types);
+    Script script = scriptHost.getOrCreateScript("x + ' ' + y", declarations, types);
 
-    String result = script.execute(String.class, singletonMap("x", "hello world"));
+    Map<String, Object> arguments = new HashMap<>();
+    arguments.put("x", "hello");
+    arguments.put("y", "world");
+
+    String result = script.execute(String.class, arguments);
+
     assertThat(result).isEqualTo("hello world");
   }
 

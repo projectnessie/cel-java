@@ -4,6 +4,68 @@ See https://opensource.google/projects/cel
 See https://github.com/google/cel-go
 See https://github.com/google/cel-spec
 
+## Getting started
+
+CEL-Java is not yet deployed to Maven Central, so you have to build it locally (see below).
+
+The easiest way to get started is to add a dependency to your Maven project
+```xml
+<dependency>
+  <groupId>org.projectnessie.cel</groupId>
+  <artifactId>cel-tools</artifactId>
+  <version>0.1-SNAPSHOT</version>
+</dependency>
+```
+or Gradle project.
+```groovy
+dependencies {
+    implementation("org.projectnessie.cel:cel-tools:0.1-SNAPSHOT")
+}
+```
+
+The `cel-tools` artifact provides a simple entry point `ScriptHost` to produce `Script` instances.
+A very simple start:
+
+```java
+import static java.util.Collections.emptyList;
+
+import com.google.api.expr.v1alpha1.Decl;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import org.projectnessie.cel.checker.Decls;
+import org.projectnessie.cel.tools.Script;
+import org.projectnessie.cel.tools.ScriptHost;
+
+public class MyClass {
+
+  public void myScriptUsage() {
+    // Build the script factory
+    ScriptHost scriptHost = ScriptHost.newBuilder().build();
+
+    // Variable declarations - we need `x` and `y` in this example
+    List<Decl> declarations = singletonList(
+        Decls.newVar("x", Decls.String),
+        Decls.newVar("y", Decls.String),
+        );
+
+    // no custom types (e.g. protobuf message default instances)
+    List<Object> types = emptyList();
+
+    // create the script, will be parsed and checked
+    Script script = scriptHost.getOrCreateScript("x + ' ' + y", declarations, types);
+
+    Map<String, Object> arguments = new HashMap<>();
+    arguments.put("x", "hello");
+    arguments.put("y", "world");
+
+    String result = script.execute(String.class, arguments);
+
+    System.out.println(result); // Prints "hello world"
+  }
+}
+```
+
 ## Building and testing CEL-Java
 
 The CEL-Java repo uses git submodules to pull in required APIs from Google and the CEL-spec.
