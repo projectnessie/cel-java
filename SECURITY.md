@@ -1,18 +1,10 @@
 # Security Policy
 
-This repository contains demos and code to support the demos, to remove as much of the boilerplate code
-as possible within the demos.
-
-Some demos may use older versions of for example [Nessie](https://projectnessie.org), older versions of
-[Apache Spark](https://spark.apache.org/) and other libraries.
+The project is in a very early stage. Artifacts are not yet published to Maven Central or the like.
 
 ## Supported Versions
 
-For a list of supported Nessie versions, see [Nessie's SECURITY.md file](https://github.com/projectnessie/nessie/blob/main/SECURITY.md).
-
-For a list of supported Spark versions, consult the official [Apache Spark](https://spark.apache.org/) website. 
-
-All references to Nessie demos should refer to the `main` branch.
+None, yet.
 
 ## Reporting a Vulnerability
 
