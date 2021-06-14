@@ -46,8 +46,7 @@ public class MyClass {
     // Variable declarations - we need `x` and `y` in this example
     List<Decl> declarations = singletonList(
         Decls.newVar("x", Decls.String),
-        Decls.newVar("y", Decls.String),
-        );
+        Decls.newVar("y", Decls.String));
 
     // no custom types (e.g. protobuf message default instances)
     List<Object> types = emptyList();
@@ -69,21 +68,20 @@ public class MyClass {
 ## Building and testing CEL-Java
 
 The CEL-Java repo uses git submodules to pull in required APIs from Google and the CEL-spec.
-Those submodules are required to build the CEL-Java project (aka run a `git submodule init` /
-`update`).
+Those submodules are required to build the CEL-Java project.
+
+You need to run `git submodule init` + `git submodule update` after a fresh clone of this repo.
 
 Requirements:
 * Java 8 or newer, it's a Gradle-wrapper build (it's fast ;) )
+
+`./gradlew publishToMavenLocal` deploy the current development to the local Maven repo, in
+case you want to pull it the CEL-Java "snapshot" artifacts another project.
 
 `./gradlew test` builds the production code and runs the unit tests.
 
 The project uses the Google Java code style and uses the Spotless plugin. Run
 `./gradlew spotlessApply` to fix formatting issues.
-
-`./gradlew check` runs all checks, including unit tests and JMH microbenchmarks.
-
-`./gradlew publishToMavenLocal` deploy the current development to the local Maven repo, in
-case you want to pull it the CEL-Java "snapshot" artifacts another project.
 
 To run the CEL-spec conformance tests, Go, the bazel build tool plus toolchains are required.
 Form the CEL-Java repo, just run `conformance/run-conformance-tests.sh`. That script performs
