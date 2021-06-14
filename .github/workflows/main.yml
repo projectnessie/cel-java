@@ -43,9 +43,16 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-            ~/.cache/bazel
           key: gradle-${{ matrix.java-version }}-${{ hashFiles('**/*.gradle.kts') }}-${{ hashFiles('**/.gitmodules') }}
           restore-keys: gradle-${{ matrix.java-version }}
+
+      - name: Cache Bazel stuff
+        uses: actions/cache@v2
+        with:
+          path: |
+            ~/.cache/bazel
+          key: bazel-${{ matrix.java-version }}-${{ hashFiles('**/.gitmodules') }}
+          restore-keys: bazel-${{ matrix.java-version }}
 
       - name: Setup bazel
         uses: jwlawson/actions-setup-bazel@v1.6.1
