@@ -50,7 +50,7 @@ dependencies {
     antlr("org.antlr:antlr4:$versionAntlr") // TODO remove from runtime-classpath *sigh*
     implementation("org.antlr:antlr4-runtime:$versionAntlr")
 
-    implementation("com.google.protobuf:protobuf-java:$versionProtobuf")
+    api("com.google.protobuf:protobuf-java:$versionProtobuf")
     implementation("org.agrona:agrona:$versionAgrona")
 
     // Since we need the protobuf stuff in this cel-core module, it's easy to generate the

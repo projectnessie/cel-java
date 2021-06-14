@@ -27,7 +27,7 @@ val versionAssertj = "3.19.0"
 val versionJunit = "5.7.2"
 
 dependencies {
-    implementation(project(":core"))
+    api(project(":core"))
 
     testImplementation("org.assertj:assertj-core:$versionAssertj")
     testImplementation("org.junit.jupiter:junit-jupiter-api:$versionJunit")
