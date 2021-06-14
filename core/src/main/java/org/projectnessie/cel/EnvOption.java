@@ -232,7 +232,7 @@ public interface EnvOption {
    *
    * <p>Note: This option must be specified after the CustomTypeProvider option when used together.
    */
-  static EnvOption types(Object... addTypes) {
+  static EnvOption types(List<Object> addTypes) {
     return e -> {
       if (!(e.provider instanceof TypeRegistry)) {
         throw new RuntimeException(
@@ -255,6 +255,10 @@ public interface EnvOption {
       }
       return e;
     };
+  }
+
+  static EnvOption types(Object... addTypes) {
+    return types(asList(addTypes));
   }
 
   //  /**

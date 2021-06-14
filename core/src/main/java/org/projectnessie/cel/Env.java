@@ -15,6 +15,7 @@
  */
 package org.projectnessie.cel;
 
+import static java.util.Arrays.asList;
 import static org.projectnessie.cel.CEL.astToParsedExpr;
 import static org.projectnessie.cel.CEL.astToString;
 import static org.projectnessie.cel.CEL.newProgram;
@@ -123,7 +124,7 @@ public class Env {
    * <p>See the EnvOption helper functions for the options that can be used to configure the
    * environment.
    */
-  public static Env newCustomEnv(EnvOption... opts) {
+  public static Env newCustomEnv(List<EnvOption> opts) {
     TypeRegistry registry = newRegistry();
     return new Env(
             defaultContainer,
@@ -134,6 +135,10 @@ public class Env {
             EnumSet.noneOf(EnvFeature.class),
             new ArrayList<>())
         .configure(opts);
+  }
+
+  public static Env newCustomEnv(EnvOption... opts) {
+    return newCustomEnv(asList(opts));
   }
 
   void addProgOpts(List<ProgramOption> progOpts) {
@@ -259,7 +264,7 @@ public class Env {
    * TypeAdapter and TypeProvider are immutable, or that their underlying implementations are based
    * on the ref.TypeRegistry which provides a Copy method which will be invoked by this method.
    */
-  public Env extend(EnvOption... opts) {
+  public Env extend(List<EnvOption> opts) {
     if (chkErr != null) {
       throw chkErr;
     }
@@ -300,6 +305,10 @@ public class Env {
     Env ext =
         new Env(this.container, decsCopy, macsCopy, adapter, provider, featuresCopy, progOptsCopy);
     return ext.configure(opts);
+  }
+
+  public Env extend(EnvOption... opts) {
+    return extend(asList(opts));
   }
 
   /**
@@ -432,7 +441,7 @@ public class Env {
   }
 
   /** configure applies a series of EnvOptions to the current environment. */
-  Env configure(EnvOption... opts) {
+  Env configure(List<EnvOption> opts) {
     // Customized the environment using the provided EnvOption values. If an error is
     // generated at any step this, will be returned as a nil Env with a non-nil error.
     Env e = this;

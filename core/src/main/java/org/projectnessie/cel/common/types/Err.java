@@ -252,6 +252,10 @@ public class Err extends BaseVal {
     return cause != null;
   }
 
+  public Throwable getCause() {
+    return cause;
+  }
+
   public RuntimeException toRuntimeException() {
     if (cause != null) throw new RuntimeException(this.error, this.cause);
     throw new RuntimeException(this.error);

@@ -46,3 +46,5 @@ gradle.beforeProject {
 include("core")
 
 include("conformance")
+
+include("tools")

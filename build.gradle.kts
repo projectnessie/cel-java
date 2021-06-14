@@ -116,7 +116,7 @@ allprojects {
             }
             scm {
               connection.set("scm:git:https://github.com/projectnessie/cel-java")
-              developerConnection.set("scm:git:https://github.com/projectnessie/cel-java</")
+              developerConnection.set("scm:git:https://github.com/projectnessie/cel-java")
               url.set("https://github.com/projectnessie/cel-java/tree/main")
               tag.set("main")
             }
