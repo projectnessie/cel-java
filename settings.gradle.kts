@@ -52,6 +52,8 @@ include("generated-pb")
 
 include("core")
 
+include("jackson")
+
 include("conformance")
 
 include("tools")

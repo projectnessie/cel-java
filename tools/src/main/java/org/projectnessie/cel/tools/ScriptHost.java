@@ -32,6 +32,8 @@ import org.projectnessie.cel.EnvOption;
 import org.projectnessie.cel.EvalOption;
 import org.projectnessie.cel.Program;
 import org.projectnessie.cel.ProgramOption;
+import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
+import org.projectnessie.cel.common.types.ref.TypeRegistry;
 
 /**
  * Manages {@link Script} instances, works like a factory to generate reusable scripts.
@@ -42,9 +44,11 @@ import org.projectnessie.cel.ProgramOption;
 public final class ScriptHost {
 
   private final boolean disableOptimize;
+  private final TypeRegistry registry;
 
-  private ScriptHost(boolean disableOptimize) {
+  private ScriptHost(boolean disableOptimize, TypeRegistry registry) {
     this.disableOptimize = disableOptimize;
+    this.registry = registry;
   }
 
   public Script getOrCreateScript(String sourceText, List<Decl> declarations, List<Object> types)
@@ -58,7 +62,7 @@ public final class ScriptHost {
     envOptions.add(declarations(declarations));
     envOptions.add(types(types));
 
-    Env env = newCustomEnv(envOptions);
+    Env env = newCustomEnv(registry, envOptions);
 
     AstIssuesTuple astIss = env.parse(sourceText);
     if (astIss.hasIssues()) {
@@ -90,6 +94,8 @@ public final class ScriptHost {
 
     private boolean disableOptimize;
 
+    private TypeRegistry registry;
+
     /**
      * Call to instruct the built {@link ScriptHost} to disable script optimizations.
      *
@@ -100,8 +106,23 @@ public final class ScriptHost {
       return this;
     }
 
+    /**
+     * Use the given {@link TypeRegistry}.
+     *
+     * <p>The implementation will fall back to {@link
+     * org.projectnessie.cel.common.types.pb.ProtoTypeRegistry}.
+     */
+    public Builder registry(TypeRegistry registry) {
+      this.registry = registry;
+      return this;
+    }
+
     public ScriptHost build() {
-      return new ScriptHost(disableOptimize);
+      TypeRegistry r = registry;
+      if (r == null) {
+        r = ProtoTypeRegistry.newRegistry();
+      }
+      return new ScriptHost(disableOptimize, r);
     }
   }
 }
