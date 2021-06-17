@@ -39,6 +39,7 @@ import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
 import java.time.DateTimeException;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -217,6 +218,9 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
     }
     if (typeDesc == LocalTime.class) {
       return (T) t.toLocalTime();
+    }
+    if (typeDesc == Instant.class) {
+      return (T) t.toInstant();
     }
 
     if (typeDesc == Any.class) {
