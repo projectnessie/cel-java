@@ -132,6 +132,20 @@ public class TimestampTest {
   }
 
   @Test
+  public void testInstantConversionResolution() {
+    String instantTime = "2021-06-18T09:39:05.070927Z";
+    String timestampTime = "google.protobuf.Timestamp{2021-06-18T09:39:05.000070927Z}";
+
+    // the nanosecond resolution for TimestampT should be the same when a string representation
+    // of an Instant is converted to TimestampT and if an Instant object is converted to TimestampT
+    TimestampT actual = timestampOf(instantTime);
+    TimestampT expected = timestampOf(Instant.parse(instantTime));
+    assertThat(actual).isEqualTo(expected);
+    assertThat(actual.toString()).isEqualTo(timestampTime);
+    assertThat(expected.toString()).isEqualTo(timestampTime);
+  }
+
+  @Test
   void timestampSubtract() {
     TimestampT ts = defaultTS();
     Val val = ts.subtract(durationOf(Duration.ofSeconds(3600, 1000)));

@@ -148,7 +148,7 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
   }
 
   public static TimestampT timestampOf(Instant t) {
-    return new TimestampT(ZonedDateTime.ofInstant(t, ZoneIdZ));
+    return timestampOf(t.toString());
   }
 
   public static TimestampT timestampOf(Timestamp t) {
