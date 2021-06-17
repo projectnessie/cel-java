@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-val baseVersion = "0.1"
+val baseVersion = file("version.txt").readText().trim()
 
 pluginManagement {
   repositories { gradlePluginPortal() }
@@ -27,6 +27,7 @@ pluginManagement {
     id("org.caffinitas.gradle.aggregatetestresults") version "0.1"
     id("org.caffinitas.gradle.testsummary") version "0.1.1"
     id("org.caffinitas.gradle.testrerun") version "0.1"
+    id("io.github.gradle-nexus.publish-plugin") version "1.1.0"
   }
 }
 
@@ -34,7 +35,7 @@ rootProject.name = "cel-java"
 
 gradle.beforeProject {
   group = "org.projectnessie.cel"
-  version = "${baseVersion}${if (!hasProperty("release")) "-SNAPSHOT" else ""}"
+  version = baseVersion
   description =
     when (name) {
       "cel-java" -> "Common-Expression-Language - Java implementation"

@@ -27,6 +27,7 @@ plugins {
   id("org.caffinitas.gradle.aggregatetestresults")
   id("org.caffinitas.gradle.testsummary")
   id("org.caffinitas.gradle.testrerun")
+  id("io.github.gradle-nexus.publish-plugin")
 }
 
 allprojects {
@@ -198,3 +199,18 @@ if (ideaDir.isDirectory) {
 }
 
 eclipse { project { name = ideName } }
+
+// Pass environment variables:
+//    ORG_GRADLE_PROJECT_sonatypeUsername
+//    ORG_GRADLE_PROJECT_sonatypePassword
+// OR in ~/.gradle/gradle.properties set
+//    sonatypeUsername
+//    sonatypePassword
+// Call targets:
+//    publishToSonatype
+//    closeAndReleaseSonatypeStagingRepository
+nexusPublishing {
+  repositories {
+    sonatype()
+  }
+}
