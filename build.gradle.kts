@@ -21,6 +21,7 @@ import org.jetbrains.gradle.ext.*
 plugins {
   eclipse
   idea
+  signing
   `maven-publish`
   id("org.jetbrains.gradle.plugin.idea-ext")
   id("com.diffplug.spotless")
@@ -129,6 +130,17 @@ allprojects {
 
           from(components.findByName("java"))
         }
+      }
+    }
+  }
+
+  plugins.withType<SigningPlugin>().configureEach {
+    configure<SigningExtension> {
+      if (project.hasProperty("release")) {
+        val signingKey: String? by project
+        val signingPassword: String? by project
+        useInMemoryPgpKeys(signingKey, signingPassword)
+        sign(publishing.publications["maven"])
       }
     }
   }

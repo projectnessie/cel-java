@@ -17,6 +17,7 @@
 plugins {
     `java-library`
     `maven-publish`
+    signing
     id("com.diffplug.spotless")
     id("org.caffinitas.gradle.aggregatetestresults")
     id("org.caffinitas.gradle.testsummary")
@@ -34,4 +35,3 @@ dependencies {
     testImplementation("org.junit.jupiter:junit-jupiter-params:$versionJunit")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:$versionJunit")
 }
-

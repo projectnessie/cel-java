@@ -22,6 +22,7 @@ plugins {
     `java-library`
     antlr
     `maven-publish`
+    signing
     id("com.diffplug.spotless")
     id("com.google.protobuf")
     id("me.champeau.jmh")
