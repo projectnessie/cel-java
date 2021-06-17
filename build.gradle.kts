@@ -209,8 +209,4 @@ eclipse { project { name = ideName } }
 // Call targets:
 //    publishToSonatype
 //    closeAndReleaseSonatypeStagingRepository
-nexusPublishing {
-  repositories {
-    sonatype()
-  }
-}
+nexusPublishing { repositories { sonatype() } }
