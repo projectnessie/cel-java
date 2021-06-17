@@ -147,6 +147,10 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
     return timestampOf(TimestampT.rfc3339nanoFormatter().parse(s, ZonedDateTime::from));
   }
 
+  public static TimestampT timestampOf(Instant t) {
+    return new TimestampT(ZonedDateTime.ofInstant(t, ZoneIdZ));
+  }
+
   public static TimestampT timestampOf(Timestamp t) {
     LocalDateTime ldt = LocalDateTime.ofEpochSecond(t.getSeconds(), t.getNanos(), ZoneOffset.UTC);
     ZonedDateTime zdt = ZonedDateTime.of(ldt, ZoneIdZ);

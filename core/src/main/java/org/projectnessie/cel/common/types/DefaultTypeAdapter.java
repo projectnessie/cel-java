@@ -109,6 +109,7 @@ public class DefaultTypeAdapter implements TypeAdapter {
     NativeToValueExact.put(String.class, (a, value) -> stringOf((String) value));
     NativeToValueExact.put(Duration.class, (a, value) -> durationOf((Duration) value));
     NativeToValueExact.put(ZonedDateTime.class, (a, value) -> timestampOf((ZonedDateTime) value));
+    NativeToValueExact.put(Instant.class, (a, value) -> timestampOf((Instant) value));
     NativeToValueExact.put(
         // TODO maybe add specialized ListT for int[]
         int[].class,
