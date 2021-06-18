@@ -15,7 +15,7 @@
  */
 package org.projectnessie.cel.checker;
 
-import static org.projectnessie.cel.checker.Types.typeKey;
+import static java.util.Collections.emptyMap;
 
 import com.google.api.expr.v1alpha1.Type;
 import java.util.HashMap;
@@ -24,25 +24,38 @@ import java.util.Map;
 public class Mapping {
 
   private final Map<String, Type> mapping;
+  private final Map<Type, String> typeKeys;
 
-  private Mapping(Map<String, Type> mapping) {
-    this.mapping = mapping;
+  private Mapping(Map<String, Type> srcMapping, Map<Type, String> srcTypeKeys) {
+    // Looks overly complicated, but prevents a bunch of j.u.HashMap.resize() operations.
+    // The copy() operation is called very often when a script's being checked, so this saves
+    // quite a lot.
+    this.mapping = new HashMap<>(srcMapping.size() * 4 / 3 + 1);
+    this.mapping.putAll(srcMapping);
+    this.typeKeys = new HashMap<>(srcTypeKeys.size() * 4 / 3 + 1);
+    this.typeKeys.putAll(srcTypeKeys);
   }
 
   static Mapping newMapping() {
-    return new Mapping(new HashMap<>());
+    return new Mapping(emptyMap(), emptyMap());
+  }
+
+  private String keyForType(Type t) {
+    // The lookup by `Type` called very often when a script's being checked, so this saves
+    // quite a lot.
+    return typeKeys.computeIfAbsent(t, Types::typeKey);
   }
 
   void add(Type from, Type to) {
-    mapping.put(typeKey(from), to);
+    mapping.put(keyForType(from), to);
   }
 
   Type find(Type from) {
-    return mapping.get(typeKey(from));
+    return mapping.get(keyForType(from));
   }
 
   Mapping copy() {
-    return new Mapping(new HashMap<>(mapping));
+    return new Mapping(mapping, typeKeys);
   }
 
   @Override

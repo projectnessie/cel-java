@@ -49,24 +49,16 @@ public class Types {
 
   /** FormatCheckedType converts a type message into a string representation. */
   public static String formatCheckedType(Type t) {
+    // This is a very hot method.
+
     if (t == null) {
       return "(type not known)";
     }
+
+    // short-cut the "easy" types
     switch (kindOf(t)) {
       case kindDyn:
         return "dyn";
-      case kindFunction:
-        return TypeErrors.formatFunction(
-            t.getFunction().getResultType(), t.getFunction().getArgTypesList(), false);
-      case kindList:
-        return String.format("list(%s)", formatCheckedType(t.getListType().getElemType()));
-      case kindObject:
-        return t.getMessageType();
-      case kindMap:
-        return String.format(
-            "map(%s, %s)",
-            formatCheckedType(t.getMapType().getKeyType()),
-            formatCheckedType(t.getMapType().getValueType()));
       case kindNull:
         return "null";
       case kindPrimitive:
@@ -75,13 +67,17 @@ public class Types {
             return "uint";
           case INT64:
             return "int";
+          case BOOL:
+            return "bool";
+          case BYTES:
+            return "bytes";
+          case DOUBLE:
+            return "double";
+          case STRING:
+            return "string";
         }
+        // unrecognizes & not-specified - ignore above
         return t.getPrimitive().toString().toLowerCase(Locale.ROOT).trim();
-      case kindType:
-        if (t.getType() == Type.getDefaultInstance()) {
-          return "type";
-        }
-        return String.format("type(%s)", formatCheckedType(t.getType()));
       case kindWellKnown:
         switch (t.getWellKnown()) {
           case ANY:
@@ -91,13 +87,109 @@ public class Types {
           case TIMESTAMP:
             return "timestamp";
         }
-      case kindWrapper:
-        return String.format(
-            "wrapper(%s)", formatCheckedType(Decls.newPrimitiveType(t.getWrapper())));
       case kindError:
         return "!error!";
     }
-    return t.toString().replaceAll("\n", "");
+
+    // complex types, use a StringBuilder, which is more efficient
+    StringBuilder sb = new StringBuilder();
+    formatCheckedType(sb, t);
+    return sb.toString();
+  }
+
+  static void formatCheckedType(StringBuilder sb, Type t) {
+    switch (kindOf(t)) {
+      case kindDyn:
+        sb.append("dyn");
+        return;
+      case kindFunction:
+        TypeErrors.formatFunction(
+            sb, t.getFunction().getResultType(), t.getFunction().getArgTypesList(), false);
+        return;
+      case kindList:
+        sb.append("list(");
+        formatCheckedType(sb, t.getListType().getElemType());
+        sb.append(')');
+        return;
+      case kindObject:
+        sb.append(t.getMessageType());
+        return;
+      case kindMap:
+        sb.append("map(");
+        formatCheckedType(sb, t.getMapType().getKeyType());
+        sb.append(", ");
+        formatCheckedType(sb, t.getMapType().getValueType());
+        sb.append(')');
+        return;
+      case kindNull:
+        sb.append("null");
+        return;
+      case kindPrimitive:
+        formatCheckedTypePrimitive(sb, t.getPrimitive());
+        return;
+      case kindType:
+        if (t.getType() == Type.getDefaultInstance()) {
+          sb.append("type");
+          return;
+        }
+        sb.append("type(");
+        formatCheckedType(sb, t.getType());
+        sb.append(')');
+        return;
+      case kindWellKnown:
+        switch (t.getWellKnown()) {
+          case ANY:
+            sb.append("any");
+            return;
+          case DURATION:
+            sb.append("duration");
+            return;
+          case TIMESTAMP:
+            sb.append("timestamp");
+            return;
+        }
+      case kindWrapper:
+        sb.append("wrapper(");
+        formatCheckedTypePrimitive(sb, t.getWrapper());
+        sb.append(')');
+        return;
+      case kindError:
+        sb.append("!error!");
+        return;
+    }
+
+    String tStr = t.toString();
+    for (int i = 0; i < tStr.length(); i++) {
+      char c = tStr.charAt(i);
+      if (c != '\n') {
+        sb.append(c);
+      }
+    }
+  }
+
+  private static void formatCheckedTypePrimitive(StringBuilder sb, Type.PrimitiveType t) {
+    switch (t) {
+      case UINT64:
+        sb.append("uint");
+        return;
+      case INT64:
+        sb.append("int");
+        return;
+      case BOOL:
+        sb.append("bool");
+        return;
+      case BYTES:
+        sb.append("bytes");
+        return;
+      case DOUBLE:
+        sb.append("double");
+        return;
+      case STRING:
+        sb.append("string");
+        return;
+    }
+    // unrecognizes & not-specified - ignore above
+    sb.append(t.toString().toLowerCase(Locale.ROOT).trim());
   }
 
   /** isDyn returns true if the input t is either type DYN or a well-known ANY message. */
