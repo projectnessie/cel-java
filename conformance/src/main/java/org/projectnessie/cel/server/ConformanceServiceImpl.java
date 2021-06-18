@@ -26,27 +26,15 @@ import static org.projectnessie.cel.EnvOption.container;
 import static org.projectnessie.cel.EnvOption.declarations;
 import static org.projectnessie.cel.EnvOption.types;
 import static org.projectnessie.cel.Library.StdLib;
-import static org.projectnessie.cel.common.types.BoolT.BoolType;
 import static org.projectnessie.cel.common.types.BoolT.True;
-import static org.projectnessie.cel.common.types.BoolT.boolOf;
-import static org.projectnessie.cel.common.types.BytesT.BytesType;
 import static org.projectnessie.cel.common.types.BytesT.bytesOf;
-import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
-import static org.projectnessie.cel.common.types.DurationT.DurationType;
 import static org.projectnessie.cel.common.types.Err.isError;
 import static org.projectnessie.cel.common.types.Err.newErr;
-import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.IntT.intOf;
-import static org.projectnessie.cel.common.types.ListT.ListType;
-import static org.projectnessie.cel.common.types.MapT.MapType;
-import static org.projectnessie.cel.common.types.NullT.NullType;
-import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
-import static org.projectnessie.cel.common.types.TimestampT.TimestampType;
-import static org.projectnessie.cel.common.types.TypeT.TypeType;
 import static org.projectnessie.cel.common.types.TypeT.newObjectTypeValue;
-import static org.projectnessie.cel.common.types.UintT.UintType;
+import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
@@ -93,6 +81,8 @@ import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.IteratorT;
 import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.TypeT;
+import org.projectnessie.cel.common.types.Types;
+import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Lister;
@@ -304,81 +294,67 @@ public class ConformanceServiceImpl extends ConformanceServiceImplBase {
   //  common/types/provider.go and consolidated/refactored as appropriate.
   //  In particular, make judicious use of types.NativeToValue().
 
-  static final Map<String, TypeT> typeNameToTypeValue = new HashMap<>();
-
-  static {
-    typeNameToTypeValue.put("bool", BoolType);
-    typeNameToTypeValue.put("bytes", BytesType);
-    typeNameToTypeValue.put("double", DoubleType);
-    typeNameToTypeValue.put("null_type", NullType);
-    typeNameToTypeValue.put("int", IntType);
-    typeNameToTypeValue.put("list", ListType);
-    typeNameToTypeValue.put("map", MapType);
-    typeNameToTypeValue.put("string", StringType);
-    typeNameToTypeValue.put("type", TypeType);
-    typeNameToTypeValue.put("uint", UintType);
-  }
-
   /**
    * RefValueToValue converts between ref.Val and Value. The ref.Val must not be error or unknown.
    */
   static Value refValueToValue(Val res) {
-    if (res.type() == BoolType) {
-      return Value.newBuilder().setBoolValue(res.booleanValue()).build();
-    } else if (res.type() == BytesType) {
-      return Value.newBuilder().setBytesValue(res.convertToNative(ByteString.class)).build();
-    } else if (res.type() == DoubleType) {
-      return Value.newBuilder().setDoubleValue(res.convertToNative(Double.class)).build();
-    } else if (res.type() == IntType) {
-      return Value.newBuilder().setInt64Value(res.intValue()).build();
-    } else if (res.type() == NullType) {
-      return Value.newBuilder().setNullValueValue(0).build();
-    } else if (res.type() == StringType) {
-      return Value.newBuilder().setStringValue(res.value().toString()).build();
-    } else if (res.type() == TypeType) {
-      return Value.newBuilder().setTypeValue(((TypeT) res).typeName()).build();
-    } else if (res.type() == UintType) {
-      return Value.newBuilder().setUint64Value(res.intValue()).build();
-    } else if (res.type() == DurationType) {
-      Duration d = res.convertToNative(Duration.class);
-      Any any = Any.pack(d);
-      return Value.newBuilder().setObjectValue(any).build();
-    } else if (res.type() == TimestampType) {
-      Timestamp t = res.convertToNative(Timestamp.class);
-      Any any = Any.pack(t);
-      return Value.newBuilder().setObjectValue(any).build();
-    } else if (res.type() == ListType) {
-      Lister l = (Lister) res;
-      ListValue.Builder elts = ListValue.newBuilder();
-      for (IteratorT i = l.iterator(); i.hasNext() == True; ) {
-        Val v = i.next();
-        elts.addValues(refValueToValue(v));
-      }
-      return Value.newBuilder().setListValue(elts).build();
-    } else if (res.type() == MapType) {
-      Mapper m = (Mapper) res;
-      MapValue.Builder elems = MapValue.newBuilder();
-      for (IteratorT i = m.iterator(); i.hasNext() == True; ) {
-        Val k = i.next();
-        Val v = m.get(k);
-        Value kv = refValueToValue(k);
-        Value vv = refValueToValue(v);
-        elems.addEntriesBuilder().setKey(kv).setValue(vv);
-      }
-      return Value.newBuilder().setMapValue(elems).build();
-    } else {
-      // Object type
-      Message pb = (Message) res.value();
-      Value.Builder v = Value.newBuilder();
-      // Somehow the conformance tests
-      if (pb instanceof ListValue) {
-        v.setListValue((ListValue) pb);
-      } else if (pb instanceof MapValue) {
-        v.setMapValue((MapValue) pb);
-      } else {
-        v.setObjectValue(Any.pack(pb));
-      }
-      return v.build();
+    switch (res.type().typeEnum()) {
+      case Bool:
+        return Value.newBuilder().setBoolValue(res.booleanValue()).build();
+      case Bytes:
+        return Value.newBuilder().setBytesValue(res.convertToNative(ByteString.class)).build();
+      case Double:
+        return Value.newBuilder().setDoubleValue(res.convertToNative(Double.class)).build();
+      case Int:
+        return Value.newBuilder().setInt64Value(res.intValue()).build();
+      case Null:
+        return Value.newBuilder().setNullValueValue(0).build();
+      case String:
+        return Value.newBuilder().setStringValue(res.value().toString()).build();
+      case Type:
+        return Value.newBuilder().setTypeValue(((TypeT) res).typeName()).build();
+      case Uint:
+        return Value.newBuilder().setUint64Value(res.intValue()).build();
+      case Duration:
+        Duration d = res.convertToNative(Duration.class);
+        return Value.newBuilder().setObjectValue(Any.pack(d)).build();
+      case Timestamp:
+        Timestamp t = res.convertToNative(Timestamp.class);
+        return Value.newBuilder().setObjectValue(Any.pack(t)).build();
+      case List:
+        Lister l = (Lister) res;
+        ListValue.Builder elts = ListValue.newBuilder();
+        for (IteratorT i = l.iterator(); i.hasNext() == True; ) {
+          Val v = i.next();
+          elts.addValues(refValueToValue(v));
+        }
+        return Value.newBuilder().setListValue(elts).build();
+      case Map:
+        Mapper m = (Mapper) res;
+        MapValue.Builder elems = MapValue.newBuilder();
+        for (IteratorT i = m.iterator(); i.hasNext() == True; ) {
+          Val k = i.next();
+          Val v = m.get(k);
+          Value kv = refValueToValue(k);
+          Value vv = refValueToValue(v);
+          elems.addEntriesBuilder().setKey(kv).setValue(vv);
+        }
+        return Value.newBuilder().setMapValue(elems).build();
+      case Object:
+        // Object type
+        Message pb = (Message) res.value();
+        Value.Builder v = Value.newBuilder();
+        // Somehow the conformance tests
+        if (pb instanceof ListValue) {
+          v.setListValue((ListValue) pb);
+        } else if (pb instanceof MapValue) {
+          v.setMapValue((MapValue) pb);
+        } else {
+          v.setObjectValue(Any.pack(pb));
+        }
+        return v.build();
+      default:
+        throw new IllegalStateException(String.format("Unknown %s", res.type().typeEnum()));
     }
   }
 
@@ -440,7 +416,7 @@ public class ConformanceServiceImpl extends ConformanceServiceImplBase {
         return adapter.nativeToValue(elts);
       case TYPE_VALUE:
         String typeName = v.getTypeValue();
-        TypeT tv = typeNameToTypeValue.get(typeName);
+        Type tv = Types.getTypeByName(typeName);
         if (tv != null) {
           return tv;
         }

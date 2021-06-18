@@ -26,7 +26,6 @@ import static org.projectnessie.cel.common.Source.newTextSource;
 import static org.projectnessie.cel.common.containers.Container.newContainer;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
-import static org.projectnessie.cel.common.types.BoolT.boolOf;
 import static org.projectnessie.cel.common.types.BytesT.bytesOf;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.Err.isError;
@@ -40,6 +39,7 @@ import static org.projectnessie.cel.common.types.ProtoTypeRegistry.newEmptyRegis
 import static org.projectnessie.cel.common.types.ProtoTypeRegistry.newRegistry;
 import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
+import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.traits.Trait.AdderType;
 import static org.projectnessie.cel.common.types.traits.Trait.NegatorType;

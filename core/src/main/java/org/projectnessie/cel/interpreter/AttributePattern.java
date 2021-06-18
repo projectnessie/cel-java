@@ -16,6 +16,7 @@
 package org.projectnessie.cel.interpreter;
 
 import static org.projectnessie.cel.common.types.Err.noSuchAttributeException;
+import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
 import static org.projectnessie.cel.interpreter.AttributeFactory.newAttributeFactory;
 
@@ -27,7 +28,6 @@ import org.agrona.collections.IntHashSet;
 import org.agrona.collections.IntHashSet.IntIterator;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.containers.Container;
-import org.projectnessie.cel.common.types.UnknownT;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
 import org.projectnessie.cel.interpreter.Activation.PartialActivation;
@@ -285,7 +285,7 @@ public class AttributePattern {
      * result, whereas in the other pattern examples, the qualifier `b` would be returned as the
      * Unknown.
      */
-    UnknownT matchesUnknownPatterns(
+    Object matchesUnknownPatterns(
         PartialActivation vars, long attrID, String[] variableNames, List<Qualifier> qualifiers) {
       AttributePattern[] patterns = vars.unknownAttributePatterns();
       IntHashSet candidateIndices = new IntHashSet();
@@ -313,8 +313,8 @@ public class AttributePattern {
         Qualifier qual = qualifiers.get(i);
         if (qual instanceof Attribute) {
           Object val = ((Attribute) qual).resolve(vars);
-          if (val instanceof UnknownT) {
-            return (UnknownT) val;
+          if (isUnknown(val)) {
+            return val;
           }
           // If this resolution behavior ever changes, new implementations of the
           // qualifierValueEquator may be required to handle proper resolution.
@@ -426,8 +426,7 @@ public class AttributePattern {
       long id = attr.id();
       if (vars instanceof PartialActivation) {
         PartialActivation partial = (PartialActivation) vars;
-        UnknownT unk =
-            fac.matchesUnknownPatterns(partial, id, candidateVariableNames(), qualifiers);
+        Object unk = fac.matchesUnknownPatterns(partial, id, candidateVariableNames(), qualifiers);
         if (unk != null) {
           return unk;
         }
@@ -439,7 +438,7 @@ public class AttributePattern {
     @Override
     public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
       Object val = resolve(vars);
-      if (val instanceof UnknownT) {
+      if (isUnknown(val)) {
         return val;
       }
       Qualifier qual = fac.newQualifier(null, id(), val);

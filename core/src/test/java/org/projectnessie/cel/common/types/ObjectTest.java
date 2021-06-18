@@ -33,6 +33,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Indexer;
@@ -160,7 +161,7 @@ public class ObjectTest {
     assertThat(obj).isInstanceOf(ObjectT.class);
     ObjectT objVal = (ObjectT) obj;
 
-    TypeT tv = (TypeT) objVal.type();
+    Type tv = objVal.type();
     assertThat(objVal.convertToType(TypeType).equal(tv)).isSameAs(True);
     assertThat(objVal.convertToType(objVal.type())).isSameAs(objVal);
   }

@@ -19,12 +19,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
-import static org.projectnessie.cel.common.types.BoolT.boolOf;
-import static org.projectnessie.cel.common.types.BoolT.isBool;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.IntT.IntNegOne;
 import static org.projectnessie.cel.common.types.IntT.IntOne;
 import static org.projectnessie.cel.common.types.IntT.IntZero;
+import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.UintT.UintZero;
 
 import com.google.protobuf.Any;
@@ -130,13 +129,5 @@ class BoolTest {
     assertThat(boolOf(false)).isSameAs(False);
     assertThat(boolOf(Boolean.TRUE)).isSameAs(True);
     assertThat(boolOf(Boolean.FALSE)).isSameAs(False);
-  }
-
-  @Test
-  void IsBool() {
-    assertThat(isBool(True)).isTrue();
-    assertThat(isBool(False)).isTrue();
-    assertThat(isBool(BoolT.BoolType)).isTrue();
-    assertThat(isBool(IntZero)).isFalse();
   }
 }

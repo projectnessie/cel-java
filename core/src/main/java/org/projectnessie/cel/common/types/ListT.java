@@ -18,7 +18,6 @@ package org.projectnessie.cel.common.types;
 import static java.util.Arrays.asList;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
-import static org.projectnessie.cel.common.types.BoolT.boolOf;
 import static org.projectnessie.cel.common.types.Err.isError;
 import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
@@ -27,7 +26,7 @@ import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.Err.valOrErr;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
-import static org.projectnessie.cel.common.types.TypeT.TypeType;
+import static org.projectnessie.cel.common.types.Types.boolOf;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.ListValue;
@@ -40,15 +39,16 @@ import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Lister;
 import org.projectnessie.cel.common.types.traits.Trait;
 
 public abstract class ListT extends BaseVal implements Lister {
   /** ListType singleton. */
-  public static final TypeT ListType =
+  public static final Type ListType =
       TypeT.newTypeValue(
-          "list",
+          TypeEnum.List,
           Trait.AdderType,
           Trait.ContainerType,
           Trait.IndexerType,
@@ -163,11 +163,11 @@ public abstract class ListT extends BaseVal implements Lister {
 
     @Override
     public Val convertToType(Type typeValue) {
-      if (typeValue == ListType) {
-        return this;
-      }
-      if (typeValue == TypeType) {
-        return ListType;
+      switch (typeValue.typeEnum()) {
+        case List:
+          return this;
+        case Type:
+          return ListType;
       }
       return newTypeConversionError(ListType, typeValue);
     }

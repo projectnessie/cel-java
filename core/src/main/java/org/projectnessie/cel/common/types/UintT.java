@@ -15,8 +15,6 @@
  */
 package org.projectnessie.cel.common.types;
 
-import static org.projectnessie.cel.common.types.BoolT.boolOf;
-import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.Err.divideByZero;
 import static org.projectnessie.cel.common.types.Err.errUintOverflow;
@@ -24,12 +22,10 @@ import static org.projectnessie.cel.common.types.Err.modulusByZero;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.Err.rangeError;
-import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.IntT.maxIntJSON;
-import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
-import static org.projectnessie.cel.common.types.TypeT.TypeType;
+import static org.projectnessie.cel.common.types.Types.boolOf;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.UInt32Value;
@@ -41,6 +37,7 @@ import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.Overflow.OverflowException;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Adder;
 import org.projectnessie.cel.common.types.traits.Comparer;
@@ -55,9 +52,9 @@ public final class UintT extends BaseVal
     implements Adder, Comparer, Divider, Modder, Multiplier, Subtractor {
 
   /** UintType singleton. */
-  public static final TypeT UintType =
+  public static final Type UintType =
       TypeT.newTypeValue(
-          "uint",
+          TypeEnum.Uint,
           Trait.AdderType,
           Trait.ComparerType,
           Trait.DividerType,
@@ -67,12 +64,6 @@ public final class UintT extends BaseVal
 
   /** Uint constants */
   public static final UintT UintZero = new UintT(0);
-
-  private final long i;
-
-  private UintT(long i) {
-    this.i = i;
-  }
 
   public static UintT uintOf(ULong i) {
     return uintOf(i.longValue());
@@ -85,6 +76,12 @@ public final class UintT extends BaseVal
     return new UintT(i);
   }
 
+  private final long i;
+
+  private UintT(long i) {
+    this.i = i;
+  }
+
   @Override
   public long intValue() {
     return i;
@@ -93,7 +90,7 @@ public final class UintT extends BaseVal
   /** Add implements traits.Adder.Add. */
   @Override
   public Val add(Val other) {
-    if (!(other instanceof UintT)) {
+    if (other.type() != UintType) {
       return noSuchOverload(this, "add", other);
     }
     try {
@@ -106,7 +103,7 @@ public final class UintT extends BaseVal
   /** Compare implements traits.Comparer.Compare. */
   @Override
   public Val compare(Val other) {
-    if (!(other instanceof UintT)) {
+    if (other.type() != UintType) {
       return noSuchOverload(this, "compare", other);
     }
     return intOf(Long.compareUnsigned(i, ((UintT) other).i));
@@ -158,26 +155,23 @@ public final class UintT extends BaseVal
   /** ConvertToType implements ref.Val.ConvertToType. */
   @Override
   public Val convertToType(Type typeValue) {
-    if (typeValue == IntType) {
-      if (i < 0L) {
-        return rangeError(Long.toUnsignedString(i), "int");
-      }
-      return intOf(i);
-    }
-    if (typeValue == UintType) {
-      return this;
-    }
-    if (typeValue == DoubleType) {
-      if (i < 0L) {
-        return doubleOf(new BigInteger(Long.toUnsignedString(i)).doubleValue());
-      }
-      return doubleOf(i);
-    }
-    if (typeValue == StringType) {
-      return stringOf(Long.toUnsignedString(i));
-    }
-    if (typeValue == TypeType) {
-      return UintType;
+    switch (typeValue.typeEnum()) {
+      case Int:
+        if (i < 0L) {
+          return rangeError(Long.toUnsignedString(i), "int");
+        }
+        return intOf(i);
+      case Uint:
+        return this;
+      case Double:
+        if (i < 0L) {
+          return doubleOf(new BigInteger(Long.toUnsignedString(i)).doubleValue());
+        }
+        return doubleOf(i);
+      case String:
+        return stringOf(Long.toUnsignedString(i));
+      case Type:
+        return UintType;
     }
     return newTypeConversionError(UintType, typeValue);
   }
@@ -185,7 +179,7 @@ public final class UintT extends BaseVal
   /** Divide implements traits.Divider.Divide. */
   @Override
   public Val divide(Val other) {
-    if (!(other instanceof UintT)) {
+    if (other.type() != UintType) {
       return noSuchOverload(this, "divide", other);
     }
     long otherInt = ((UintT) other).i;
@@ -198,7 +192,7 @@ public final class UintT extends BaseVal
   /** Equal implements ref.Val.Equal. */
   @Override
   public Val equal(Val other) {
-    if (!(other instanceof UintT)) {
+    if (other.type() != UintType) {
       return noSuchOverload(this, "equal", other);
     }
     return boolOf(i == ((UintT) other).i);
@@ -207,7 +201,7 @@ public final class UintT extends BaseVal
   /** Modulo implements traits.Modder.Modulo. */
   @Override
   public Val modulo(Val other) {
-    if (!(other instanceof UintT)) {
+    if (other.type() != UintType) {
       return noSuchOverload(this, "modulo", other);
     }
     long otherInt = ((UintT) other).i;
@@ -220,7 +214,7 @@ public final class UintT extends BaseVal
   /** Multiply implements traits.Multiplier.Multiply. */
   @Override
   public Val multiply(Val other) {
-    if (!(other instanceof UintT)) {
+    if (other.type() != UintType) {
       return noSuchOverload(this, "multiply", other);
     }
     try {
@@ -233,7 +227,7 @@ public final class UintT extends BaseVal
   /** Subtract implements traits.Subtractor.Subtract. */
   @Override
   public Val subtract(Val other) {
-    if (!(other instanceof UintT)) {
+    if (other.type() != UintType) {
       return noSuchOverload(this, "subtract", other);
     }
     try {

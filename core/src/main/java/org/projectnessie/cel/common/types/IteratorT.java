@@ -15,8 +15,8 @@
  */
 package org.projectnessie.cel.common.types;
 
-import static org.projectnessie.cel.common.types.BoolT.boolOf;
 import static org.projectnessie.cel.common.types.Err.noMoreElements;
+import static org.projectnessie.cel.common.types.Types.boolOf;
 
 import java.util.Iterator;
 import java.util.NoSuchElementException;

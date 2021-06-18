@@ -15,14 +15,12 @@
  */
 package org.projectnessie.cel.common.types;
 
-import static org.projectnessie.cel.common.types.BoolT.boolOf;
 import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.IntT.intOfCompare;
-import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
-import static org.projectnessie.cel.common.types.TypeT.TypeType;
+import static org.projectnessie.cel.common.types.Types.boolOf;
 
 import com.google.api.expr.v1alpha1.Constant;
 import com.google.protobuf.Any;
@@ -36,6 +34,7 @@ import java.util.Base64;
 import org.projectnessie.cel.common.debug.Debug;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Adder;
 import org.projectnessie.cel.common.types.traits.Comparer;
@@ -46,14 +45,8 @@ import org.projectnessie.cel.parser.Unescape;
 /** Bytes type that implements ref.Val and supports add, compare, and size operations. */
 public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
   /** BytesType singleton. */
-  public static final TypeT BytesType =
-      TypeT.newTypeValue("bytes", Trait.AdderType, Trait.ComparerType, Trait.SizerType);
-
-  private final byte[] b;
-
-  private BytesT(byte[] b) {
-    this.b = b;
-  }
+  public static final Type BytesType =
+      TypeT.newTypeValue(TypeEnum.Bytes, Trait.AdderType, Trait.ComparerType, Trait.SizerType);
 
   public static BytesT bytesOf(byte[] b) {
     return new BytesT(b);
@@ -65,6 +58,12 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
 
   public static BytesT bytesOf(String s) {
     return new BytesT(s.getBytes(StandardCharsets.UTF_8));
+  }
+
+  private final byte[] b;
+
+  private BytesT(byte[] b) {
+    this.b = b;
   }
 
   /** Add implements traits.Adder interface method by concatenating byte sequences. */
@@ -145,18 +144,17 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
   /** ConvertToType implements the ref.Val interface method. */
   @Override
   public Val convertToType(Type typeValue) {
-    if (typeValue == StringType) {
-      try {
-        return stringOf(Unescape.toUtf8(ByteBuffer.wrap(b)));
-      } catch (Exception e) {
-        return newErr(e, "invalid UTF-8 in bytes, cannot convert to string");
-      }
-    }
-    if (typeValue == BytesType) {
-      return this;
-    }
-    if (typeValue == TypeType) {
-      return BytesType;
+    switch (typeValue.typeEnum()) {
+      case String:
+        try {
+          return stringOf(Unescape.toUtf8(ByteBuffer.wrap(b)));
+        } catch (Exception e) {
+          return newErr(e, "invalid UTF-8 in bytes, cannot convert to string");
+        }
+      case Bytes:
+        return this;
+      case Type:
+        return BytesType;
     }
     return newTypeConversionError(BytesType, typeValue);
   }

@@ -15,45 +15,58 @@
  */
 package org.projectnessie.cel.common.types;
 
-import static org.projectnessie.cel.common.types.BoolT.boolOf;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
-import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
+import static org.projectnessie.cel.common.types.Types.boolOf;
 
+import java.util.Collections;
 import java.util.EnumSet;
 import org.projectnessie.cel.common.types.ref.Type;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Trait;
 
 /** TypeValue is an instance of a Value that describes a value's type. */
 public class TypeT implements Type, Val {
   /** TypeType is the type of a TypeValue. */
-  public static final TypeT TypeType = newTypeValue("type");
+  public static final Type TypeType = newTypeValue(TypeEnum.Type);
 
-  private final String name;
+  private final TypeEnum typeEnum;
   private final EnumSet<Trait> traitMask;
 
-  private TypeT(String name, Trait... traits) {
+  TypeT(TypeEnum typeEnum, Trait... traits) {
     EnumSet<Trait> traitEnumSet = EnumSet.noneOf(Trait.class);
-    for (Trait trait : traits) {
-      traitEnumSet.add(trait);
-    }
-    this.name = name;
+    Collections.addAll(traitEnumSet, traits);
+    this.typeEnum = typeEnum;
     this.traitMask = traitEnumSet;
   }
 
   /** NewTypeValue returns *TypeValue which is both a ref.Type and ref.Val. */
-  public static TypeT newTypeValue(String name, Trait... traits) {
-    return new TypeT(name, traits);
+  static Type newTypeValue(TypeEnum typeEnum, Trait... traits) {
+    return new TypeT(typeEnum, traits);
   }
 
   /**
    * NewObjectTypeValue returns a *TypeValue based on the input name, which is annotated with the
    * traits relevant to all objects.
    */
-  public static TypeT newObjectTypeValue(String name) {
-    return newTypeValue(name, Trait.FieldTesterType, Trait.IndexerType);
+  public static Type newObjectTypeValue(String name) {
+    return new ObjectTypeT(name);
+  }
+
+  static final class ObjectTypeT extends TypeT {
+    private final String typeName;
+
+    ObjectTypeT(String typeName) {
+      super(TypeEnum.Object, Trait.FieldTesterType, Trait.IndexerType);
+      this.typeName = typeName;
+    }
+
+    @Override
+    public String typeName() {
+      return typeName;
+    }
   }
 
   @Override
@@ -75,21 +88,21 @@ public class TypeT implements Type, Val {
   /** ConvertToType implements ref.Val.ConvertToType. */
   @Override
   public Val convertToType(Type typeVal) {
-    if (typeVal.equals(TypeType)) {
-      return TypeType;
-    }
-    if (typeVal.equals(StringType)) {
-      return stringOf(typeName());
+    switch (typeVal.typeEnum()) {
+      case Type:
+        return TypeType;
+      case String:
+        return stringOf(typeName());
     }
     return newTypeConversionError(TypeType, typeVal);
   }
 
   /** Equal implements ref.Val.Equal. */
   public Val equal(Val other) {
-    if (!TypeType.equals(other.type())) {
+    if (TypeType != other.type()) {
       return noSuchOverload(this, "equal", other);
     }
-    return boolOf(typeName().equals(((Type) other).typeName()));
+    return boolOf(this.equals(other));
   }
 
   /**
@@ -101,10 +114,15 @@ public class TypeT implements Type, Val {
     return traitMask.contains(trait);
   }
 
+  @Override
+  public TypeEnum typeEnum() {
+    return typeEnum;
+  }
+
   /** String implements fmt.Stringer. */
   @Override
   public String toString() {
-    return name;
+    return typeName();
   }
 
   /** Type implements ref.Val.Type. */
@@ -116,13 +134,13 @@ public class TypeT implements Type, Val {
   /** TypeName gives the type's name as a string. */
   @Override
   public String typeName() {
-    return name;
+    return typeEnum.getName();
   }
 
   /** Value implements ref.Val.Value. */
   @Override
   public Object value() {
-    return name;
+    return typeName();
   }
 
   @Override
@@ -133,12 +151,12 @@ public class TypeT implements Type, Val {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    TypeT typeValue = (TypeT) o;
-    return name.equals(typeValue.name);
+    Type typeValue = (Type) o;
+    return typeEnum == typeValue.typeEnum() && typeName().equals(typeValue.typeName());
   }
 
   @Override
   public int hashCode() {
-    return name.hashCode();
+    return typeName().hashCode();
   }
 }

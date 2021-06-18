@@ -17,7 +17,6 @@ package org.projectnessie.cel.interpreter;
 
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
-import static org.projectnessie.cel.common.types.BoolT.boolOf;
 import static org.projectnessie.cel.common.types.Err.indexOutOfBoundsException;
 import static org.projectnessie.cel.common.types.Err.isError;
 import static org.projectnessie.cel.common.types.Err.maybeNoSuchOverloadErr;
@@ -28,6 +27,7 @@ import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.Err.throwErrorAsIllegalStateException;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
+import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.interpreter.Coster.costOf;
@@ -41,13 +41,8 @@ import java.util.Map;
 import java.util.Objects;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.containers.Container;
-import org.projectnessie.cel.common.types.BoolT;
 import org.projectnessie.cel.common.types.Err;
-import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.NullT;
-import org.projectnessie.cel.common.types.StringT;
-import org.projectnessie.cel.common.types.UintT;
-import org.projectnessie.cel.common.types.UnknownT;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
@@ -330,7 +325,7 @@ public interface AttributeFactory {
     @Override
     public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
       Object val = resolve(vars);
-      if (val instanceof UnknownT) {
+      if (isUnknown(val)) {
         return val;
       }
       Qualifier qual = fac.newQualifier(null, id, val);
@@ -452,7 +447,7 @@ public interface AttributeFactory {
     @Override
     public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
       Object val = resolve(vars);
-      if (val instanceof UnknownT) {
+      if (isUnknown(val)) {
         return val;
       }
       Qualifier qual = fac.newQualifier(null, id, val);
@@ -477,7 +472,7 @@ public interface AttributeFactory {
       if (val == False) {
         return falsy.resolve(vars);
       }
-      if (isUnknown(val) || isError(val)) {
+      if (isUnknown(val)) {
         return val;
       }
       return maybeNoSuchOverloadErr(val);
@@ -600,7 +595,7 @@ public interface AttributeFactory {
     @Override
     public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
       Object val = resolve(vars);
-      if (val instanceof UnknownT) {
+      if (isUnknown(val)) {
         return val;
       }
       Qualifier qual = fac.newQualifier(null, id, val);
@@ -682,7 +677,7 @@ public interface AttributeFactory {
     @Override
     public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
       Object val = resolve(vars);
-      if (val instanceof UnknownT) {
+      if (isUnknown(val)) {
         return val;
       }
       Qualifier qual = fac.newQualifier(null, id, val);
@@ -732,17 +727,16 @@ public interface AttributeFactory {
     Class<?> c = v.getClass();
 
     if (v instanceof Val) {
-      if (c == StringT.class) {
-        return new StringQualifier(id, (String) ((StringT) v).value(), (Val) v, adapter);
-      }
-      if (c == IntT.class) {
-        return new IntQualifier(id, ((IntT) v).intValue(), (Val) v, adapter);
-      }
-      if (c == UintT.class) {
-        return new UintQualifier(id, ((UintT) v).intValue(), (Val) v, adapter);
-      }
-      if (c == BoolT.class) {
-        return new BoolQualifier(id, ((BoolT) v).booleanValue(), (Val) v, adapter);
+      Val val = (Val) v;
+      switch (val.type().typeEnum()) {
+        case String:
+          return new StringQualifier(id, (String) val.value(), val, adapter);
+        case Int:
+          return new IntQualifier(id, val.intValue(), val, adapter);
+        case Uint:
+          return new UintQualifier(id, val.intValue(), val, adapter);
+        case Bool:
+          return new BoolQualifier(id, val.booleanValue(), val, adapter);
       }
     }
 
@@ -840,7 +834,7 @@ public interface AttributeFactory {
           }
           throw noSuchKeyException(s);
         }
-      } else if (obj instanceof UnknownT) {
+      } else if (isUnknown(obj)) {
         return obj;
       } else {
         return refResolve(adapter, celValue, obj);
@@ -939,7 +933,7 @@ public interface AttributeFactory {
         obj = list.get((int) i);
         return obj;
       }
-      if (obj instanceof UnknownT) {
+      if (isUnknown(obj)) {
         return obj;
       }
       return refResolve(adapter, celValue, obj);
@@ -1023,7 +1017,7 @@ public interface AttributeFactory {
         obj = Array.get(obj, (int) i);
         return obj;
       }
-      if (obj instanceof UnknownT) {
+      if (isUnknown(obj)) {
         return obj;
       }
       return refResolve(adapter, celValue, obj);
@@ -1097,7 +1091,7 @@ public interface AttributeFactory {
           }
           throw noSuchKeyException(b);
         }
-      } else if (obj instanceof UnknownT) {
+      } else if (isUnknown(obj)) {
         return obj;
       } else {
         return refResolve(adapter, celValue, obj);

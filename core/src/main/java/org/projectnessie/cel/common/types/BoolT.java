@@ -18,9 +18,7 @@ package org.projectnessie.cel.common.types;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.IntT.intOfCompare;
-import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
-import static org.projectnessie.cel.common.types.TypeT.TypeType;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.BoolValue;
@@ -28,32 +26,28 @@ import com.google.protobuf.Value;
 import java.util.Objects;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Comparer;
 import org.projectnessie.cel.common.types.traits.Negater;
 import org.projectnessie.cel.common.types.traits.Trait;
 
 /** Bool type that implements ref.Val and supports comparison and negation. */
-public class BoolT extends BaseVal implements Comparer, Negater {
+public final class BoolT extends BaseVal implements Comparer, Negater {
 
   /** BoolType singleton. */
-  public static final TypeT BoolType =
-      TypeT.newTypeValue("bool", Trait.ComparerType, Trait.NegatorType);
-
-  private final boolean b;
-
-  private BoolT(boolean b) {
-    this.b = b;
-  }
-
-  public static BoolT boolOf(boolean b) {
-    return b ? True : False;
-  }
-
+  public static final Type BoolType =
+      TypeT.newTypeValue(TypeEnum.Bool, Trait.ComparerType, Trait.NegatorType);
   /** Boolean constants */
   public static final BoolT False = new BoolT(false);
 
   public static final BoolT True = new BoolT(true);
+
+  private final boolean b;
+
+  BoolT(boolean b) {
+    this.b = b;
+  }
 
   @Override
   public boolean booleanValue() {
@@ -98,14 +92,13 @@ public class BoolT extends BaseVal implements Comparer, Negater {
   /** ConvertToType implements the ref.Val interface method. */
   @Override
   public Val convertToType(Type typeVal) {
-    if (typeVal == StringType) {
-      return stringOf(Boolean.toString(b));
-    }
-    if (typeVal == BoolType) {
-      return this;
-    }
-    if (typeVal == TypeType) {
-      return BoolType;
+    switch (typeVal.typeEnum()) {
+      case String:
+        return stringOf(Boolean.toString(b));
+      case Bool:
+        return this;
+      case Type:
+        return BoolType;
     }
     return newTypeConversionError(BoolType, typeVal);
   }
@@ -116,13 +109,13 @@ public class BoolT extends BaseVal implements Comparer, Negater {
     if (!(other instanceof BoolT)) {
       return noSuchOverload(this, "equal", other);
     }
-    return boolOf(b == ((BoolT) other).b);
+    return Types.boolOf(b == ((BoolT) other).b);
   }
 
   /** Negate implements the traits.Negater interface method. */
   @Override
   public Val negate() {
-    return boolOf(!b);
+    return Types.boolOf(!b);
   }
 
   /** Type implements the ref.Val interface method. */
@@ -152,16 +145,5 @@ public class BoolT extends BaseVal implements Comparer, Negater {
   @Override
   public int hashCode() {
     return Objects.hash(super.hashCode(), b);
-  }
-
-  /** IsBool returns whether the input ref.Val or ref.Type is equal to BoolType. */
-  public static boolean isBool(Object elem) {
-    if (elem instanceof Type) {
-      return elem == BoolType;
-    }
-    if (elem instanceof Val) {
-      return isBool(((Val) elem).type());
-    }
-    return false;
   }
 }

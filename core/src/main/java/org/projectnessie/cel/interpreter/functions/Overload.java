@@ -18,7 +18,6 @@ package org.projectnessie.cel.interpreter.functions;
 import static org.projectnessie.cel.common.types.BoolT.BoolType;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
-import static org.projectnessie.cel.common.types.BoolT.isBool;
 import static org.projectnessie.cel.common.types.BytesT.BytesType;
 import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
 import static org.projectnessie.cel.common.types.DurationT.DurationType;
@@ -33,10 +32,10 @@ import static org.projectnessie.cel.common.types.TypeT.TypeType;
 import static org.projectnessie.cel.common.types.UintT.UintType;
 
 import org.projectnessie.cel.common.operators.Operator;
-import org.projectnessie.cel.common.types.BoolT;
 import org.projectnessie.cel.common.types.IterableT;
 import org.projectnessie.cel.common.types.IteratorT;
 import org.projectnessie.cel.common.types.Overloads;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Adder;
 import org.projectnessie.cel.common.types.traits.Comparer;
@@ -154,10 +153,10 @@ public class Overload {
           Operator.LogicalNot,
           Trait.NegatorType,
           v -> {
-            if (!isBool(v)) {
-              return noSuchOverload(null, Operator.LogicalNot.id, v);
+            if (v.type().typeEnum() == TypeEnum.Bool) {
+              return ((Negater) v).negate();
             }
-            return ((Negater) v).negate();
+            return noSuchOverload(null, Operator.LogicalNot.id, v);
           }),
 
       // Not strictly false: IsBool(a) ? a : true
@@ -249,10 +248,10 @@ public class Overload {
           Operator.Negate,
           Trait.NegatorType,
           v -> {
-            if (BoolT.isBool(v)) {
-              return noSuchOverload(null, Operator.Negate.id, v);
+            if (v.type().typeEnum() != TypeEnum.Bool) {
+              return ((Negater) v).negate();
             }
-            return ((Negater) v).negate();
+            return noSuchOverload(null, Operator.Negate.id, v);
           }),
 
       // Index operator
@@ -308,7 +307,7 @@ public class Overload {
   }
 
   static Val notStrictlyFalse(Val value) {
-    if (BoolT.isBool(value)) {
+    if (value.type().typeEnum() == TypeEnum.Bool) {
       return value;
     }
     return True;

@@ -15,26 +15,18 @@
  */
 package org.projectnessie.cel.common.types;
 
-import static org.projectnessie.cel.common.types.BoolT.BoolType;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
-import static org.projectnessie.cel.common.types.BoolT.boolOf;
-import static org.projectnessie.cel.common.types.BytesT.BytesType;
 import static org.projectnessie.cel.common.types.BytesT.bytesOf;
-import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
-import static org.projectnessie.cel.common.types.DurationT.DurationType;
 import static org.projectnessie.cel.common.types.DurationT.durationOf;
 import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
-import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.IntT.intOfCompare;
-import static org.projectnessie.cel.common.types.TimestampT.TimestampType;
 import static org.projectnessie.cel.common.types.TimestampT.timestampOf;
-import static org.projectnessie.cel.common.types.TypeT.TypeType;
-import static org.projectnessie.cel.common.types.UintT.UintType;
+import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 
 import com.google.protobuf.Any;
@@ -48,6 +40,7 @@ import java.util.function.BiFunction;
 import java.util.regex.Pattern;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Adder;
 import org.projectnessie.cel.common.types.traits.Comparer;
@@ -57,19 +50,19 @@ import org.projectnessie.cel.common.types.traits.Sizer;
 import org.projectnessie.cel.common.types.traits.Trait;
 
 /** String type implementation which supports addition, comparison, matching, and size functions. */
-public class StringT extends BaseVal implements Adder, Comparer, Matcher, Receiver, Sizer {
+public final class StringT extends BaseVal implements Adder, Comparer, Matcher, Receiver, Sizer {
 
   /** StringType singleton. */
-  public static final TypeT StringType =
+  public static final Type StringType =
       TypeT.newTypeValue(
-          "string",
+          TypeEnum.String,
           Trait.AdderType,
           Trait.ComparerType,
           Trait.MatcherType,
           Trait.ReceiverType,
           Trait.SizerType);
 
-  public static final Map<String, BiFunction<String, Val, Val>> stringOneArgOverloads;
+  private static final Map<String, BiFunction<String, Val, Val>> stringOneArgOverloads;
 
   static {
     stringOneArgOverloads = new HashMap<>();
@@ -78,14 +71,14 @@ public class StringT extends BaseVal implements Adder, Comparer, Matcher, Receiv
     stringOneArgOverloads.put(Overloads.StartsWith, StringT::stringStartsWith);
   }
 
+  public static StringT stringOf(String s) {
+    return new StringT(s);
+  }
+
   private final String s;
 
   private StringT(String s) {
     this.s = s;
-  }
-
-  public static StringT stringOf(String s) {
-    return new StringT(s);
   }
 
   /** Add implements traits.Adder.Add. */
@@ -138,30 +131,31 @@ public class StringT extends BaseVal implements Adder, Comparer, Matcher, Receiv
   @Override
   public Val convertToType(Type typeVal) {
     try {
-      if (typeVal == IntType) {
-        return intOf(Long.parseLong(s));
-      } else if (typeVal == UintType) {
-        return uintOf(Long.parseUnsignedLong(s));
-      } else if (typeVal == DoubleType) {
-        return doubleOf(Double.parseDouble(s));
-      } else if (typeVal == BoolType) {
-        if ("true".equalsIgnoreCase(s)) {
-          return True;
-        }
-        if ("false".equalsIgnoreCase(s)) {
-          return False;
-        }
-      } else if (typeVal == BytesType) {
-        return bytesOf(s.getBytes(StandardCharsets.UTF_8));
-      } else if (typeVal == DurationType) {
-        return durationOf(s).rangeCheck();
-      } else if (typeVal == TimestampType) {
-        return timestampOf(s).rangeCheck();
-      }
-      if (typeVal == StringType) {
-        return this;
-      } else if (typeVal == TypeType) {
-        return StringType;
+      switch (typeVal.typeEnum()) {
+        case Int:
+          return intOf(Long.parseLong(s));
+        case Uint:
+          return uintOf(Long.parseUnsignedLong(s));
+        case Double:
+          return doubleOf(Double.parseDouble(s));
+        case Bool:
+          if ("true".equalsIgnoreCase(s)) {
+            return True;
+          }
+          if ("false".equalsIgnoreCase(s)) {
+            return False;
+          }
+          break;
+        case Bytes:
+          return bytesOf(s.getBytes(StandardCharsets.UTF_8));
+        case Duration:
+          return durationOf(s).rangeCheck();
+        case Timestamp:
+          return timestampOf(s).rangeCheck();
+        case String:
+          return this;
+        case Type:
+          return StringType;
       }
       return newTypeConversionError(StringType, typeVal);
     } catch (Exception e) {

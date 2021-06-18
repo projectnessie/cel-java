@@ -15,26 +15,30 @@
  */
 package org.projectnessie.cel.common.types.ref;
 
-import org.projectnessie.cel.common.types.traits.Trait;
+public enum TypeEnum {
+  Bool("bool"),
+  Bytes("bytes"),
+  Double("double"),
+  Duration("google.protobuf.Duration"),
+  Err("error"),
+  Int("int"),
+  List("list"),
+  Map("map"),
+  Null("null_type"),
+  Object("object"),
+  String("string"),
+  Timestamp("google.protobuf.Timestamp"),
+  Type("type"),
+  Uint("uint"),
+  Unknown("unknown");
 
-/** Type interface indicate the name of a given type. */
-public interface Type extends Val {
+  private final String name;
 
-  /**
-   * HasTrait returns whether the type has a given trait associated with it.
-   *
-   * <p>See common/types/traits/traits.go for a list of supported traits.
-   */
-  boolean hasTrait(Trait trait);
+  TypeEnum(java.lang.String name) {
+    this.name = name;
+  }
 
-  /**
-   * TypeName returns the qualified type name of the type.
-   *
-   * <p>The type name is also used as the type's identifier name at type-check and interpretation
-   * time.
-   */
-  String typeName();
-
-  /** Get the type enum. */
-  TypeEnum typeEnum();
+  public java.lang.String getName() {
+    return name;
+  }
 }

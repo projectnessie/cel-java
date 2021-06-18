@@ -15,18 +15,14 @@
  */
 package org.projectnessie.cel.common.types;
 
-import static org.projectnessie.cel.common.types.BoolT.boolOf;
 import static org.projectnessie.cel.common.types.Err.errDurationOutOfRange;
 import static org.projectnessie.cel.common.types.Err.errDurationOverflow;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
-import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.IntT.intOfCompare;
-import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
-import static org.projectnessie.cel.common.types.TimestampT.TimestampType;
 import static org.projectnessie.cel.common.types.TimestampT.timestampOf;
-import static org.projectnessie.cel.common.types.TypeT.TypeType;
+import static org.projectnessie.cel.common.types.Types.boolOf;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.Value;
@@ -41,6 +37,7 @@ import java.util.function.Function;
 import org.projectnessie.cel.common.types.Overflow.OverflowException;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Adder;
 import org.projectnessie.cel.common.types.traits.Comparer;
@@ -57,30 +54,14 @@ public final class DurationT extends BaseVal
     implements Adder, Comparer, Negater, Receiver, Subtractor {
 
   /** DurationType singleton. */
-  public static final TypeT DurationType =
+  public static final Type DurationType =
       TypeT.newTypeValue(
-          "google.protobuf.Duration",
+          TypeEnum.Duration,
           Trait.AdderType,
           Trait.ComparerType,
           Trait.NegatorType,
           Trait.ReceiverType,
           Trait.SubtractorType);
-
-  public static final Map<String, Function<Duration, Val>> durationZeroArgOverloads;
-
-  static {
-    durationZeroArgOverloads = new HashMap<>();
-    durationZeroArgOverloads.put(Overloads.TimeGetHours, DurationT::timeGetHours);
-    durationZeroArgOverloads.put(Overloads.TimeGetMinutes, DurationT::timeGetMinutes);
-    durationZeroArgOverloads.put(Overloads.TimeGetSeconds, DurationT::timeGetSeconds);
-    durationZeroArgOverloads.put(Overloads.TimeGetMilliseconds, DurationT::timeGetMilliseconds);
-  }
-
-  private final Duration d;
-
-  private DurationT(Duration d) {
-    this.d = d;
-  }
 
   // Go's Duration represents the number of nanoseconds as an int64
   // 	minDuration Duration = -1 << 63
@@ -108,6 +89,22 @@ public final class DurationT extends BaseVal
     return new DurationT(d);
   }
 
+  private static final Map<String, Function<Duration, Val>> durationZeroArgOverloads;
+
+  static {
+    durationZeroArgOverloads = new HashMap<>();
+    durationZeroArgOverloads.put(Overloads.TimeGetHours, DurationT::timeGetHours);
+    durationZeroArgOverloads.put(Overloads.TimeGetMinutes, DurationT::timeGetMinutes);
+    durationZeroArgOverloads.put(Overloads.TimeGetSeconds, DurationT::timeGetSeconds);
+    durationZeroArgOverloads.put(Overloads.TimeGetMilliseconds, DurationT::timeGetMilliseconds);
+  }
+
+  private final Duration d;
+
+  private DurationT(Duration d) {
+    this.d = d;
+  }
+
   /**
    * Verifies that the range of this duration conforms to Go's constraints, see above code comment.
    */
@@ -121,19 +118,19 @@ public final class DurationT extends BaseVal
   /** Add implements traits.Adder.Add. */
   @Override
   public Val add(Val other) {
-    if (other.type() == DurationType) {
-      try {
-        return durationOf(Overflow.addDurationChecked(d, ((DurationT) other).d));
-      } catch (OverflowException e) {
-        return errDurationOverflow;
-      }
-    }
-    if (other.type() == TimestampType) {
-      try {
-        return timestampOf(Overflow.addTimeDurationChecked((ZonedDateTime) other.value(), d));
-      } catch (OverflowException e) {
-        return errDurationOverflow;
-      }
+    switch (other.type().typeEnum()) {
+      case Duration:
+        try {
+          return durationOf(Overflow.addDurationChecked(d, ((DurationT) other).d));
+        } catch (OverflowException e) {
+          return errDurationOverflow;
+        }
+      case Timestamp:
+        try {
+          return timestampOf(Overflow.addTimeDurationChecked((ZonedDateTime) other.value(), d));
+        } catch (OverflowException e) {
+          return errDurationOverflow;
+        }
     }
     return noSuchOverload(this, "add", other);
   }
@@ -203,17 +200,15 @@ public final class DurationT extends BaseVal
   /** ConvertToType implements ref.Val.ConvertToType. */
   @Override
   public Val convertToType(Type typeValue) {
-    if (typeValue == StringType) {
-      return stringOf(toPbString());
-    }
-    if (typeValue == IntType) {
-      return IntT.intOf(toJavaLong());
-    }
-    if (typeValue == DurationType) {
-      return this;
-    }
-    if (typeValue == TypeType) {
-      return DurationType;
+    switch (typeValue.typeEnum()) {
+      case String:
+        return stringOf(toPbString());
+      case Int:
+        return IntT.intOf(toJavaLong());
+      case Duration:
+        return this;
+      case Type:
+        return DurationType;
     }
     return newTypeConversionError(DurationType, typeValue);
   }

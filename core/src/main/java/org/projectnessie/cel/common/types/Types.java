@@ -15,51 +15,44 @@
  */
 package org.projectnessie.cel.common.types;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.projectnessie.cel.common.types.BoolT.BoolType;
 import static org.projectnessie.cel.common.types.BytesT.BytesType;
 import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
-import static org.projectnessie.cel.common.types.DurationT.DurationType;
 import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.ListT.ListType;
 import static org.projectnessie.cel.common.types.MapT.MapType;
 import static org.projectnessie.cel.common.types.NullT.NullType;
 import static org.projectnessie.cel.common.types.StringT.StringType;
-import static org.projectnessie.cel.common.types.TimestampT.TimestampType;
 import static org.projectnessie.cel.common.types.TypeT.TypeType;
 import static org.projectnessie.cel.common.types.UintT.UintType;
 
-import org.junit.jupiter.api.Test;
+import java.util.HashMap;
+import java.util.Map;
 import org.projectnessie.cel.common.types.ref.Type;
-import org.projectnessie.cel.common.types.ref.Val;
 
-public class TypeTest {
+public final class Types {
 
-  @Test
-  void typeConvertToType() {
-    Type[] stdTypes =
-        new Type[] {
-          BoolType,
-          BytesType,
-          DoubleType,
-          DurationType,
-          IntType,
-          ListType,
-          MapType,
-          NullType,
-          StringType,
-          TimestampType,
-          TypeType,
-          UintType,
-        };
-    for (Type stdType : stdTypes) {
-      Val cnv = stdType.convertToType(TypeType);
-      assertThat(cnv).isEqualTo(TypeType);
-    }
+  private Types() {}
+
+  private static final Map<String, Type> typeNameToTypeValue = new HashMap<>();
+
+  static {
+    typeNameToTypeValue.put(BoolT.BoolType.typeName(), BoolT.BoolType);
+    typeNameToTypeValue.put(BytesType.typeName(), BytesType);
+    typeNameToTypeValue.put(DoubleType.typeName(), DoubleType);
+    typeNameToTypeValue.put(NullType.typeName(), NullType);
+    typeNameToTypeValue.put(IntType.typeName(), IntType);
+    typeNameToTypeValue.put(ListType.typeName(), ListType);
+    typeNameToTypeValue.put(MapType.typeName(), MapType);
+    typeNameToTypeValue.put(StringType.typeName(), StringType);
+    typeNameToTypeValue.put(TypeType.typeName(), TypeType);
+    typeNameToTypeValue.put(UintType.typeName(), UintType);
   }
 
-  @Test
-  void typeType() {
-    assertThat(TypeType.type()).isSameAs(TypeType);
+  public static Type getTypeByName(String typeName) {
+    return null;
+  }
+
+  public static BoolT boolOf(boolean b) {
+    return b ? BoolT.True : BoolT.False;
   }
 }

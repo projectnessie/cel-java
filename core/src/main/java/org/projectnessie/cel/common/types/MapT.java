@@ -17,12 +17,12 @@ package org.projectnessie.cel.common.types;
 
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
-import static org.projectnessie.cel.common.types.BoolT.boolOf;
 import static org.projectnessie.cel.common.types.Err.isError;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.TypeT.TypeType;
+import static org.projectnessie.cel.common.types.Types.boolOf;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.Struct;
@@ -34,6 +34,7 @@ import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Container;
 import org.projectnessie.cel.common.types.traits.Indexer;
@@ -43,9 +44,13 @@ import org.projectnessie.cel.common.types.traits.Trait;
 
 public abstract class MapT extends BaseVal implements Mapper, Container, Indexer, IterableT, Sizer {
   /** MapType singleton. */
-  public static final TypeT MapType =
+  public static final Type MapType =
       TypeT.newTypeValue(
-          "map", Trait.ContainerType, Trait.IndexerType, Trait.IterableType, Trait.SizerType);
+          TypeEnum.Map,
+          Trait.ContainerType,
+          Trait.IndexerType,
+          Trait.IterableType,
+          Trait.SizerType);
 
   public static Val newWrappedMap(TypeAdapter adapter, Map<Val, Val> value) {
     return new ValMapT(adapter, value);

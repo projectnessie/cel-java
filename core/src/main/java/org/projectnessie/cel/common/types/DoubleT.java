@@ -15,18 +15,14 @@
  */
 package org.projectnessie.cel.common.types;
 
-import static org.projectnessie.cel.common.types.BoolT.boolOf;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.Err.rangeError;
-import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.IntT.IntZero;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.IntT.intOfCompare;
-import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
-import static org.projectnessie.cel.common.types.TypeT.TypeType;
-import static org.projectnessie.cel.common.types.UintT.UintType;
+import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 
 import com.google.protobuf.Any;
@@ -38,6 +34,7 @@ import java.math.BigInteger;
 import java.util.Objects;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Adder;
 import org.projectnessie.cel.common.types.traits.Comparer;
@@ -51,9 +48,9 @@ import org.projectnessie.cel.common.types.traits.Trait;
 public final class DoubleT extends BaseVal
     implements Adder, Comparer, Divider, Multiplier, Negater, Subtractor {
   /** DoubleType singleton. */
-  public static final TypeT DoubleType =
+  public static final Type DoubleType =
       TypeT.newTypeValue(
-          "double",
+          TypeEnum.Double,
           Trait.AdderType,
           Trait.ComparerType,
           Trait.DividerType,
@@ -61,14 +58,14 @@ public final class DoubleT extends BaseVal
           Trait.NegatorType,
           Trait.SubtractorType);
 
+  public static DoubleT doubleOf(double d) {
+    return new DoubleT(d);
+  }
+
   private final double d;
 
   private DoubleT(double d) {
     this.d = d;
-  }
-
-  public static DoubleT doubleOf(double d) {
-    return new DoubleT(d);
   }
 
   /** Add implements traits.Adder.Add. */
@@ -142,30 +139,27 @@ public final class DoubleT extends BaseVal
     // handling. However, any two not-a-number values will compare equal even if their underlying
     // properties are different."
     // (see https://github.com/google/cel-spec/blob/master/doc/langdef.md#numeric-values)
-    if (typeValue == IntType) {
-      long r = (long) d; // ?? Math.round(d);
-      if (r == Long.MIN_VALUE || r == Long.MAX_VALUE) {
-        return rangeError(d, "int");
-      }
-      return intOf(r);
-    }
-    if (typeValue == UintType) {
-      // hack to support uint64
-      BigDecimal dec = new BigDecimal(d);
-      BigInteger bi = dec.toBigInteger();
-      if (d < 0 || bi.compareTo(MAX_UINT64) > 0) {
-        return rangeError(d, "int");
-      }
-      return uintOf(bi.longValue());
-    }
-    if (typeValue == DoubleType) {
-      return this;
-    }
-    if (typeValue == StringType) {
-      return stringOf(Double.toString(d));
-    }
-    if (typeValue == TypeType) {
-      return DoubleType;
+    switch (typeValue.typeEnum()) {
+      case Int:
+        long r = (long) d; // ?? Math.round(d);
+        if (r == Long.MIN_VALUE || r == Long.MAX_VALUE) {
+          return rangeError(d, "int");
+        }
+        return intOf(r);
+      case Uint:
+        // hack to support uint64
+        BigDecimal dec = new BigDecimal(d);
+        BigInteger bi = dec.toBigInteger();
+        if (d < 0 || bi.compareTo(MAX_UINT64) > 0) {
+          return rangeError(d, "int");
+        }
+        return uintOf(bi.longValue());
+      case Double:
+        return this;
+      case String:
+        return stringOf(Double.toString(d));
+      case Type:
+        return DoubleType;
     }
     return newTypeConversionError(DoubleType, typeValue);
   }

@@ -15,33 +15,23 @@
  */
 package org.projectnessie.cel.common.types;
 
-import static org.projectnessie.cel.common.types.BoolT.BoolType;
-import static org.projectnessie.cel.common.types.BoolT.boolOf;
-import static org.projectnessie.cel.common.types.BytesT.BytesType;
 import static org.projectnessie.cel.common.types.BytesT.bytesOf;
-import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.DurationT.durationOf;
 import static org.projectnessie.cel.common.types.Err.anyWithEmptyType;
 import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.unknownType;
-import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.IntT.intOf;
-import static org.projectnessie.cel.common.types.ListT.ListType;
 import static org.projectnessie.cel.common.types.ListT.newGenericArrayList;
 import static org.projectnessie.cel.common.types.ListT.newJSONList;
 import static org.projectnessie.cel.common.types.ListT.newStringArrayList;
 import static org.projectnessie.cel.common.types.ListT.newValArrayList;
-import static org.projectnessie.cel.common.types.MapT.MapType;
 import static org.projectnessie.cel.common.types.MapT.newJSONStruct;
 import static org.projectnessie.cel.common.types.MapT.newMaybeWrappedMap;
-import static org.projectnessie.cel.common.types.NullT.NullType;
-import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.TimestampT.ZoneIdZ;
 import static org.projectnessie.cel.common.types.TimestampT.timestampOf;
-import static org.projectnessie.cel.common.types.TypeT.TypeType;
-import static org.projectnessie.cel.common.types.UintT.UintType;
+import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.pb.TypeDescription.typeNameFromMessage;
 
@@ -61,7 +51,6 @@ import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -243,7 +232,7 @@ public class DefaultTypeAdapter implements TypeAdapter {
         case STRING_VALUE:
           return v.getStringValue();
         case TYPE_VALUE:
-          return typeNameToTypeValue.get(v.getTypeValue());
+          return Types.getTypeByName(v.getTypeValue());
         case UINT64_VALUE:
           return ULong.valueOf(v.getUint64Value());
         case OBJECT_VALUE:
@@ -252,20 +241,5 @@ public class DefaultTypeAdapter implements TypeAdapter {
     }
 
     return value;
-  }
-
-  private static final Map<String, TypeT> typeNameToTypeValue = new HashMap<>();
-
-  static {
-    typeNameToTypeValue.put("bool", BoolType);
-    typeNameToTypeValue.put("bytes", BytesType);
-    typeNameToTypeValue.put("double", DoubleType);
-    typeNameToTypeValue.put("null_type", NullType);
-    typeNameToTypeValue.put("int", IntType);
-    typeNameToTypeValue.put("list", ListType);
-    typeNameToTypeValue.put("map", MapType);
-    typeNameToTypeValue.put("string", StringType);
-    typeNameToTypeValue.put("type", TypeType);
-    typeNameToTypeValue.put("uint", UintType);
   }
 }

@@ -15,8 +15,6 @@
  */
 package org.projectnessie.cel.common.types;
 
-import static org.projectnessie.cel.common.types.BoolT.boolOf;
-import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.Err.divideByZero;
 import static org.projectnessie.cel.common.types.Err.errIntOverflow;
@@ -25,15 +23,12 @@ import static org.projectnessie.cel.common.types.Err.modulusByZero;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.Err.rangeError;
-import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
-import static org.projectnessie.cel.common.types.TimestampT.TimestampType;
 import static org.projectnessie.cel.common.types.TimestampT.ZoneIdZ;
 import static org.projectnessie.cel.common.types.TimestampT.maxUnixTime;
 import static org.projectnessie.cel.common.types.TimestampT.minUnixTime;
 import static org.projectnessie.cel.common.types.TimestampT.timestampOf;
-import static org.projectnessie.cel.common.types.TypeT.TypeType;
-import static org.projectnessie.cel.common.types.UintT.UintType;
+import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 
 import com.google.protobuf.Any;
@@ -45,6 +40,7 @@ import java.util.Objects;
 import org.projectnessie.cel.common.types.Overflow.OverflowException;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Adder;
 import org.projectnessie.cel.common.types.traits.Comparer;
@@ -59,6 +55,18 @@ import org.projectnessie.cel.common.types.traits.Trait;
 public final class IntT extends BaseVal
     implements Adder, Comparer, Divider, Modder, Multiplier, Negater, Subtractor {
 
+  /** IntType singleton. */
+  public static final Type IntType =
+      TypeT.newTypeValue(
+          TypeEnum.Int,
+          Trait.AdderType,
+          Trait.ComparerType,
+          Trait.DividerType,
+          Trait.ModderType,
+          Trait.MultiplierType,
+          Trait.NegatorType,
+          Trait.SubtractorType);
+
   /** Int constants used for comparison results. IntZero is the zero-value for Int */
   public static final IntT IntZero = new IntT(0);
 
@@ -68,18 +76,6 @@ public final class IntT extends BaseVal
   public static final long maxIntJSON = (1L << 53) - 1;
   /** minIntJSON is defined as the Number.MIN_SAFE_INTEGER value per EcmaScript 6. */
   public static final long minIntJSON = -maxIntJSON;
-
-  /** IntType singleton. */
-  public static final TypeT IntType =
-      TypeT.newTypeValue(
-          "int",
-          Trait.AdderType,
-          Trait.ComparerType,
-          Trait.DividerType,
-          Trait.ModderType,
-          Trait.MultiplierType,
-          Trait.NegatorType,
-          Trait.SubtractorType);
 
   private final long i;
 
@@ -194,31 +190,27 @@ public final class IntT extends BaseVal
   /** ConvertToType implements ref.Val.ConvertToType. */
   @Override
   public Val convertToType(Type typeValue) {
-    if (typeValue == IntType) {
-      return this;
-    }
-    if (typeValue == UintType) {
-      if (i < 0) {
-        return rangeError(i, "uint");
-      }
-      return uintOf(i);
-    }
-    if (typeValue == DoubleType) {
-      return doubleOf(i);
-    }
-    if (typeValue == StringType) {
-      return stringOf(Long.toString(i));
-    }
-    if (typeValue == TimestampType) {
-      // The maximum positive value that can be passed to time.Unix is math.MaxInt64 minus the
-      // number of seconds between year 1 and year 1970. See comments on unixToInternal.
-      if (i < minUnixTime || i > maxUnixTime) {
-        return errTimestampOverflow;
-      }
-      return timestampOf(Instant.ofEpochSecond(i).atZone(ZoneIdZ));
-    }
-    if (typeValue == TypeType) {
-      return IntType;
+    switch (typeValue.typeEnum()) {
+      case Int:
+        return this;
+      case Uint:
+        if (i < 0) {
+          return rangeError(i, "uint");
+        }
+        return uintOf(i);
+      case Double:
+        return doubleOf(i);
+      case String:
+        return stringOf(Long.toString(i));
+      case Timestamp:
+        // The maximum positive value that can be passed to time.Unix is math.MaxInt64 minus the
+        // number of seconds between year 1 and year 1970. See comments on unixToInternal.
+        if (i < minUnixTime || i > maxUnixTime) {
+          return errTimestampOverflow;
+        }
+        return timestampOf(Instant.ofEpochSecond(i).atZone(ZoneIdZ));
+      case Type:
+        return IntType;
     }
     return newTypeConversionError(IntType, typeValue);
   }

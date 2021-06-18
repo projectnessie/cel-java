@@ -15,8 +15,6 @@
  */
 package org.projectnessie.cel.common.types;
 
-import static org.projectnessie.cel.common.types.BoolT.boolOf;
-import static org.projectnessie.cel.common.types.DurationT.DurationType;
 import static org.projectnessie.cel.common.types.DurationT.durationOf;
 import static org.projectnessie.cel.common.types.Err.errDurationOverflow;
 import static org.projectnessie.cel.common.types.Err.errTimestampOutOfRange;
@@ -26,12 +24,10 @@ import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.IntT.IntNegOne;
 import static org.projectnessie.cel.common.types.IntT.IntOne;
-import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.IntT.IntZero;
 import static org.projectnessie.cel.common.types.IntT.intOf;
-import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
-import static org.projectnessie.cel.common.types.TypeT.TypeType;
+import static org.projectnessie.cel.common.types.Types.boolOf;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.StringValue;
@@ -64,6 +60,7 @@ import java.util.function.Function;
 import org.projectnessie.cel.common.types.Overflow.OverflowException;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Adder;
 import org.projectnessie.cel.common.types.traits.Comparer;
@@ -76,6 +73,15 @@ import org.projectnessie.cel.common.types.traits.Trait;
  * are also capable of participating in dynamic function dispatch to instance methods.
  */
 public final class TimestampT extends BaseVal implements Adder, Comparer, Receiver, Subtractor {
+
+  /** TimestampType singleton. */
+  public static final Type TimestampType =
+      TypeT.newTypeValue(
+          TypeEnum.Timestamp,
+          Trait.AdderType,
+          Trait.ComparerType,
+          Trait.ReceiverType,
+          Trait.SubtractorType);
 
   /**
    * The number of seconds between year 1 and year 1970. This is borrowed from
@@ -91,8 +97,27 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
 
   public static final ZoneId ZoneIdZ = ZoneId.of("Z");
 
-  public static final Map<String, Function<ZonedDateTime, Val>> timestampZeroArgOverloads;
-  public static final Map<String, BiFunction<ZonedDateTime, Val, Val>> timestampOneArgOverloads;
+  public static TimestampT timestampOf(String s) {
+    return timestampOf(TimestampT.rfc3339nanoFormatter().parse(s, ZonedDateTime::from));
+  }
+
+  public static TimestampT timestampOf(Instant t) {
+    return new TimestampT(ZonedDateTime.ofInstant(t, ZoneIdZ));
+  }
+
+  public static TimestampT timestampOf(Timestamp t) {
+    LocalDateTime ldt = LocalDateTime.ofEpochSecond(t.getSeconds(), t.getNanos(), ZoneOffset.UTC);
+    ZonedDateTime zdt = ZonedDateTime.of(ldt, ZoneIdZ);
+    return new TimestampT(zdt);
+  }
+
+  public static TimestampT timestampOf(ZonedDateTime t) {
+    // Note that this function does not validate that time.Time is in our supported range.
+    return new TimestampT(t);
+  }
+
+  private static final Map<String, Function<ZonedDateTime, Val>> timestampZeroArgOverloads;
+  private static final Map<String, BiFunction<ZonedDateTime, Val, Val>> timestampOneArgOverloads;
 
   static {
     timestampZeroArgOverloads = new HashMap<>();
@@ -128,38 +153,10 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
         Overloads.TimeGetMilliseconds, TimestampT::timestampGetMillisecondsWithTz);
   }
 
-  /** TimestampType singleton. */
-  public static final TypeT TimestampType =
-      TypeT.newTypeValue(
-          "google.protobuf.Timestamp",
-          Trait.AdderType,
-          Trait.ComparerType,
-          Trait.ReceiverType,
-          Trait.SubtractorType);
-
   private final ZonedDateTime t;
 
   private TimestampT(ZonedDateTime t) {
     this.t = t;
-  }
-
-  public static TimestampT timestampOf(String s) {
-    return timestampOf(TimestampT.rfc3339nanoFormatter().parse(s, ZonedDateTime::from));
-  }
-
-  public static TimestampT timestampOf(Instant t) {
-    return new TimestampT(ZonedDateTime.ofInstant(t, ZoneIdZ));
-  }
-
-  public static TimestampT timestampOf(Timestamp t) {
-    LocalDateTime ldt = LocalDateTime.ofEpochSecond(t.getSeconds(), t.getNanos(), ZoneOffset.UTC);
-    ZonedDateTime zdt = ZonedDateTime.of(ldt, ZoneIdZ);
-    return new TimestampT(zdt);
-  }
-
-  public static TimestampT timestampOf(ZonedDateTime t) {
-    // Note that this function does not validate that time.Time is in our supported range.
-    return new TimestampT(t);
   }
 
   public Val rangeCheck() {
@@ -173,7 +170,7 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
   /** Add implements traits.Adder.Add. */
   @Override
   public Val add(Val other) {
-    if (other.type() == DurationType) {
+    if (other.type().typeEnum() == TypeEnum.Duration) {
       return ((DurationT) other).add(this);
     }
     return noSuchOverload(this, "add", other);
@@ -258,18 +255,16 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
   /** ConvertToType implements ref.Val.ConvertToType. */
   @Override
   public Val convertToType(Type typeValue) {
-    if (typeValue == StringType) {
-      DateTimeFormatter df = (t.getNano() > 0L) ? rfc3339nanoFormatter() : rfc3339formatter();
-      return stringOf(df.format(t));
-    }
-    if (typeValue == IntType) {
-      return intOf(t.toEpochSecond());
-    }
-    if (typeValue == TimestampType) {
-      return this;
-    }
-    if (typeValue == TypeType) {
-      return TimestampType;
+    switch (typeValue.typeEnum()) {
+      case String:
+        DateTimeFormatter df = (t.getNano() > 0L) ? rfc3339nanoFormatter() : rfc3339formatter();
+        return stringOf(df.format(t));
+      case Int:
+        return intOf(t.toEpochSecond());
+      case Timestamp:
+        return this;
+      case Type:
+        return TimestampType;
     }
     return newTypeConversionError(TimestampType, typeValue);
   }
@@ -372,21 +367,21 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
   /** Subtract implements traits.Subtractor.Subtract. */
   @Override
   public Val subtract(Val other) {
-    if (other.type() == DurationType) {
-      Duration d = (Duration) other.value();
-      try {
-        return timestampOf(Overflow.subtractTimeDurationChecked(t, d));
-      } catch (OverflowException e) {
-        return errTimestampOverflow;
-      }
-    }
-    if (other.type() == TimestampType) {
-      ZonedDateTime o = (ZonedDateTime) other.value();
-      try {
-        return durationOf(Overflow.subtractTimeChecked(t, o)).rangeCheck();
-      } catch (OverflowException e) {
-        return errDurationOverflow;
-      }
+    switch (other.type().typeEnum()) {
+      case Duration:
+        Duration d = (Duration) other.value();
+        try {
+          return timestampOf(Overflow.subtractTimeDurationChecked(t, d));
+        } catch (OverflowException e) {
+          return errTimestampOverflow;
+        }
+      case Timestamp:
+        ZonedDateTime o = (ZonedDateTime) other.value();
+        try {
+          return durationOf(Overflow.subtractTimeChecked(t, o)).rangeCheck();
+        } catch (OverflowException e) {
+          return errDurationOverflow;
+        }
     }
     return noSuchOverload(this, "subtract", other);
   }
@@ -503,7 +498,7 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
   }
 
   private static Val timeZone(Val tz, Function<ZonedDateTime, Val> funct, ZonedDateTime t) {
-    if (tz.type() != StringType) {
+    if (tz.type().typeEnum() != TypeEnum.String) {
       return noSuchOverload(TimestampType, "_op_with_timezone", tz);
     }
     String val = (String) tz.value();

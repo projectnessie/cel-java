@@ -22,13 +22,14 @@ import java.util.Arrays;
 import java.util.stream.Collectors;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
 
 /** Err type which extends the built-in go error and implements ref.Val. */
-public class Err extends BaseVal {
+public final class Err extends BaseVal {
 
   /** ErrType singleton. */
-  public static final TypeT ErrType = TypeT.newTypeValue("error");
+  public static final Type ErrType = TypeT.newTypeValue(TypeEnum.Err);
 
   /** errIntOverflow is an error representing integer overflow. */
   public static final Val errIntOverflow = newErr("integer overflow");
@@ -245,7 +246,7 @@ public class Err extends BaseVal {
    * singleton.
    */
   public static boolean isError(Val val) {
-    return val.type() == ErrType;
+    return val != null && val.type() == ErrType;
   }
 
   public boolean hasCause() {

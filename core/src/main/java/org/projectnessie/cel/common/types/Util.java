@@ -15,24 +15,18 @@
  */
 package org.projectnessie.cel.common.types;
 
-import static org.projectnessie.cel.common.types.BoolT.BoolType;
-import static org.projectnessie.cel.common.types.BytesT.BytesType;
-import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
-import static org.projectnessie.cel.common.types.Err.ErrType;
-import static org.projectnessie.cel.common.types.IntT.IntType;
-import static org.projectnessie.cel.common.types.StringT.StringType;
-import static org.projectnessie.cel.common.types.UintT.UintType;
-import static org.projectnessie.cel.common.types.UnknownT.UnknownType;
-
-import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.Val;
 
 public class Util {
 
   /** IsUnknownOrError returns whether the input element ref.Val is an ErrType or UnknonwType. */
   public static boolean isUnknownOrError(Val val) {
-    Type t = val.type();
-    return t == UnknownType || t == ErrType;
+    switch (val.type().typeEnum()) {
+      case Unknown:
+      case Err:
+        return true;
+    }
+    return false;
   }
 
   /**
@@ -40,12 +34,15 @@ public class Util {
    * types do not include well-known types such as Duration and Timestamp.
    */
   public static boolean isPrimitiveType(Val val) {
-    Type t = val.type();
-    return t == BoolType
-        || t == BytesType
-        || t == DoubleType
-        || t == IntType
-        || t == StringType
-        || t == UintType;
+    switch (val.type().typeEnum()) {
+      case Bool:
+      case Bytes:
+      case Double:
+      case Int:
+      case String:
+      case Uint:
+        return true;
+    }
+    return false;
   }
 }

@@ -34,7 +34,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.projectnessie.cel.common.operators.Operator;
-import org.projectnessie.cel.common.types.BoolT;
 import org.projectnessie.cel.common.types.IterableT;
 import org.projectnessie.cel.common.types.IteratorT;
 import org.projectnessie.cel.common.types.Overloads;
@@ -45,6 +44,7 @@ import org.projectnessie.cel.common.types.ref.TypeProvider;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Container;
 import org.projectnessie.cel.common.types.traits.FieldTester;
+import org.projectnessie.cel.common.types.traits.Negater;
 import org.projectnessie.cel.common.types.traits.Receiver;
 import org.projectnessie.cel.common.types.traits.Trait;
 import org.projectnessie.cel.interpreter.Activation.VarActivation;
@@ -289,7 +289,7 @@ public interface Interpretable {
         return True;
       }
       // return if both sides are bool false.
-      if (lVal instanceof BoolT && rVal instanceof BoolT) {
+      if (lVal == False && rVal == False) {
         return False;
       }
       // TODO: return both values as a set if both are unknown or error.
@@ -342,7 +342,7 @@ public interface Interpretable {
         return False;
       }
       // return if both sides are bool true.
-      if (lVal instanceof BoolT && rVal instanceof BoolT) {
+      if (lVal == True && rVal == True) {
         return True;
       }
       // TODO: return both values as a set if both are unknown or error.
@@ -435,13 +435,13 @@ public interface Interpretable {
       Val lVal = lhs.eval(ctx);
       Val rVal = rhs.eval(ctx);
       Val eqVal = lVal.equal(rVal);
-      if (isError(eqVal)) {
-        return eqVal;
+      switch (eqVal.type().typeEnum()) {
+        case Err:
+          return eqVal;
+        case Bool:
+          return ((Negater) eqVal).negate();
       }
-      if (!(eqVal instanceof BoolT)) {
-        return noSuchOverload(lVal, Operator.NotEquals.id, rVal);
-      }
-      return ((BoolT) eqVal).negate();
+      return noSuchOverload(lVal, Operator.NotEquals.id, rVal);
     }
 
     /** Cost implements the Coster interface method. */
@@ -1013,7 +1013,7 @@ public interface Interpretable {
 
         // Evaluate the condition, terminate the loop if false.
         Val c = cond.eval(iterCtx);
-        if (!isUnknown(c) && c instanceof BoolT && c != True) {
+        if (c == False) {
           break;
         }
 
@@ -1413,13 +1413,10 @@ public interface Interpretable {
     public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
       Val lVal = lhs.eval(ctx);
       Val rVal = rhs.eval(ctx);
-      if (lVal == True) {
+      if (lVal == True || rVal == True) {
         return True;
       }
-      if (rVal == True) {
-        return True;
-      }
-      if (lVal instanceof BoolT && rVal instanceof BoolT) {
+      if (lVal == False && rVal == False) {
         return False;
       }
       if (isUnknown(lVal)) {
@@ -1460,13 +1457,10 @@ public interface Interpretable {
     public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
       Val lVal = lhs.eval(ctx);
       Val rVal = rhs.eval(ctx);
-      if (lVal == False) {
+      if (lVal == False || rVal == False) {
         return False;
       }
-      if (rVal == False) {
-        return False;
-      }
-      if (lVal instanceof BoolT && rVal instanceof BoolT) {
+      if (lVal == True && rVal == True) {
         return True;
       }
       if (isUnknown(lVal)) {
@@ -1520,12 +1514,10 @@ public interface Interpretable {
       Val cVal = attr.expr.eval(ctx);
       Object tVal = attr.truthy.resolve(ctx);
       Object fVal = attr.falsy.resolve(ctx);
-      if (cVal instanceof BoolT) {
-        if (cVal == True) {
-          return adapter.nativeToValue(tVal);
-        } else {
-          return adapter.nativeToValue(fVal);
-        }
+      if (cVal == True) {
+        return adapter.nativeToValue(tVal);
+      } else if (cVal == False) {
+        return adapter.nativeToValue(fVal);
       } else {
         return noSuchOverload(null, Operator.Conditional.id, cVal);
       }

@@ -18,21 +18,20 @@ package org.projectnessie.cel.common.types;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
-import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
-import static org.projectnessie.cel.common.types.TypeT.TypeType;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.Value;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
 
 /** Null type implementation. */
 public final class NullT extends BaseVal {
 
   /** NullType singleton. */
-  public static TypeT NullType = TypeT.newTypeValue("null_type");
+  public static Type NullType = TypeT.newTypeValue(TypeEnum.Null);
   /** NullValue singleton. */
   public static NullT NullValue = new NullT();
 
@@ -81,14 +80,13 @@ public final class NullT extends BaseVal {
   /** ConvertToType implements ref.Val.ConvertToType. */
   @Override
   public Val convertToType(Type typeValue) {
-    if (typeValue == StringType) {
-      return stringOf("null");
-    }
-    if (typeValue == NullType) {
-      return this;
-    }
-    if (typeValue == TypeType) {
-      return NullType;
+    switch (typeValue.typeEnum()) {
+      case String:
+        return stringOf("null");
+      case Null:
+        return this;
+      case Type:
+        return NullType;
     }
     return newTypeConversionError(NullType, typeValue);
   }

@@ -18,24 +18,25 @@ package org.projectnessie.cel.common.types;
 import java.util.Objects;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
 
 /**
  * Unknown type implementation which collects expression ids which caused the current value to
  * become unknown.
  */
-public class UnknownT extends BaseVal {
+public final class UnknownT extends BaseVal {
   /** UnknownType singleton. */
-  public static final TypeT UnknownType = TypeT.newTypeValue("unknown");
+  public static final Type UnknownType = TypeT.newTypeValue(TypeEnum.Unknown);
+
+  public static UnknownT unknownOf(long value) {
+    return new UnknownT(value);
+  }
 
   private final long value;
 
   private UnknownT(long value) {
     this.value = value;
-  }
-
-  public static UnknownT unknownOf(long value) {
-    return new UnknownT(value);
   }
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
@@ -105,7 +106,7 @@ public class UnknownT extends BaseVal {
    * IsUnknown returns whether the element ref.Type or ref.Val is equal to the UnknownType
    * singleton.
    */
-  public static boolean isUnknown(Val val) {
-    return val.type() == UnknownType;
+  public static boolean isUnknown(Object val) {
+    return val != null && val.getClass() == UnknownT.class;
   }
 }

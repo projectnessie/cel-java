@@ -19,15 +19,9 @@ package org.projectnessie.cel.interpreter;
 //  subexpressions. This can be called before or after constant folding to find
 //  common subexpressions.
 
-import static org.projectnessie.cel.common.types.BoolT.BoolType;
 import static org.projectnessie.cel.common.types.BoolT.True;
-import static org.projectnessie.cel.common.types.BytesT.BytesType;
-import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
-import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.IntT.intOf;
-import static org.projectnessie.cel.common.types.NullT.NullType;
-import static org.projectnessie.cel.common.types.StringT.StringType;
-import static org.projectnessie.cel.common.types.UintT.UintType;
+import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.common.types.Util.isUnknownOrError;
 
 import com.google.api.expr.v1alpha1.Constant;
@@ -44,7 +38,6 @@ import java.util.ArrayList;
 import java.util.List;
 import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.IteratorT;
-import org.projectnessie.cel.common.types.UnknownT;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Lister;
@@ -107,24 +100,27 @@ public class AstPruner {
 
   Expr maybeCreateLiteral(long id, Val v) {
     Type t = v.type();
-    if (t == BoolType) {
-      return createLiteral(id, Constant.newBuilder().setBoolValue((Boolean) v.value()).build());
-    } else if (t == IntType) {
-      return createLiteral(
-          id, Constant.newBuilder().setInt64Value(((Number) v.value()).longValue()).build());
-    } else if (t == UintType) {
-      return createLiteral(
-          id, Constant.newBuilder().setUint64Value(((Number) v.value()).longValue()).build());
-    } else if (t == StringType) {
-      return createLiteral(id, Constant.newBuilder().setStringValue(v.value().toString()).build());
-    } else if (t == DoubleType) {
-      return createLiteral(
-          id, Constant.newBuilder().setDoubleValue(((Number) v.value()).doubleValue()).build());
-    } else if (t == BytesType) {
-      return createLiteral(
-          id, Constant.newBuilder().setBytesValue(ByteString.copyFrom((byte[]) v.value())).build());
-    } else if (t == NullType) {
-      return createLiteral(id, Constant.newBuilder().setNullValue(NullValue.NULL_VALUE).build());
+    switch (t.typeEnum()) {
+      case Bool:
+        return createLiteral(id, Constant.newBuilder().setBoolValue((Boolean) v.value()).build());
+      case Int:
+        return createLiteral(
+            id, Constant.newBuilder().setInt64Value(((Number) v.value()).longValue()).build());
+      case Uint:
+        return createLiteral(
+            id, Constant.newBuilder().setUint64Value(((Number) v.value()).longValue()).build());
+      case String:
+        return createLiteral(
+            id, Constant.newBuilder().setStringValue(v.value().toString()).build());
+      case Double:
+        return createLiteral(
+            id, Constant.newBuilder().setDoubleValue(((Number) v.value()).doubleValue()).build());
+      case Bytes:
+        return createLiteral(
+            id,
+            Constant.newBuilder().setBytesValue(ByteString.copyFrom((byte[]) v.value())).build());
+      case Null:
+        return createLiteral(id, Constant.newBuilder().setNullValue(NullValue.NULL_VALUE).build());
     }
 
     // Attempt to build a list literal.
@@ -389,12 +385,12 @@ public class AstPruner {
 
   boolean existsWithUnknownValue(long id) {
     Val val = value(id);
-    return val instanceof UnknownT;
+    return isUnknown(val);
   }
 
   boolean existsWithKnownValue(long id) {
     Val val = value(id);
-    return val != null && !(val instanceof UnknownT);
+    return val != null && !isUnknown(val);
   }
 
   long nextID() {

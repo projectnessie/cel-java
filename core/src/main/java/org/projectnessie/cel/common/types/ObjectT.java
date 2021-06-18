@@ -15,11 +15,10 @@
  */
 package org.projectnessie.cel.common.types;
 
-import static org.projectnessie.cel.common.types.BoolT.boolOf;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchField;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
-import static org.projectnessie.cel.common.types.TypeT.TypeType;
+import static org.projectnessie.cel.common.types.Types.boolOf;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.DynamicMessage;
@@ -39,9 +38,9 @@ public final class ObjectT extends BaseVal implements FieldTester, Indexer, Type
   private final TypeAdapter adapter;
   private final Message value;
   private final TypeDescription typeDesc;
-  private final TypeT typeValue;
+  private final Type typeValue;
 
-  private ObjectT(TypeAdapter adapter, Message value, TypeDescription typeDesc, TypeT typeValue) {
+  private ObjectT(TypeAdapter adapter, Message value, TypeDescription typeDesc, Type typeValue) {
     this.adapter = adapter;
     this.value = value;
     this.typeDesc = typeDesc;
@@ -57,7 +56,7 @@ public final class ObjectT extends BaseVal implements FieldTester, Indexer, Type
    * within the type adapter / provider.
    */
   public static Val newObject(
-      TypeAdapter adapter, TypeDescription typeDesc, TypeT typeValue, Message value) {
+      TypeAdapter adapter, TypeDescription typeDesc, Type typeValue, Message value) {
     return new ObjectT(adapter, value, typeDesc, typeValue);
   }
 
@@ -135,11 +134,14 @@ public final class ObjectT extends BaseVal implements FieldTester, Indexer, Type
 
   @Override
   public Val convertToType(Type typeVal) {
-    if (typeVal == TypeType) {
-      return typeValue;
-    }
-    if (type().typeName().equals(typeVal.typeName())) {
-      return this;
+    switch (typeVal.typeEnum()) {
+      case Type:
+        return typeValue;
+      case Object:
+        if (type().typeName().equals(typeVal.typeName())) {
+          return this;
+        }
+        break;
     }
     return newTypeConversionError(typeDesc.name(), typeVal);
   }
