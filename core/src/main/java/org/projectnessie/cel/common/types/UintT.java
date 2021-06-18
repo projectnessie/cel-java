@@ -113,16 +113,20 @@ public final class UintT extends BaseVal
   @SuppressWarnings("unchecked")
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
-    if (typeDesc == ULong.class) {
-      return (T) ULong.valueOf(i);
-    }
     if (typeDesc == Long.class || typeDesc == long.class || typeDesc == Object.class) {
-      // TODO overflow check
+      if (i < 0) {
+        Err.throwErrorAsIllegalStateException(rangeError(i, "Java long"));
+      }
       return (T) Long.valueOf(i);
     }
     if (typeDesc == Integer.class || typeDesc == int.class) {
-      // TODO overflow check
+      if (i < 0 || i > Integer.MAX_VALUE) {
+        Err.throwErrorAsIllegalStateException(rangeError(i, "Java int"));
+      }
       return (T) Integer.valueOf((int) i);
+    }
+    if (typeDesc == ULong.class) {
+      return (T) ULong.valueOf(i);
     }
     if (typeDesc == Any.class) {
       return (T) Any.pack(UInt64Value.of(i));

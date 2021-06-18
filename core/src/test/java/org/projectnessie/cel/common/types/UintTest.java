@@ -44,6 +44,7 @@ import com.google.protobuf.UInt64Value;
 import com.google.protobuf.Value;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.projectnessie.cel.common.ULong;
 
 public class UintTest {
 
@@ -111,8 +112,8 @@ public class UintTest {
   @Test
   void uintConvertToNative_Ptr_Uint64() {
     // 18446744073709551612 --> -4L
-    Long val = uintOf(-4L).convertToNative(Long.class);
-    assertThat(val).isEqualTo(-4L);
+    ULong val = uintOf(-4L).convertToNative(ULong.class);
+    assertThat(val).isEqualTo(ULong.valueOf(-4L));
   }
 
   @Test

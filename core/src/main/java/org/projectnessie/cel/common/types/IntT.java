@@ -140,8 +140,10 @@ public final class IntT extends BaseVal
     if (typeDesc == Long.class || typeDesc == long.class || typeDesc == Object.class) {
       return (T) Long.valueOf(i);
     }
-    if (typeDesc == Integer.class || typeDesc == int.class) {
-      // TODO overflow check
+    if (typeDesc == Integer.class || typeDesc == int.class || typeDesc == Enum.class) {
+      if (i < Integer.MIN_VALUE || i > Integer.MAX_VALUE) {
+        Err.throwErrorAsIllegalStateException(rangeError(i, "Java int"));
+      }
       return (T) Integer.valueOf((int) i);
     }
     if (typeDesc == Any.class) {
@@ -177,9 +179,6 @@ public final class IntT extends BaseVal
       // Proto3 to JSON conversion requires string-formatted int64 values
       // since the conversion to floating point would result in truncation.
       return (T) Value.newBuilder().setStringValue(Long.toString(i)).build();
-    }
-    if (typeDesc == Enum.class) {
-      return (T) (Integer) (int) i;
     }
 
     throw new RuntimeException(
