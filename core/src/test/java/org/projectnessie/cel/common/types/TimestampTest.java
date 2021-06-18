@@ -428,4 +428,32 @@ public class TimestampTest {
   private TimestampT defaultTS() {
     return timestampOf(Instant.ofEpochSecond(7506).atZone(ZoneIdZ));
   }
+
+  @Test
+  void nanoMicroMilliPrecision() {
+    long secondsEpoch = 1624006650L;
+    String ts0 = "2021-06-18T08:57:30Z";
+    int nano3 = 123000000;
+    String ts3 = "2021-06-18T08:57:30.123Z";
+    int nano6 = 123456000;
+    String ts6 = "2021-06-18T08:57:30.123456Z";
+    int nano9 = 123456789;
+    String ts9 = "2021-06-18T08:57:30.123456789Z";
+
+    Object z = timestampOf(ts0).value();
+    assertThat(z).extracting(x -> ((ZonedDateTime) x).toEpochSecond()).isEqualTo(secondsEpoch);
+    assertThat(z).extracting(x -> ((ZonedDateTime) x).getNano()).isEqualTo(0);
+
+    z = timestampOf(ts3).value();
+    assertThat(z).extracting(x -> ((ZonedDateTime) x).toEpochSecond()).isEqualTo(secondsEpoch);
+    assertThat(z).extracting(x -> ((ZonedDateTime) x).getNano()).isEqualTo(nano3);
+
+    z = timestampOf(ts6).value();
+    assertThat(z).extracting(x -> ((ZonedDateTime) x).toEpochSecond()).isEqualTo(secondsEpoch);
+    assertThat(z).extracting(x -> ((ZonedDateTime) x).getNano()).isEqualTo(nano6);
+
+    z = timestampOf(ts9).value();
+    assertThat(z).extracting(x -> ((ZonedDateTime) x).toEpochSecond()).isEqualTo(secondsEpoch);
+    assertThat(z).extracting(x -> ((ZonedDateTime) x).getNano()).isEqualTo(nano9);
+  }
 }

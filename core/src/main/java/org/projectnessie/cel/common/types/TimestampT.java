@@ -45,6 +45,7 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
+import java.time.format.DateTimeParseException;
 import java.time.format.SignStyle;
 import java.time.temporal.ChronoField;
 import java.time.zone.ZoneRulesException;
@@ -83,13 +84,6 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
           Trait.ReceiverType,
           Trait.SubtractorType);
 
-  /**
-   * The number of seconds between year 1 and year 1970. This is borrowed from
-   * https://golang.org/src/time/time.go.
-   */
-  public static final long unixToInternal =
-      (1969L * 365 + 1969 / 4 - 1969 / 100 + 1969 / 400) * (60 * 60 * 24);
-
   /** Number of seconds between `0001-01-01T00:00:00Z` and the Unix epoch. */
   public static final long minUnixTime = -62135596800L;
   /** Number of seconds between `9999-12-31T23:59:59.999999999Z` and the Unix epoch. */
@@ -98,7 +92,31 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
   public static final ZoneId ZoneIdZ = ZoneId.of("Z");
 
   public static TimestampT timestampOf(String s) {
-    return timestampOf(TimestampT.rfc3339nanoFormatter().parse(s, ZonedDateTime::from));
+    // String parsing is a bit more complex here.
+    // If the fraction of the second is 3 digits long, it's considered as milliseconds.
+    // If the fraction of the second is 6 digits long, it's considered as microseconds.
+    // If the fraction of the second is 9 digits long, it's considered as nanoseconds.
+    // This is mostly to help with Java's behavior across different Java versions with String
+    // representations, which can have 3 (fraction as millis), 6 (fraction as micros) or
+    // 9 (fraction as nanos) digits. I.e. this implementation accepts these format patterns:
+    //  yyyy-mm-ddThh:mm:ssZ
+    //  yyyy-mm-ddThh:mm:ss.mmmZ
+    //  yyyy-mm-ddThh:mm:ss.uuuuuuZ
+    //  yyyy-mm-ddThh:mm:ss.nnnnnnnnnZ
+    try {
+      return timestampOf(TimestampT.rfc3339nanoFormatter().parse(s, ZonedDateTime::from));
+    } catch (DateTimeParseException e) {
+      try {
+        if (e.getErrorIndex() < 20) {
+          // Example: 2021-06-18T08:57:30Z - length=20
+          // If the error index is 0..19 (including the second field), just don't try other formats.
+          throw e;
+        }
+        return timestampOf(TimestampT.rfc3339microFormatter().parse(s, ZonedDateTime::from));
+      } catch (DateTimeParseException e2) {
+        return timestampOf(TimestampT.rfc3339milliFormatter().parse(s, ZonedDateTime::from));
+      }
+    }
   }
 
   public static TimestampT timestampOf(Instant t) {
@@ -288,7 +306,7 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
       new DateTimeFormatterBuilder()
           .parseLenient()
           .appendValue(ChronoField.YEAR, 4, 5, SignStyle.EXCEEDS_PAD)
-          .parseLenient()
+          .parseStrict()
           .appendLiteral('-')
           .appendValue(ChronoField.MONTH_OF_YEAR, 2)
           .appendLiteral('-')
@@ -305,7 +323,7 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
       new DateTimeFormatterBuilder()
           .parseLenient()
           .appendValue(ChronoField.YEAR, 4, 5, SignStyle.EXCEEDS_PAD)
-          .parseLenient()
+          .parseStrict()
           .appendLiteral('-')
           .appendValue(ChronoField.MONTH_OF_YEAR, 2)
           .appendLiteral('-')
@@ -316,10 +334,52 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
           .appendValue(ChronoField.MINUTE_OF_HOUR, 2)
           .appendLiteral(':')
           .appendValue(ChronoField.SECOND_OF_MINUTE, 2)
+          .parseStrict()
+          .appendLiteral('.')
+          .appendValue(ChronoField.NANO_OF_SECOND, 9, 9, SignStyle.NOT_NEGATIVE)
+          .appendOffset("+HH:MM", "Z");
+
+  private static final DateTimeFormatterBuilder rfc3339microFormatterBuilder =
+      new DateTimeFormatterBuilder()
           .parseLenient()
+          .appendValue(ChronoField.YEAR, 4, 5, SignStyle.EXCEEDS_PAD)
+          .parseStrict()
+          .appendLiteral('-')
+          .appendValue(ChronoField.MONTH_OF_YEAR, 2)
+          .appendLiteral('-')
+          .appendValue(ChronoField.DAY_OF_MONTH, 2)
+          .appendLiteral('T')
+          .appendValue(ChronoField.HOUR_OF_DAY, 2)
+          .appendLiteral(':')
+          .appendValue(ChronoField.MINUTE_OF_HOUR, 2)
+          .appendLiteral(':')
+          .appendValue(ChronoField.SECOND_OF_MINUTE, 2)
+          .parseStrict()
           .optionalStart()
           .appendLiteral('.')
-          .appendValue(ChronoField.NANO_OF_SECOND, 1, 9, SignStyle.NOT_NEGATIVE)
+          .appendValue(ChronoField.MICRO_OF_SECOND, 6, 6, SignStyle.NOT_NEGATIVE)
+          .optionalEnd()
+          .appendOffset("+HH:MM", "Z");
+
+  private static final DateTimeFormatterBuilder rfc3339milliFormatterBuilder =
+      new DateTimeFormatterBuilder()
+          .parseLenient()
+          .appendValue(ChronoField.YEAR, 4, 5, SignStyle.EXCEEDS_PAD)
+          .parseStrict()
+          .appendLiteral('-')
+          .appendValue(ChronoField.MONTH_OF_YEAR, 2)
+          .appendLiteral('-')
+          .appendValue(ChronoField.DAY_OF_MONTH, 2)
+          .appendLiteral('T')
+          .appendValue(ChronoField.HOUR_OF_DAY, 2)
+          .appendLiteral(':')
+          .appendValue(ChronoField.MINUTE_OF_HOUR, 2)
+          .appendLiteral(':')
+          .appendValue(ChronoField.SECOND_OF_MINUTE, 2)
+          .parseStrict()
+          .optionalStart()
+          .appendLiteral('.')
+          .appendValue(ChronoField.MILLI_OF_SECOND, 3, 3, SignStyle.NOT_NEGATIVE)
           .optionalEnd()
           .appendOffset("+HH:MM", "Z");
 
@@ -329,6 +389,14 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
 
   static DateTimeFormatter rfc3339nanoFormatter() {
     return rfc3339nanoFormatterBuilder.toFormatter();
+  }
+
+  static DateTimeFormatter rfc3339microFormatter() {
+    return rfc3339microFormatterBuilder.toFormatter();
+  }
+
+  static DateTimeFormatter rfc3339milliFormatter() {
+    return rfc3339milliFormatterBuilder.toFormatter();
   }
 
   static DateTimeFormatter rfc3339formatter() {
