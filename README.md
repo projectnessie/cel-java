@@ -1,5 +1,7 @@
 # Java implementation of Common-Expression-Language (CEL)
 
+[![CI](https://github.com/projectnessie/cel-java/actions/workflows/main.yml/badge.svg)](https://github.com/projectnessie/cel-java/actions/workflows/main.yml)
+
 This is a Java port of the [Common-Expression-Language (CEL)](https://opensource.google/projects/cel).
 
 The CEL specification can be found [here](https://github.com/google/cel-spec).
