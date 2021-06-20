@@ -17,7 +17,7 @@ package org.projectnessie.cel.checker;
 
 import static java.util.Collections.singletonList;
 import static org.projectnessie.cel.checker.CheckerEnv.newStandardCheckerEnv;
-import static org.projectnessie.cel.common.types.ProtoTypeRegistry.newRegistry;
+import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newRegistry;
 
 import com.google.api.expr.v1alpha1.Type;
 import java.util.List;

@@ -51,11 +51,12 @@ import java.util.Objects;
 import java.util.function.Function;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.TimestampT;
+import org.projectnessie.cel.common.types.ref.TypeDescription;
 
 /**
  * TypeDescription is a collection of type metadata relevant to expression checking and evaluation.
  */
-public class TypeDescription extends Description {
+public final class PbTypeDescription extends Description implements TypeDescription {
 
   private final String typeName;
   private final Descriptor desc;
@@ -63,7 +64,7 @@ public class TypeDescription extends Description {
   private Class<?> reflectType;
   private Message zeroMsg;
 
-  private TypeDescription(
+  private PbTypeDescription(
       String typeName,
       Descriptor desc,
       Map<String, FieldDescription> fieldMap,
@@ -85,14 +86,14 @@ public class TypeDescription extends Description {
    * NewTypeDescription produces a TypeDescription value for the fully-qualified proto type name
    * with a given descriptor.
    */
-  public static TypeDescription newTypeDescription(String typeName, Descriptor desc) {
+  public static PbTypeDescription newTypeDescription(String typeName, Descriptor desc) {
     DynamicMessage msgZero = DynamicMessage.getDefaultInstance(desc);
     Map<String, FieldDescription> fieldMap = new HashMap<>();
     List<FieldDescriptor> fields = desc.getFields();
     for (FieldDescriptor f : fields) {
       fieldMap.put(f.getName(), newFieldDescription(f));
     }
-    return new TypeDescription(
+    return new PbTypeDescription(
         typeName, desc, fieldMap, reflectTypeOf(msgZero), zeroValueOf(msgZero));
   }
 
@@ -112,7 +113,8 @@ public class TypeDescription extends Description {
    *
    * <p>This method returns the unwrapped value and 'true', else the original value and 'false'.
    */
-  public Object maybeUnwrap(Db db, Message msg) {
+  public Object maybeUnwrap(Db db, Object m) {
+    Message msg = (Message) m;
     try {
       if (this.reflectType == Any.class) {
         String realTypeUrl;
@@ -135,7 +137,7 @@ public class TypeDescription extends Description {
         if (realTypeName.isEmpty() || realTypeName.equals(typeName)) {
           return anyWithEmptyType();
         }
-        TypeDescription realTypeDescriptor = db.describeType(realTypeName);
+        PbTypeDescription realTypeDescriptor = db.describeType(realTypeName);
         Message realMsg = realTypeDescriptor.zeroMsg.getParserForType().parseFrom(realValue);
         return realTypeDescriptor.maybeUnwrap(db, realMsg);
       }
@@ -156,6 +158,7 @@ public class TypeDescription extends Description {
   }
 
   /** Name returns the fully-qualified name of the type. */
+  @Override
   public String name() {
     return desc.getFullName();
   }
@@ -170,6 +173,7 @@ public class TypeDescription extends Description {
   }
 
   /** ReflectType returns the Golang reflect.Type for this type. */
+  @Override
   public Class<?> reflectType() {
     return reflectType;
   }
@@ -182,7 +186,7 @@ public class TypeDescription extends Description {
 
   @Override
   public String toString() {
-    return "TypeDescription{name: '"
+    return "PbTypeDescription{name: '"
         + typeName
         + '\''
         + ", fieldMap: "
@@ -200,7 +204,7 @@ public class TypeDescription extends Description {
     if (o == null || getClass() != o.getClass()) {
       return false;
     }
-    TypeDescription that = (TypeDescription) o;
+    PbTypeDescription that = (PbTypeDescription) o;
     return Objects.equals(typeName, that.typeName) && Objects.equals(desc, that.desc);
   }
 
@@ -353,7 +357,7 @@ public class TypeDescription extends Description {
       return anyWithEmptyType();
     }
     String innerTypeName = typeNameFromUrl(typeUrl);
-    TypeDescription innerType = db.describeType(innerTypeName);
+    PbTypeDescription innerType = db.describeType(innerTypeName);
     if (innerType == null) {
       return refMsg;
     }

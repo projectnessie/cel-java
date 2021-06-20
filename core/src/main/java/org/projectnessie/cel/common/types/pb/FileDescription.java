@@ -25,13 +25,13 @@ import java.util.Map;
 import java.util.Objects;
 
 /** FileDescription holds a map of all types and enum values declared within a proto file. */
-public class FileDescription {
+public final class FileDescription {
 
-  private final Map<String, TypeDescription> types;
+  private final Map<String, PbTypeDescription> types;
   private final Map<String, EnumValueDescription> enums;
 
   private FileDescription(
-      Map<String, TypeDescription> types, Map<String, EnumValueDescription> enums) {
+      Map<String, PbTypeDescription> types, Map<String, EnumValueDescription> enums) {
     this.types = types;
     this.enums = enums;
   }
@@ -63,9 +63,9 @@ public class FileDescription {
     metadata.enumValues.forEach(
         (name, enumVal) ->
             enums.put(name, EnumValueDescription.newEnumValueDescription(name, enumVal)));
-    Map<String, TypeDescription> types = new HashMap<>();
+    Map<String, PbTypeDescription> types = new HashMap<>();
     metadata.msgTypes.forEach(
-        (name, msgType) -> types.put(name, TypeDescription.newTypeDescription(name, msgType)));
+        (name, msgType) -> types.put(name, PbTypeDescription.newTypeDescription(name, msgType)));
     return new FileDescription(types, enums);
   }
 
@@ -86,7 +86,7 @@ public class FileDescription {
    * GetTypeDescription returns a TypeDescription for a qualified protobuf message type name
    * declared within the .proto file.
    */
-  public TypeDescription getTypeDescription(String typeName) {
+  public PbTypeDescription getTypeDescription(String typeName) {
     return types.get(sanitizeProtoName(typeName));
   }
 

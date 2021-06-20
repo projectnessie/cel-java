@@ -15,8 +15,8 @@
  */
 package org.projectnessie.cel.common.types.pb;
 
-import static org.projectnessie.cel.common.types.pb.TypeDescription.reflectTypeOf;
-import static org.projectnessie.cel.common.types.pb.TypeDescription.unwrapDynamic;
+import static org.projectnessie.cel.common.types.pb.PbTypeDescription.reflectTypeOf;
+import static org.projectnessie.cel.common.types.pb.PbTypeDescription.unwrapDynamic;
 
 import com.google.api.expr.v1alpha1.Type;
 import com.google.api.expr.v1alpha1.Type.ListType;
@@ -38,7 +38,7 @@ import java.util.Objects;
 import org.projectnessie.cel.common.ULong;
 
 /** FieldDescription holds metadata related to fields declared within a type. */
-public class FieldDescription extends Description {
+public final class FieldDescription extends Description {
 
   /** KeyType holds the key FieldDescription for map fields. */
   final FieldDescription keyType;

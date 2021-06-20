@@ -22,7 +22,7 @@ import java.lang.reflect.Array;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.projectnessie.cel.common.types.DefaultTypeAdapter;
+import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 
 public class Util {

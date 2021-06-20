@@ -16,120 +16,29 @@
 package org.projectnessie.cel.common.types;
 
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
-import static org.projectnessie.cel.common.types.Err.noSuchField;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.Types.boolOf;
 
-import com.google.protobuf.Any;
-import com.google.protobuf.DynamicMessage;
-import com.google.protobuf.Message;
-import com.google.protobuf.Value;
 import java.util.Objects;
-import org.projectnessie.cel.common.types.pb.FieldDescription;
-import org.projectnessie.cel.common.types.pb.TypeDescription;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
+import org.projectnessie.cel.common.types.ref.TypeDescription;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.FieldTester;
 import org.projectnessie.cel.common.types.traits.Indexer;
 
-public final class ObjectT extends BaseVal implements FieldTester, Indexer, TypeAdapter {
-  private final TypeAdapter adapter;
-  private final Message value;
-  private final TypeDescription typeDesc;
-  private final Type typeValue;
+public abstract class ObjectT extends BaseVal implements FieldTester, Indexer, TypeAdapter {
+  protected final TypeAdapter adapter;
+  protected final Object value;
+  protected final TypeDescription typeDesc;
+  protected final Type typeValue;
 
-  private ObjectT(TypeAdapter adapter, Message value, TypeDescription typeDesc, Type typeValue) {
+  protected ObjectT(TypeAdapter adapter, Object value, TypeDescription typeDesc, Type typeValue) {
     this.adapter = adapter;
     this.value = value;
     this.typeDesc = typeDesc;
     this.typeValue = typeValue;
-  }
-
-  /**
-   * NewObject returns an object based on a proto.Message value which handles conversion between
-   * protobuf type values and expression type values. Objects support indexing and iteration.
-   *
-   * <p>Note: the type value is pulled from the list of registered types within the type provider.
-   * If the proto type is not registered within the type provider, then this will result in an error
-   * within the type adapter / provider.
-   */
-  public static Val newObject(
-      TypeAdapter adapter, TypeDescription typeDesc, Type typeValue, Message value) {
-    return new ObjectT(adapter, value, typeDesc, typeValue);
-  }
-
-  @SuppressWarnings("unchecked")
-  @Override
-  public <T> T convertToNative(Class<T> typeDesc) {
-    Message pb = value;
-    if (typeDesc.isAssignableFrom(pb.getClass())) {
-      return (T) pb;
-    }
-    if (typeDesc.isAssignableFrom(getClass())) {
-      return (T) this;
-    }
-    if (typeDesc.isAssignableFrom(value.getClass())) {
-      return (T) value;
-    }
-    if (typeDesc == DynamicMessage.class) {
-      return (T) DynamicMessage.newBuilder(value.getDescriptorForType()).mergeFrom(value).build();
-    }
-    if (typeDesc == Any.class) {
-      // anyValueType
-      if (pb instanceof Any) {
-        return (T) pb;
-      }
-      return (T) Any.pack(pb);
-    }
-    if (typeDesc == Value.class) {
-      // jsonValueType
-      throw new UnsupportedOperationException("IMPLEMENT proto-to-json");
-      // TODO proto-to-json
-      //		// Marshal the proto to JSON first, and then rehydrate as protobuf.Value as there is no
-      //		// support for direct conversion from proto.Message to protobuf.Value.
-      //		bytes, err := protojson.Marshal(pb)
-      //		if err != nil {
-      //			return nil, err
-      //		}
-      //		json := &structpb.Value{}
-      //		err = protojson.Unmarshal(bytes, json)
-      //		if err != nil {
-      //			return nil, err
-      //		}
-      //		return json, nil
-    }
-    if (typeDesc.isAssignableFrom(this.typeDesc.reflectType()) || typeDesc == Object.class) {
-      if (value instanceof Any || value instanceof DynamicMessage) {
-        return buildFrom(typeDesc);
-      }
-      return (T) value;
-    }
-
-    if (Message.class.isAssignableFrom(typeDesc)) {
-      return buildFrom(typeDesc);
-    }
-
-    if (typeDesc == Val.class || typeDesc == ObjectT.class) {
-      return (T) this;
-    }
-
-    // impossible cast
-    throw new IllegalArgumentException(
-        newTypeConversionError(value.getClass().getName(), typeDesc).toString());
-  }
-
-  @SuppressWarnings("unchecked")
-  private <T> T buildFrom(Class<T> typeDesc) {
-    try {
-      Message.Builder builder =
-          (Message.Builder) typeDesc.getDeclaredMethod("newBuilder").invoke(null);
-      return (T) builder.mergeFrom(value).build();
-    } catch (Exception e) {
-      throw new RuntimeException(
-          String.format("%s: %s", newTypeConversionError(value.getClass().getName(), typeDesc), e));
-    }
   }
 
   @Override
@@ -152,34 +61,6 @@ public final class ObjectT extends BaseVal implements FieldTester, Indexer, Type
       return noSuchOverload(this, "equal", other);
     }
     return boolOf(this.value.equals(other.value()));
-  }
-
-  /** IsSet tests whether a field which is defined is set to a non-default value. */
-  @Override
-  public Val isSet(Val field) {
-    if (!(field instanceof StringT)) {
-      return noSuchOverload(this, "isSet", field);
-    }
-    String protoFieldStr = (String) field.value();
-    FieldDescription fd = typeDesc.fieldByName(protoFieldStr);
-    if (fd == null) {
-      return noSuchField(protoFieldStr);
-    }
-    return boolOf(FieldDescription.hasValueForField(fd.descriptor(), value));
-  }
-
-  @Override
-  public Val get(Val index) {
-    if (!(index instanceof StringT)) {
-      return noSuchOverload(this, "get", index);
-    }
-    String protoFieldStr = (String) index.value();
-    FieldDescription fd = typeDesc.fieldByName(protoFieldStr);
-    if (fd == null) {
-      return noSuchField(protoFieldStr);
-    }
-    Object fv = FieldDescription.getValueFromField(fd.descriptor(), value);
-    return nativeToValue(fv);
   }
 
   @Override

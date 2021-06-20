@@ -24,7 +24,7 @@ import com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes;
 class UnwrapContext {
 
   final Db pbdb;
-  final TypeDescription msgDesc;
+  final PbTypeDescription msgDesc;
 
   UnwrapContext() {
     pbdb = newDb();

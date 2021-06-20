@@ -19,7 +19,7 @@ import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import java.util.Objects;
 
 /** EnumValueDescription maps a fully-qualified enum value name to its numeric value. */
-public class EnumValueDescription {
+public final class EnumValueDescription {
 
   private final String enumValueName;
   private final EnumValueDescriptor desc;

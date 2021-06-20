@@ -15,9 +15,6 @@
  */
 package org.projectnessie.cel.common.types.ref;
 
-import com.google.protobuf.Descriptors.FileDescriptor;
-import com.google.protobuf.Message;
-
 /**
  * TypeRegistry allows third-parties to add custom types to CEL. Not all `TypeProvider`
  * implementations support type-customization, so these features are optional. However, a
@@ -25,11 +22,12 @@ import com.google.protobuf.Message;
  * registered can be converted to CEL representations.
  */
 public interface TypeRegistry extends TypeAdapter, TypeProvider {
-  /** RegisterDescriptor registers the contents of a protocol buffer `FileDescriptor`. */
-  void registerDescriptor(FileDescriptor fileDesc);
 
-  /** RegisterMessage registers a protocol buffer message and its dependencies. */
-  void registerMessage(Message message);
+  /** Copy the TypeRegistry and return a new registry whose mutable state is isolated. */
+  TypeRegistry copy();
+
+  /** Register a type via a materialized object, which the provider can turn into a type. */
+  void register(Object t);
 
   /**
    * RegisterType registers a type value with the provider which ensures the provider is aware of
@@ -39,7 +37,4 @@ public interface TypeRegistry extends TypeAdapter, TypeProvider {
    * an error.
    */
   void registerType(Type... types);
-
-  /** Copy the TypeRegistry and return a new registry whose mutable state is isolated. */
-  TypeRegistry copy();
 }

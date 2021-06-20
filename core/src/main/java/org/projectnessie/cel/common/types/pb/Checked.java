@@ -27,7 +27,7 @@ import com.google.protobuf.NullValue;
 import java.util.HashMap;
 import java.util.Map;
 
-public class Checked {
+public final class Checked {
 
   // common types
   public static final Type checkedDyn =

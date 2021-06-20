@@ -29,12 +29,12 @@ import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.ListT.newGenericArrayList;
 import static org.projectnessie.cel.common.types.MapT.newMaybeWrappedMap;
 import static org.projectnessie.cel.common.types.NullT.NullValue;
-import static org.projectnessie.cel.common.types.ProtoTypeRegistry.newEmptyRegistry;
-import static org.projectnessie.cel.common.types.ProtoTypeRegistry.newRegistry;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.TimestampT.ZoneIdZ;
 import static org.projectnessie.cel.common.types.TimestampT.timestampOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
+import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newEmptyRegistry;
+import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newRegistry;
 
 import com.google.api.expr.test.v1.proto3.TestAllTypesProto.GlobalEnum;
 import com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes;
@@ -64,6 +64,7 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.common.ULong;
+import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Indexer;
@@ -84,7 +85,7 @@ public class ProviderTest {
 
   @Test
   void typeRegistryEnumValue() {
-    TypeRegistry reg = newEmptyRegistry();
+    ProtoTypeRegistry reg = newEmptyRegistry();
     reg.registerDescriptor(GlobalEnum.getDescriptor().getFile());
 
     Val enumVal = reg.enumValue("google.api.expr.test.v1.proto3.GlobalEnum.GOO");
@@ -96,7 +97,7 @@ public class ProviderTest {
 
   @Test
   void typeRegistryFindType() {
-    TypeRegistry reg = newEmptyRegistry();
+    ProtoTypeRegistry reg = newEmptyRegistry();
     reg.registerDescriptor(GlobalEnum.getDescriptor().getFile());
 
     String msgTypeName = "google.api.expr.test.v1.proto3.TestAllTypes";

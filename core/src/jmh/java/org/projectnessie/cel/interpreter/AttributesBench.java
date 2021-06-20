@@ -19,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.IntT.intOf;
-import static org.projectnessie.cel.common.types.ProtoTypeRegistry.newRegistry;
+import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newRegistry;
 import static org.projectnessie.cel.interpreter.Activation.newActivation;
 import static org.projectnessie.cel.interpreter.AttributeFactory.newAttributeFactory;
 import static org.projectnessie.cel.interpreter.Coster.Cost.estimateCost;
