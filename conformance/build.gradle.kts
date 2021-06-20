@@ -33,13 +33,14 @@ val versionJunit = "5.7.2"
 val versionGrpc = "1.38.1"
 val versionProtobuf = "3.17.3"
 
-sourceSets.named("main") {
+sourceSets.create("generated") {
     java.srcDir(project.buildDir.resolve("generated/source/proto/main/java"))
 }
 
 dependencies {
     implementation(project(":core"))
     implementation(project(":core", "testJar"))
+    implementation(project(":generated", "testJar"))
 
     implementation("com.google.protobuf:protobuf-java:$versionProtobuf")
 

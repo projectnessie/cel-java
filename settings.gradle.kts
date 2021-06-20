@@ -44,8 +44,12 @@ gradle.beforeProject {
     }
 }
 
+include("generated")
+
 include("core")
 
 include("conformance")
 
 include("tools")
+
+include("jacoco")

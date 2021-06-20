@@ -31,12 +31,16 @@ plugins {
   id("io.github.gradle-nexus.publish-plugin")
 }
 
+var versionJacoco = "0.8.7"
+
 allprojects {
   repositories { mavenCentral() }
 
-  tasks.withType<Test>().configureEach {
-    useJUnitPlatform {}
-    maxParallelForks = Runtime.getRuntime().availableProcessors()
+  if (project.projectDir.resolve("src/test/java").exists()) {
+    tasks.withType<Test>().configureEach {
+      useJUnitPlatform {}
+      maxParallelForks = Runtime.getRuntime().availableProcessors()
+    }
   }
 
   tasks.withType<Jar>().configureEach {
@@ -145,7 +149,76 @@ allprojects {
     }
   }
 
+  if (this.path != ":jacoco") {
+    plugins.withType<JacocoPlugin>().configureEach {
+      tasks.named<JacocoReport>("jacocoTestReport") {
+        reports {
+          html.required.set(true)
+          xml.required.set(true)
+        }
+      }
+
+      // Share sources folder with other projects for aggregated JaCoCo reports
+      configurations.create("transitiveSourcesElements") {
+        isVisible = false
+        isCanBeResolved = false
+        isCanBeConsumed = true
+        attributes {
+          attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_RUNTIME))
+          attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.DOCUMENTATION))
+          attribute(DocsType.DOCS_TYPE_ATTRIBUTE, objects.named("source-folders"))
+        }
+        val sourceSets = project.extensions.getByType<JavaPluginExtension>().sourceSets
+        sourceSets.named("main").get().java.srcDirs.forEach { outgoing.artifact(it) }
+      }
+
+      // Share classes folder with other projects for aggregated JaCoCo reports
+      configurations.create("transitiveClassesElements") {
+        isVisible = false
+        isCanBeResolved = false
+        isCanBeConsumed = true
+        attributes {
+          attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_RUNTIME))
+          attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.DOCUMENTATION))
+          attribute(DocsType.DOCS_TYPE_ATTRIBUTE, objects.named("class-folders"))
+        }
+        val sourceSets = project.extensions.getByType<JavaPluginExtension>().sourceSets
+        outgoing.artifact(sourceSets.named("main").get().java.destinationDirectory)
+      }
+
+      // Share the coverage data to be aggregated for the whole product
+      configurations.create("coverageDataElements") {
+        isVisible = false
+        isCanBeResolved = false
+        isCanBeConsumed = true
+        attributes {
+          attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_RUNTIME))
+          attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.DOCUMENTATION))
+          attribute(DocsType.DOCS_TYPE_ATTRIBUTE, objects.named("jacoco-coverage-data"))
+        }
+        // This will cause the test task to run if the coverage data is requested by the aggregation
+        // task
+        outgoing.artifact(
+          tasks.named("test").map { task ->
+            task.extensions.getByType<JacocoTaskExtension>().destinationFile!!
+          }
+        )
+      }
+    }
+  }
+
   if (this != rootProject) {
+    plugins.withType<JacocoPlugin>().configureEach {
+      configure<JacocoPluginExtension> { toolVersion = versionJacoco }
+
+      tasks.withType<JacocoReport> {
+        reports {
+          html.required.set(true)
+          xml.required.set(true)
+        }
+      }
+    }
+
     plugins.withType<SpotlessPlugin>().configureEach {
       configure<SpotlessExtension> {
         java {
