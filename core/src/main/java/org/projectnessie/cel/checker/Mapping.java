@@ -30,8 +30,8 @@ public class Mapping {
     // Looks overly complicated, but prevents a bunch of j.u.HashMap.resize() operations.
     // The copy() operation is called very often when a script's being checked, so this saves
     // quite a lot.
-    // The formula "* 4 / 3 + 1" prevents the HashMap from resizing, assuming the default-load-factor
-    // of .75 (-> 3/4).
+    // The formula "* 4 / 3 + 1" prevents the HashMap from resizing, assuming the
+    // default-load-factor of .75 (-> 3/4).
     this.mapping = new HashMap<>(srcMapping.size() * 4 / 3 + 1);
     this.mapping.putAll(srcMapping);
     this.typeKeys = new HashMap<>(srcTypeKeys.size() * 4 / 3 + 1);
