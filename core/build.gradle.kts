@@ -14,17 +14,12 @@
  * limitations under the License.
  */
 
-import com.google.protobuf.gradle.generateProtoTasks
-import com.google.protobuf.gradle.plugins
-import com.google.protobuf.gradle.protoc
-
 plugins {
     `java-library`
-    antlr
     `maven-publish`
     signing
+    jacoco
     id("com.diffplug.spotless")
-    id("com.google.protobuf")
     id("me.champeau.jmh")
     id("org.caffinitas.gradle.aggregatetestresults")
     id("org.caffinitas.gradle.testsummary")
@@ -32,34 +27,16 @@ plugins {
 }
 
 val versionAgrona = "1.11.0"
-val versionAntlr = "4.9.2"
 val versionAssertj = "3.20.2"
-val versionGrpc = "1.38.1"
 val versionJmh = "1.32"
 val versionJunit = "5.7.2"
-val versionProtobuf = "3.17.3"
-
-sourceSets.named("main") {
-    java.srcDir(project.buildDir.resolve("generated/source/proto/main/java"))
-    java.srcDir(project.buildDir.resolve("generated/source/proto/main/grpc"))
-}
-sourceSets.named("test") {
-    java.srcDir(project.buildDir.resolve("generated/source/proto/test/java"))
-}
 
 dependencies {
-    antlr("org.antlr:antlr4:$versionAntlr") // TODO remove from runtime-classpath *sigh*
-    implementation("org.antlr:antlr4-runtime:$versionAntlr")
+    api(project(":generated"))
 
-    api("com.google.protobuf:protobuf-java:$versionProtobuf")
     implementation("org.agrona:agrona:$versionAgrona")
 
-    // Since we need the protobuf stuff in this cel-core module, it's easy to generate the
-    // gRPC code as well. But do not expose the gRPC dependencies "publicly".
-    compileOnly("io.grpc:grpc-protobuf:$versionGrpc")
-    compileOnly("io.grpc:grpc-stub:$versionGrpc")
-    compileOnly("org.apache.tomcat:annotations-api:6.0.53")
-
+    testImplementation(project(":generated", "testJar"))
     testImplementation("org.assertj:assertj-core:$versionAssertj")
     testImplementation("org.junit.jupiter:junit-jupiter-api:$versionJunit")
     testImplementation("org.junit.jupiter:junit-jupiter-params:$versionJunit")
@@ -67,25 +44,6 @@ dependencies {
 
     jmhImplementation("org.openjdk.jmh:jmh-core:$versionJmh")
     jmhAnnotationProcessor("org.openjdk.jmh:jmh-generator-annprocess:$versionJmh")
-}
-
-// *.proto files taken from https://github.com/googleapis/googleapis/ repo, available as a git submodule
-protobuf {
-    // Configure the protoc executable
-    protobuf.protoc {
-        // Download from repositories
-        artifact = "com.google.protobuf:protoc:$versionProtobuf"
-    }
-    protobuf.plugins {
-        this.create("grpc") {
-            artifact = "io.grpc:protoc-gen-grpc-java:$versionGrpc"
-        }
-    }
-    protobuf.generateProtoTasks {
-        all().configureEach {
-            this.plugins.create("grpc") {}
-        }
-    }
 }
 
 jmh {
