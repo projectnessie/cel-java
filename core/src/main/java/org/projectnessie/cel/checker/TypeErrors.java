@@ -123,11 +123,17 @@ public class TypeErrors extends Errors {
 
   static String formatFunction(Type resultType, List<Type> argTypes, boolean isInstance) {
     StringBuilder result = new StringBuilder();
+    formatFunction(result, resultType, argTypes, isInstance);
+    return result.toString();
+  }
+
+  static void formatFunction(
+      StringBuilder result, Type resultType, List<Type> argTypes, boolean isInstance) {
     if (isInstance) {
       Type target = argTypes.get(0);
       argTypes = argTypes.subList(1, argTypes.size());
 
-      result.append(formatCheckedType(target));
+      formatCheckedType(result, target);
       result.append(".");
     }
 
@@ -137,14 +143,12 @@ public class TypeErrors extends Errors {
       if (i > 0) {
         result.append(", ");
       }
-      result.append(formatCheckedType(arg));
+      formatCheckedType(result, arg);
     }
     result.append(")");
     if (resultType != null) {
       result.append(" -> ");
-      result.append(formatCheckedType(resultType));
+      formatCheckedType(result, resultType);
     }
-
-    return result.toString();
   }
 }
