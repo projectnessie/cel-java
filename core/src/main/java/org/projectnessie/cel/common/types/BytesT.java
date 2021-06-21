@@ -104,6 +104,9 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
   @SuppressWarnings("unchecked")
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
+    if (typeDesc == ByteString.class || typeDesc == Object.class) {
+      return (T) ByteString.copyFrom(this.b);
+    }
     if (typeDesc == byte[].class) {
       return (T) b;
     }
@@ -119,9 +122,6 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
     }
     if (typeDesc == BytesValue.class) {
       return (T) BytesValue.of(ByteString.copyFrom(this.b));
-    }
-    if (typeDesc == ByteString.class || typeDesc == Object.class) {
-      return (T) ByteString.copyFrom(this.b);
     }
     if (typeDesc == ByteBuffer.class) {
       return (T) ByteBuffer.wrap(this.b);
