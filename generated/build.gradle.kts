@@ -30,12 +30,12 @@ val versionAntlr = "4.9.2"
 val versionGrpc = "1.38.1"
 val versionProtobuf = "3.17.3"
 
-sourceSets.create("generated") {
+sourceSets.main {
     java.srcDir(project.buildDir.resolve("generated/source/proto/main/java"))
     java.srcDir(project.buildDir.resolve("generated/source/proto/main/grpc"))
     java.destinationDirectory.set(project.buildDir.resolve("classes/java/generated"))
 }
-sourceSets.create("generatedTest") {
+sourceSets.test {
     java.srcDir(project.buildDir.resolve("generated/source/proto/test/java"))
     java.destinationDirectory.set(project.buildDir.resolve("classes/java/generatedTest"))
 }

@@ -33,7 +33,7 @@ val versionJunit = "5.7.2"
 val versionGrpc = "1.38.1"
 val versionProtobuf = "3.17.3"
 
-sourceSets.create("generated") {
+sourceSets.main {
     java.srcDir(project.buildDir.resolve("generated/source/proto/main/java"))
 }
 
