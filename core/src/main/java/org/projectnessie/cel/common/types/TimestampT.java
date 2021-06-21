@@ -524,6 +524,20 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
     }
   }
 
+  /**
+   * Parses a string to a valid {@link ZoneId}.
+   *
+   * <p>The input can be a
+   *
+   * <ul>
+   *   <li>numerical representation {@code ( '+' | '-' ) digit ( digit ) ( ':' digit ( digit ) ( ':'
+   *       digit ( digit ) ) )}, which is more flexible than {@link ZoneOffset#of(String)
+   *       ZoneOffset.of(String)}, or a
+   *   <li>zone ID, as returned by {@link ZoneId#of(String) ZoneId.of(String)}, or a
+   *   <li>time zone, as returned by {@link TimeZone#getTimeZone(String)
+   *       TimeZone.getTimeZone(String).toZoneId()}.
+   * </ul>
+   */
   static ZoneId parseTz(String tz) {
     if (tz.isEmpty()) {
       throw new DateTimeException("time-zone must not be empty");
@@ -551,12 +565,13 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
             String.format("invalid hour/minute/second value in time zone: '%s'", tz));
       }
 
-      int totalSeconds = hours * 60 * 60 + minutes * 60 + seconds;
+      ZoneOffset offset;
       if (negate) {
-        totalSeconds = -totalSeconds;
+        offset = ZoneOffset.ofHoursMinutesSeconds(-hours, -minutes, -seconds);
+      } else {
+        offset = ZoneOffset.ofHoursMinutesSeconds(hours, minutes, seconds);
       }
-
-      return ZoneId.ofOffset("UTC", ZoneOffset.ofTotalSeconds(totalSeconds));
+      return ZoneId.ofOffset("UTC", offset);
     }
 
     try {

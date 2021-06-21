@@ -17,6 +17,7 @@ package org.projectnessie.cel.common.types;
 
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.DurationT.DurationType;
 import static org.projectnessie.cel.common.types.DurationT.durationOf;
@@ -36,6 +37,7 @@ import com.google.protobuf.Any;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
+import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -244,6 +246,11 @@ public class TimestampTest {
             zoneUTC, zoneUTC, zoneUTC, zoneUTC, zoneUTC, zoneUTC, zoneUTC, zoneUTC, zoneUTC,
             zoneUTC, zoneUTC, zoneUTC);
 
+    assertThatThrownBy(() -> TimestampT.parseTz("+19")).isInstanceOf(DateTimeException.class);
+    assertThatThrownBy(() -> TimestampT.parseTz("+1:61")).isInstanceOf(DateTimeException.class);
+    assertThatThrownBy(() -> TimestampT.parseTz("+1:60:0")).isInstanceOf(DateTimeException.class);
+    assertThatThrownBy(() -> TimestampT.parseTz("+1:1:60")).isInstanceOf(DateTimeException.class);
+
     assertThat(
             asList(
                 TimestampT.parseTz("-1"),
@@ -253,12 +260,12 @@ public class TimestampTest {
                 TimestampT.parseTz("+02:30"),
                 TimestampT.parseTz("0:1:3")))
         .containsExactly(
-            ZoneId.ofOffset("UTC", ZoneOffset.ofTotalSeconds(-3600)),
-            ZoneId.ofOffset("UTC", ZoneOffset.ofTotalSeconds(3600)),
-            ZoneId.ofOffset("UTC", ZoneOffset.ofTotalSeconds(3600)),
-            ZoneId.ofOffset("UTC", ZoneOffset.ofTotalSeconds(-3750)),
-            ZoneId.ofOffset("UTC", ZoneOffset.ofTotalSeconds(9000)),
-            ZoneId.ofOffset("UTC", ZoneOffset.ofTotalSeconds(63)));
+            ZoneId.ofOffset("UTC", ZoneOffset.ofHoursMinutesSeconds(-1, 0, 0)),
+            ZoneId.ofOffset("UTC", ZoneOffset.ofHoursMinutesSeconds(1, 0, 0)),
+            ZoneId.ofOffset("UTC", ZoneOffset.ofHoursMinutesSeconds(1, 0, 0)),
+            ZoneId.ofOffset("UTC", ZoneOffset.ofHoursMinutesSeconds(-1, -2, -30)),
+            ZoneId.ofOffset("UTC", ZoneOffset.ofHoursMinutesSeconds(2, 30, 0)),
+            ZoneId.ofOffset("UTC", ZoneOffset.ofHoursMinutesSeconds(0, 1, 3)));
   }
 
   static class ParseTestCase {
