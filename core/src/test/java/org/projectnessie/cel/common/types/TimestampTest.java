@@ -435,6 +435,8 @@ public class TimestampTest {
     String ts0 = "2021-06-18T08:57:30Z";
     int nano3 = 123000000;
     String ts3 = "2021-06-18T08:57:30.123Z";
+    int nano4 = 123400000;
+    String ts4 = "2021-06-18T08:57:30.1234Z";
     int nano6 = 123456000;
     String ts6 = "2021-06-18T08:57:30.123456Z";
     int nano9 = 123456789;
@@ -447,6 +449,10 @@ public class TimestampTest {
     z = timestampOf(ts3).value();
     assertThat(z).extracting(x -> ((ZonedDateTime) x).toEpochSecond()).isEqualTo(secondsEpoch);
     assertThat(z).extracting(x -> ((ZonedDateTime) x).getNano()).isEqualTo(nano3);
+
+    z = timestampOf(ts4).value();
+    assertThat(z).extracting(x -> ((ZonedDateTime) x).toEpochSecond()).isEqualTo(secondsEpoch);
+    assertThat(z).extracting(x -> ((ZonedDateTime) x).getNano()).isEqualTo(nano4);
 
     z = timestampOf(ts6).value();
     assertThat(z).extracting(x -> ((ZonedDateTime) x).toEpochSecond()).isEqualTo(secondsEpoch);
