@@ -295,4 +295,12 @@ eclipse { project { name = ideName } }
 // Call targets:
 //    publishToSonatype
 //    closeAndReleaseSonatypeStagingRepository
-nexusPublishing { repositories { sonatype() } }
+nexusPublishing {
+  transitionCheckOptions {
+    // default==60 (10 minutes), wait up to 60 minutes
+    maxRetries.set(360)
+    // default 10s
+    delayBetween.set(java.time.Duration.ofSeconds(10))
+  }
+  repositories { sonatype() }
+}
