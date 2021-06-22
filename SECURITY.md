@@ -1,6 +1,6 @@
 # Security Policy
 
-The project is in a very early stage. Artifacts are not yet published to Maven Central or the like.
+The project is in a very early stage.
 
 ## Supported Versions
 
