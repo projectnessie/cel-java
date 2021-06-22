@@ -13,13 +13,13 @@ The easiest way to get started is to add a dependency to your Maven project
 <dependency>
   <groupId>org.projectnessie.cel</groupId>
   <artifactId>cel-tools</artifactId>
-  <version>0.1-SNAPSHOT</version>
+  <version>0.1.0</version>
 </dependency>
 ```
 or Gradle project.
 ```groovy
 dependencies {
-    implementation("org.projectnessie.cel:cel-tools:0.1-SNAPSHOT")
+    implementation("org.projectnessie.cel:cel-tools:0.1.0")
 }
 ```
 
