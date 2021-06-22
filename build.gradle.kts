@@ -85,6 +85,7 @@ allprojects {
                 parentNode.appendNode("version", project.version)
               }
             }
+            name.set(project.name)
             description.set(project.description)
             inceptionYear.set("2021")
             url.set("https://github.com/projectnessie/cel-java")
