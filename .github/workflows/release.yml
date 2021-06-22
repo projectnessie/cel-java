@@ -85,6 +85,14 @@ jobs:
       - name: Bump to release version
         run: echo "${RELEASE_VERSION}" > version.txt
 
+      - name: Update README.md
+        run: |
+          cp README.md README.md.bak
+          cat README.md.bak | \
+            sed "s/<version>.*<\/version>/<version>${RELEASE_VERSION}<\/version>/" | \
+            sed "s/implementation(\"org.projectnessie.cel:cel-tools:.*\")/implementation(\"org.projectnessie.cel:cel-tools:${RELEASE_VERSION}\")/" > README.md
+          rm README.md.bak
+
       - name: Record ${{ github.event.inputs.releaseVersion }} release in git
         run: |
           git commit -a -m "[release] v${RELEASE_VERSION}"

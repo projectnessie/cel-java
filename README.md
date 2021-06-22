@@ -8,8 +8,6 @@ The CEL specification can be found [here](https://github.com/google/cel-spec).
 
 ## Getting started
 
-CEL-Java is not yet deployed to Maven Central, so you have to build it locally (see below).
-
 The easiest way to get started is to add a dependency to your Maven project
 ```xml
 <dependency>
