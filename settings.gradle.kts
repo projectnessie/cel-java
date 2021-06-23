@@ -44,7 +44,9 @@ gradle.beforeProject {
     }
 }
 
-include("generated")
+include("generated-antlr")
+
+include("generated-pb")
 
 include("core")
 

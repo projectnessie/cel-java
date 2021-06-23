@@ -20,13 +20,11 @@ import com.google.protobuf.gradle.protoc
 
 plugins {
     `java-library`
-    antlr
     `maven-publish`
     signing
     id("com.google.protobuf")
 }
 
-val versionAntlr = "4.9.2"
 val versionGrpc = "1.38.1"
 val versionProtobuf = "3.17.3"
 
@@ -41,9 +39,6 @@ sourceSets.test {
 }
 
 dependencies {
-    antlr("org.antlr:antlr4:$versionAntlr") // TODO remove from runtime-classpath *sigh*
-    implementation("org.antlr:antlr4-runtime:$versionAntlr")
-
     api("com.google.protobuf:protobuf-java:$versionProtobuf")
 
     // Since we need the protobuf stuff in this cel-core module, it's easy to generate the

@@ -32,11 +32,12 @@ val versionJmh = "1.32"
 val versionJunit = "5.7.2"
 
 dependencies {
-    api(project(":generated"))
+    implementation(project(":generated-antlr"))
+    api(project(":generated-pb"))
 
     implementation("org.agrona:agrona:$versionAgrona")
 
-    testImplementation(project(":generated", "testJar"))
+    testImplementation(project(":generated-pb", "testJar"))
     testImplementation("org.assertj:assertj-core:$versionAssertj")
     testImplementation("org.junit.jupiter:junit-jupiter-api:$versionJunit")
     testImplementation("org.junit.jupiter:junit-jupiter-params:$versionJunit")

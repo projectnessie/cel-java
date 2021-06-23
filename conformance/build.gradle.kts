@@ -40,7 +40,7 @@ sourceSets.main {
 dependencies {
     implementation(project(":core"))
     implementation(project(":core", "testJar"))
-    implementation(project(":generated", "testJar"))
+    implementation(project(":generated-pb", "testJar"))
 
     implementation("com.google.protobuf:protobuf-java:$versionProtobuf")
 
