@@ -98,6 +98,7 @@ public class TypeT implements Type, Val {
   }
 
   /** Equal implements ref.Val.Equal. */
+  @Override
   public Val equal(Val other) {
     if (TypeType != other.type()) {
       return noSuchOverload(this, "equal", other);

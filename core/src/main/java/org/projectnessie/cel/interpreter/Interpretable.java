@@ -93,15 +93,18 @@ public interface Interpretable {
      * not copyable by default, so this is a capable that would need to be added to the
      * AttributeFactory or specifically to the underlying Attribute implementation.
      */
+    @Override
     Attribute addQualifier(Qualifier qualifier);
 
     /**
      * Qualify replicates the Attribute.Qualify method to permit extension and interception of
      * object qualification.
      */
+    @Override
     Object qualify(Activation vars, Object obj);
 
     /** Resolve returns the value of the Attribute given the current Activation. */
+    @Override
     Object resolve(Activation act);
   }
 
@@ -445,6 +448,7 @@ public interface Interpretable {
     }
 
     /** Cost implements the Coster interface method. */
+    @Override
     public Cost cost() {
       return calExhaustiveBinaryOpsCost(lhs, rhs);
     }

@@ -158,6 +158,7 @@ public class Debug {
   }
 
   static class EmptyDebugAdorner implements Adorner {
+    @Override
     public String getMetadata(Object e) {
       return "";
     }
