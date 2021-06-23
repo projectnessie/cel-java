@@ -22,7 +22,7 @@ import java.util.Arrays;
 import java.util.List;
 import org.projectnessie.cel.common.Location;
 
-public class ExprHelperImpl implements ExprHelper {
+public final class ExprHelperImpl implements ExprHelper {
 
   final Helper parserHelper;
   final long id;

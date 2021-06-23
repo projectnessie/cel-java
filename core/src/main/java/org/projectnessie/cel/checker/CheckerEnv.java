@@ -46,7 +46,7 @@ import org.projectnessie.cel.parser.Macro;
  * <p>The Env is comprised of a container, type provider, declarations, and other related objects
  * which can be used to assist with type-checking.
  */
-public class CheckerEnv {
+public final class CheckerEnv {
 
   final Container container;
   final TypeProvider provider;

@@ -233,7 +233,7 @@ public abstract class ListT extends BaseVal implements Lister {
       return intOf(size);
     }
 
-    private class ArrayListIteratorT extends BaseVal implements IteratorT {
+    private final class ArrayListIteratorT extends BaseVal implements IteratorT {
       private long index;
 
       @Override

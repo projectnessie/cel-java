@@ -21,7 +21,7 @@ import com.google.api.expr.v1alpha1.Type;
 import java.util.HashMap;
 import java.util.Map;
 
-public class Mapping {
+public final class Mapping {
 
   private final Map<String, Type> mapping;
   private final Map<Type, String> typeKeys;

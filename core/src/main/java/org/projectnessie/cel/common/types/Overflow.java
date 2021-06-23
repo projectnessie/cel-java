@@ -25,7 +25,7 @@ import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
 
 public final class Overflow {
-  public static class OverflowException extends RuntimeException {
+  public static final class OverflowException extends RuntimeException {
     OverflowException() {
       super("overflow", null, false, false);
     }

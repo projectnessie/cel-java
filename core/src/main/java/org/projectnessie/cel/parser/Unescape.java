@@ -25,7 +25,7 @@ import java.nio.charset.CharsetEncoder;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 
-public class Unescape {
+public final class Unescape {
 
   /**
    * Unescape takes a quoted string, unquotes, and unescapes it.

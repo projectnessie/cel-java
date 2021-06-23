@@ -136,7 +136,7 @@ public interface Interpretable {
 
   // Core Interpretable implementations used during the program planning phase.
 
-  class EvalTestOnly implements Interpretable, Coster {
+  final class EvalTestOnly implements Interpretable, Coster {
     private final long id;
     private final Interpretable op;
     private final StringT field;
@@ -240,7 +240,7 @@ public interface Interpretable {
     }
   }
 
-  class EvalConst extends AbstractEval implements InterpretableConst, Coster {
+  final class EvalConst extends AbstractEval implements InterpretableConst, Coster {
     private final Val val;
 
     EvalConst(long id, Val val) {
@@ -272,7 +272,7 @@ public interface Interpretable {
     }
   }
 
-  class EvalOr extends AbstractEvalLhsRhs {
+  final class EvalOr extends AbstractEvalLhsRhs {
     // TODO combine with EvalExhaustiveOr
     EvalOr(long id, Interpretable lhs, Interpretable rhs) {
       super(id, lhs, rhs);
@@ -325,7 +325,7 @@ public interface Interpretable {
     }
   }
 
-  class EvalAnd extends AbstractEvalLhsRhs {
+  final class EvalAnd extends AbstractEvalLhsRhs {
     // TODO combine with EvalExhaustiveAnd
     EvalAnd(long id, Interpretable lhs, Interpretable rhs) {
       super(id, lhs, rhs);
@@ -384,7 +384,7 @@ public interface Interpretable {
     return costOf(l.min, l.max + r.max + 1);
   }
 
-  class EvalEq extends AbstractEvalLhsRhs implements InterpretableCall {
+  final class EvalEq extends AbstractEvalLhsRhs implements InterpretableCall {
     EvalEq(long id, Interpretable lhs, Interpretable rhs) {
       super(id, lhs, rhs);
     }
@@ -427,7 +427,7 @@ public interface Interpretable {
     }
   }
 
-  class EvalNe extends AbstractEvalLhsRhs implements InterpretableCall {
+  final class EvalNe extends AbstractEvalLhsRhs implements InterpretableCall {
     EvalNe(long id, Interpretable lhs, Interpretable rhs) {
       super(id, lhs, rhs);
     }
@@ -477,7 +477,7 @@ public interface Interpretable {
     }
   }
 
-  class EvalZeroArity extends AbstractEval implements InterpretableCall, Coster {
+  final class EvalZeroArity extends AbstractEval implements InterpretableCall, Coster {
     private final String function;
     private final String overload;
     private final FunctionOp impl;
@@ -536,7 +536,7 @@ public interface Interpretable {
     }
   }
 
-  class EvalUnary extends AbstractEval implements InterpretableCall, Coster {
+  final class EvalUnary extends AbstractEval implements InterpretableCall, Coster {
     private final String function;
     private final String overload;
     private final Interpretable arg;
@@ -620,7 +620,7 @@ public interface Interpretable {
     }
   }
 
-  class EvalBinary extends AbstractEvalLhsRhs implements InterpretableCall {
+  final class EvalBinary extends AbstractEvalLhsRhs implements InterpretableCall {
     private final String function;
     private final String overload;
     private final Trait trait;
@@ -713,7 +713,7 @@ public interface Interpretable {
     }
   }
 
-  class EvalVarArgs extends AbstractEval implements Coster, InterpretableCall {
+  final class EvalVarArgs extends AbstractEval implements Coster, InterpretableCall {
     private final String function;
     private final String overload;
     private final Interpretable[] args;
@@ -808,7 +808,7 @@ public interface Interpretable {
     }
   }
 
-  class EvalList extends AbstractEval implements Coster {
+  final class EvalList extends AbstractEval implements Coster {
     final Interpretable[] elems;
     private final TypeAdapter adapter;
 
@@ -846,7 +846,7 @@ public interface Interpretable {
     }
   }
 
-  class EvalMap extends AbstractEval implements Coster {
+  final class EvalMap extends AbstractEval implements Coster {
     final Interpretable[] keys;
     final Interpretable[] vals;
     private final TypeAdapter adapter;
@@ -899,7 +899,7 @@ public interface Interpretable {
     }
   }
 
-  class EvalObj extends AbstractEval implements Coster {
+  final class EvalObj extends AbstractEval implements Coster {
     private final String typeName;
     private final String[] fields;
     private final Interpretable[] vals;
@@ -965,7 +965,7 @@ public interface Interpretable {
     return costOf(min, max);
   }
 
-  class EvalFold extends AbstractEval implements Coster {
+  final class EvalFold extends AbstractEval implements Coster {
     // TODO combine with EvalExhaustiveFold
     final String accuVar;
     final String iterVar;
@@ -1092,7 +1092,7 @@ public interface Interpretable {
    * evalSetMembership is an Interpretable implementation which tests whether an input value exists
    * within the set of map keys used to model a set.
    */
-  class EvalSetMembership extends AbstractEval implements Coster {
+  final class EvalSetMembership extends AbstractEval implements Coster {
     private final Interpretable inst;
     private final Interpretable arg;
     private final String argTypeName;
@@ -1145,7 +1145,7 @@ public interface Interpretable {
    * evalWatch is an Interpretable implementation that wraps the execution of a given expression so
    * that it may observe the computed value and send it to an observer.
    */
-  class EvalWatch implements Interpretable, Coster {
+  final class EvalWatch implements Interpretable, Coster {
     private final Interpretable i;
     private final EvalObserver observer;
 
@@ -1185,7 +1185,7 @@ public interface Interpretable {
    * <p>Since the watcher may be selected against at a later stage in program planning, the watcher
    * must implement the instAttr interface by proxy.
    */
-  class EvalWatchAttr implements Coster, InterpretableAttribute, Attribute {
+  final class EvalWatchAttr implements Coster, InterpretableAttribute, Attribute {
     private final InterpretableAttribute attr;
     private final EvalObserver observer;
 
@@ -1292,7 +1292,7 @@ public interface Interpretable {
     }
   }
 
-  class EvalWatchConstQualEquat extends AbstractEvalWatch<ConstantQualifierEquator>
+  final class EvalWatchConstQualEquat extends AbstractEvalWatch<ConstantQualifierEquator>
       implements ConstantQualifierEquator {
     EvalWatchConstQualEquat(
         ConstantQualifierEquator delegate, EvalObserver observer, TypeAdapter adapter) {
@@ -1327,7 +1327,7 @@ public interface Interpretable {
    * evalWatchConstQual observes the qualification of an object using a constant boolean, int,
    * string, or uint.
    */
-  class EvalWatchConstQual extends AbstractEvalWatch<ConstantQualifier>
+  final class EvalWatchConstQual extends AbstractEvalWatch<ConstantQualifier>
       implements ConstantQualifier, Coster {
     EvalWatchConstQual(ConstantQualifier delegate, EvalObserver observer, TypeAdapter adapter) {
       super(delegate, observer, adapter);
@@ -1350,7 +1350,7 @@ public interface Interpretable {
   }
 
   /** evalWatchQual observes the qualification of an object by a value computed at runtime. */
-  class EvalWatchQual extends AbstractEvalWatch<Qualifier> {
+  final class EvalWatchQual extends AbstractEvalWatch<Qualifier> {
     public EvalWatchQual(Qualifier delegate, EvalObserver observer, TypeAdapter adapter) {
       super(delegate, observer, adapter);
     }
@@ -1367,7 +1367,7 @@ public interface Interpretable {
   }
 
   /** evalWatchConst describes a watcher of an instConst Interpretable. */
-  class EvalWatchConst implements InterpretableConst, Coster {
+  final class EvalWatchConst implements InterpretableConst, Coster {
     private final InterpretableConst c;
     private final EvalObserver observer;
 
@@ -1406,7 +1406,7 @@ public interface Interpretable {
   }
 
   /** evalExhaustiveOr is just like evalOr, but does not short-circuit argument evaluation. */
-  class EvalExhaustiveOr extends AbstractEvalLhsRhs {
+  final class EvalExhaustiveOr extends AbstractEvalLhsRhs {
     // TODO combine with EvalOr
     EvalExhaustiveOr(long id, Interpretable lhs, Interpretable rhs) {
       super(id, lhs, rhs);
@@ -1450,7 +1450,7 @@ public interface Interpretable {
   }
 
   /** evalExhaustiveAnd is just like evalAnd, but does not short-circuit argument evaluation. */
-  class EvalExhaustiveAnd extends AbstractEvalLhsRhs {
+  final class EvalExhaustiveAnd extends AbstractEvalLhsRhs {
     // TODO combine with EvalAnd
     EvalExhaustiveAnd(long id, Interpretable lhs, Interpretable rhs) {
       super(id, lhs, rhs);
@@ -1501,7 +1501,7 @@ public interface Interpretable {
    * evalExhaustiveConditional is like evalConditional, but does not short-circuit argument
    * evaluation.
    */
-  class EvalExhaustiveConditional extends AbstractEval implements Coster {
+  final class EvalExhaustiveConditional extends AbstractEval implements Coster {
     // TODO combine with EvalConditional
     private final TypeAdapter adapter;
     private final ConditionalAttribute attr;
@@ -1540,7 +1540,7 @@ public interface Interpretable {
   }
 
   /** evalExhaustiveFold is like evalFold, but does not short-circuit argument evaluation. */
-  class EvalExhaustiveFold extends AbstractEval implements Coster {
+  final class EvalExhaustiveFold extends AbstractEval implements Coster {
     // TODO combine with EvalFold
     private final String accuVar;
     private final String iterVar;
@@ -1655,7 +1655,7 @@ public interface Interpretable {
   }
 
   /** evalAttr evaluates an Attribute value. */
-  class EvalAttr extends AbstractEval
+  final class EvalAttr extends AbstractEval
       implements InterpretableAttribute, Coster, Qualifier, Attribute {
     private final TypeAdapter adapter;
     private Attribute attr;

@@ -205,7 +205,7 @@ final class Helper {
     return new Balancer(function, term);
   }
 
-  class Balancer {
+  final class Balancer {
     final String function;
     final List<Expr> terms;
     final LongArrayList ops;

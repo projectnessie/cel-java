@@ -81,7 +81,7 @@ public interface Activation {
    * <p>Named bindings may lazily supply values by providing a function which accepts no arguments
    * and produces an interface value.
    */
-  class MapActivation implements Activation {
+  final class MapActivation implements Activation {
     private final Map<String, Object> bindings;
 
     MapActivation(Map<String, Object> bindings) {
@@ -117,7 +117,7 @@ public interface Activation {
   /**
    * hierarchicalActivation which implements Activation and contains a parent and child activation.
    */
-  class HierarchicalActivation implements Activation {
+  final class HierarchicalActivation implements Activation {
     private final Activation parent;
     private final Activation child;
 
@@ -179,7 +179,7 @@ public interface Activation {
   }
 
   /** partActivation is the default implementations of the PartialActivation interface. */
-  class PartActivation implements PartialActivation {
+  final class PartActivation implements PartialActivation {
     private final Activation delegate;
     private final AttributePattern[] unknowns;
 

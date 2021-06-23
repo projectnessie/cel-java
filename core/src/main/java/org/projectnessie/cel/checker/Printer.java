@@ -24,9 +24,9 @@ import com.google.api.expr.v1alpha1.Type;
 import org.projectnessie.cel.common.debug.Debug;
 import org.projectnessie.cel.common.debug.Debug.Adorner;
 
-public class Printer {
+public final class Printer {
 
-  static class SemanticAdorner implements Adorner {
+  static final class SemanticAdorner implements Adorner {
     private final CheckedExpr checks;
 
     SemanticAdorner(CheckedExpr checks) {

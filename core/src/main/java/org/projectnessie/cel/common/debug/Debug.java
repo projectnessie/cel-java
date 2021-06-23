@@ -24,7 +24,7 @@ import com.google.api.expr.v1alpha1.Expr.CreateStruct;
 import com.google.api.expr.v1alpha1.Expr.CreateStruct.Entry;
 import com.google.api.expr.v1alpha1.Expr.Select;
 
-public class Debug {
+public final class Debug {
   /** ToDebugString gives the unadorned string representation of the Expr. */
   public String toDebugString(Expr e) {
     return toAdornedDebugString(e, new EmptyDebugAdorner());
@@ -157,7 +157,7 @@ public class Debug {
     String getMetadata(Object ctx);
   }
 
-  static class EmptyDebugAdorner implements Adorner {
+  static final class EmptyDebugAdorner implements Adorner {
     @Override
     public String getMetadata(Object e) {
       return "";
@@ -165,9 +165,9 @@ public class Debug {
   }
 
   /** debugWriter is used to print out pretty-printed debug strings. */
-  public static class DebugWriter {
-    Adorner adorner;
-    StringBuilder buffer;
+  public static final class DebugWriter {
+    final Adorner adorner;
+    final StringBuilder buffer;
     int indent;
     boolean lineStart;
 

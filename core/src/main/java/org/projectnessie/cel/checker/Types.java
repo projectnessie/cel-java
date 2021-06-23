@@ -28,7 +28,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
-public class Types {
+public final class Types {
 
   enum Kind {
     kindUnknown,

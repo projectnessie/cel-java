@@ -25,7 +25,7 @@ import java.util.Map;
  * mapping of names to Decls in the ident and function namespaces. Lookups are performed such that
  * bindings in inner scopes shadow those in outer scopes.
  */
-public class Scopes {
+public final class Scopes {
   private final Scopes parent;
   private final Group scopes;
 
@@ -129,7 +129,7 @@ public class Scopes {
    * Group is a set of Decls that is pushed on or popped off a Scopes as a unit. Contains separate
    * namespaces for idenifier and function Decls. (Should be named "Scope" perhaps?)
    */
-  public static class Group {
+  public static final class Group {
     private final Map<String, Decl> idents;
     private final Map<String, Decl> functions;
 

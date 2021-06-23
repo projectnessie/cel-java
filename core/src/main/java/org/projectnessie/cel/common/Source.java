@@ -97,7 +97,7 @@ public interface Source {
   String snippet(int line);
 }
 
-class SourceImpl implements Source {
+final class SourceImpl implements Source {
 
   private final String content;
   private final String description;

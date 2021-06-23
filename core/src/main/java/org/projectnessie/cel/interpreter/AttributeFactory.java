@@ -171,7 +171,7 @@ public interface AttributeFactory {
     return new AttrFactory(cont, a, p);
   }
 
-  class AttrFactory implements AttributeFactory {
+  final class AttrFactory implements AttributeFactory {
     private final Container container;
     private final TypeAdapter adapter;
     private final TypeProvider provider;
@@ -251,7 +251,7 @@ public interface AttributeFactory {
     }
   }
 
-  class AbsoluteAttribute implements Qualifier, NamespacedAttribute, Coster {
+  final class AbsoluteAttribute implements Qualifier, NamespacedAttribute, Coster {
     final long id;
     /**
      * namespaceNames represent the names the variable could have based on declared container
@@ -390,7 +390,7 @@ public interface AttributeFactory {
     }
   }
 
-  class ConditionalAttribute implements Qualifier, Attribute, Coster {
+  final class ConditionalAttribute implements Qualifier, Attribute, Coster {
     final long id;
     final Interpretable expr;
     final Attribute truthy;
@@ -485,7 +485,7 @@ public interface AttributeFactory {
     }
   }
 
-  class MaybeAttribute implements Coster, Attribute, Qualifier {
+  final class MaybeAttribute implements Coster, Attribute, Qualifier {
     final long id;
     final List<NamespacedAttribute> attrs;
     final TypeAdapter adapter;
@@ -626,7 +626,7 @@ public interface AttributeFactory {
     }
   }
 
-  class RelativeAttribute implements Coster, Qualifier, Attribute {
+  final class RelativeAttribute implements Coster, Qualifier, Attribute {
     final long id;
     final Interpretable operand;
     final List<Qualifier> qualifiers;
@@ -760,7 +760,7 @@ public interface AttributeFactory {
         String.format("invalid qualifier type: %s", v.getClass().getName()));
   }
 
-  class AttrQualifier implements Coster, Attribute {
+  final class AttrQualifier implements Coster, Attribute {
     final long id;
     final Attribute attribute;
 
@@ -801,7 +801,7 @@ public interface AttributeFactory {
     }
   }
 
-  class StringQualifier implements Coster, ConstantQualifierEquator, QualifierValueEquator {
+  final class StringQualifier implements Coster, ConstantQualifierEquator, QualifierValueEquator {
     final long id;
     final String value;
     final Val celValue;
@@ -878,7 +878,7 @@ public interface AttributeFactory {
     }
   }
 
-  class IntQualifier implements Coster, ConstantQualifierEquator {
+  final class IntQualifier implements Coster, ConstantQualifierEquator {
     final long id;
     final long value;
     final Val celValue;
@@ -977,7 +977,7 @@ public interface AttributeFactory {
     }
   }
 
-  class UintQualifier implements Coster, ConstantQualifierEquator {
+  final class UintQualifier implements Coster, ConstantQualifierEquator {
     final long id;
     final long value;
     final Val celValue;
@@ -1058,7 +1058,7 @@ public interface AttributeFactory {
     }
   }
 
-  class BoolQualifier implements Coster, ConstantQualifierEquator {
+  final class BoolQualifier implements Coster, ConstantQualifierEquator {
     final long id;
     final boolean value;
     final Val celValue;
@@ -1139,7 +1139,7 @@ public interface AttributeFactory {
    * type. When the field type is known this can be used to improve the speed and efficiency of
    * field resolution.
    */
-  class FieldQualifier implements Coster, ConstantQualifierEquator {
+  final class FieldQualifier implements Coster, ConstantQualifierEquator {
     final long id;
     final String name;
     final FieldType fieldType;

@@ -42,7 +42,7 @@ import org.projectnessie.cel.common.operators.Operator;
  * to represent the value. - Spacing around punctuation marks may be lost. - Parentheses will only
  * be applied when they affect operator precedence.
  */
-public class Unparser {
+public final class Unparser {
 
   private final SourceInfo info;
   private final StringBuilder str;

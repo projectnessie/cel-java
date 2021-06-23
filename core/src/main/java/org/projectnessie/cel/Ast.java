@@ -28,7 +28,7 @@ import org.projectnessie.cel.common.Source;
  * Ast representing the checked or unchecked expression, its source, and related metadata such as
  * source position information.
  */
-public class Ast {
+public final class Ast {
   private final Expr expr;
   private final SourceInfo info;
   private final Source source;

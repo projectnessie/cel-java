@@ -32,7 +32,7 @@ public interface Location extends Comparable<Location> {
   int column();
 }
 
-class SourceLocation implements Location {
+final class SourceLocation implements Location {
   private final int line;
   private final int column;
 

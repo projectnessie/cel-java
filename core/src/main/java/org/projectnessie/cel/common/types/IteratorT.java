@@ -37,7 +37,7 @@ public interface IteratorT extends Val {
   /** Next returns the next element. */
   Val next();
 
-  class JavaIteratorT extends BaseVal implements IteratorT {
+  final class JavaIteratorT extends BaseVal implements IteratorT {
     private final TypeAdapter adapter;
     private final Iterator<?> iterator;
 

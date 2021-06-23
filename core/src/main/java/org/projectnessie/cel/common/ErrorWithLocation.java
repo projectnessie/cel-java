@@ -15,7 +15,7 @@
  */
 package org.projectnessie.cel.common;
 
-public class ErrorWithLocation extends RuntimeException {
+public final class ErrorWithLocation extends RuntimeException {
   private final Location location;
 
   public ErrorWithLocation(Location location, String message) {

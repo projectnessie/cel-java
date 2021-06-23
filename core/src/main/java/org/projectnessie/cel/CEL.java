@@ -47,7 +47,7 @@ import org.projectnessie.cel.interpreter.Dispatcher;
 import org.projectnessie.cel.interpreter.InterpretableDecorator;
 import org.projectnessie.cel.interpreter.Interpreter;
 
-public class CEL {
+public final class CEL {
 
   /**
    * newProgram creates a program instance with an environment, an ast, and an optional list of

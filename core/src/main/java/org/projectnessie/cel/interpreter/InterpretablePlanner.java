@@ -118,7 +118,7 @@ public interface InterpretablePlanner {
   }
 
   /** planner is an implementatio of the interpretablePlanner interface. */
-  class Planner implements InterpretablePlanner {
+  final class Planner implements InterpretablePlanner {
     private final Dispatcher disp;
     private final TypeProvider provider;
     private final TypeAdapter adapter;
@@ -630,7 +630,7 @@ public interface InterpretablePlanner {
       return null;
     }
 
-    static class ResolvedFunction {
+    static final class ResolvedFunction {
       final Expr target;
       final String fnName;
       final String overloadId;

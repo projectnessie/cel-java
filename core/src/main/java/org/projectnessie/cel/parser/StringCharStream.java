@@ -19,7 +19,7 @@ import org.antlr.v4.runtime.CharStream;
 import org.antlr.v4.runtime.IntStream;
 import org.antlr.v4.runtime.misc.Interval;
 
-public class StringCharStream implements CharStream {
+public final class StringCharStream implements CharStream {
 
   private final String buf;
   private final String src;

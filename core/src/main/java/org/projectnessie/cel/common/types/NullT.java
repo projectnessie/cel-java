@@ -31,9 +31,9 @@ import org.projectnessie.cel.common.types.ref.Val;
 public final class NullT extends BaseVal {
 
   /** NullType singleton. */
-  public static Type NullType = TypeT.newTypeValue(TypeEnum.Null);
+  public static final Type NullType = TypeT.newTypeValue(TypeEnum.Null);
   /** NullValue singleton. */
-  public static NullT NullValue = new NullT();
+  public static final NullT NullValue = new NullT();
 
   private static final Value PbValue =
       Value.newBuilder().setNullValue(com.google.protobuf.NullValue.NULL_VALUE).build();

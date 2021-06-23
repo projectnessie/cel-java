@@ -25,7 +25,7 @@ import org.projectnessie.cel.common.Source;
  *
  * <p>Note: in the future, non-fatal warnings and notices may be inspectable via the Issues struct.
  */
-public class Issues {
+public final class Issues {
 
   private final Errors errs;
 

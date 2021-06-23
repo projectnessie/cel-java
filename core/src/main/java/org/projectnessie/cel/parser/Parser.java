@@ -87,7 +87,7 @@ import org.projectnessie.cel.parser.gen.CELParser.StringContext;
 import org.projectnessie.cel.parser.gen.CELParser.UintContext;
 import org.projectnessie.cel.parser.gen.CELParser.UnaryContext;
 
-public class Parser {
+public final class Parser {
 
   private static final Set<String> reservedIds =
       Collections.unmodifiableSet(
@@ -174,7 +174,7 @@ public class Parser {
     return new ParseResult(expr, errors, helper.getSourceInfo());
   }
 
-  public static class ParseResult {
+  public static final class ParseResult {
     private final Expr expr;
     private final Errors errors;
     private final SourceInfo sourceInfo;
@@ -202,7 +202,7 @@ public class Parser {
     }
   }
 
-  static class RecursionListener implements ParseTreeListener {
+  static final class RecursionListener implements ParseTreeListener {
     private final int maxDepth;
     private int depth;
 
@@ -236,20 +236,20 @@ public class Parser {
     }
   }
 
-  static class RecursionError extends RuntimeException {
+  static final class RecursionError extends RuntimeException {
     public RecursionError(String message) {
       super(message);
     }
   }
 
-  static class RecoveryLimitError extends RecognitionException {
+  static final class RecoveryLimitError extends RecognitionException {
     public RecoveryLimitError(
         String message, Recognizer<?, ?> recognizer, IntStream input, ParserRuleContext ctx) {
       super(message, recognizer, input, ctx);
     }
   }
 
-  static class RecoveryLimitErrorStrategy extends DefaultErrorStrategy {
+  static final class RecoveryLimitErrorStrategy extends DefaultErrorStrategy {
     private final int maxAttempts;
     private int attempts;
 
@@ -280,7 +280,7 @@ public class Parser {
     }
   }
 
-  class InnerParser extends AbstractParseTreeVisitor<Object> implements ANTLRErrorListener {
+  final class InnerParser extends AbstractParseTreeVisitor<Object> implements ANTLRErrorListener {
 
     private final Helper helper;
     private final Errors errors;
