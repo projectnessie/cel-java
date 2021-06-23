@@ -30,6 +30,7 @@ final class ProgGen implements Program, Coster {
   }
 
   /** Eval implements the Program interface method. */
+  @Override
   public EvalResult eval(Object input) {
     // The factory based Eval() differs from the standard evaluation model in that it generates a
     // new EvalState instance for each call to ensure that unique evaluations yield unique stateful
