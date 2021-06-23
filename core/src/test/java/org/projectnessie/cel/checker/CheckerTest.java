@@ -36,7 +36,7 @@ import org.projectnessie.cel.common.Source;
 import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.Overloads;
-import org.projectnessie.cel.common.types.ProtoTypeRegistry;
+import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.parser.Parser;
 import org.projectnessie.cel.parser.Parser.ParseResult;

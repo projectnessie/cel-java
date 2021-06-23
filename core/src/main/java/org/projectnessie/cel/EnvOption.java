@@ -18,15 +18,10 @@ package org.projectnessie.cel;
 import static java.util.Arrays.asList;
 import static org.projectnessie.cel.EnvOption.EnvFeature.FeatureDisableDynamicAggregateLiterals;
 import static org.projectnessie.cel.common.containers.Container.name;
-import static org.projectnessie.cel.common.types.pb.Db.collectFileDescriptorSet;
 
 import com.google.api.expr.v1alpha1.Decl;
-import com.google.protobuf.Descriptors.FileDescriptor;
-import com.google.protobuf.Message;
 import java.util.List;
-import java.util.Set;
 import org.projectnessie.cel.common.containers.Container;
-import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
@@ -241,17 +236,7 @@ public interface EnvOption {
       }
       TypeRegistry reg = (TypeRegistry) e.provider;
       for (Object t : addTypes) {
-        if (t instanceof Message) {
-          Set<FileDescriptor> fds = collectFileDescriptorSet((Message) t);
-          for (FileDescriptor fd : fds) {
-            reg.registerDescriptor(fd);
-          }
-          reg.registerMessage((Message) t);
-        } else if (t instanceof Type) {
-          reg.registerType((Type) t);
-        } else {
-          throw new RuntimeException(String.format("unsupported type: %s", t.getClass().getName()));
-        }
+        reg.register(t);
       }
       return e;
     };

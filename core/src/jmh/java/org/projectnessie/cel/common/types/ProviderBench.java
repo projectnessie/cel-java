@@ -18,8 +18,8 @@ package org.projectnessie.cel.common.types;
 import static org.projectnessie.cel.Util.mapOf;
 import static org.projectnessie.cel.common.types.ListT.newGenericArrayList;
 import static org.projectnessie.cel.common.types.MapT.newMaybeWrappedMap;
-import static org.projectnessie.cel.common.types.ProtoTypeRegistry.newRegistry;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
+import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newRegistry;
 
 import com.google.api.expr.v1alpha1.ParsedExpr;
 import java.util.concurrent.TimeUnit;

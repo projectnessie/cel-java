@@ -39,6 +39,7 @@ import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.TestInstance.Lifecycle;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Adder;

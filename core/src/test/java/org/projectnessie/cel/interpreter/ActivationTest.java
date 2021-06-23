@@ -30,7 +30,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
-import org.projectnessie.cel.common.types.DefaultTypeAdapter;
+import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 
 public class ActivationTest {

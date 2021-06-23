@@ -38,7 +38,7 @@ import org.openjdk.jmh.annotations.Warmup;
 @Threads(2)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
-public class TypeDescriptionBench {
+public class PbTypeDescriptionBench {
 
   @State(Scope.Benchmark)
   public static class Case {
@@ -54,7 +54,7 @@ public class TypeDescriptionBench {
     })
     public UnwrapTestCase testCase;
 
-    TypeDescription td;
+    PbTypeDescription td;
     Message msg;
     UnwrapContext ctx;
 

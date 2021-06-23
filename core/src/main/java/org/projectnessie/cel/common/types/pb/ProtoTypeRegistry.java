@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.projectnessie.cel.common.types;
+package org.projectnessie.cel.common.types.pb;
 
 import static org.projectnessie.cel.common.types.BoolT.BoolType;
 import static org.projectnessie.cel.common.types.BytesT.BytesType;
@@ -29,14 +29,17 @@ import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.ListT.ListType;
 import static org.projectnessie.cel.common.types.MapT.MapType;
 import static org.projectnessie.cel.common.types.NullT.NullType;
-import static org.projectnessie.cel.common.types.ObjectT.newObject;
 import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.TimestampT.TimestampType;
 import static org.projectnessie.cel.common.types.TypeT.TypeType;
 import static org.projectnessie.cel.common.types.TypeT.newObjectTypeValue;
 import static org.projectnessie.cel.common.types.UintT.UintType;
+import static org.projectnessie.cel.common.types.pb.Db.collectFileDescriptorSet;
 import static org.projectnessie.cel.common.types.pb.Db.newDb;
-import static org.projectnessie.cel.common.types.pb.TypeDescription.typeNameFromMessage;
+import static org.projectnessie.cel.common.types.pb.DefaultTypeAdapter.maybeUnwrapValue;
+import static org.projectnessie.cel.common.types.pb.PbObjectT.newObject;
+import static org.projectnessie.cel.common.types.pb.PbTypeDescription.typeNameFromMessage;
+import static org.projectnessie.cel.common.types.ref.TypeAdapterSupport.maybeNativeToValue;
 
 import com.google.api.expr.v1alpha1.Type;
 import com.google.protobuf.Any;
@@ -75,11 +78,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
-import org.projectnessie.cel.common.types.pb.Db;
-import org.projectnessie.cel.common.types.pb.EnumValueDescription;
-import org.projectnessie.cel.common.types.pb.FieldDescription;
-import org.projectnessie.cel.common.types.pb.FileDescription;
-import org.projectnessie.cel.common.types.pb.TypeDescription;
+import org.projectnessie.cel.common.types.TypeT;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
@@ -99,7 +98,7 @@ public final class ProtoTypeRegistry implements TypeRegistry {
    * create new instances of the provided message or any message that proto depends upon in its
    * FileDescriptor.
    */
-  public static TypeRegistry newRegistry(Message... types) {
+  public static ProtoTypeRegistry newRegistry(Message... types) {
     ProtoTypeRegistry p = new ProtoTypeRegistry(new HashMap<>(), newDb());
     p.registerType(
         BoolType,
@@ -152,7 +151,7 @@ public final class ProtoTypeRegistry implements TypeRegistry {
   }
 
   /** NewEmptyRegistry returns a registry which is completely unconfigured. */
-  public static TypeRegistry newEmptyRegistry() {
+  public static ProtoTypeRegistry newEmptyRegistry() {
     return new ProtoTypeRegistry(new HashMap<>(), newDb());
   }
 
@@ -161,8 +160,23 @@ public final class ProtoTypeRegistry implements TypeRegistry {
    * registry into its own memory space.
    */
   @Override
-  public TypeRegistry copy() {
+  public ProtoTypeRegistry copy() {
     return new ProtoTypeRegistry(new HashMap<>(this.revTypeMap), pbdb.copy());
+  }
+
+  @Override
+  public void register(Object t) {
+    if (t instanceof Message) {
+      Set<FileDescriptor> fds = collectFileDescriptorSet((Message) t);
+      for (FileDescriptor fd : fds) {
+        registerDescriptor(fd);
+      }
+      registerMessage((Message) t);
+    } else if (t instanceof org.projectnessie.cel.common.types.ref.Type) {
+      registerType((org.projectnessie.cel.common.types.ref.Type) t);
+    } else {
+      throw new RuntimeException(String.format("unsupported type: %s", t.getClass().getName()));
+    }
   }
 
   @Override
@@ -176,7 +190,7 @@ public final class ProtoTypeRegistry implements TypeRegistry {
 
   @Override
   public FieldType findFieldType(String messageType, String fieldName) {
-    TypeDescription msgType = pbdb.describeType(messageType);
+    PbTypeDescription msgType = pbdb.describeType(messageType);
     if (msgType == null) {
       return null;
     }
@@ -191,7 +205,7 @@ public final class ProtoTypeRegistry implements TypeRegistry {
   public Val findIdent(String identName) {
     org.projectnessie.cel.common.types.ref.Type t = revTypeMap.get(identName);
     if (t != null) {
-      return (Val) t;
+      return t;
     }
     EnumValueDescription enumVal = pbdb.describeEnum(identName);
     if (enumVal != null) {
@@ -213,7 +227,7 @@ public final class ProtoTypeRegistry implements TypeRegistry {
 
   @Override
   public Val newValue(String typeName, Map<String, Val> fields) {
-    TypeDescription td = pbdb.describeType(typeName);
+    PbTypeDescription td = pbdb.describeType(typeName);
     if (td == null) {
       return unknownType(typeName);
     }
@@ -226,7 +240,7 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     return nativeToValue(msg);
   }
 
-  private Val newValueSetFields(Map<String, Val> fields, TypeDescription td, Builder builder) {
+  private Val newValueSetFields(Map<String, Val> fields, PbTypeDescription td, Builder builder) {
     Map<String, FieldDescription> fieldMap = td.fieldMap();
     for (Entry<String, Val> nv : fields.entrySet()) {
       String name = nv.getKey();
@@ -323,13 +337,13 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     return value;
   }
 
-  @Override
+  /** RegisterDescriptor registers the contents of a protocol buffer `FileDescriptor`. */
   public void registerDescriptor(FileDescriptor fileDesc) {
     FileDescription fd = pbdb.registerDescriptor(fileDesc);
     registerAllTypes(fd);
   }
 
-  @Override
+  /** RegisterMessage registers a protocol buffer message and its dependencies. */
   public void registerMessage(Message message) {
     FileDescription fd = pbdb.registerMessage(message);
     registerAllTypes(fd);
@@ -357,18 +371,18 @@ public final class ProtoTypeRegistry implements TypeRegistry {
       if (typeName.isEmpty()) {
         return anyWithEmptyType();
       }
-      TypeDescription td = pbdb.describeType(typeName);
+      PbTypeDescription td = pbdb.describeType(typeName);
       if (td == null) {
         return unknownType(typeName);
       }
       Object unwrapped = td.maybeUnwrap(pbdb, v);
       if (unwrapped != null) {
-        Object further = DefaultTypeAdapter.maybeUnwrapValue(unwrapped);
+        Object further = maybeUnwrapValue(unwrapped);
         if (further != unwrapped) {
           return nativeToValue(further);
         }
 
-        Val val = DefaultTypeAdapter.maybeNativeToValue(this, unwrapped);
+        Val val = maybeNativeToValue(this, unwrapped);
         if (val != null) {
           return val;
         }

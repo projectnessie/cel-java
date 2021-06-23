@@ -53,7 +53,7 @@ import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.TimestampT;
 
-public class TypeDescriptorTest {
+public class PbTypeDescriptionTest {
 
   @ParameterizedTest
   @ValueSource(
@@ -79,7 +79,7 @@ public class TypeDescriptorTest {
     Db pbdb = newDb();
     NestedTestAllTypes msg = NestedTestAllTypes.getDefaultInstance();
     pbdb.registerMessage(msg);
-    TypeDescription td = pbdb.describeType(msg.getDescriptorForType().getFullName());
+    PbTypeDescription td = pbdb.describeType(msg.getDescriptorForType().getFullName());
     assertThat(td).isNotNull();
 
     assertThat(td.fieldMap()).hasSize(2);
@@ -186,7 +186,7 @@ public class TypeDescriptorTest {
     UnwrapContext c = UnwrapContext.get();
 
     String typeName = tc.in.getDescriptorForType().getFullName();
-    TypeDescription td = c.pbdb.describeType(typeName);
+    PbTypeDescription td = c.pbdb.describeType(typeName);
     assertThat(td).isNotNull();
     Object val = td.maybeUnwrap(c.pbdb, tc.in);
     assertThat(val).isNotNull();
@@ -207,7 +207,7 @@ public class TypeDescriptorTest {
     Message msg = tc.message();
 
     String typeName = msg.getDescriptorForType().getFullName();
-    TypeDescription td = c.pbdb.describeType(typeName);
+    PbTypeDescription td = c.pbdb.describeType(typeName);
     assertThat(td).isNotNull();
 
     td.maybeUnwrap(c.pbdb, msg);
@@ -219,7 +219,7 @@ public class TypeDescriptorTest {
     TestAllTypes msg = TestAllTypes.getDefaultInstance();
     String msgName = msg.getDescriptorForType().getFullName();
     pbdb.registerMessage(msg);
-    TypeDescription td = pbdb.describeType(msgName);
+    PbTypeDescription td = pbdb.describeType(msgName);
     assertThat(td).isNotNull();
 
     FieldDescription field = td.fieldByName("map_string_string");

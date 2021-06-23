@@ -42,7 +42,7 @@ import java.util.Set;
  * fetched from the global protobuf registry, no descriptors are added to this registry, else the
  * isolation guarantees of the Db object would be violated.
  */
-public class Db {
+public final class Db {
 
   private final Map<String, FileDescription> revFileDescriptorMap;
   /** files contains the deduped set of FileDescriptions whose types are contained in the pb.Db. */
@@ -162,7 +162,7 @@ public class Db {
   }
 
   /** DescribeType returns a `TypeDescription` for the `typeName` if it exists in the `pb.Db`. */
-  public TypeDescription describeType(String typeName) {
+  public PbTypeDescription describeType(String typeName) {
     typeName = sanitizeProtoName(typeName);
     FileDescription fd = revFileDescriptorMap.get(typeName);
     return fd != null ? fd.getTypeDescription(typeName) : null;

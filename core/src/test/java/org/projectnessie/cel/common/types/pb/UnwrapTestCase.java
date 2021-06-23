@@ -37,7 +37,7 @@ import java.util.function.Supplier;
 
 /**
  * Test cases for {@link
- * TypeDescriptorTest#benchmarkTypeDescriptionMaybeUnwrap(org.projectnessie.cel.common.types.pb.UnwrapTestCase)}
+ * PbTypeDescriptionTest#benchmarkTypeDescriptionMaybeUnwrap(org.projectnessie.cel.common.types.pb.UnwrapTestCase)}
  * and {@code TypeDescriptorBnch} JMH benchmark, latter requires this class to be a top-level public
  * enum.
  */

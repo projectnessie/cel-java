@@ -17,7 +17,7 @@ package org.projectnessie.cel.interpreter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
-import static org.projectnessie.cel.common.types.ProtoTypeRegistry.newRegistry;
+import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newRegistry;
 import static org.projectnessie.cel.interpreter.Activation.emptyActivation;
 import static org.projectnessie.cel.interpreter.Activation.newActivation;
 import static org.projectnessie.cel.interpreter.Activation.newPartialActivation;

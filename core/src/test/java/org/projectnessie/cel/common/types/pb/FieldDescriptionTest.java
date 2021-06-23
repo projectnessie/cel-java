@@ -46,7 +46,7 @@ public class FieldDescriptionTest {
     NestedTestAllTypes msg = NestedTestAllTypes.getDefaultInstance();
     String msgName = msg.getDescriptorForType().getFullName();
     pbdb.registerMessage(msg);
-    TypeDescription td = pbdb.describeType(msgName);
+    PbTypeDescription td = pbdb.describeType(msgName);
     assertThat(td).isNotNull();
 
     FieldDescription fd = td.fieldByName("payload");
@@ -131,7 +131,7 @@ public class FieldDescriptionTest {
             .build();
     String msgName = msg.getDescriptorForType().getFullName();
     pbdb.registerMessage(msg);
-    TypeDescription td = pbdb.describeType(msgName);
+    PbTypeDescription td = pbdb.describeType(msgName);
     assertThat(td).isNotNull();
 
     FieldDescription f = td.fieldByName(tc.field);
@@ -194,7 +194,7 @@ public class FieldDescriptionTest {
     TestAllTypes msg = TestAllTypes.getDefaultInstance();
     String msgName = msg.getDescriptorForType().getFullName();
     pbdb.registerMessage(msg);
-    TypeDescription td = pbdb.describeType(msgName);
+    PbTypeDescription td = pbdb.describeType(msgName);
     assertThat(td).isNotNull();
 
     FieldDescription f = td.fieldByName(tc.field);

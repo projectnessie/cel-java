@@ -27,7 +27,7 @@ import static org.projectnessie.cel.Library.StdLib;
 import static org.projectnessie.cel.common.Location.NoLocation;
 import static org.projectnessie.cel.common.Source.newTextSource;
 import static org.projectnessie.cel.common.containers.Container.defaultContainer;
-import static org.projectnessie.cel.common.types.ProtoTypeRegistry.newRegistry;
+import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newRegistry;
 import static org.projectnessie.cel.interpreter.Activation.emptyActivation;
 import static org.projectnessie.cel.interpreter.AstPruner.pruneAst;
 import static org.projectnessie.cel.interpreter.AttributePattern.newAttributePattern;

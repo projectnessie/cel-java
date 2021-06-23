@@ -13,16 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.projectnessie.cel.common.types;
+package org.projectnessie.cel.common.types.pb;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.IntT.IntZero;
 import static org.projectnessie.cel.common.types.IntT.intOf;
-import static org.projectnessie.cel.common.types.ProtoTypeRegistry.newRegistry;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.TypeT.TypeType;
+import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newRegistry;
 
 import com.google.api.expr.v1alpha1.Expr;
 import com.google.api.expr.v1alpha1.ParsedExpr;
@@ -33,16 +33,18 @@ import java.util.Arrays;
 import java.util.Collections;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.projectnessie.cel.common.types.Err;
+import org.projectnessie.cel.common.types.ObjectT;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Indexer;
 
-public class ObjectTest {
+public class PbObjectTest {
 
   @Test
   void newProtoObject() {
-    TypeRegistry reg = newRegistry();
+    ProtoTypeRegistry reg = newRegistry();
     ParsedExpr parsedExpr =
         ParsedExpr.newBuilder()
             .setSourceInfo(
