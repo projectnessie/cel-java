@@ -17,7 +17,7 @@ package org.projectnessie.cel.common.types;
 
 import org.projectnessie.cel.common.types.ref.Val;
 
-public class Util {
+public final class Util {
 
   /** IsUnknownOrError returns whether the input element ref.Val is an ErrType or UnknonwType. */
   public static boolean isUnknownOrError(Val val) {

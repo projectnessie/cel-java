@@ -44,7 +44,7 @@ public interface EvalState {
   }
 
   /** evalState permits the mutation of evaluation state for a given expression id. */
-  class EvalStateImpl implements EvalState {
+  final class EvalStateImpl implements EvalState {
     private final Long2ObjectHashMap<Val> values = new Long2ObjectHashMap<>();
 
     /** IDs implements the EvalState interface method. */

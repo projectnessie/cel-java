@@ -37,14 +37,14 @@ import org.projectnessie.cel.interpreter.InterpretableDecorator;
 import org.projectnessie.cel.interpreter.Interpreter;
 
 /** prog is the internal implementation of the Program interface. */
-class Prog implements Program, Coster {
+final class Prog implements Program, Coster {
   static final EvalState emptyEvalState = newEvalState();
 
-  Env e;
+  final Env e;
   final Set<EvalOption> evalOpts = EnumSet.noneOf(EvalOption.class);
   final List<InterpretableDecorator> decorators = new ArrayList<>();
   Activation defaultVars;
-  Dispatcher dispatcher;
+  final Dispatcher dispatcher;
   Interpreter interpreter;
   Interpretable interpretable;
   AttributeFactory attrFactory;

@@ -44,7 +44,7 @@ public interface Program {
    */
   EvalResult eval(Object vars);
 
-  class EvalResult {
+  final class EvalResult {
     private final Val val;
     private final EvalDetails evalDetails;
 

@@ -26,7 +26,7 @@ import org.projectnessie.cel.Program.EvalResult;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.ref.Val;
 
-public class Script {
+public final class Script {
   private final Env env;
   private final Program prg;
 

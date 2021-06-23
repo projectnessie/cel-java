@@ -21,7 +21,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class Options {
+public final class Options {
   private final int maxRecursionDepth;
   private final int errorRecoveryLimit;
   private final int expressionSizeCodePointLimit;

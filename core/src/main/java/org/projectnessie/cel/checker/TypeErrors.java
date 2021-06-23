@@ -23,8 +23,8 @@ import org.projectnessie.cel.common.Errors;
 import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.Source;
 
-// typeErrors is a specialization of Errors.
-public class TypeErrors extends Errors {
+/** TypeErrors is a specialization of Errors. */
+public final class TypeErrors extends Errors {
 
   public TypeErrors(Source source) {
     super(source);

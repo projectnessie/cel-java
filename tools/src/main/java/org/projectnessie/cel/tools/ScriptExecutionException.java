@@ -15,7 +15,7 @@
  */
 package org.projectnessie.cel.tools;
 
-public class ScriptExecutionException extends ScriptException {
+public final class ScriptExecutionException extends ScriptException {
 
   public ScriptExecutionException(String message) {
     super(message);

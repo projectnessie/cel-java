@@ -74,7 +74,7 @@ public interface Library {
    * stdLibrary implements the Library interface and provides functional options for the core CEL
    * features documented in the specification.
    */
-  class StdLibrary implements Library {
+  final class StdLibrary implements Library {
 
     /** EnvOptions returns options for the standard CEL function declarations and macros. */
     @Override

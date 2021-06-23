@@ -178,7 +178,7 @@ public final class Err extends BaseVal {
     return new IllegalStateException(format("index out of bounds: %s", i));
   }
 
-  public static class ErrException extends IllegalArgumentException {
+  public static final class ErrException extends IllegalArgumentException {
     private final String format;
     private final Object[] args;
 

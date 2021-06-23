@@ -39,7 +39,7 @@ import org.projectnessie.cel.ProgramOption;
  * <p>The current implementation is rather dumb, but it might be extended in the future to cache
  * {@link Script} instances returned by {@link #getOrCreateScript(String, List, List)}.
  */
-public class ScriptHost {
+public final class ScriptHost {
 
   private final boolean disableOptimize;
 
@@ -85,7 +85,7 @@ public class ScriptHost {
     return new Builder();
   }
 
-  public static class Builder {
+  public static final class Builder {
     private Builder() {}
 
     private boolean disableOptimize;

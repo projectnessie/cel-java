@@ -104,7 +104,7 @@ public final class FileDescription {
   }
 
   /** fileMetadata is a flattened view of message types and enum values within a file descriptor. */
-  static class FileMetadata {
+  static final class FileMetadata {
     /** msgTypes maps from fully-qualified message name to descriptor. */
     final Map<String, Descriptor> msgTypes;
     /** enumValues maps from fully-qualified enum value to enum value descriptor. */

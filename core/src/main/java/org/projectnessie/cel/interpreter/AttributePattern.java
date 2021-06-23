@@ -63,7 +63,7 @@ import org.projectnessie.cel.interpreter.AttributeFactory.Qualifier;
  * index `0` should match. And lastly, the third example matches any indexed access that later
  * selects the 'name' field.
  */
-public class AttributePattern {
+public final class AttributePattern {
   private final String variable;
   private final List<AttributeQualifierPattern> qualifierPatterns;
 
@@ -140,7 +140,7 @@ public class AttributePattern {
   }
 
   /** AttributeQualifierPattern holds a wilcard or valued qualifier pattern. */
-  static class AttributeQualifierPattern {
+  static final class AttributeQualifierPattern {
     private final boolean wildcard;
     private final Object value;
 
@@ -209,7 +209,7 @@ public class AttributePattern {
     return new PartialAttributeFactory(fac, container, adapter, provider);
   }
 
-  static class PartialAttributeFactory implements AttributeFactory {
+  static final class PartialAttributeFactory implements AttributeFactory {
     private final AttributeFactory fac;
     private final Container container;
     private final TypeAdapter adapter;
@@ -357,7 +357,7 @@ public class AttributePattern {
    * AttributePattern matching against Attribute values without having to modify the code paths that
    * identify Attributes in expressions.
    */
-  static class AttributeMatcher implements NamespacedAttribute {
+  static final class AttributeMatcher implements NamespacedAttribute {
 
     private final NamespacedAttribute attr;
     private final PartialAttributeFactory fac;

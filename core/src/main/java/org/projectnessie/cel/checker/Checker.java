@@ -58,7 +58,7 @@ import org.projectnessie.cel.common.types.Err.ErrException;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.parser.Parser.ParseResult;
 
-public class Checker {
+public final class Checker {
 
   public static final List<Decl> StandardDeclarations = Standard.makeStandardDeclarations();
 
@@ -369,7 +369,7 @@ public class Checker {
   void resolveOverloadOrError(
       Location loc, Expr.Builder e, Decl fn, Expr.Builder target, List<Expr.Builder> args) {
     // Attempt to resolve the overload.
-    overloadResolution resolution = resolveOverload(loc, fn, target, args);
+    OverloadResolution resolution = resolveOverload(loc, fn, target, args);
     // No such overload, error noted in the resolveOverload call, type recorded here.
     if (resolution == null) {
       setType(e, Decls.Error);
@@ -380,7 +380,7 @@ public class Checker {
     setReference(e, resolution.reference);
   }
 
-  overloadResolution resolveOverload(
+  OverloadResolution resolveOverload(
       Location loc, Decl fn, Expr.Builder target, List<Expr.Builder> args) {
 
     List<Type> argTypes = new ArrayList<>();
@@ -684,18 +684,18 @@ public class Checker {
     }
   }
 
-  static class overloadResolution {
+  static final class OverloadResolution {
     final Reference reference;
     final Type type;
 
-    public overloadResolution(Reference reference, Type type) {
+    public OverloadResolution(Reference reference, Type type) {
       this.reference = reference;
       this.type = type;
     }
   }
 
-  static overloadResolution newResolution(Reference checkedRef, Type t) {
-    return new overloadResolution(checkedRef, t);
+  static OverloadResolution newResolution(Reference checkedRef, Type t) {
+    return new OverloadResolution(checkedRef, t);
   }
 
   Location location(Expr.Builder e) {

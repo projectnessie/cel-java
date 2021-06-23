@@ -77,7 +77,7 @@ import org.projectnessie.cel.common.types.traits.Mapper;
  * is not willing to constant fold(and thus cache results of) some external calls, then they can
  * prepare the overloads accordingly.
  */
-public class AstPruner {
+public final class AstPruner {
   private final Expr expr;
   private final EvalState state;
   private long nextExprID;

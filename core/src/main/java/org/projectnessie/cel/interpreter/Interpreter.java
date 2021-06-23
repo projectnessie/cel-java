@@ -99,7 +99,7 @@ public interface Interpreter {
     return newInterpreter(dispatcher, container, provider, adapter, resolver);
   }
 
-  class ExprInterpreter implements Interpreter {
+  final class ExprInterpreter implements Interpreter {
     private final Dispatcher dispatcher;
     private final Container container;
     private final TypeProvider provider;

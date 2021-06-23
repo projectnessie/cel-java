@@ -17,7 +17,7 @@ package org.projectnessie.cel.tools;
 
 import org.projectnessie.cel.Issues;
 
-public class ScriptCreateException extends ScriptException {
+public final class ScriptCreateException extends ScriptException {
 
   private final Issues issues;
 

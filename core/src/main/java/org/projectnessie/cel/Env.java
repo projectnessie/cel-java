@@ -63,7 +63,7 @@ import org.projectnessie.cel.parser.Parser.ParseResult;
  * Env encapsulates the context necessary to perform parsing, type checking, or generation of
  * evaluable programs for different expressions.
  */
-public class Env {
+public final class Env {
 
   Container container;
   final List<Decl> declarations;
@@ -145,7 +145,7 @@ public class Env {
     this.progOpts.addAll(progOpts);
   }
 
-  public static class AstIssuesTuple {
+  public static final class AstIssuesTuple {
     private final Ast ast;
     private final Issues issues;
 

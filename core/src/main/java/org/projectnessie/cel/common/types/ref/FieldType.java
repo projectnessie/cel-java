@@ -16,7 +16,7 @@
 package org.projectnessie.cel.common.types.ref;
 
 /** FieldType represents a field's type value and whether that field supports presence detection. */
-public class FieldType {
+public final class FieldType {
   /** Type of the field. */
   public final com.google.api.expr.v1alpha1.Type type;
 

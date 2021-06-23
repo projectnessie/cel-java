@@ -59,7 +59,7 @@ import org.projectnessie.cel.common.types.traits.Trait;
  * specializations simplify the call contract for implementers of types with operator overloads. Any
  * added complexity is assumed to be handled by the generic FunctionOp.
  */
-public class Overload {
+public final class Overload {
   /** Operator name as written in an expression or defined within operators.go. */
   public final String operator;
 

@@ -18,7 +18,7 @@ package org.projectnessie.cel;
 import org.projectnessie.cel.interpreter.EvalState;
 
 /** EvalDetails holds additional information observed during the Eval() call. */
-public class EvalDetails {
+public final class EvalDetails {
   private final EvalState state;
 
   public EvalDetails(EvalState state) {

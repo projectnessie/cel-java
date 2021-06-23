@@ -35,7 +35,7 @@ import com.google.protobuf.NullValue;
 import java.util.Arrays;
 import java.util.List;
 
-public class Decls {
+public final class Decls {
 
   /** Error type used to communicate issues during type-checking. */
   public static final Type Error = Type.newBuilder().setError(Empty.getDefaultInstance()).build();

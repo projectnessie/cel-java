@@ -48,7 +48,7 @@ public interface Dispatcher {
   }
 
   /** defaultDispatcher struct which contains an overload map. */
-  class DefaultDispatcher implements Dispatcher {
+  final class DefaultDispatcher implements Dispatcher {
     private final Dispatcher parent;
     private final Map<String, Overload> overloads;
 

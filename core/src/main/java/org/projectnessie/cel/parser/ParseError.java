@@ -17,7 +17,7 @@ package org.projectnessie.cel.parser;
 
 import org.projectnessie.cel.common.Location;
 
-public class ParseError extends RuntimeException {
+public final class ParseError extends RuntimeException {
   private final Location location;
 
   public ParseError(Location location, String message) {

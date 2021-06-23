@@ -30,7 +30,7 @@ import java.util.Map;
  * within CEL programs and behaves more or less like a C++ namespace. See ResolveCandidateNames for
  * more details.
  */
-public class Container {
+public final class Container {
 
   /** DefaultContainer has an empty container name. */
   public static final Container defaultContainer = new Container("", Collections.emptyMap());
