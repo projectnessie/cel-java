@@ -1,7 +1,7 @@
 
 # Gradle
 build/
-/.gradle
+.gradle/
 
 # IDE
 /.idea

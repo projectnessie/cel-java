@@ -23,6 +23,7 @@ plugins {
     `maven-publish`
     signing
     id("com.google.protobuf")
+    id("org.projectnessie.cel.reflectionconfig")
 }
 
 val versionGrpc = "1.38.1"
@@ -67,6 +68,16 @@ protobuf {
     }
 }
 
+reflectionConfig {
+    // Consider classes that extend one of these classes...
+    classExtendsPatterns.set(listOf("com.google.protobuf.GeneratedMessageV3", "com.google.protobuf.GeneratedMessageV3.Builder"))
+    // ... and classes the implement this interface.
+    classImplementsPatterns.set(listOf("com.google.protobuf.ProtocolMessageEnum"))
+    // Also include generated classes (e.g. google.protobuf.Empty) via the "runtimeClasspath",
+    // which contains the the "com.google.protobuf:protobuf-java" dependency.
+    includeConfigurations.set(listOf("runtimeClasspath"))
+}
+
 val testJar by configurations.creating {
     isCanBeResolved = true
     isCanBeConsumed = true
@@ -74,7 +85,7 @@ val testJar by configurations.creating {
 tasks.register<Jar>("testJar") {
     val testClasses = tasks.getByName<JavaCompile>("compileTestJava")
     val baseJar = tasks.getByName<Jar>("jar")
-    from(testClasses.destinationDirectory)
+    from(testClasses.destinationDirectory, project.buildDir.resolve("resources/test"))
     archiveBaseName.set(baseJar.archiveBaseName)
     destinationDirectory.set(baseJar.destinationDirectory)
     archiveClassifier.set("tests")

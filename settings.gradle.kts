@@ -16,6 +16,8 @@
 
 val baseVersion = file("version.txt").readText().trim()
 
+includeBuild("build-tools")
+
 pluginManagement {
   repositories { gradlePluginPortal() }
   plugins {
