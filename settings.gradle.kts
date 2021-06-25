@@ -16,6 +16,8 @@
 
 val baseVersion = file("version.txt").readText().trim()
 
+includeBuild("build-tools")
+
 pluginManagement {
   repositories { gradlePluginPortal() }
   plugins {
@@ -44,7 +46,9 @@ gradle.beforeProject {
     }
 }
 
-include("generated")
+include("generated-antlr")
+
+include("generated-pb")
 
 include("core")
 
