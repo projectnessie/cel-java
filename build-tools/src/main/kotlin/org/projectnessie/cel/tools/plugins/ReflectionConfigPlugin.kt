@@ -18,6 +18,7 @@ package org.projectnessie.cel.tools.plugins
 
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.UnknownTaskException
 import org.gradle.api.plugins.JavaLibraryPlugin
 import org.gradle.api.tasks.SourceSet
 import org.gradle.api.tasks.SourceSetContainer
@@ -58,6 +59,11 @@ class ReflectionConfigPlugin : Plugin<Project> {
       tasks.named(processResourcesTaskName) {
         dependsOn(genRefCfg)
       }
+      try {
+        tasks.named(sourcesJarTaskName) {
+          dependsOn(genRefCfg)
+        }
+      } catch (ignore: UnknownTaskException) { null }
     }
   }
 }

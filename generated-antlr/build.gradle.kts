@@ -27,3 +27,8 @@ dependencies {
     antlr("org.antlr:antlr4:$versionAntlr") // TODO remove from runtime-classpath *sigh*
     implementation("org.antlr:antlr4-runtime:$versionAntlr")
 }
+
+// The antlr-plugin should ideally do this
+tasks.named<Jar>("sourcesJar") {
+    dependsOn(tasks.named("generateGrammarSource"))
+}
