@@ -36,7 +36,7 @@ import org.projectnessie.cel.common.types.ref.Val;
  *
  * <p>The implementation does not support the construction of Jackson objects in CEL expressions and
  * therefore returning Jackson objects from CEL expressions is not possible/implemented and results
- * in {@link UnsupportedOperationException}s.</p>
+ * in {@link UnsupportedOperationException}s.
  */
 public final class JacksonRegistry implements TypeRegistry {
   final ObjectMapper objectMapper;
