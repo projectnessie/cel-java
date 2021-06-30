@@ -69,3 +69,8 @@ protobuf {
         artifact = "com.google.protobuf:protoc:$versionProtobuf"
     }
 }
+
+// The protobuf-plugin should ideally do this
+tasks.named<Jar>("sourcesJar") {
+    dependsOn(tasks.named("generateProto"))
+}

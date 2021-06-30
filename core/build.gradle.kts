@@ -59,6 +59,8 @@ tasks.register<Jar>("testJar") {
     val testClasses = tasks.getByName<JavaCompile>("compileTestJava")
     val baseJar = tasks.getByName<Jar>("jar")
     from(testClasses.destinationDirectory)
+    dependsOn(testClasses)
+    dependsOn(tasks.named("processTestResources"))
     archiveBaseName.set(baseJar.archiveBaseName)
     destinationDirectory.set(baseJar.destinationDirectory)
     archiveClassifier.set("tests")

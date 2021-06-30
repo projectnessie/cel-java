@@ -86,6 +86,8 @@ tasks.register<Jar>("testJar") {
     val testClasses = tasks.getByName<JavaCompile>("compileTestJava")
     val baseJar = tasks.getByName<Jar>("jar")
     from(testClasses.destinationDirectory, project.buildDir.resolve("resources/test"))
+    dependsOn(testClasses)
+    dependsOn(tasks.named("processTestResources"))
     archiveBaseName.set(baseJar.archiveBaseName)
     destinationDirectory.set(baseJar.destinationDirectory)
     archiveClassifier.set("tests")
@@ -95,4 +97,9 @@ artifacts {
     add("testJar", testJar.archiveFile) {
         builtBy(testJar)
     }
+}
+
+// The protobuf-plugin should ideally do this
+tasks.named<Jar>("sourcesJar") {
+    dependsOn(tasks.named("generateProto"))
 }
