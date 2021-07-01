@@ -64,11 +64,11 @@ public class MyClass {
 }
 ```
 
-## Protobuf and Jackson
+## Protobuf and Jackson and plain Java objects
 
 Protobuf (via `com.google.protobuf:protobuf-java`) objects and schema is supported out of the box.
 
-It is also possible to use Jackson objects as arguments by using the 
+It is also possible to use plain Java and Jackson objects as arguments by using the 
 `org.projectnessie.cel.types.jackson.JacksonRegistry` in `org.projectnessie.cel:cel-jackson`.
 
 Code sample similar to the one above. It takes a user-provided object type `MyInput`.
@@ -106,7 +106,8 @@ public class MyClass {
 }
 ```
 
-Note that the Jackson field-names are used as property names in CEL-Java.
+Note that the Jackson field-names are used as property names in CEL-Java. It is not necessary to
+annotate "plain Java" classes with Jackson annotations.
 
 To use the `JacksonRegistry` in your application code, add the `cel-jackson` dependency in
 addition to `cel-core` or `cel-tools`.

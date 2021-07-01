@@ -43,34 +43,37 @@ final class JacksonTypeDescription implements TypeDescription {
   private final Type type;
   private final com.google.api.expr.v1alpha1.Type pbType;
 
-  private final Map<String, PropertyWriter> properties;
-  private final Map<String, FieldType> fieldTypes;
+  private final Map<String, JacksonFieldType> fieldTypes;
 
-  JacksonTypeDescription(JavaType javaType, JsonSerializer<Object> ser) {
+  JacksonTypeDescription(JavaType javaType, JsonSerializer<Object> ser, TypeQuery typeQuery) {
     this.javaType = javaType;
     this.name = javaType.getRawClass().getName();
     this.type = TypeT.newObjectTypeValue(name);
     this.pbType = com.google.api.expr.v1alpha1.Type.newBuilder().setMessageType(name).build();
 
-    properties = new HashMap<>();
     fieldTypes = new HashMap<>();
 
     Iterator<PropertyWriter> propIter = ser.properties();
     while (propIter.hasNext()) {
       PropertyWriter pw = propIter.next();
       String n = pw.getName();
-      properties.put(n, pw);
 
-      FieldType ft =
-          new FieldType(
-              findTypeForJacksonType(pw.getType()),
+      JacksonFieldType ft =
+          new JacksonFieldType(
+              findTypeForJacksonType(pw.getType(), typeQuery),
               target -> fromObject(target, n) != null,
-              target -> fromObject(target, n));
+              target -> fromObject(target, n),
+              pw);
       fieldTypes.put(n, ft);
     }
   }
 
-  private com.google.api.expr.v1alpha1.Type findTypeForJacksonType(JavaType type) {
+  @FunctionalInterface
+  interface TypeQuery {
+    com.google.api.expr.v1alpha1.Type getType(JavaType javaType);
+  }
+
+  com.google.api.expr.v1alpha1.Type findTypeForJacksonType(JavaType type, TypeQuery typeQuery) {
     Class<?> rawClass = type.getRawClass();
     if (rawClass == boolean.class || rawClass == Boolean.class) {
       return Checked.checkedBool;
@@ -101,23 +104,34 @@ final class JacksonTypeDescription implements TypeDescription {
         || ZonedDateTime.class.isAssignableFrom(rawClass)) {
       return Checked.checkedTimestamp;
     } else if (Map.class.isAssignableFrom(rawClass)) {
-      com.google.api.expr.v1alpha1.Type keyType = findTypeForJacksonType(type.getKeyType());
-      com.google.api.expr.v1alpha1.Type valueType = findTypeForJacksonType(type.getContentType());
+      com.google.api.expr.v1alpha1.Type keyType =
+          findTypeForJacksonType(type.getKeyType(), typeQuery);
+      com.google.api.expr.v1alpha1.Type valueType =
+          findTypeForJacksonType(type.getContentType(), typeQuery);
       return Decls.newMapType(keyType, valueType);
     } else if (List.class.isAssignableFrom(rawClass)) {
-      com.google.api.expr.v1alpha1.Type valueType = findTypeForJacksonType(type.getContentType());
+      com.google.api.expr.v1alpha1.Type valueType =
+          findTypeForJacksonType(type.getContentType(), typeQuery);
       return Decls.newListType(valueType);
     } else {
-      throw new UnsupportedOperationException(String.format("Unsupported Java Type '%s'", type));
+      com.google.api.expr.v1alpha1.Type t = typeQuery.getType(type);
+      if (t == null) {
+        throw new UnsupportedOperationException(String.format("Unsupported Java Type '%s'", type));
+      }
+      return t;
     }
   }
 
   boolean hasProperty(String property) {
-    return properties.containsKey(property);
+    return fieldTypes.containsKey(property);
   }
 
   Object fromObject(Object value, String property) {
-    PropertyWriter pw = properties.get(property);
+    JacksonFieldType ft = fieldTypes.get(property);
+    if (ft == null) {
+      throw new IllegalArgumentException(String.format("No property named '%s'", property));
+    }
+    PropertyWriter pw = ft.propertyWriter();
 
     if (pw instanceof BeanPropertyWriter) {
       try {

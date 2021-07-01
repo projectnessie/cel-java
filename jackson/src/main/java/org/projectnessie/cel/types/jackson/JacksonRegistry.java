@@ -122,14 +122,22 @@ public final class JacksonRegistry implements TypeRegistry {
   }
 
   JacksonTypeDescription typeDescription(Class<?> clazz) {
-    return knownTypes.computeIfAbsent(clazz, this::computeTypeDescription);
+    JacksonTypeDescription td = knownTypes.get(clazz);
+    if (td != null) {
+      return td;
+    }
+    td = computeTypeDescription(clazz);
+    knownTypes.put(clazz, td);
+    return td;
   }
 
   private JacksonTypeDescription computeTypeDescription(Class<?> clazz) {
     try {
       JsonSerializer<Object> ser = serializationProvider.findValueSerializer(clazz);
       JavaType javaType = typeFactory.constructType(clazz);
-      JacksonTypeDescription typeDesc = new JacksonTypeDescription(javaType, ser);
+      JacksonTypeDescription typeDesc =
+          new JacksonTypeDescription(
+              javaType, ser, jt -> typeDescription(jt.getRawClass()).pbType());
       knownTypesByName.put(clazz.getName(), typeDesc);
       return typeDesc;
     } catch (JsonMappingException e) {
