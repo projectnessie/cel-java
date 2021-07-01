@@ -15,7 +15,9 @@
  */
 package org.projectnessie.cel.tools;
 
+import static java.util.Arrays.asList;
 import static org.projectnessie.cel.Env.newCustomEnv;
+import static org.projectnessie.cel.EnvOption.container;
 import static org.projectnessie.cel.EnvOption.declarations;
 import static org.projectnessie.cel.EnvOption.types;
 import static org.projectnessie.cel.EvalOption.OptOptimize;
@@ -51,38 +53,84 @@ public final class ScriptHost {
     this.registry = registry;
   }
 
+  /** Use {@link #buildScript(String)}. */
+  @Deprecated
   public Script getOrCreateScript(String sourceText, List<Decl> declarations, List<Object> types)
       throws ScriptException {
+    return buildScript(sourceText).withDeclarations(declarations).withTypes(types).build();
+  }
+
+  public ScriptBuilder buildScript(String sourceText) {
     if (sourceText.trim().isEmpty()) {
       throw new IllegalArgumentException("No source code.");
     }
+    return new ScriptBuilder(sourceText);
+  }
 
-    List<EnvOption> envOptions = new ArrayList<>();
-    envOptions.add(StdLib());
-    envOptions.add(declarations(declarations));
-    envOptions.add(types(types));
+  public final class ScriptBuilder {
+    private final String sourceText;
+    private String container;
+    private final List<Decl> declarations = new ArrayList<>();
+    private final List<Object> types = new ArrayList<>();
 
-    Env env = newCustomEnv(registry, envOptions);
-
-    AstIssuesTuple astIss = env.parse(sourceText);
-    if (astIss.hasIssues()) {
-      throw new ScriptCreateException("parse failed", astIss.getIssues());
-    }
-    Ast ast = astIss.getAst();
-
-    astIss = env.check(ast);
-    if (astIss.hasIssues()) {
-      throw new ScriptCreateException("check failed", astIss.getIssues());
+    private ScriptBuilder(String sourceText) {
+      this.sourceText = sourceText;
     }
 
-    List<ProgramOption> programOptions = new ArrayList<>();
-    if (!disableOptimize) {
-      programOptions.add(evalOptions(OptOptimize));
+    public ScriptBuilder withContainer(String container) {
+      this.container = container;
+      return this;
     }
 
-    Program prg = env.program(ast, programOptions.toArray(new ProgramOption[] {}));
+    public ScriptBuilder withDeclarations(Decl... declarations) {
+      return withDeclarations(asList(declarations));
+    }
 
-    return new Script(env, prg);
+    public ScriptBuilder withDeclarations(List<Decl> declarations) {
+      this.declarations.addAll(declarations);
+      return this;
+    }
+
+    public ScriptBuilder withTypes(Object... types) {
+      return withTypes(asList(types));
+    }
+
+    public ScriptBuilder withTypes(List<Object> types) {
+      this.types.addAll(types);
+      return this;
+    }
+
+    public Script build() throws ScriptCreateException {
+      List<EnvOption> envOptions = new ArrayList<>();
+      envOptions.add(StdLib());
+      envOptions.add(declarations(declarations));
+      envOptions.add(types(types));
+      if (container != null) {
+        envOptions.add(container(container));
+      }
+
+      Env env = newCustomEnv(registry, envOptions);
+
+      AstIssuesTuple astIss = env.parse(sourceText);
+      if (astIss.hasIssues()) {
+        throw new ScriptCreateException("parse failed", astIss.getIssues());
+      }
+      Ast ast = astIss.getAst();
+
+      astIss = env.check(ast);
+      if (astIss.hasIssues()) {
+        throw new ScriptCreateException("check failed", astIss.getIssues());
+      }
+
+      List<ProgramOption> programOptions = new ArrayList<>();
+      if (!disableOptimize) {
+        programOptions.add(evalOptions(OptOptimize));
+      }
+
+      Program prg = env.program(ast, programOptions.toArray(new ProgramOption[] {}));
+
+      return new Script(env, prg);
+    }
   }
 
   public static Builder newBuilder() {
