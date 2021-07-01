@@ -38,7 +38,6 @@ import org.projectnessie.cel.tools.Script;
 import org.projectnessie.cel.tools.ScriptHost;
 
 public class MyClass {
-
   public void myScriptUsage() {
     // Build the script factory
     ScriptHost scriptHost = ScriptHost.newBuilder().build();
@@ -62,6 +61,74 @@ public class MyClass {
 
     System.out.println(result); // Prints "hello world"
   }
+}
+```
+
+## Protobuf and Jackson and plain Java objects
+
+Protobuf (via `com.google.protobuf:protobuf-java`) objects and schema is supported out of the box.
+
+It is also possible to use plain Java and Jackson objects as arguments by using the 
+`org.projectnessie.cel.types.jackson.JacksonRegistry` in `org.projectnessie.cel:cel-jackson`.
+
+Code sample similar to the one above. It takes a user-provided object type `MyInput`.
+```java
+import org.projectnessie.cel.types.jackson.JacksonRegistry;
+
+public class MyClass {
+  public void evalWithJacksonObject(MyInput input, String checkName) {
+    // Build the script factory
+    ScriptHost scriptHost = ScriptHost.newBuilder()
+        .registry(JacksonRegistry.newRegistry())
+        .build();
+
+    // Variable declarations - we need `inp` +  `checkName` in this example
+    List<Decl> declarations = singletonList(
+        Decls.newVar("inp", Decls.newObjectType(MyInput.class.getName())), 
+        Decls.newVar("checkName", Decls.String));
+
+    // Register our Jackson object input type
+    List<Object> types = singletonList(MyInput.class);
+
+    // Create the script, will be parsed and checked.
+    // It checks whether the property `name` in the "Jackson-ized" class `MyInput` is
+    // equal to the value of `checkName`.
+    Script script = scriptHost.getOrCreateScript("inp.name == checkName", declarations, types);
+
+    Map<String, Object> arguments = new HashMap<>();
+    arguments.put("inp", input);
+    arguments.put("checkName", checkName);
+
+    Boolean result = script.execute(Boolean.class, arguments);
+
+    return result;
+  }
+}
+```
+
+Note that the Jackson field-names are used as property names in CEL-Java. It is not necessary to
+annotate "plain Java" classes with Jackson annotations.
+
+To use the `JacksonRegistry` in your application code, add the `cel-jackson` dependency in
+addition to `cel-core` or `cel-tools`.
+
+```xml
+<dependency>
+  <groupId>org.projectnessie.cel</groupId>
+  <artifactId>cel-jackson</artifactId>
+  <version>0.1.1</version>
+</dependency>
+<dependency>
+  <groupId>org.projectnessie.cel</groupId>
+  <artifactId>cel-tools</artifactId>
+  <version>0.1.1</version>
+</dependency>
+```
+or Gradle project.
+```groovy
+dependencies {
+    implementation("org.projectnessie.cel:cel-tools:0.1.1")
+    implementation("org.projectnessie.cel:cel-jackson:0.1.1")
 }
 ```
 

@@ -67,7 +67,7 @@ val codeCoverageReport by tasks.registering(JacocoReport::class) {
 }
 
 dependencies {
-    listOf(":core", ":tools").forEach { prj ->
+    listOf(":core", ":tools", ":jackson").forEach { prj ->
         add("coverageDataPath", project(prj, "coverageDataElements"))
         add("sourcesPath", project(prj, "transitiveSourcesElements"))
         add("classesPath", project(prj, "transitiveClassesElements"))

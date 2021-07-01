@@ -37,6 +37,7 @@ import com.google.protobuf.EnumValue;
 import com.google.protobuf.ListValue;
 import com.google.protobuf.NullValue;
 import com.google.protobuf.Struct;
+import com.google.protobuf.Timestamp;
 import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
 import java.time.Duration;
@@ -76,6 +77,10 @@ public final class TypeAdapterSupport {
     NativeToValueExact.put(Long.class, (a, value) -> intOf((Long) value));
     NativeToValueExact.put(String.class, (a, value) -> stringOf((String) value));
     NativeToValueExact.put(Duration.class, (a, value) -> durationOf((Duration) value));
+    NativeToValueExact.put(
+        com.google.protobuf.Duration.class,
+        (a, value) -> durationOf((com.google.protobuf.Duration) value));
+    NativeToValueExact.put(Timestamp.class, (a, value) -> timestampOf((Timestamp) value));
     NativeToValueExact.put(ZonedDateTime.class, (a, value) -> timestampOf((ZonedDateTime) value));
     NativeToValueExact.put(Instant.class, (a, value) -> timestampOf((Instant) value));
     NativeToValueExact.put(

@@ -15,15 +15,11 @@
  */
 package org.projectnessie.cel.tools;
 
-import static java.util.Arrays.asList;
-import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.google.api.expr.v1alpha1.Decl;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.checker.Decls;
@@ -33,15 +29,13 @@ class ScriptHostTest {
   void basic() throws Exception {
     ScriptHost scriptHost = ScriptHost.newBuilder().build();
 
-    // Variable declarations - we need `x` and `y` in this example
-    List<Decl> declarations =
-        asList(Decls.newVar("x", Decls.String), Decls.newVar("y", Decls.String));
-
-    // no custom types
-    List<Object> types = emptyList();
-
     // create the script, will be parsed and checked
-    Script script = scriptHost.getOrCreateScript("x + ' ' + y", declarations, types);
+    Script script =
+        scriptHost
+            .buildScript("x + ' ' + y")
+            // Variable declarations - we need `x` and `y` in this example
+            .withDeclarations(Decls.newVar("x", Decls.String), Decls.newVar("y", Decls.String))
+            .build();
 
     Map<String, Object> arguments = new HashMap<>();
     arguments.put("x", "hello");
@@ -57,7 +51,7 @@ class ScriptHostTest {
     ScriptHost scriptHost = ScriptHost.newBuilder().build();
 
     // create the script, will be parsed and checked
-    Script script = scriptHost.getOrCreateScript("1/0 != 0", emptyList(), emptyList());
+    Script script = scriptHost.buildScript("1/0 != 0").build();
 
     assertThatThrownBy(() -> script.execute(String.class, singletonMap("x", "hello world")))
         .isInstanceOf(ScriptExecutionException.class)
@@ -68,7 +62,7 @@ class ScriptHostTest {
   void badSyntax() {
     ScriptHost scriptHost = ScriptHost.newBuilder().build();
 
-    assertThatThrownBy(() -> scriptHost.getOrCreateScript("-.,", emptyList(), emptyList()))
+    assertThatThrownBy(() -> scriptHost.buildScript("-.,").build())
         .isInstanceOf(ScriptCreateException.class)
         .hasMessageStartingWith(
             "parse failed: ERROR: <input>:1:3: Syntax error: mismatched input ',' expecting IDENTIFIER");
@@ -78,7 +72,7 @@ class ScriptHostTest {
   void checkFailure() {
     ScriptHost scriptHost = ScriptHost.newBuilder().build();
 
-    assertThatThrownBy(() -> scriptHost.getOrCreateScript("x", emptyList(), emptyList()))
+    assertThatThrownBy(() -> scriptHost.buildScript("x").build())
         .isInstanceOf(ScriptCreateException.class)
         .hasMessageStartingWith(
             "check failed: ERROR: <input>:1:1: undeclared reference to 'x' (in container '')");

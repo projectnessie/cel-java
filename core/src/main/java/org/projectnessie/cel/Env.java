@@ -124,8 +124,7 @@ public final class Env {
    * <p>See the EnvOption helper functions for the options that can be used to configure the
    * environment.
    */
-  public static Env newCustomEnv(List<EnvOption> opts) {
-    TypeRegistry registry = newRegistry();
+  public static Env newCustomEnv(TypeRegistry registry, List<EnvOption> opts) {
     return new Env(
             defaultContainer,
             new ArrayList<>(),
@@ -138,7 +137,7 @@ public final class Env {
   }
 
   public static Env newCustomEnv(EnvOption... opts) {
-    return newCustomEnv(asList(opts));
+    return newCustomEnv(newRegistry(), asList(opts));
   }
 
   void addProgOpts(List<ProgramOption> progOpts) {

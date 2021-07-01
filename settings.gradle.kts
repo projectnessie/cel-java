@@ -42,6 +42,8 @@ gradle.beforeProject {
     when (name) {
       "cel-java" -> "Common-Expression-Language - Java implementation"
       "core" -> "Common-Expression-Language - Java - Core Module"
+      "tools" -> "Common-Expression-Language - Script Tools"
+      "jackson" -> "Common-Expression-Language - Jackson Type Registry"
       else -> name
     }
 }
@@ -51,6 +53,8 @@ include("generated-antlr")
 include("generated-pb")
 
 include("core")
+
+include("jackson")
 
 include("conformance")
 
