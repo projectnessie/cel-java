@@ -26,7 +26,7 @@ plugins {
 }
 
 val versionAssertj = "3.20.2"
-val versionImmutables = "2.8.8"
+val versionImmutables = "2.8.9-ea-1"
 val versionJackson = "2.12.3"
 val versionJSR305 = "3.0.2"
 val versionJunit = "5.7.2"
