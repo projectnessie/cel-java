@@ -16,9 +16,8 @@
 package org.projectnessie.cel.types.jackson;
 
 import static java.util.Collections.emptyMap;
-import static java.util.Collections.singletonList;
-import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.MapT.newMaybeWrappedMap;
@@ -31,28 +30,26 @@ import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
-import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.Err;
+import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.ObjectT;
 import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
-import org.projectnessie.cel.tools.Script;
-import org.projectnessie.cel.tools.ScriptHost;
-import org.projectnessie.cel.types.jackson.types.Branch;
-import org.projectnessie.cel.types.jackson.types.CommitMeta;
+import org.projectnessie.cel.types.jackson.types.MetaTest;
+import org.projectnessie.cel.types.jackson.types.RefVariantB;
 
 class JacksonRegistryTest {
   @Test
   void nessieBranch() {
     TypeRegistry reg = JacksonRegistry.newRegistry();
 
-    Branch branch = Branch.of("main", "cafebabe123412341234123412341234");
+    RefVariantB refVariantB = RefVariantB.of("main", "cafebabe123412341234123412341234");
 
-    Val branchVal = reg.nativeToValue(branch);
+    Val branchVal = reg.nativeToValue(refVariantB);
     assertThat(branchVal).isInstanceOf(ObjectT.class);
     assertThat(branchVal.type().typeEnum()).isSameAs(TypeEnum.Object);
-    assertThat(branchVal.type().typeName()).isEqualTo(branch.getClass().getName());
+    assertThat(branchVal.type().typeName()).isEqualTo(refVariantB.getClass().getName());
 
     ObjectT branchObj = (ObjectT) branchVal;
     assertThat(branchObj.isSet(stringOf("foo")))
@@ -77,8 +74,8 @@ class JacksonRegistryTest {
     Instant now = Instant.now();
     Instant nowMinus5 = now.minus(5, ChronoUnit.MINUTES);
 
-    CommitMeta cm =
-        CommitMeta.builder()
+    MetaTest cm =
+        MetaTest.builder()
             .commitTime(now)
             .authorTime(nowMinus5)
             .committer("committer@projectnessie.org")
@@ -131,8 +128,8 @@ class JacksonRegistryTest {
 
     Instant now = Instant.now();
 
-    CommitMeta cm =
-        CommitMeta.builder()
+    MetaTest cm =
+        MetaTest.builder()
             .commitTime(now)
             .committer("committer@projectnessie.org")
             .hash("beeffeed123412341234123412341234")
@@ -171,19 +168,15 @@ class JacksonRegistryTest {
   }
 
   @Test
-  void scriptHost() throws Exception {
-    ScriptHost scriptHost = ScriptHost.newBuilder().registry(JacksonRegistry.newRegistry()).build();
+  void copy() {
+    TypeRegistry reg = JacksonRegistry.newRegistry();
+    assertThat(reg).extracting(TypeRegistry::copy).isSameAs(reg);
+  }
 
-    Script script =
-        scriptHost.getOrCreateScript(
-            "commit.author == 'foo@bar.baz'",
-            singletonList(Decls.newVar("commit", Decls.newObjectType(CommitMeta.class.getName()))),
-            singletonList(CommitMeta.class));
-
-    CommitMeta cmMatch = CommitMeta.builder().author("foo@bar.baz").build();
-    CommitMeta cmNoMatch = CommitMeta.builder().author("foo@foo.foo").build();
-
-    assertThat(script.execute(Boolean.class, singletonMap("commit", cmMatch))).isTrue();
-    assertThat(script.execute(Boolean.class, singletonMap("commit", cmNoMatch))).isFalse();
+  @Test
+  void registerType() {
+    TypeRegistry reg = JacksonRegistry.newRegistry();
+    assertThatThrownBy(() -> reg.registerType(IntT.IntType))
+        .isInstanceOf(UnsupportedOperationException.class);
   }
 }

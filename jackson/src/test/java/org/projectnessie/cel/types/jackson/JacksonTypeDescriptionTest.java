@@ -18,6 +18,7 @@ package org.projectnessie.cel.types.jackson;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.IntT.intOf;
@@ -38,27 +39,34 @@ import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.common.ULong;
+import org.projectnessie.cel.common.types.Err;
+import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.ListT;
 import org.projectnessie.cel.common.types.MapT;
+import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.ObjectT;
 import org.projectnessie.cel.common.types.TypeT;
 import org.projectnessie.cel.common.types.pb.Checked;
 import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.types.jackson.types.AnEnum;
+import org.projectnessie.cel.types.jackson.types.CollectionsObject;
+import org.projectnessie.cel.types.jackson.types.InnerType;
 
 class JacksonTypeDescriptionTest {
 
   @Test
-  void types() {
+  void basics() {
     JacksonRegistry reg = (JacksonRegistry) newRegistry();
 
     reg.register(CollectionsObject.class);
     com.google.api.expr.v1alpha1.Type t = reg.findType(CollectionsObject.class.getName());
-    assertThat(t).isNotNull();
-    assertThat(t.getMessageType()).isEqualTo(CollectionsObject.class.getName());
-    assertThat(t.getTypeKindCase()).isSameAs(TypeKindCase.MESSAGE_TYPE);
+    assertThat(t)
+        .extracting(
+            com.google.api.expr.v1alpha1.Type::getMessageType,
+            com.google.api.expr.v1alpha1.Type::getTypeKindCase)
+        .containsExactly(CollectionsObject.class.getName(), TypeKindCase.MESSAGE_TYPE);
 
     JacksonTypeDescription td = reg.typeDescription(CollectionsObject.class);
     assertThat(td)
@@ -89,6 +97,30 @@ class JacksonTypeDescriptionTest {
             InnerType.class,
             InnerType.class.getName(),
             TypeT.newObjectTypeValue(InnerType.class.getName()));
+
+    //
+
+    assertThat(reg)
+        .extracting(
+            r -> r.findIdent(CollectionsObject.class.getName()),
+            r -> r.findIdent(InnerType.class.getName()),
+            r -> r.findIdent(AnEnum.class.getName() + '.' + AnEnum.ENUM_VALUE_2.name()))
+        .containsExactly(
+            TypeT.newObjectTypeValue(CollectionsObject.class.getName()),
+            TypeT.newObjectTypeValue(InnerType.class.getName()),
+            intOf(AnEnum.ENUM_VALUE_2.ordinal()));
+
+    assertThatThrownBy(() -> reg.typeDescription(AnEnum.class))
+        .isInstanceOf(IllegalArgumentException.class);
+
+    assertThatThrownBy(() -> reg.enumDescription(InnerType.class))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void types() {
+    JacksonRegistry reg = (JacksonRegistry) newRegistry();
+    reg.register(CollectionsObject.class);
 
     // verify the map-type-fields
 
@@ -206,7 +238,50 @@ class JacksonTypeDescriptionTest {
   }
 
   @Test
-  void innerTypes() throws Exception {
+  void unknownProperties() {
+    CollectionsObject collectionsObject = new CollectionsObject();
+
+    JacksonRegistry reg = (JacksonRegistry) newRegistry();
+    reg.register(CollectionsObject.class);
+
+    Val collectionsVal = reg.nativeToValue(collectionsObject);
+    assertThat(collectionsVal).isInstanceOf(ObjectT.class);
+    ObjectT obj = (ObjectT) collectionsVal;
+
+    Val x = obj.isSet(stringOf("bart"));
+    assertThat(x)
+        .isInstanceOf(Err.class)
+        .extracting(e -> (Err) e)
+        .extracting(Err::value)
+        .isEqualTo("no such field 'bart'");
+
+    x = obj.get(stringOf("bart"));
+    assertThat(x)
+        .isInstanceOf(Err.class)
+        .extracting(e -> (Err) e)
+        .extracting(Err::value)
+        .isEqualTo("no such field 'bart'");
+  }
+
+  @Test
+  void collectionsObjectEmpty() {
+    CollectionsObject collectionsObject = new CollectionsObject();
+
+    JacksonRegistry reg = (JacksonRegistry) newRegistry();
+    reg.register(CollectionsObject.class);
+
+    Val collectionsVal = reg.nativeToValue(collectionsObject);
+    assertThat(collectionsVal).isInstanceOf(ObjectT.class);
+    ObjectT obj = (ObjectT) collectionsVal;
+
+    for (String field : CollectionsObject.ALL_PROPERTIES) {
+      assertThat(obj.isSet(stringOf(field))).isSameAs(False);
+      assertThat(obj.get(stringOf(field))).isSameAs(NullT.NullValue);
+    }
+  }
+
+  @Test
+  void collectionsObjectTypeTest() throws Exception {
     CollectionsObject collectionsObject = new CollectionsObject();
 
     // populate (primitive) map types
@@ -276,6 +351,13 @@ class JacksonTypeDescriptionTest {
     inner2.wrappedIntProp = 4;
     collectionsObject.innerTypes = asList(inner1, inner2);
 
+    // populate enum-related fields
+
+    collectionsObject.anEnum = AnEnum.ENUM_VALUE_2;
+    collectionsObject.anEnumList = asList(AnEnum.ENUM_VALUE_2, AnEnum.ENUM_VALUE_3);
+    collectionsObject.anEnumStringMap = singletonMap(AnEnum.ENUM_VALUE_2, "a");
+    collectionsObject.stringAnEnumMap = singletonMap("a", AnEnum.ENUM_VALUE_2);
+
     // prepare registry
 
     JacksonRegistry reg = (JacksonRegistry) newRegistry();
@@ -287,33 +369,7 @@ class JacksonTypeDescriptionTest {
 
     // briefly verify all fields
 
-    for (String field :
-        asList(
-            "stringBooleanMap",
-            "byteShortMap",
-            "intLongMap",
-            "ulongTimestampMap",
-            "ulongZonedDateTimeMap",
-            "stringProtoDurationMap",
-            "stringJavaDurationMap",
-            "stringBytesMap",
-            "floatDoubleMap",
-            "stringList",
-            "booleanList",
-            "byteList",
-            "shortList",
-            "intList",
-            "longList",
-            "ulongList",
-            "timestampList",
-            "zonedDateTimeList",
-            "durationList",
-            "javaDurationList",
-            "bytesList",
-            "floatList",
-            "doubleList",
-            "stringInnerMap",
-            "innerTypes")) {
+    for (String field : CollectionsObject.ALL_PROPERTIES) {
       assertThat(obj.isSet(stringOf(field))).isSameAs(True);
       assertThat(obj.get(stringOf(field))).isNotNull();
 
@@ -373,60 +429,23 @@ class JacksonTypeDescriptionTest {
     assertThat(i)
         .extracting(o -> o.get(stringOf("intProp")), o -> o.get(stringOf("wrappedIntProp")))
         .containsExactly(intOf(3), intOf(4));
-  }
 
-  @SuppressWarnings("unused")
-  public static class CollectionsObject {
-    public Map<String, Boolean> stringBooleanMap;
-    public Map<Byte, Short> byteShortMap;
-    public Map<Integer, Long> intLongMap;
-    public Map<ULong, Timestamp> ulongTimestampMap;
-    public Map<ULong, ZonedDateTime> ulongZonedDateTimeMap;
-    public Map<String, Duration> stringProtoDurationMap;
-    public Map<String, java.time.Duration> stringJavaDurationMap;
-    public Map<String, ByteString> stringBytesMap;
-    public Map<Float, Double> floatDoubleMap;
+    // verify enums
 
-    public List<String> stringList;
-    public List<Boolean> booleanList;
-    public List<Byte> byteList;
-    public List<Short> shortList;
-    public List<Integer> intList;
-    public List<Long> longList;
-    public List<ULong> ulongList;
-    public List<Timestamp> timestampList;
-    public List<ZonedDateTime> zonedDateTimeList;
-    public List<Duration> durationList;
-    public List<java.time.Duration> javaDurationList;
-    public List<ByteString> bytesList;
-    public List<Float> floatList;
-    public List<Double> doubleList;
-
-    public Map<String, InnerType> stringInnerMap;
-    public List<InnerType> innerTypes;
-  }
-
-  @SuppressWarnings("unused")
-  public static class InnerType {
-    public int intProp;
-    public Integer wrappedIntProp;
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      InnerType innerType = (InnerType) o;
-      return intProp == innerType.intProp
-          && Objects.equals(wrappedIntProp, innerType.wrappedIntProp);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(intProp, wrappedIntProp);
-    }
+    Val x = obj.get(stringOf("anEnum"));
+    assertThat(x).isInstanceOf(IntT.class).isEqualTo(intOf(AnEnum.ENUM_VALUE_2.ordinal()));
+    listVal = (ListT) obj.get(stringOf("anEnumList"));
+    assertThat(listVal)
+        .extracting(l -> l.get(intOf(0)), l -> l.get(intOf(1)))
+        .containsExactly(
+            intOf(AnEnum.ENUM_VALUE_2.ordinal()), intOf(AnEnum.ENUM_VALUE_3.ordinal()));
+    mapVal = (MapT) obj.get(stringOf("anEnumStringMap"));
+    assertThat(mapVal)
+        .extracting(l -> l.get(intOf(AnEnum.ENUM_VALUE_2.ordinal())))
+        .isEqualTo(stringOf("a"));
+    mapVal = (MapT) obj.get(stringOf("stringAnEnumMap"));
+    assertThat(mapVal)
+        .extracting(l -> l.get(stringOf("a")))
+        .isEqualTo(intOf(AnEnum.ENUM_VALUE_2.ordinal()));
   }
 }

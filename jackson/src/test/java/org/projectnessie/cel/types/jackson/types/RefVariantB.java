@@ -19,21 +19,19 @@ import com.fasterxml.jackson.annotation.JsonTypeName;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import org.immutables.value.Value;
-import org.immutables.value.Value.Derived;
 
+/** Api representation of an Nessie Tag/Branch. This object is akin to a Ref in Git terminology. */
 @Value.Immutable(prehash = true)
-@JsonSerialize(as = ImmutableHash.class)
-@JsonDeserialize(as = ImmutableHash.class)
-@JsonTypeName("HASH")
-public abstract class Hash implements Reference {
+@JsonSerialize(as = ImmutableRefVariantB.class)
+@JsonDeserialize(as = ImmutableRefVariantB.class)
+@JsonTypeName("B")
+public interface RefVariantB extends RefBase {
 
-  @Override
-  @Derived
-  public String getHash() {
-    return getName();
+  static ImmutableRefVariantB.Builder builder() {
+    return ImmutableRefVariantB.builder();
   }
 
-  public static Hash of(String hash) {
-    return ImmutableHash.builder().name(hash).build();
+  static RefVariantB of(String name, String hash) {
+    return builder().name(name).hash(hash).build();
   }
 }

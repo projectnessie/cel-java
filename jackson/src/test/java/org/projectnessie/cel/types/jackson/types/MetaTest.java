@@ -32,9 +32,9 @@ import javax.annotation.Nullable;
 import org.immutables.value.Value;
 
 @Value.Immutable(prehash = true)
-@JsonSerialize(as = ImmutableCommitMeta.class)
-@JsonDeserialize(as = ImmutableCommitMeta.class)
-public abstract class CommitMeta {
+@JsonSerialize(as = ImmutableMetaTest.class)
+@JsonDeserialize(as = ImmutableMetaTest.class)
+public abstract class MetaTest {
 
   @Nullable
   public abstract String getHash();
@@ -63,16 +63,16 @@ public abstract class CommitMeta {
 
   public abstract Map<String, String> getProperties();
 
-  public ImmutableCommitMeta.Builder toBuilder() {
-    return ImmutableCommitMeta.builder().from(this);
+  public ImmutableMetaTest.Builder toBuilder() {
+    return ImmutableMetaTest.builder().from(this);
   }
 
-  public static ImmutableCommitMeta.Builder builder() {
-    return ImmutableCommitMeta.builder();
+  public static ImmutableMetaTest.Builder builder() {
+    return ImmutableMetaTest.builder();
   }
 
-  public static CommitMeta fromMessage(String message) {
-    return ImmutableCommitMeta.builder().message(message).build();
+  public static MetaTest fromMessage(String message) {
+    return ImmutableMetaTest.builder().message(message).build();
   }
 
   public static class InstantSerializer extends StdSerializer<Instant> {

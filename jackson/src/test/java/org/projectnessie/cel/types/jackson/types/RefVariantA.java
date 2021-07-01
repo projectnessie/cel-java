@@ -15,16 +15,22 @@
  */
 package org.projectnessie.cel.types.jackson.types;
 
-import com.fasterxml.jackson.annotation.JsonSubTypes;
-import com.fasterxml.jackson.annotation.JsonSubTypes.Type;
-import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import javax.annotation.Nullable;
+import com.fasterxml.jackson.annotation.JsonTypeName;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import org.immutables.value.Value;
 
-@JsonSubTypes({@Type(Branch.class), @Type(Tag.class), @Type(Hash.class)})
-@JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
-public interface Reference {
-  String getName();
+@Value.Immutable(prehash = true)
+@JsonSerialize(as = ImmutableRefVariantA.class)
+@JsonDeserialize(as = ImmutableRefVariantA.class)
+@JsonTypeName("A")
+public interface RefVariantA extends RefBase {
 
-  @Nullable
-  String getHash();
+  static ImmutableRefVariantA.Builder builder() {
+    return ImmutableRefVariantA.builder();
+  }
+
+  static RefVariantA of(String name, String hash) {
+    return builder().name(name).hash(hash).build();
+  }
 }

@@ -45,7 +45,7 @@ final class JacksonTypeDescription implements TypeDescription {
 
   private final Map<String, JacksonFieldType> fieldTypes;
 
-  JacksonTypeDescription(JavaType javaType, JsonSerializer<Object> ser, TypeQuery typeQuery) {
+  JacksonTypeDescription(JavaType javaType, JsonSerializer<?> ser, TypeQuery typeQuery) {
     this.javaType = javaType;
     this.name = javaType.getRawClass().getName();
     this.type = TypeT.newObjectTypeValue(name);
@@ -113,6 +113,8 @@ final class JacksonTypeDescription implements TypeDescription {
       com.google.api.expr.v1alpha1.Type valueType =
           findTypeForJacksonType(type.getContentType(), typeQuery);
       return Decls.newListType(valueType);
+    } else if (type.isEnumType()) {
+      return typeQuery.getType(type);
     } else {
       com.google.api.expr.v1alpha1.Type t = typeQuery.getType(type);
       if (t == null) {
@@ -168,10 +170,5 @@ final class JacksonTypeDescription implements TypeDescription {
   @Override
   public Class<?> reflectType() {
     return javaType.getRawClass();
-  }
-
-  @Override
-  public String toString() {
-    return "JacksonTypeDescription{name: '" + name() + "', reflectType: " + reflectType() + '}';
   }
 }

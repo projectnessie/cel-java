@@ -15,22 +15,8 @@
  */
 package org.projectnessie.cel.types.jackson.types;
 
-import com.fasterxml.jackson.annotation.JsonTypeName;
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import org.immutables.value.Value;
-
-@Value.Immutable(prehash = true)
-@JsonSerialize(as = ImmutableTag.class)
-@JsonDeserialize(as = ImmutableTag.class)
-@JsonTypeName("TAG")
-public interface Tag extends Reference {
-
-  static ImmutableTag.Builder builder() {
-    return ImmutableTag.builder();
-  }
-
-  static Tag of(String name, String hash) {
-    return builder().name(name).hash(hash).build();
-  }
+public enum AnEnum {
+  ENUM_VALUE_1,
+  ENUM_VALUE_2,
+  ENUM_VALUE_3
 }
