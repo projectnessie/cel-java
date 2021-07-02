@@ -27,11 +27,8 @@ The `cel-tools` artifact provides a simple entry point `ScriptHost` to produce `
 A very simple start:
 
 ```java
-import static java.util.Collections.emptyList;
-
 import com.google.api.expr.v1alpha1.Decl;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.tools.Script;
@@ -42,16 +39,13 @@ public class MyClass {
     // Build the script factory
     ScriptHost scriptHost = ScriptHost.newBuilder().build();
 
-    // Variable declarations - we need `x` and `y` in this example
-    List<Decl> declarations = singletonList(
-        Decls.newVar("x", Decls.String),
-        Decls.newVar("y", Decls.String));
-
-    // no custom types (e.g. protobuf message default instances)
-    List<Object> types = emptyList();
-
     // create the script, will be parsed and checked
-    Script script = scriptHost.getOrCreateScript("x + ' ' + y", declarations, types);
+    Script script = scriptHost.buildScript("x + ' ' + y")
+        .withDeclarations(
+            // Variable declarations - we need `x` and `y` in this example
+            Decls.newVar("x", Decls.String),
+            Decls.newVar("y", Decls.String))
+        .build();
 
     Map<String, Object> arguments = new HashMap<>();
     arguments.put("x", "hello");
@@ -82,18 +76,17 @@ public class MyClass {
         .registry(JacksonRegistry.newRegistry())
         .build();
 
-    // Variable declarations - we need `inp` +  `checkName` in this example
-    List<Decl> declarations = singletonList(
-        Decls.newVar("inp", Decls.newObjectType(MyInput.class.getName())), 
-        Decls.newVar("checkName", Decls.String));
-
-    // Register our Jackson object input type
-    List<Object> types = singletonList(MyInput.class);
-
     // Create the script, will be parsed and checked.
     // It checks whether the property `name` in the "Jackson-ized" class `MyInput` is
     // equal to the value of `checkName`.
-    Script script = scriptHost.getOrCreateScript("inp.name == checkName", declarations, types);
+    Script script = scriptHost.buildScript("inp.name == checkName")
+        // Variable declarations - we need `inp` +  `checkName` in this example
+        .withDeclarations(
+            Decls.newVar("inp", Decls.newObjectType(MyInput.class.getName())),
+            Decls.newVar("checkName", Decls.String))
+        // Register our Jackson object input type
+        .withTypes(MyInput.class)
+        .build();
 
     Map<String, Object> arguments = new HashMap<>();
     arguments.put("inp", input);
