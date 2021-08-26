@@ -1,6 +1,8 @@
 # Java implementation of Common-Expression-Language (CEL)
 
 [![CI](https://github.com/projectnessie/cel-java/actions/workflows/main.yml/badge.svg)](https://github.com/projectnessie/cel-java/actions/workflows/main.yml)
+[![codecov](https://codecov.io/gh/projectnessie/cel-java/branch/main/graph/badge.svg?token=T0oH60kJYh)](https://codecov.io/gh/projectnessie/cel-java)
+[![Maven Central](https://img.shields.io/maven-central/v/org.projectnessie.cel/cel-core)](https://search.maven.org/artifact/org.projectnessie.cel/cel-core)
 
 This is a Java port of the [Common-Expression-Language (CEL)](https://opensource.google/projects/cel).
 
