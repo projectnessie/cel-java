@@ -26,7 +26,7 @@ plugins {
     id("org.projectnessie.cel.reflectionconfig")
 }
 
-val versionGrpc = "1.40.1"
+val versionGrpc = "1.41.0"
 val versionProtobuf = "3.18.0"
 
 sourceSets.main {
