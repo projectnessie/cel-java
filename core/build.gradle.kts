@@ -29,7 +29,7 @@ plugins {
 val versionAgrona = "1.12.0"
 val versionAssertj = "3.21.0"
 val versionJmh = "1.33"
-val versionJunit = "5.8.0"
+val versionJunit = "5.8.1"
 
 dependencies {
     implementation(project(":generated-antlr"))

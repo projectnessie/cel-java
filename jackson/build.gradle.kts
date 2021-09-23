@@ -29,7 +29,7 @@ val versionAssertj = "3.21.0"
 val versionImmutables = "2.8.8"
 val versionJackson = "2.12.5"
 val versionJSR305 = "3.0.2"
-val versionJunit = "5.8.0"
+val versionJunit = "5.8.1"
 
 dependencies {
     api(project(":core"))
