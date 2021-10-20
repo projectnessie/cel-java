@@ -68,7 +68,7 @@ jobs:
           restore-keys: bazel-${{ matrix.java-version }}
 
       - name: Setup bazel
-        uses: jwlawson/actions-setup-bazel@v1.6.1
+        uses: jwlawson/actions-setup-bazel@v1.7.0
         with:
           bazel-version: '3.5.1'
 
