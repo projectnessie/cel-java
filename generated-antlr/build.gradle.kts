@@ -21,7 +21,7 @@ plugins {
     signing
 }
 
-val versionAntlr = "4.9.2"
+val versionAntlr = "4.8"
 
 dependencies {
     antlr("org.antlr:antlr4:$versionAntlr") // TODO remove from runtime-classpath *sigh*
