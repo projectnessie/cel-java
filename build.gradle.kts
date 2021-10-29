@@ -133,7 +133,9 @@ allprojects {
             }
           }
 
-          from(components.findByName("java"))
+          if (project.name != "generated-antlr") {
+            from(components.findByName("java"))
+          }
         }
       }
     }

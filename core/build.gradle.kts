@@ -32,7 +32,7 @@ val versionJmh = "1.33"
 val versionJunit = "5.8.1"
 
 dependencies {
-    implementation(project(":generated-antlr"))
+    implementation(project(":generated-antlr", "shadow"))
     api(project(":generated-pb"))
 
     implementation("org.agrona:agrona:$versionAgrona")

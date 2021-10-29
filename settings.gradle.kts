@@ -25,7 +25,7 @@ pluginManagement {
     id("org.jetbrains.gradle.plugin.idea-ext") version "1.0"
     id("com.google.protobuf") version "0.8.16"
     id("me.champeau.jmh") version "0.6.5"
-    id("com.github.johnrengelman.shadow") version "7.0.0"
+    id("com.github.johnrengelman.shadow") version "7.1.0"
     id("org.caffinitas.gradle.aggregatetestresults") version "0.1"
     id("org.caffinitas.gradle.testsummary") version "0.1.1"
     id("org.caffinitas.gradle.testrerun") version "0.1"
