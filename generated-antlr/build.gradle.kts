@@ -47,7 +47,7 @@ tasks.named<ShadowJar>("shadowJar") {
     dependencies {
         include(dependency("org.antlr:antlr4-runtime"))
     }
-    relocate("org.antlr.v4.runtime", "org.projectnessie.cel.parser.gen.antlr.v4.runtime")
+    relocate("org.antlr.v4.runtime", "org.projectnessie.cel.shaded.org.antlr.v4.runtime")
     archiveClassifier.set("")
 }
 

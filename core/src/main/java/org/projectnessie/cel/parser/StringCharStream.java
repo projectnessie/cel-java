@@ -15,9 +15,9 @@
  */
 package org.projectnessie.cel.parser;
 
-import org.projectnessie.cel.parser.gen.antlr.v4.runtime.CharStream;
-import org.projectnessie.cel.parser.gen.antlr.v4.runtime.IntStream;
-import org.projectnessie.cel.parser.gen.antlr.v4.runtime.misc.Interval;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.CharStream;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.IntStream;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.misc.Interval;
 
 public final class StringCharStream implements CharStream {
 
