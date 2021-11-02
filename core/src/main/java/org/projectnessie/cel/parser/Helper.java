@@ -33,10 +33,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.agrona.collections.LongArrayList;
-import org.antlr.v4.runtime.ParserRuleContext;
-import org.antlr.v4.runtime.Token;
 import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.Source;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.ParserRuleContext;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.Token;
 
 final class Helper {
   private final Source source;

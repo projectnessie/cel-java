@@ -14,14 +14,17 @@
  * limitations under the License.
  */
 
+import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+
 plugins {
     `java-library`
     antlr
     `maven-publish`
     signing
+    id("com.github.johnrengelman.shadow")
 }
 
-val versionAntlr = "4.8"
+val versionAntlr = "4.9.2"
 
 dependencies {
     antlr("org.antlr:antlr4:$versionAntlr") // TODO remove from runtime-classpath *sigh*
@@ -31,4 +34,27 @@ dependencies {
 // The antlr-plugin should ideally do this
 tasks.named<Jar>("sourcesJar") {
     dependsOn(tasks.named("generateGrammarSource"))
+}
+
+tasks.named<Jar>("jar") {
+    archiveClassifier.set("raw")
+}
+
+tasks.named<ShadowJar>("shadowJar") {
+    // The antlr-plugin should ideally do this
+    dependsOn(tasks.named("generateGrammarSource"))
+
+    dependencies {
+        include(dependency("org.antlr:antlr4-runtime"))
+    }
+    relocate("org.antlr.v4.runtime", "org.projectnessie.cel.shaded.org.antlr.v4.runtime")
+    archiveClassifier.set("")
+}
+
+publishing {
+    publications {
+        getByName<MavenPublication>("maven") {
+            project.shadow.component(this)
+        }
+    }
 }

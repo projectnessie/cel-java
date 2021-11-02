@@ -32,22 +32,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import org.antlr.v4.runtime.ANTLRErrorListener;
-import org.antlr.v4.runtime.CommonTokenStream;
-import org.antlr.v4.runtime.DefaultErrorStrategy;
-import org.antlr.v4.runtime.IntStream;
-import org.antlr.v4.runtime.ParserRuleContext;
-import org.antlr.v4.runtime.RecognitionException;
-import org.antlr.v4.runtime.Recognizer;
-import org.antlr.v4.runtime.RuleContext;
-import org.antlr.v4.runtime.Token;
-import org.antlr.v4.runtime.atn.ATNConfigSet;
-import org.antlr.v4.runtime.dfa.DFA;
-import org.antlr.v4.runtime.tree.AbstractParseTreeVisitor;
-import org.antlr.v4.runtime.tree.ErrorNode;
-import org.antlr.v4.runtime.tree.ParseTree;
-import org.antlr.v4.runtime.tree.ParseTreeListener;
-import org.antlr.v4.runtime.tree.TerminalNode;
 import org.projectnessie.cel.common.ErrorWithLocation;
 import org.projectnessie.cel.common.Errors;
 import org.projectnessie.cel.common.Location;
@@ -86,6 +70,22 @@ import org.projectnessie.cel.parser.gen.CELParser.StartContext;
 import org.projectnessie.cel.parser.gen.CELParser.StringContext;
 import org.projectnessie.cel.parser.gen.CELParser.UintContext;
 import org.projectnessie.cel.parser.gen.CELParser.UnaryContext;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.ANTLRErrorListener;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.CommonTokenStream;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.DefaultErrorStrategy;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.IntStream;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.ParserRuleContext;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.RecognitionException;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.Recognizer;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.RuleContext;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.Token;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.atn.ATNConfigSet;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.dfa.DFA;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.tree.AbstractParseTreeVisitor;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.tree.ErrorNode;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.tree.ParseTree;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.tree.ParseTreeListener;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.tree.TerminalNode;
 
 public final class Parser {
 
@@ -258,18 +258,22 @@ public final class Parser {
     }
 
     @Override
-    public void recover(org.antlr.v4.runtime.Parser recognizer, RecognitionException e) {
+    public void recover(
+        org.projectnessie.cel.shaded.org.antlr.v4.runtime.Parser recognizer,
+        RecognitionException e) {
       checkAttempts(recognizer);
       super.recover(recognizer, e);
     }
 
     @Override
-    public Token recoverInline(org.antlr.v4.runtime.Parser recognizer) throws RecognitionException {
+    public Token recoverInline(org.projectnessie.cel.shaded.org.antlr.v4.runtime.Parser recognizer)
+        throws RecognitionException {
       checkAttempts(recognizer);
       return super.recoverInline(recognizer);
     }
 
-    void checkAttempts(org.antlr.v4.runtime.Parser recognizer) throws RecognitionException {
+    void checkAttempts(org.projectnessie.cel.shaded.org.antlr.v4.runtime.Parser recognizer)
+        throws RecognitionException {
       if (attempts >= maxAttempts) {
         attempts++;
         String msg = String.format("error recovery attempt limit exceeded: %d", maxAttempts);
@@ -303,7 +307,7 @@ public final class Parser {
 
     @Override
     public void reportAmbiguity(
-        org.antlr.v4.runtime.Parser recognizer,
+        org.projectnessie.cel.shaded.org.antlr.v4.runtime.Parser recognizer,
         DFA dfa,
         int startIndex,
         int stopIndex,
@@ -315,7 +319,7 @@ public final class Parser {
 
     @Override
     public void reportAttemptingFullContext(
-        org.antlr.v4.runtime.Parser recognizer,
+        org.projectnessie.cel.shaded.org.antlr.v4.runtime.Parser recognizer,
         DFA dfa,
         int startIndex,
         int stopIndex,
@@ -326,7 +330,7 @@ public final class Parser {
 
     @Override
     public void reportContextSensitivity(
-        org.antlr.v4.runtime.Parser recognizer,
+        org.projectnessie.cel.shaded.org.antlr.v4.runtime.Parser recognizer,
         DFA dfa,
         int startIndex,
         int stopIndex,
