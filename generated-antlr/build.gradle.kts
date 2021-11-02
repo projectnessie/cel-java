@@ -55,6 +55,8 @@ publishing {
     publications {
         getByName<MavenPublication>("maven") {
             project.shadow.component(this)
+            artifact(project.tasks.findByName("javadocJar"))
+            artifact(project.tasks.findByName("sourcesJar"))
         }
     }
 }
