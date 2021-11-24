@@ -24,7 +24,7 @@ pluginManagement {
     id("com.diffplug.spotless") version "5.14.0"
     id("org.jetbrains.gradle.plugin.idea-ext") version "1.0"
     id("com.google.protobuf") version "0.8.16"
-    id("me.champeau.jmh") version "0.6.5"
+    id("me.champeau.jmh") version "0.6.6"
     id("com.github.johnrengelman.shadow") version "7.1.0"
     id("org.caffinitas.gradle.aggregatetestresults") version "0.1"
     id("org.caffinitas.gradle.testsummary") version "0.1.1"
