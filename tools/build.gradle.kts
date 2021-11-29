@@ -26,7 +26,7 @@ plugins {
 }
 
 val versionAssertj = "3.21.0"
-val versionJunit = "5.8.1"
+val versionJunit = "5.8.2"
 
 dependencies {
     api(project(":core"))
