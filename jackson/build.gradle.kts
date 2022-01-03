@@ -25,7 +25,7 @@ plugins {
     id("org.caffinitas.gradle.testrerun")
 }
 
-val versionAssertj = "3.21.0"
+val versionAssertj = "3.22.0"
 val versionImmutables = "2.8.8"
 val versionJackson = "2.13.1"
 val versionJSR305 = "3.0.2"
