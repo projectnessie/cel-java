@@ -27,7 +27,7 @@ plugins {
 }
 
 val versionGrpc = "1.43.1"
-val versionProtobuf = "3.19.1"
+val versionProtobuf = "3.19.2"
 
 sourceSets.main {
     java.srcDir(project.buildDir.resolve("generated/source/proto/main/java"))
