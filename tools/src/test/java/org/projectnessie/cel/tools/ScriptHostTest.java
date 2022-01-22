@@ -91,15 +91,15 @@ class ScriptHostTest {
       @Override
       public List<EnvOption> getCompileOptions() {
         return Collections.singletonList(
-                EnvOption.declarations(
-                        Decls.newFunction(
-                                "foo", Decls.newOverload("foo_void", Collections.emptyList(), Decls.Int))));
+            EnvOption.declarations(
+                Decls.newFunction(
+                    "foo", Decls.newOverload("foo_void", Collections.emptyList(), Decls.Int))));
       }
 
       @Override
       public List<ProgramOption> getProgramOptions() {
         return Collections.singletonList(
-                ProgramOption.functions(Overload.function("foo", e -> IntT.intOf(42))));
+            ProgramOption.functions(Overload.function("foo", e -> IntT.intOf(42))));
       }
     }
 
