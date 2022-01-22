@@ -19,10 +19,17 @@ import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.projectnessie.cel.EnvOption;
+import org.projectnessie.cel.Library;
+import org.projectnessie.cel.ProgramOption;
 import org.projectnessie.cel.checker.Decls;
+import org.projectnessie.cel.common.types.IntT;
+import org.projectnessie.cel.interpreter.functions.Overload;
 
 class ScriptHostTest {
   @Test
@@ -76,5 +83,30 @@ class ScriptHostTest {
         .isInstanceOf(ScriptCreateException.class)
         .hasMessageStartingWith(
             "check failed: ERROR: <input>:1:1: undeclared reference to 'x' (in container '')");
+  }
+
+  @Test
+  void library() throws Exception {
+    class MyLib implements Library {
+      @Override
+      public List<EnvOption> getCompileOptions() {
+        return Collections.singletonList(
+            EnvOption.declarations(
+                Decls.newFunction(
+                    "foo", Decls.newOverload("foo_void", Collections.emptyList(), Decls.Int))));
+      }
+
+      @Override
+      public List<ProgramOption> getProgramOptions() {
+        return Collections.singletonList(
+            ProgramOption.functions(Overload.function("foo", e -> IntT.intOf(42))));
+      }
+    }
+
+    ScriptHost scriptHost = ScriptHost.newBuilder().build();
+
+    Script script = scriptHost.buildScript("foo()").withLibraries(new MyLib()).build();
+
+    assertThat(script.execute(Integer.class, Collections.emptyMap())).isEqualTo(42);
   }
 }

@@ -27,11 +27,13 @@ import static org.projectnessie.cel.ProgramOption.evalOptions;
 import com.google.api.expr.v1alpha1.Decl;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 import org.projectnessie.cel.Ast;
 import org.projectnessie.cel.Env;
 import org.projectnessie.cel.Env.AstIssuesTuple;
 import org.projectnessie.cel.EnvOption;
 import org.projectnessie.cel.EvalOption;
+import org.projectnessie.cel.Library;
 import org.projectnessie.cel.Program;
 import org.projectnessie.cel.ProgramOption;
 import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
@@ -72,6 +74,7 @@ public final class ScriptHost {
     private String container;
     private final List<Decl> declarations = new ArrayList<>();
     private final List<Object> types = new ArrayList<>();
+    private final List<Library> libraries = new ArrayList<>();
 
     private ScriptBuilder(String sourceText) {
       this.sourceText = sourceText;
@@ -100,6 +103,15 @@ public final class ScriptHost {
       return this;
     }
 
+    public ScriptBuilder withLibraries(Library... libraries) {
+      return withLibraries(asList(libraries));
+    }
+
+    public ScriptBuilder withLibraries(List<Library> libraries) {
+      this.libraries.addAll(libraries);
+      return this;
+    }
+
     public Script build() throws ScriptCreateException {
       List<EnvOption> envOptions = new ArrayList<>();
       envOptions.add(StdLib());
@@ -108,6 +120,7 @@ public final class ScriptHost {
       if (container != null) {
         envOptions.add(container(container));
       }
+      envOptions.addAll(libraries.stream().map(Library::Lib).collect(Collectors.toList()));
 
       Env env = newCustomEnv(registry, envOptions);
 
