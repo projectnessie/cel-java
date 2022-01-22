@@ -198,6 +198,7 @@ interface. The interface provides the necessary declarations (function definitio
 `List<EnvOption> getCompileOptions()` and the function implementations via 
 `List<ProgramOption> getProgramOptions()`. Examples are
 [here (`StdLibrary` class)](https://github.com/projectnessie/cel-java/blob/main/core/src/main/java/org/projectnessie/cel/Library.java),
+[here (`MyLib` class)](https://github.com/projectnessie/cel-java/blob/main/tools/src/test/java/org/projectnessie/cel/tools/ScriptHostTest.java),
 [here](https://github.com/google/cel-go/blob/master/ext/encoders.go) and
 [here](https://github.com/google/cel-go/blob/master/ext/strings.go)
 
