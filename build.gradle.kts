@@ -90,26 +90,37 @@ allprojects {
             inceptionYear.set("2021")
             url.set("https://github.com/projectnessie/cel-java")
             developers {
-              developer {
-                id.set("snazy")
-                name.set("Robert Stupp")
-                url.set("https://github.com/snazy")
-              }
-              developer {
-                id.set("nastra")
-                name.set("Eduard Tudenhoefner")
-                url.set("https://github.com/nastra")
-              }
-              developer {
-                id.set("rymurr")
-                name.set("Ryan Murray")
-                url.set("https://github.com/rymurr")
-              }
-              developer {
-                id.set("laurentgo")
-                name.set("Laurent Goujon")
-                url.set("https://github.com/laurentgo")
-              }
+              file(rootProject.file("gradle/developers.csv"))
+                .readLines()
+                .map { line -> line.trim() }
+                .filter { line -> !line.isEmpty() && !line.startsWith("#") }
+                .forEach { line ->
+                  val args = line.split(",")
+                  if (args.size < 3) {
+                    throw GradleException("gradle/developers.csv contains invalid line '${line}'")
+                  }
+                  developer {
+                    id.set(args[0])
+                    name.set(args[1])
+                    url.set(args[2])
+                  }
+                }
+            }
+            contributors {
+              file(rootProject.file("gradle/contributors.csv"))
+                .readLines()
+                .map { line -> line.trim() }
+                .filter { line -> !line.isEmpty() && !line.startsWith("#") }
+                .forEach { line ->
+                  val args = line.split(",")
+                  if (args.size > 2) {
+                    throw GradleException("gradle/contributors.csv contains invalid line '${line}'")
+                  }
+                  contributor {
+                    name.set(args[1])
+                    url.set(args[2])
+                  }
+                }
             }
             organization {
               name.set("Project Nessie")
