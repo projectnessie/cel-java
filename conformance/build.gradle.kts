@@ -30,7 +30,7 @@ plugins {
 
 val versionAssertj = "3.22.0"
 val versionJunit = "5.8.2"
-val versionGrpc = "1.43.2"
+val versionGrpc = "1.44.0"
 val versionProtobuf = "3.19.3"
 
 sourceSets.main {
