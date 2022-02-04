@@ -22,7 +22,7 @@ pluginManagement {
   repositories { gradlePluginPortal() }
   plugins {
     id("com.diffplug.spotless") version "6.2.1"
-    id("org.jetbrains.gradle.plugin.idea-ext") version "1.1.2"
+    id("org.jetbrains.gradle.plugin.idea-ext") version "1.1.3"
     id("com.google.protobuf") version "0.8.18"
     id("me.champeau.jmh") version "0.6.6"
     id("com.github.johnrengelman.shadow") version "7.1.2"
