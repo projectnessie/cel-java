@@ -231,8 +231,6 @@ the necessary Gradle and bazel builds.
 * JSON extension ([see spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md#json-data-conversion) and for example `nonFinite` in `com_github_golang_protobuf/jsonpb/decode.go`, around line 441)
 * Encoders extension ([like in Go](https://github.com/google/cel-go/blob/master/ext/encoders.go)),
   not difficult to port to Java, it's just work to be done at some point.
-* Strings extension ([like in Go](https://github.com/google/cel-go/blob/master/ext/strings.go)),
-  not difficult to port to Java, it's just work to be done at some point.
 
 ### Unsigned integer
 
