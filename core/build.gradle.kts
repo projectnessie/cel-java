@@ -26,7 +26,7 @@ plugins {
     id("org.caffinitas.gradle.testrerun")
 }
 
-val versionAgrona = "1.14.0"
+val versionAgrona = "1.15.0"
 val versionAssertj = "3.22.0"
 val versionJmh = "1.34"
 val versionJunit = "5.8.2"
