@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.*;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.projectnessie.cel.Env;
@@ -46,53 +47,44 @@ public class StringsTest {
         new TestData("'tacocat'.indexOf('') == 0"),
         new TestData("'tacocat'.indexOf('ac') == 1"),
         new TestData("'tacocat'.indexOf('none') == -1"),
-        /*
-            new TestData("'tacocat'.indexOf('', 3) == 3"),
-            new TestData("'tacocat'.indexOf('a', 3) == 5"),
-            new TestData("'tacocat'.indexOf('at', 3) == 5"),
-        */
+        new TestData("'tacocat'.indexOf('', 3) == 3"),
+        new TestData("'tacocat'.indexOf('a', 3) == 5"),
+        new TestData("'tacocat'.indexOf('at', 3) == 5"),
         new TestData("'ta©o©αT'.indexOf('©') == 2"),
-        /*
-            new TestData("'ta©o©αT'.indexOf('©', 3) == 4"),
-            new TestData("'ta©o©αT'.indexOf('©αT', 3) == 4"),
-            new TestData("'ta©o©αT'.indexOf('©α', 5) == -1"),
-        */
+        new TestData("'ta©o©αT'.indexOf('©', 3) == 4"),
+        new TestData("'ta©o©αT'.indexOf('©αT', 3) == 4"),
+        new TestData("'ta©o©αT'.indexOf('©α', 5) == -1"),
         new TestData("'tacocat'.lastIndexOf('') == 7"),
         new TestData("'tacocat'.lastIndexOf('at') == 5"),
         new TestData("'tacocat'.lastIndexOf('none') == -1"),
-        /*
-            new TestData("'tacocat'.lastIndexOf('', 3) == 3"),
-            new TestData("'tacocat'.lastIndexOf('a', 3) == 1"),
-        */
+        new TestData("'tacocat'.lastIndexOf('', 3) == 3"),
+        new TestData("'tacocat'.lastIndexOf('a', 3) == 1"),
         new TestData("'ta©o©αT'.lastIndexOf('©') == 4"),
-        /*
-            new TestData("'ta©o©αT'.lastIndexOf('©', 3) == 2"),
-            new TestData("'ta©o©αT'.lastIndexOf('©α', 4) == 4"),
-        */
+        new TestData("'ta©o©αT'.lastIndexOf('©', 3) == 2"),
+        new TestData("'ta©o©αT'.lastIndexOf('©α', 4) == 4"),
         new TestData("'TacoCat'.lowerAscii() == 'tacocat'"),
         new TestData("'TacoCÆt Xii'.lowerAscii() == 'tacocÆt xii'"),
         new TestData("'hello hello'.replace('he', 'we') == 'wello wello'"),
+        new TestData("'hello hello'.replace('he', 'we', -1) == 'wello wello'"),
+        new TestData("'hello hello'.replace('he', 'we', 1)  == 'wello hello'"),
+        new TestData("'hello hello'.replace('he', 'we', 0) == 'hello hello'"),
         new TestData("\"12 days 12 hours\".replace(\"{0}\", \"2\") == \"12 days 12 hours\""),
         new TestData("\"{0} days {0} hours\".replace(\"{0}\", \"2\") == \"2 days 2 hours\""),
-        /*
-            new TestData("\"{0} days {0} hours\".replace(\"{0}\", \"2\", 1).replace(\"{0}\", \"23\") == \"2 days 23 hours\""),
-        */
+        new TestData(
+            "\"{0} days {0} hours\".replace(\"{0}\", \"2\", 1).replace(\"{0}\", \"23\") == \"2 days 23 hours\""),
         new TestData("\"1 ©αT taco\".replace(\"αT\", \"o©α\") == \"1 ©o©α taco\""),
         new TestData("'hello hello hello'.split(' ') == ['hello', 'hello', 'hello']"),
         new TestData("\"hello world\".split(\" \") == [\"hello\", \"world\"]"),
-        /*
-            new TestData("\"hello world events!\".split(\" \", 0) == []"),
-            new TestData("\"hello world events!\".split(\" \", 1) == [\"hello world events!\"]"),
-            new TestData("\"o©o©o©o\".split(\"©\", -1) == [\"o\", \"o\", \"o\", \"o\"]"),
-        */
+        new TestData("\"hello world events!\".split(\" \", 0) == []"),
+        new TestData("\"hello world events!\".split(\" \", 1) == [\"hello world events!\"]"),
+        new TestData("\"hello world events!\".split(\" \", 2) == [\"hello\", \"world events!\"]"),
+        new TestData("\"o©o©o©o\".split(\"©\", -1) == [\"o\", \"o\", \"o\", \"o\"]"),
         new TestData("\"tacocat\".substring(4) == \"cat\""),
         new TestData("\"tacocat\".substring(7) == \"\""),
-        /*
-            new TestData("\"tacocat\".substring(0, 4) == \"taco\""),
-            new TestData("\"tacocat\".substring(4, 4) == \"\""),
-            new TestData("'ta©o©αT'.substring(2, 6) == \"©o©α\""),
-            new TestData("'ta©o©αT'.substring(7, 7) == \"\""),
-        */
+        new TestData("\"tacocat\".substring(0, 4) == \"taco\""),
+        new TestData("\"tacocat\".substring(4, 4) == \"\""),
+        new TestData("'ta©o©αT'.substring(2, 6) == \"©o©α\""),
+        new TestData("'ta©o©αT'.substring(7, 7) == \"\""),
         new TestData("'TacoCat'.upperAscii() == 'TACOCAT'"),
         new TestData("'TacoCÆt Xii'.upperAscii() == 'TACOCÆT XII'"),
         new TestData("\" \\f\\n\\r\\t\\vtext  \".trim() == \"text\""),
@@ -105,12 +97,9 @@ public class StringsTest {
             "\"\u180etext\u200b\u200c\u200d\u2060\ufeff\".trim() == \"\u180etext\u200b\u200c\u200d\u2060\ufeff\""),
 
         // Error test cases based on checked expression usage.
-        /*
-                new TestData("'tacocat'.indexOf('a', 30) == -1", "String index out of range: 30"),
-                new TestData("'tacocat'.lastIndexOf('a', -1) == -1", "String index out of range: -1"),
-                new TestData("'tacocat'.lastIndexOf('a', 30) == -1", "String index out of range: 30"),
-        */
-
+        new TestData("'tacocat'.indexOf('a', 30) == -1", "String index out of range: 30"),
+        new TestData("'tacocat'.lastIndexOf('a', -1) == -1", "String index out of range: -1"),
+        new TestData("'tacocat'.lastIndexOf('a', 30) == -1", "String index out of range: 30"),
         new TestData(
             "\"tacocat\".substring(40) == \"cat\"",
             "String index out of range: -33",
@@ -129,12 +118,10 @@ public class StringsTest {
                 put(14, "begin -1, end 7, length 7");
               }
             }),
-        /*
-                new TestData("\"tacocat\".substring(1, 50) == \"cat\"", "String index out of range: 50"),
-                new TestData("\"tacocat\".substring(49, 50) == \"cat\"", "String index out of range: 49"),
-                new TestData(
-                    "\"tacocat\".substring(4, 3) == \"\"", "invalid substring range. start: 4, end: 3"),
-        */
+        new TestData("\"tacocat\".substring(1, 50) == \"cat\"", "String index out of range: 50"),
+        new TestData("\"tacocat\".substring(49, 50) == \"cat\"", "String index out of range: 49"),
+        new TestData(
+            "\"tacocat\".substring(4, 3) == \"\"", "invalid substring range. start: 4, end: 3"),
 
         // Valid parse-only expressions which should generate runtime errors.
         new TestData("42.charAt(2) == \"\"", "no matching overload", true),
@@ -171,6 +158,52 @@ public class StringsTest {
         new TestData("30.substring(true, 3) == \"\"", "no matching overload", true),
         new TestData("\"tacocat\".substring(true, 3) == \"\"", "no matching overload", true),
         new TestData("\"tacocat\".substring(0, false) == \"\"", "no matching overload", true));
+  }
+
+  @Test
+  public void testReplaceN() {
+    assertThat(StringsLib.replaceN("hello hello hello xyz hello", "hello", "hello", -1))
+        .isEqualTo("hello hello hello xyz hello");
+    assertThat(StringsLib.replaceN("hello hello hello xyz hello", "hello", "abcd", -1))
+        .isEqualTo("abcd abcd abcd xyz abcd");
+    assertThat(StringsLib.replaceN("hello hello hello xyz hello", "hello", "abcd", 0))
+        .isEqualTo("hello hello hello xyz hello");
+    assertThat(StringsLib.replaceN("hello hello hello xyz hello", "hello", "abcd", 1))
+        .isEqualTo("abcd hello hello xyz hello");
+    assertThat(StringsLib.replaceN("hello hello hello xyz hello", "hello", "abcd", 2))
+        .isEqualTo("abcd abcd hello xyz hello");
+    assertThat(StringsLib.replaceN("hello hello hello xyz hello ", "hello", "abcd", 4))
+        .isEqualTo("abcd abcd abcd xyz abcd ");
+    assertThat(StringsLib.replaceN("hello hello hello xyz hello ", "hello", "abcd", 100))
+        .isEqualTo("abcd abcd abcd xyz abcd ");
+    assertThat(StringsLib.replaceN("hello hello hello xyz hello ", "", "abcd", 2))
+        .isEqualTo("abcdhabcdello hello hello xyz hello ");
+  }
+
+  @Test
+  public void testSplitN() {
+    assertThat(StringsLib.splitN("A B C D E", " ", 0)).isEqualTo(new String[] {});
+    assertThat(StringsLib.splitN("A B C D E", " ", 1)).isEqualTo(new String[] {"A B C D E"});
+    assertThat(StringsLib.splitN("A B C D E", " ", 2)).isEqualTo(new String[] {"A", "B C D E"});
+    assertThat(StringsLib.splitN("A B C D E", " ", 3)).isEqualTo(new String[] {"A", "B", "C D E"});
+    assertThat(StringsLib.splitN("A B C D E", " ", 4))
+        .isEqualTo(new String[] {"A", "B", "C", "D E"});
+    assertThat(StringsLib.splitN("A B C D E", " ", 5))
+        .isEqualTo(new String[] {"A", "B", "C", "D", "E"});
+    assertThat(StringsLib.splitN("A B C D E", " ", 100))
+        .isEqualTo(new String[] {"A", "B", "C", "D", "E"});
+    assertThat(StringsLib.splitN("A B C D E", " ", -100))
+        .isEqualTo(new String[] {"A", "B", "C", "D", "E"});
+
+    assertThat(StringsLib.splitN(" A B C ", " ", 5))
+        .isEqualTo(new String[] {"", "A", "B", "C", ""});
+
+    assertThat(StringsLib.splitN("", " ", 5)).isEqualTo(new String[] {""});
+    // edge cases, sep is empty string
+    assertThat(StringsLib.splitN("A B C", "", 2)).isEqualTo(new String[] {"A", " B C"});
+    assertThat(StringsLib.splitN("A B C", "", 5)).isEqualTo(new String[] {"A", " ", "B", " ", "C"});
+    assertThat(StringsLib.splitN("A B C", "", 100))
+        .isEqualTo(new String[] {"A", " ", "B", " ", "C"});
   }
 
   private static void testExpression(TestData testData) {
