@@ -16,7 +16,7 @@
 
 plugins {
   `kotlin-dsl`
-  id("com.gradle.plugin-publish") version "0.15.0"
+  id("com.gradle.plugin-publish") version "0.20.0"
   id("com.diffplug.spotless") version "6.3.0"
 }
 
