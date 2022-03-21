@@ -30,7 +30,7 @@ group = "org.projectnessie.cel.build"
 version = file("../version.txt").readText().trim()
 
 val versionAsm = "9.2"
-val versionProtobufPlugin = "0.8.16"
+val versionProtobufPlugin = "0.8.18"
 
 dependencies {
   implementation("org.ow2.asm:asm:$versionAsm")
