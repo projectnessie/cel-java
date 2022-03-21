@@ -117,8 +117,8 @@ allprojects {
                     throw GradleException("gradle/contributors.csv contains invalid line '${line}'")
                   }
                   contributor {
-                    name.set(args[1])
-                    url.set(args[2])
+                    name.set(args[0])
+                    url.set(args[1])
                   }
                 }
             }
