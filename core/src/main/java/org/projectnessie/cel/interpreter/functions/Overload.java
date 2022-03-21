@@ -118,6 +118,11 @@ public final class Overload {
     return new Overload(operator, trait, null, null, op);
   }
 
+  public static Overload overload(
+      String operator, Trait trait, UnaryOp unary, BinaryOp binary, FunctionOp function) {
+    return new Overload(operator, trait, unary, binary, function);
+  }
+
   private Overload(
       String operator, Trait operandTrait, UnaryOp unary, BinaryOp binary, FunctionOp function) {
     this.operator = operator;
