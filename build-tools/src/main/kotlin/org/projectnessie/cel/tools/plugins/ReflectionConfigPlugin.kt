@@ -63,7 +63,9 @@ class ReflectionConfigPlugin : Plugin<Project> {
         tasks.named(sourcesJarTaskName) {
           dependsOn(genRefCfg)
         }
-      } catch (ignore: UnknownTaskException) { null }
+      } catch (ignore: UnknownTaskException) {
+        // ignore
+      }
     }
   }
 }
