@@ -61,3 +61,5 @@ include("conformance")
 include("tools")
 
 include("jacoco")
+
+include("bom")
