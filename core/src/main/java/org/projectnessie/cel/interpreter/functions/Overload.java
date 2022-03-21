@@ -136,7 +136,7 @@ public final class Overload {
       sb.append(", unary");
     }
     if (binary != null) {
-      sb.append(", unary");
+      sb.append(", binary");
     }
     if (binary != null) {
       sb.append(", function");
