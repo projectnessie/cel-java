@@ -50,7 +50,7 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: '0'
           submodules: 'true'
@@ -62,7 +62,7 @@ jobs:
           gh api repos/projectnessie/cel-java/commits/${SHA}/check-runs --jq 'if ([.check_runs[] | select(.name | endswith("Release") or startswith("codecov/") or startswith("Report") | not ) | .conclusion // "pending" ] | unique == ["success"] or unique == []) then "OK" else error("Commit checks are not OK") end'
 
       - name: Set up JDK 11
-        uses: actions/setup-java@v2
+        uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
           java-version: 11
@@ -70,7 +70,7 @@ jobs:
           gpg-passphrase: MAVEN_GPG_PASSPHRASE
 
       - name: Cache Gradle packages
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/.gradle/caches
