@@ -42,7 +42,15 @@ public class StringsTest {
         new TestData("'tacocat'.charAt(3) == 'o'"),
         new TestData("'tacocat'.charAt(7) == ''"),
         new TestData("'©αT'.charAt(0) == '©' && '©αT'.charAt(1) == 'α' && '©αT'.charAt(2) == 'T'"),
-        new TestData("'tacocat'.charAt(30) == ''", "String index out of range: 30"),
+        new TestData(
+            "'tacocat'.charAt(30) == ''",
+            "String index out of range: 30",
+            false,
+            new TreeMap<Integer, String>(Collections.reverseOrder()) {
+              {
+                put(18, "Index 30 out of bounds for length 7");
+              }
+            }),
         new TestData("'tacocat'.indexOf('') == 0"),
         new TestData("'tacocat'.indexOf('ac') == 1"),
         new TestData("'tacocat'.indexOf('none') == -1"),
@@ -118,6 +126,7 @@ public class StringsTest {
             new TreeMap<Integer, String>(Collections.reverseOrder()) {
               {
                 put(14, "begin 40, end 7, length 7");
+                put(18, "Range [40, 7) out of bounds for length 7");
               }
             }),
         new TestData(
@@ -127,6 +136,7 @@ public class StringsTest {
             new TreeMap<Integer, String>(Collections.reverseOrder()) {
               {
                 put(14, "begin -1, end 7, length 7");
+                put(18, "Range [-1, 7) out of bounds for length 7");
               }
             }),
         /*
