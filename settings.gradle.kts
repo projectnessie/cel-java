@@ -21,7 +21,7 @@ includeBuild("build-tools")
 pluginManagement {
   repositories { gradlePluginPortal() }
   plugins {
-    id("com.diffplug.spotless") version "6.3.0"
+    id("com.diffplug.spotless") version "6.4.0"
     id("org.jetbrains.gradle.plugin.idea-ext") version "1.1.3"
     id("com.google.protobuf") version "0.8.18"
     id("me.champeau.jmh") version "0.6.6"
