@@ -65,8 +65,8 @@ jobs:
         with:
           path: |
             ~/.cache/bazel
-          key: bazel-${{ matrix.java-version }}-${{ hashFiles('**/.gitmodules') }}
-          restore-keys: bazel-${{ matrix.java-version }}
+          key: bazel-${{ hashFiles('**/.gitmodules') }}
+          restore-keys: bazel-
 
       - name: Setup bazel
         uses: jwlawson/actions-setup-bazel@v1.7.0
