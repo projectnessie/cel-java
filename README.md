@@ -12,18 +12,34 @@ The CEL specification can be found [here](https://github.com/google/cel-spec).
 
 The easiest way to get started is to add a dependency to your Maven project
 ```xml
-<dependency>
-  <groupId>org.projectnessie.cel</groupId>
-  <artifactId>cel-tools</artifactId>
-  <version>0.2.5</version>
-</dependency>
+<dependencyManagement>
+  <dependencies>
+    <dependency>
+      <groupId>org.projectnessie.cel</groupId>
+      <artifactId>cel-bom</artifactId>
+      <version>0.2.6</version>
+      <type>pom</type>
+      <scope>import</scope>
+    </dependency>
+  </dependencies>
+</dependencyManagement>
+
+<dependencies>
+  <dependency>
+    <groupId>org.projectnessie.cel</groupId>
+    <artifactId>cel-tools</artifactId>
+  </dependency>
+</dependencies>
 ```
 or Gradle project.
 ```groovy
 dependencies {
-    implementation("org.projectnessie.cel:cel-tools:0.2.5")
+  implementation(enforcedPlatform("org.projectnessie.cel:cel-bom:0.2.6"))
+  implementation("org.projectnessie.cel:cel-tools")
 }
 ```
+
+(Note: `cel-bom` is available for CEL-Java version 0.2.6 and newer.)
 
 The `cel-tools` artifact provides a simple entry point `ScriptHost` to produce `Script` instances.
 A very simple start:
@@ -108,22 +124,35 @@ To use the `JacksonRegistry` in your application code, add the `cel-jackson` dep
 addition to `cel-core` or `cel-tools`.
 
 ```xml
-<dependency>
-  <groupId>org.projectnessie.cel</groupId>
-  <artifactId>cel-jackson</artifactId>
-  <version>0.2.5</version>
-</dependency>
-<dependency>
-  <groupId>org.projectnessie.cel</groupId>
-  <artifactId>cel-tools</artifactId>
-  <version>0.2.5</version>
-</dependency>
+<dependencyManagement>
+  <dependencies>
+    <dependency>
+      <groupId>org.projectnessie.cel</groupId>
+      <artifactId>cel-bom</artifactId>
+      <version>0.2.6</version>
+      <type>pom</type>
+      <scope>import</scope>
+    </dependency>
+  </dependencies>
+</dependencyManagement>
+
+<dependencies>
+  <dependency>
+    <groupId>org.projectnessie.cel</groupId>
+    <artifactId>cel-jackson</artifactId>
+  </dependency>
+  <dependency>
+    <groupId>org.projectnessie.cel</groupId>
+    <artifactId>cel-tools</artifactId>
+  </dependency>
+</dependencies>
 ```
 or Gradle project.
 ```groovy
 dependencies {
-    implementation("org.projectnessie.cel:cel-tools:0.2.5")
-    implementation("org.projectnessie.cel:cel-jackson:0.2.5")
+  implementation(enforcedPlatform("org.projectnessie.cel:cel-bom:0.2.6"))
+  implementation("org.projectnessie.cel:cel-tools")
+  implementation("org.projectnessie.cel:cel-jackson")
 }
 ```
 
