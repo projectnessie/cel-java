@@ -91,7 +91,7 @@ jobs:
           cp README.md README.md.bak
           cat README.md.bak | \
             sed "s/<version>.*<\/version>/<version>${RELEASE_VERSION}<\/version>/" | \
-            sed "s/implementation(\"org.projectnessie.cel:\(cel-.*\):.*\")/implementation(\"org.projectnessie.cel:\1:${RELEASE_VERSION}\")/" > README.md
+            sed "s/enforcedPlatform(\"org.projectnessie.cel:\(cel-.*\):.*\")/enforcedPlatform(\"org.projectnessie.cel:\1:${RELEASE_VERSION}\")/" > README.md
           rm README.md.bak
 
       - name: Record ${{ github.event.inputs.releaseVersion }} release in git

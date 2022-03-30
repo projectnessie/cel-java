@@ -34,12 +34,12 @@ The easiest way to get started is to add a dependency to your Maven project
 or Gradle project.
 ```groovy
 dependencies {
-  implementation(enforcedPlatform("org.projectnessie.cel:cel-bom:0.2.6"))
+  implementation(enforcedPlatform("org.projectnessie.cel:cel-bom:0.3.0"))
   implementation("org.projectnessie.cel:cel-tools")
 }
 ```
 
-(Note: `cel-bom` is available for CEL-Java version 0.2.6 and newer.)
+(Note: `cel-bom` is available for CEL-Java version 0.3.0 and newer.)
 
 The `cel-tools` artifact provides a simple entry point `ScriptHost` to produce `Script` instances.
 A very simple start:
@@ -150,7 +150,7 @@ addition to `cel-core` or `cel-tools`.
 or Gradle project.
 ```groovy
 dependencies {
-  implementation(enforcedPlatform("org.projectnessie.cel:cel-bom:0.2.6"))
+  implementation(enforcedPlatform("org.projectnessie.cel:cel-bom:0.3.0"))
   implementation("org.projectnessie.cel:cel-tools")
   implementation("org.projectnessie.cel:cel-jackson")
 }
