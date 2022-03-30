@@ -17,7 +17,7 @@ The easiest way to get started is to add a dependency to your Maven project
     <dependency>
       <groupId>org.projectnessie.cel</groupId>
       <artifactId>cel-bom</artifactId>
-      <version>0.2.6</version>
+      <version>0.3.0</version>
       <type>pom</type>
       <scope>import</scope>
     </dependency>
@@ -129,7 +129,7 @@ addition to `cel-core` or `cel-tools`.
     <dependency>
       <groupId>org.projectnessie.cel</groupId>
       <artifactId>cel-bom</artifactId>
-      <version>0.2.6</version>
+      <version>0.3.0</version>
       <type>pom</type>
       <scope>import</scope>
     </dependency>
