@@ -32,12 +32,6 @@ public final class Guards {
 
   public static BinaryOp callInStrIntOutStr(BiFunction<String, Integer, String> func) {
     return (lhs, rhs) -> {
-      if (lhs.type() != StringT.StringType) {
-        return Err.maybeNoSuchOverloadErr(lhs);
-      }
-      if (rhs.type() != IntT.IntType) {
-        return Err.maybeNoSuchOverloadErr(rhs);
-      }
       try {
         return StringT.stringOf(func.apply(((String) lhs.value()), getIntValue((IntT) rhs)));
       } catch (RuntimeException e) {
@@ -46,14 +40,23 @@ public final class Guards {
     };
   }
 
+  public static FunctionOp callInStrIntIntOutStr(
+      TriFunction<String, Integer, Integer, String> func) {
+    return values -> {
+      try {
+        return StringT.stringOf(
+            func.apply(
+                ((String) values[0].value()),
+                (getIntValue((IntT) values[1])),
+                (getIntValue((IntT) values[2]))));
+      } catch (RuntimeException e) {
+        return Err.newErr(e, "%s", e.getMessage());
+      }
+    };
+  }
+
   public static BinaryOp callInStrStrOutInt(BiFunction<String, String, Integer> func) {
     return (lhs, rhs) -> {
-      if (lhs.type() != StringT.StringType) {
-        return Err.maybeNoSuchOverloadErr(lhs);
-      }
-      if (rhs.type() != StringT.StringType) {
-        return Err.maybeNoSuchOverloadErr(rhs);
-      }
       try {
         return IntT.intOf(func.apply(((String) lhs.value()), ((String) rhs.value())));
       } catch (RuntimeException e) {
@@ -62,14 +65,23 @@ public final class Guards {
     };
   }
 
+  public static FunctionOp callInStrStrIntOutInt(
+      TriFunction<String, String, Integer, Integer> func) {
+    return values -> {
+      try {
+        return IntT.intOf(
+            func.apply(
+                ((String) values[0].value()),
+                ((String) values[1].value()),
+                (getIntValue((IntT) values[2]))));
+      } catch (RuntimeException e) {
+        return Err.newErr(e, "%s", e.getMessage());
+      }
+    };
+  }
+
   public static BinaryOp callInStrStrOutStrArr(BiFunction<String, String, String[]> func) {
     return (lhs, rhs) -> {
-      if (lhs.type() != StringT.StringType) {
-        return Err.maybeNoSuchOverloadErr(lhs);
-      }
-      if (rhs.type() != StringT.StringType) {
-        return Err.maybeNoSuchOverloadErr(rhs);
-      }
       try {
         return ListT.newStringArrayList(func.apply(((String) lhs.value()), ((String) rhs.value())));
       } catch (RuntimeException e) {
@@ -78,20 +90,23 @@ public final class Guards {
     };
   }
 
+  public static FunctionOp callInStrStrIntOutStrArr(
+      TriFunction<String, String, Integer, String[]> func) {
+    return values -> {
+      try {
+        return ListT.newStringArrayList(
+            func.apply(
+                ((String) values[0].value()),
+                ((String) values[1].value()),
+                getIntValue((IntT) values[2])));
+      } catch (RuntimeException e) {
+        return Err.newErr(e, "%s", e.getMessage());
+      }
+    };
+  }
+
   public static FunctionOp callInStrStrStrOutStr(TriFunction<String, String, String, String> func) {
     return values -> {
-      if (values.length != 3) {
-        return Err.maybeNoSuchOverloadErr(null);
-      }
-      if (values[0].type() != StringT.StringType) {
-        return Err.maybeNoSuchOverloadErr(values[0]);
-      }
-      if (values[1].type() != StringT.StringType) {
-        return Err.maybeNoSuchOverloadErr(values[1]);
-      }
-      if (values[2].type() != StringT.StringType) {
-        return Err.maybeNoSuchOverloadErr(values[2]);
-      }
       try {
         return StringT.stringOf(
             func.apply(
@@ -104,11 +119,24 @@ public final class Guards {
     };
   }
 
+  public static FunctionOp callInStrStrStrIntOutStr(
+      QuadFunction<String, String, String, Integer, String> func) {
+    return values -> {
+      try {
+        return StringT.stringOf(
+            func.apply(
+                ((String) values[0].value()),
+                ((String) values[1].value()),
+                ((String) values[2].value()),
+                getIntValue((IntT) values[3])));
+      } catch (RuntimeException e) {
+        return Err.newErr(e, "%s", e.getMessage());
+      }
+    };
+  }
+
   public static UnaryOp callInStrOutStr(UnaryOperator<String> func) {
     return val -> {
-      if (val.type() != StringT.StringType) {
-        return Err.maybeNoSuchOverloadErr(val);
-      }
       try {
         return StringT.stringOf(func.apply(((String) val.value())));
       } catch (RuntimeException e) {
