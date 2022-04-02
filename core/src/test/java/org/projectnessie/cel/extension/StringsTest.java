@@ -104,6 +104,14 @@ public class StringsTest {
         new TestData(
             "\"\u180etext\u200b\u200c\u200d\u2060\ufeff\".trim() == \"\u180etext\u200b\u200c\u200d\u2060\ufeff\""),
 
+        // Join tests
+        new TestData("['x', 'y'].join() == 'xy'"),
+        new TestData("['x', 'y'].join('-') == 'x-y'"),
+        new TestData("[].join() == ''"),
+        new TestData("[].join('-') == ''"),
+        new TestData("['x'].join() == 'x'"),
+        new TestData("['x'].join('-') == 'x'"),
+
         // Error test cases based on checked expression usage.
         new TestData("'tacocat'.indexOf('a', 30) == -1", "String index out of range: 30"),
         new TestData("'tacocat'.lastIndexOf('a', -1) == -1", "String index out of range: -1"),
