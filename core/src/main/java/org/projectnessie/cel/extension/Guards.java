@@ -15,7 +15,9 @@
  */
 package org.projectnessie.cel.extension;
 
+import java.util.Arrays;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.function.UnaryOperator;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.IntT;
@@ -139,6 +141,30 @@ public final class Guards {
     return val -> {
       try {
         return StringT.stringOf(func.apply(((String) val.value())));
+      } catch (RuntimeException e) {
+        return Err.newErr(e, "%s", e.getMessage());
+      }
+    };
+  }
+
+  public static UnaryOp callInStrArrayOutStr(Function<String[], String> func) {
+    return val -> {
+      try {
+        Object[] objects = (Object[]) val.value();
+        return StringT.stringOf(func.apply(Arrays.copyOf(objects, objects.length, String[].class)));
+      } catch (RuntimeException e) {
+        return Err.newErr(e, "%s", e.getMessage());
+      }
+    };
+  }
+
+  public static BinaryOp callInStrArrayStrOutStr(BiFunction<String[], String, String> func) {
+    return (lhs, rhs) -> {
+      try {
+        Object[] objects = (Object[]) lhs.value();
+        return StringT.stringOf(
+            func.apply(
+                Arrays.copyOf(objects, objects.length, String[].class), ((String) rhs.value())));
       } catch (RuntimeException e) {
         return Err.newErr(e, "%s", e.getMessage());
       }

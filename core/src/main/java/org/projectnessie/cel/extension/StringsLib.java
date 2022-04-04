@@ -73,6 +73,27 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code 'hello mellow'.indexOf('ello', 20) // error}</pre>
  *
+ * <h3>Join</h3>
+ *
+ * <p>Returns a new string where the elements of string list are concatenated.
+ *
+ * <p>The function also accepts an optional separator which is placed between elements in the
+ * resulting string.
+ *
+ * <pre>    {@code <list<string>>.join() -> <string>}</pre>
+ *
+ * <pre>    {@code <list<string>>.join(<string>) -> <string>}</pre>
+ *
+ * <h4>Examples:</h4>
+ *
+ * <pre>    {@code ['hello', 'mellow'].join()    // returns 'hellomellow'}</pre>
+ *
+ * <pre>    {@code ['hello', 'mellow'].join(' ') // returns 'hello mellow'}</pre>
+ *
+ * <pre>    {@code [].join()                     // returns ''}</pre>
+ *
+ * <pre>    {@code [].join('/')                  // returns ''}</pre>
+ *
  * <h3>LastIndexOf</h3>
  *
  * <p>Returns the integer index at the start of the last occurrence of the search string. If the
@@ -214,6 +235,7 @@ public class StringsLib implements Library {
 
   private static final String CHAR_AT = "charAt";
   private static final String INDEX_OF = "indexOf";
+  private static final String JOIN = "join";
   private static final String LAST_INDEX_OF = "lastIndexOf";
   private static final String LOWER_ASCII = "lowerAscii";
   private static final String REPLACE = "replace";
@@ -274,6 +296,14 @@ public class StringsLib implements Library {
                     "string_index_of_string_int",
                     Arrays.asList(Decls.String, Decls.String, Decls.Int),
                     Decls.Int)),
+            Decls.newFunction(
+                JOIN,
+                Decls.newInstanceOverload(
+                    "list_join", Arrays.asList(Decls.newListType(Decls.String)), Decls.String),
+                Decls.newInstanceOverload(
+                    "list_join_string",
+                    Arrays.asList(Decls.newListType(Decls.String), Decls.String),
+                    Decls.String)),
             Decls.newFunction(
                 LAST_INDEX_OF,
                 Decls.newInstanceOverload(
@@ -339,6 +369,12 @@ public class StringsLib implements Library {
                 Guards.callInStrStrOutInt(StringsLib::indexOf),
                 Guards.callInStrStrIntOutInt(StringsLib::indexOfOffset)),
             Overload.overload(
+                JOIN,
+                null,
+                Guards.callInStrArrayOutStr(StringsLib::join),
+                Guards.callInStrArrayStrOutStr(StringsLib::joinSepartor),
+                null),
+            Overload.overload(
                 LAST_INDEX_OF,
                 null,
                 null,
@@ -393,6 +429,16 @@ public class StringsLib implements Library {
       throw new IndexOutOfBoundsException("String index out of range: " + offset);
     }
     return str.indexOf(substr, offset);
+  }
+
+  static String join(String[] strs) {
+    StringBuilder stringBuilder = new StringBuilder();
+    Arrays.stream(strs).forEach(stringBuilder::append);
+    return stringBuilder.toString();
+  }
+
+  static String joinSepartor(String[] strs, String seperator) {
+    return String.join(seperator, strs);
   }
 
   static int lastIndexOf(String str, String substr) {
