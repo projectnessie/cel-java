@@ -29,7 +29,7 @@ group = "org.projectnessie.cel.build"
 
 version = file("../version.txt").readText().trim()
 
-val versionAsm = "9.2"
+val versionAsm = "9.3"
 val versionProtobufPlugin = "0.8.18"
 
 dependencies {
