@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 The Authors of CEL-Java
+ * Copyright (C) 2022 The Authors of CEL-Java
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,23 +14,7 @@
  * limitations under the License.
  */
 
-plugins {
-    `java-platform`
-    `maven-publish`
-    signing
-}
+import org.projectnessie.cel.checker.Decls;
+import org.projectnessie.cel.tools.ScriptHost;
 
-dependencies {
-    constraints {
-        api(project(":core"))
-        api(project(":generated-antlr", "shadow"))
-        api(project(":generated-pb"))
-        api(project(":conformance"))
-        api(project(":jackson"))
-        api(project(":tools"))
-    }
-}
-
-javaPlatform {
-    allowDependencies()
-}
+public class MyClass {}

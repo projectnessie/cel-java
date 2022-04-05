@@ -43,6 +43,7 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
+            ~/.m2/repository
           key: gradle-${{ matrix.java-version }}-${{ hashFiles('**/*.gradle.kts') }}-${{ hashFiles('**/.gitmodules') }}
           restore-keys: gradle-${{ matrix.java-version }}
 
@@ -66,6 +67,13 @@ jobs:
             ADDITIONAL_ARGS="-x spotlessCheck"
           fi
           ./gradlew --rerun-tasks --no-daemon --info assemble check publishToMavenLocal -x jmh ${ADDITIONAL_ARGS}
+
+      - name: Build tool integrations
+        if: ${{ matrix.java-version != '8' }}
+        # The buildToolIntegration* tasks require publishToMavenLocal, run it as a separate step,
+        # because these tasks intentionally do not depend on the publishToMavenLocal tasks.
+        run: |
+          ./gradlew buildToolIntegrations
 
       - name: Microbenchmarks
         run: |

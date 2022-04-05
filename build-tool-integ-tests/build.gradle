@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 The Authors of CEL-Java
+ * Copyright (C) 2022 The Authors of CEL-Java
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,22 +15,19 @@
  */
 
 plugins {
-    `java-platform`
-    `maven-publish`
-    signing
+    id 'java-library'
+}
+
+group 'org.projectnessie.cel.build-tool-integration-tests'
+version '0.0.2-SNAPSHOT'
+
+repositories {
+    mavenLocal()
+    mavenCentral()
 }
 
 dependencies {
-    constraints {
-        api(project(":core"))
-        api(project(":generated-antlr", "shadow"))
-        api(project(":generated-pb"))
-        api(project(":conformance"))
-        api(project(":jackson"))
-        api(project(":tools"))
-    }
-}
-
-javaPlatform {
-    allowDependencies()
+    implementation(enforcedPlatform("org.projectnessie.cel:cel-bom:${System.getProperty("cel.version")}"))
+    implementation("org.projectnessie.cel:cel-tools")
+    implementation("org.projectnessie.cel:cel-jackson")
 }

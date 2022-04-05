@@ -3,6 +3,10 @@
 build/
 .gradle/
 
+# Maven
+**/.mvn/wrapper/maven-wrapper.jar
+target/
+
 # IDE
 /.idea
 out/
