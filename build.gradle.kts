@@ -145,7 +145,11 @@ allprojects {
           }
 
           if (project.name != "generated-antlr") {
-            from(components.findByName("java"))
+            if (project.name != "bom") {
+              from(components.findByName("java"))
+            } else {
+              from(components.findByName("javaPlatform"))
+            }
           }
         }
       }
@@ -316,4 +320,28 @@ nexusPublishing {
     delayBetween.set(java.time.Duration.ofSeconds(10))
   }
   repositories { sonatype() }
+}
+
+val buildToolIntegrationGradle by tasks.creating(Exec::class) {
+  group = "Verification"
+  description = "Checks whether bom works fine with Gradle, requires preceding publishToMavenLocal in a separate Gradle invocation"
+
+  workingDir = file("build-tool-integ-tests")
+  commandLine("./gradlew", "jar", "-Dcel.version=${project.version}")
+}
+
+val buildToolIntegrationMaven by tasks.creating(Exec::class) {
+  group = "Verification"
+  description = "Checks whether bom works fine with Maven, requires preceding publishToMavenLocal in a separate Gradle invocation"
+
+  workingDir = file("build-tool-integ-tests")
+  commandLine("./mvnw", "clean", "package", "-Dcel.version=${project.version}")
+}
+
+val buildToolIntegrations by tasks.creating {
+  group = "Verification"
+  description = "Checks whether bom works fine with build tools, requires preceding publishToMavenLocal in a separate Gradle invocation"
+
+  dependsOn(buildToolIntegrationGradle)
+  dependsOn(buildToolIntegrationMaven)
 }
