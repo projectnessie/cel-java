@@ -82,7 +82,7 @@ public final class TypeErrors extends Errors {
   }
 
   void notAType(Location l, Type t) {
-    reportError(l, "'%s(%v)' is not a type", formatCheckedType(t), t);
+    reportError(l, "'%s' is not a type", formatCheckedType(t), t);
   }
 
   void notAMessageType(Location l, Type t) {
