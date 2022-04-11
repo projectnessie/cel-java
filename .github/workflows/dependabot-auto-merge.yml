@@ -64,7 +64,7 @@ jobs:
       - name: Check commit status
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | gh auth login --with-token
-          gh api repos/projectnessie/cel-java/commits/${{ github.event.workflow_run.head_commit.id }}/check-runs --jq 'if ([.check_runs[] | select(.name | endswith("Release") or startswith("codecov/") or startswith("Report") | not ) | .conclusion // "pending" ] | unique == ["success"] or unique == []) then "OK" else error("Commit checks are not OK") end'
+          gh api repos/projectnessie/cel-java/commits/${{ github.event.workflow_run.head_commit.id }}/check-runs --jq 'if ([.check_runs[] | select(.name | endswith("Release") or startswith("Dependabot ") or startswith("codecov/") or startswith("Report") | not ) | .conclusion // "pending" ] | unique == ["success"] or unique == []) then "OK" else error("Commit checks are not OK") end'
 
       - name: "Approve pull request"
         uses: "actions/github-script@v6"
