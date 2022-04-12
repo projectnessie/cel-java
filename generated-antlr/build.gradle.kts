@@ -24,7 +24,7 @@ plugins {
     id("com.github.johnrengelman.shadow")
 }
 
-val versionAntlr = "4.9.3"
+val versionAntlr = "4.10"
 
 dependencies {
     antlr("org.antlr:antlr4:$versionAntlr") // TODO remove from runtime-classpath *sigh*
