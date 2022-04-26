@@ -36,7 +36,7 @@ jobs:
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.actor == 'dependabot[bot]' && (
-        startsWith(github.event.workflow_run.head_commit.message, 'Bump')
+        contains(github.event.workflow_run.head_commit.message, 'ump ') // starts-with or contains "[Bb]ump"
       ) &&
       github.repository == 'projectnessie/cel-java'
 
