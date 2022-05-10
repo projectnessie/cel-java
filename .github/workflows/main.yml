@@ -31,21 +31,33 @@ jobs:
       - uses: actions/checkout@v3
         with:
           submodules: 'true'
+
       - name: Set up JDK ${{ matrix.java-version }}
         uses: actions/setup-java@v3
         with:
           distribution: 'zulu'
           java-version: ${{ matrix.java-version }}
 
-      - name: Cache Gradle packages
-        uses: actions/cache@v3
+      - name: Build with Gradle
+        # Java 8 and 16+ don't run spotless, because google-java-format requires Java 11+ (but doesn't run w/ Java 16)
+        uses: gradle/gradle-build-action@v2
         with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-            ~/.m2/repository
-          key: gradle-${{ matrix.java-version }}-${{ hashFiles('**/*.gradle.kts') }}-${{ hashFiles('**/.gitmodules') }}
-          restore-keys: gradle-${{ matrix.java-version }}
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+          arguments: --rerun-tasks --info assemble check publishToMavenLocal -x jmh
+
+      - name: Build tool integrations
+        # The buildToolIntegration* tasks require publishToMavenLocal, run it as a separate step,
+        # because these tasks intentionally do not depend on the publishToMavenLocal tasks.
+        uses: gradle/gradle-build-action@v2
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+          arguments: buildToolIntegrations
+
+      - name: Microbenchmarks
+        uses: gradle/gradle-build-action@v2
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+          arguments: jmh
 
       - name: Cache Bazel stuff
         uses: actions/cache@v3
@@ -59,24 +71,6 @@ jobs:
         uses: jwlawson/actions-setup-bazel@v1.7.0
         with:
           bazel-version: '3.5.1'
-
-      - name: Build with Gradle
-        # Java 8 and 16+ don't run spotless, because google-java-format requires Java 11+ (but doesn't run w/ Java 16)
-        run: |
-          if [[ ${{ matrix.java-version }} -ge 16 ]] ; then
-            ADDITIONAL_ARGS="-x spotlessCheck"
-          fi
-          ./gradlew --rerun-tasks --no-daemon --info assemble check publishToMavenLocal -x jmh ${ADDITIONAL_ARGS}
-
-      - name: Build tool integrations
-        # The buildToolIntegration* tasks require publishToMavenLocal, run it as a separate step,
-        # because these tasks intentionally do not depend on the publishToMavenLocal tasks.
-        run: |
-          ./gradlew buildToolIntegrations
-
-      - name: Microbenchmarks
-        run: |
-          ./gradlew jmh
 
       - name: Conformance tests
         run: |
@@ -112,4 +106,4 @@ jobs:
       - name: Test with Gradle (Java 8)
         if: ${{ matrix.java-version == '11' }}
         run: |
-          ./gradlew test -PtestRerun
+          ./gradlew test -PtestRerun -Dorg.gradle.jvmargs=""
