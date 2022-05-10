@@ -28,31 +28,30 @@ plugins {
     id("org.caffinitas.gradle.testrerun")
 }
 
-val versionAssertj = "3.22.0"
-val versionJunit = "5.8.2"
-val versionGrpc = "1.46.0"
-val versionProtobuf = "3.20.1"
-
 sourceSets.main {
     java.srcDir(project.buildDir.resolve("generated/source/proto/main/java"))
 }
 
 dependencies {
+    implementation(platform(rootProject))
+
     implementation(project(":core"))
     implementation(project(":core", "testJar"))
     implementation(project(":generated-pb", "testJar"))
 
-    implementation("com.google.protobuf:protobuf-java:$versionProtobuf")
+    implementation("com.google.protobuf:protobuf-java")
 
-    implementation("io.grpc:grpc-protobuf:$versionGrpc")
-    implementation("io.grpc:grpc-stub:$versionGrpc")
-    runtimeOnly("io.grpc:grpc-netty-shaded:$versionGrpc")
-    compileOnly("org.apache.tomcat:annotations-api:6.0.53")
+    implementation("io.grpc:grpc-protobuf")
+    implementation("io.grpc:grpc-stub")
+    runtimeOnly("io.grpc:grpc-netty-shaded")
+    compileOnly("org.apache.tomcat:annotations-api")
 
-    testImplementation("org.assertj:assertj-core:$versionAssertj")
-    testImplementation("org.junit.jupiter:junit-jupiter-api:$versionJunit")
-    testImplementation("org.junit.jupiter:junit-jupiter-params:$versionJunit")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:$versionJunit")
+    testImplementation(platform(rootProject))
+
+    testImplementation("org.assertj:assertj-core")
+    testImplementation("org.junit.jupiter:junit-jupiter-api")
+    testImplementation("org.junit.jupiter:junit-jupiter-params")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
 }
 
 tasks.named<Jar>("shadowJar") {
@@ -66,7 +65,7 @@ protobuf {
     // Configure the protoc executable
     protobuf.protoc {
         // Download from repositories
-        artifact = "com.google.protobuf:protoc:$versionProtobuf"
+        artifact = "com.google.protobuf:protoc:${rootProject.extra["versionProtobuf"]}"
     }
 }
 

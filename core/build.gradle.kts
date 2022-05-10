@@ -26,29 +26,31 @@ plugins {
     id("org.caffinitas.gradle.testrerun")
 }
 
-val versionAgrona = "1.15.2"
-val versionAssertj = "3.22.0"
-val versionJmh = "1.35"
-val versionJunit = "5.8.2"
-
 dependencies {
     implementation(project(":generated-antlr", "shadow"))
     api(project(":generated-pb"))
 
-    implementation("org.agrona:agrona:$versionAgrona")
+    implementation(platform(rootProject))
+
+    implementation("org.agrona:agrona")
+
+    testImplementation(platform(rootProject))
 
     testImplementation(project(":generated-pb", "testJar"))
-    testImplementation("org.assertj:assertj-core:$versionAssertj")
-    testImplementation("org.junit.jupiter:junit-jupiter-api:$versionJunit")
-    testImplementation("org.junit.jupiter:junit-jupiter-params:$versionJunit")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:$versionJunit")
+    testImplementation("org.assertj:assertj-core")
+    testImplementation("org.junit.jupiter:junit-jupiter-api")
+    testImplementation("org.junit.jupiter:junit-jupiter-params")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
 
-    jmhImplementation("org.openjdk.jmh:jmh-core:$versionJmh")
-    jmhAnnotationProcessor("org.openjdk.jmh:jmh-generator-annprocess:$versionJmh")
+    jmhImplementation(platform(rootProject))
+    jmhAnnotationProcessor(platform(rootProject))
+
+    jmhImplementation("org.openjdk.jmh:jmh-core")
+    jmhAnnotationProcessor("org.openjdk.jmh:jmh-generator-annprocess")
 }
 
 jmh {
-    jmhVersion.set(versionJmh)
+    jmhVersion.set(rootProject.extra["versionJmh"] as String)
 }
 
 val testJar by configurations.creating {

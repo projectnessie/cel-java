@@ -26,9 +26,6 @@ plugins {
     id("org.projectnessie.cel.reflectionconfig")
 }
 
-val versionGrpc = "1.46.0"
-val versionProtobuf = "3.20.1"
-
 sourceSets.main {
     java.srcDir(project.buildDir.resolve("generated/source/proto/main/java"))
     java.srcDir(project.buildDir.resolve("generated/source/proto/main/grpc"))
@@ -40,13 +37,15 @@ sourceSets.test {
 }
 
 dependencies {
-    api("com.google.protobuf:protobuf-java:$versionProtobuf")
+    api(platform(rootProject))
+
+    api("com.google.protobuf:protobuf-java")
 
     // Since we need the protobuf stuff in this cel-core module, it's easy to generate the
     // gRPC code as well. But do not expose the gRPC dependencies "publicly".
-    compileOnly("io.grpc:grpc-protobuf:$versionGrpc")
-    compileOnly("io.grpc:grpc-stub:$versionGrpc")
-    compileOnly("org.apache.tomcat:annotations-api:6.0.53")
+    compileOnly("io.grpc:grpc-protobuf")
+    compileOnly("io.grpc:grpc-stub")
+    compileOnly("org.apache.tomcat:annotations-api")
 }
 
 // *.proto files taken from https://github.com/googleapis/googleapis/ repo, available as a git submodule
@@ -54,11 +53,11 @@ protobuf {
     // Configure the protoc executable
     protobuf.protoc {
         // Download from repositories
-        artifact = "com.google.protobuf:protoc:$versionProtobuf"
+        artifact = "com.google.protobuf:protoc:${rootProject.extra["versionProtobuf"]}"
     }
     protobuf.plugins {
         this.create("grpc") {
-            artifact = "io.grpc:protoc-gen-grpc-java:$versionGrpc"
+            artifact = "io.grpc:protoc-gen-grpc-java:${rootProject.extra["versionGrpc"]}"
         }
     }
     protobuf.generateProtoTasks {
