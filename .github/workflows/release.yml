@@ -69,15 +69,6 @@ jobs:
           gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
           gpg-passphrase: MAVEN_GPG_PASSPHRASE
 
-      - name: Cache Gradle packages
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: gradle-${{ matrix.java-version }}-${{ hashFiles('**/*.gradle.kts') }}-${{ hashFiles('**/.gitmodules') }}
-          restore-keys: gradle-${{ matrix.java-version }}
-
       - name: Configure release-bot-user in git config
         run: |
           git config --global user.email "cel-java-release-noreply@projectnessie.org"
@@ -108,7 +99,11 @@ jobs:
           echo "sonatypeUsername=${{ secrets.OSSRH_ACCESS_ID }}" >> ~/.gradle/gradle.properties
           echo "sonatypePassword=${{ secrets.OSSRH_TOKEN }}" >> ~/.gradle/gradle.properties
 
-          ./gradlew --rerun-tasks --no-daemon --info assemble check publishToMavenLocal -x jmh publishToSonatype closeAndReleaseSonatypeStagingRepository -Prelease
+      - name: Publish to Sonatype
+        uses: gradle/gradle-build-action@v2
+        with:
+          cache-read-only: true
+          arguments: --rerun-tasks --info assemble check publishToMavenLocal -x jmh publishToSonatype closeAndReleaseSonatypeStagingRepository -Prelease
 
       - name: Bump to next development version
         run: echo "${NEXT_VERSION}-SNAPSHOT" > version.txt
