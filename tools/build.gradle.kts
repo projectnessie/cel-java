@@ -25,14 +25,12 @@ plugins {
     id("org.caffinitas.gradle.testrerun")
 }
 
-val versionAssertj = "3.22.0"
-val versionJunit = "5.8.2"
-
 dependencies {
     api(project(":core"))
 
-    testImplementation("org.assertj:assertj-core:$versionAssertj")
-    testImplementation("org.junit.jupiter:junit-jupiter-api:$versionJunit")
-    testImplementation("org.junit.jupiter:junit-jupiter-params:$versionJunit")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:$versionJunit")
+    testImplementation(platform(rootProject))
+    testImplementation("org.assertj:assertj-core")
+    testImplementation("org.junit.jupiter:junit-jupiter-api")
+    testImplementation("org.junit.jupiter:junit-jupiter-params")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
 }

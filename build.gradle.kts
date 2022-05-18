@@ -22,6 +22,7 @@ plugins {
   eclipse
   idea
   signing
+  `java-platform`
   `maven-publish`
   id("org.jetbrains.gradle.plugin.idea-ext")
   id("com.diffplug.spotless")
@@ -31,7 +32,49 @@ plugins {
   id("io.github.gradle-nexus.publish-plugin")
 }
 
+val versionAgrona = "1.15.2"
+val versionAntlr = "4.10.1"
+val versionAssertj = "3.22.0"
+val versionGrpc = "1.46.0"
+val versionImmutables = "2.9.0"
+val versionJackson = "2.13.2"
 var versionJacoco = "0.8.7"
+val versionJmh = "1.35"
+val versionJSR305 = "3.0.2"
+val versionJunit = "5.8.2"
+val versionProtobuf = "3.20.1"
+val versionTomcatAnnotationsApi = "6.0.53"
+
+extra["versionGrpc"] = versionGrpc
+
+extra["versionJmh"] = versionJmh
+
+extra["versionProtobuf"] = versionProtobuf
+
+dependencies {
+  constraints {
+    api("com.fasterxml.jackson.core:jackson-databind:$versionJackson")
+    api("com.fasterxml.jackson.dataformat:jackson-dataformat-protobuf:$versionJackson")
+    api("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$versionJackson")
+    api("com.google.code.findbugs:jsr305:$versionJSR305")
+    api("com.google.protobuf:protobuf-java:$versionProtobuf")
+    api("org.agrona:agrona:$versionAgrona")
+    api("org.antlr:antlr4:$versionAntlr") // TODO remove from runtime-classpath *sigh*
+    api("org.antlr:antlr4-runtime:$versionAntlr")
+    api("org.apache.tomcat:annotations-api:$versionTomcatAnnotationsApi")
+    api("org.assertj:assertj-core:$versionAssertj")
+    api("org.immutables:value-processor:$versionImmutables")
+    api("org.immutables:value-annotations:$versionImmutables")
+    api("org.junit.jupiter:junit-jupiter-api:$versionJunit")
+    api("org.junit.jupiter:junit-jupiter-params:$versionJunit")
+    api("org.junit.jupiter:junit-jupiter-engine:$versionJunit")
+    api("org.openjdk.jmh:jmh-core:$versionJmh")
+    api("org.openjdk.jmh:jmh-generator-annprocess:$versionJmh")
+    api("io.grpc:grpc-protobuf:$versionGrpc")
+    api("io.grpc:grpc-stub:$versionGrpc")
+    api("io.grpc:grpc-netty-shaded:$versionGrpc")
+  }
+}
 
 allprojects {
   repositories { mavenCentral() }
@@ -145,11 +188,7 @@ allprojects {
           }
 
           if (project.name != "generated-antlr") {
-            if (project.name != "bom") {
-              from(components.findByName("java"))
-            } else {
-              from(components.findByName("javaPlatform"))
-            }
+            from(components.firstOrNull { c -> c.name == "javaPlatform" || c.name == "java" })
           }
         }
       }
@@ -253,6 +292,8 @@ allprojects {
     }
   }
 }
+
+javaPlatform { allowDependencies() }
 
 spotless {
   kotlinGradle {

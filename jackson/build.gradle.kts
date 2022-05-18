@@ -25,25 +25,22 @@ plugins {
     id("org.caffinitas.gradle.testrerun")
 }
 
-val versionAssertj = "3.22.0"
-val versionImmutables = "2.9.0"
-val versionJackson = "2.13.3"
-val versionJSR305 = "3.0.2"
-val versionJunit = "5.8.2"
-
 dependencies {
     api(project(":core"))
 
-    implementation("com.fasterxml.jackson.core:jackson-databind:$versionJackson")
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-protobuf:$versionJackson")
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:$versionJackson")
+    implementation(platform(rootProject))
+    implementation("com.fasterxml.jackson.core:jackson-databind")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-protobuf")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
 
+    testImplementation(platform(rootProject))
+    testAnnotationProcessor(platform(rootProject))
     testImplementation(project(":tools"))
-    testAnnotationProcessor("org.immutables:value-processor:$versionImmutables")
-    testCompileOnly("org.immutables:value-annotations:$versionImmutables")
-    testImplementation("com.google.code.findbugs:jsr305:$versionJSR305")
-    testImplementation("org.assertj:assertj-core:$versionAssertj")
-    testImplementation("org.junit.jupiter:junit-jupiter-api:$versionJunit")
-    testImplementation("org.junit.jupiter:junit-jupiter-params:$versionJunit")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:$versionJunit")
+    testAnnotationProcessor("org.immutables:value-processor")
+    testCompileOnly("org.immutables:value-annotations")
+    testImplementation("com.google.code.findbugs:jsr305")
+    testImplementation("org.assertj:assertj-core")
+    testImplementation("org.junit.jupiter:junit-jupiter-api")
+    testImplementation("org.junit.jupiter:junit-jupiter-params")
+    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
 }

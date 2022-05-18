@@ -8,31 +8,3 @@ updates:
   directory: "/build-tools/"
   schedule:
     interval: daily
-- package-ecosystem: gradle
-  directory: "/conformance/"
-  schedule:
-    interval: daily
-- package-ecosystem: gradle
-  directory: "/core/"
-  schedule:
-    interval: daily
-- package-ecosystem: gradle
-  directory: "/jackson/"
-  schedule:
-    interval: daily
-- package-ecosystem: gradle
-  directory: "/jacoco/"
-  schedule:
-    interval: daily
-- package-ecosystem: gradle
-  directory: "/generated-antlr/"
-  schedule:
-    interval: daily
-- package-ecosystem: gradle
-  directory: "/generated-pb/"
-  schedule:
-    interval: daily
-- package-ecosystem: gradle
-  directory: "/tools/"
-  schedule:
-    interval: daily

@@ -24,11 +24,11 @@ plugins {
     id("com.github.johnrengelman.shadow")
 }
 
-val versionAntlr = "4.10.1"
-
 dependencies {
-    antlr("org.antlr:antlr4:$versionAntlr") // TODO remove from runtime-classpath *sigh*
-    implementation("org.antlr:antlr4-runtime:$versionAntlr")
+    antlr(platform(rootProject))
+    antlr("org.antlr:antlr4") // TODO remove from runtime-classpath *sigh*
+    implementation(platform(rootProject))
+    implementation("org.antlr:antlr4-runtime")
 }
 
 // The antlr-plugin should ideally do this
