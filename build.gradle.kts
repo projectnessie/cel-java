@@ -298,7 +298,7 @@ javaPlatform { allowDependencies() }
 spotless {
   kotlinGradle {
     ktfmt().googleStyle()
-    licenseHeaderFile(rootProject.file("gradle/license-header-java.txt"), "")
+    licenseHeaderFile(rootProject.file("gradle/license-header-java.txt"), "$")
   }
 }
 
@@ -363,26 +363,32 @@ nexusPublishing {
   repositories { sonatype() }
 }
 
-val buildToolIntegrationGradle by tasks.creating(Exec::class) {
-  group = "Verification"
-  description = "Checks whether bom works fine with Gradle, requires preceding publishToMavenLocal in a separate Gradle invocation"
+val buildToolIntegrationGradle by
+  tasks.creating(Exec::class) {
+    group = "Verification"
+    description =
+      "Checks whether bom works fine with Gradle, requires preceding publishToMavenLocal in a separate Gradle invocation"
 
-  workingDir = file("build-tool-integ-tests")
-  commandLine("./gradlew", "jar", "-Dcel.version=${project.version}")
-}
+    workingDir = file("build-tool-integ-tests")
+    commandLine("./gradlew", "jar", "-Dcel.version=${project.version}")
+  }
 
-val buildToolIntegrationMaven by tasks.creating(Exec::class) {
-  group = "Verification"
-  description = "Checks whether bom works fine with Maven, requires preceding publishToMavenLocal in a separate Gradle invocation"
+val buildToolIntegrationMaven by
+  tasks.creating(Exec::class) {
+    group = "Verification"
+    description =
+      "Checks whether bom works fine with Maven, requires preceding publishToMavenLocal in a separate Gradle invocation"
 
-  workingDir = file("build-tool-integ-tests")
-  commandLine("./mvnw", "clean", "package", "-Dcel.version=${project.version}")
-}
+    workingDir = file("build-tool-integ-tests")
+    commandLine("./mvnw", "clean", "package", "-Dcel.version=${project.version}")
+  }
 
-val buildToolIntegrations by tasks.creating {
-  group = "Verification"
-  description = "Checks whether bom works fine with build tools, requires preceding publishToMavenLocal in a separate Gradle invocation"
+val buildToolIntegrations by
+  tasks.creating {
+    group = "Verification"
+    description =
+      "Checks whether bom works fine with build tools, requires preceding publishToMavenLocal in a separate Gradle invocation"
 
-  dependsOn(buildToolIntegrationGradle)
-  dependsOn(buildToolIntegrationMaven)
-}
+    dependsOn(buildToolIntegrationGradle)
+    dependsOn(buildToolIntegrationMaven)
+  }
