@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-import com.google.protobuf.gradle.generateProtoTasks
-import com.google.protobuf.gradle.plugins
 import com.google.protobuf.gradle.protoc
 
 plugins {
@@ -45,8 +43,6 @@ dependencies {
     implementation("io.grpc:grpc-stub")
     runtimeOnly("io.grpc:grpc-netty-shaded")
     compileOnly("org.apache.tomcat:annotations-api")
-
-    testImplementation(platform(rootProject))
 
     testImplementation("org.assertj:assertj-core")
     testImplementation("org.junit.jupiter:junit-jupiter-api")

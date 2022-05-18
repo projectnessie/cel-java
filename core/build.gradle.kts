@@ -34,8 +34,6 @@ dependencies {
 
     implementation("org.agrona:agrona")
 
-    testImplementation(platform(rootProject))
-
     testImplementation(project(":generated-pb", "testJar"))
     testImplementation("org.assertj:assertj-core")
     testImplementation("org.junit.jupiter:junit-jupiter-api")
