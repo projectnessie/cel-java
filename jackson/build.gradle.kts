@@ -33,7 +33,6 @@ dependencies {
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-protobuf")
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
 
-    testImplementation(platform(rootProject))
     testAnnotationProcessor(platform(rootProject))
     testImplementation(project(":tools"))
     testAnnotationProcessor("org.immutables:value-processor")
