@@ -45,7 +45,11 @@ val versionJunit = "5.8.2"
 val versionProtobuf = "3.20.1"
 val versionTomcatAnnotationsApi = "6.0.53"
 
+extra["versionAgrona"] = versionAgrona
+
 extra["versionGrpc"] = versionGrpc
+
+extra["versionJackson"] = versionJackson
 
 extra["versionJmh"] = versionJmh
 
@@ -59,7 +63,7 @@ dependencies {
     api("com.google.code.findbugs:jsr305:$versionJSR305")
     api("com.google.protobuf:protobuf-java:$versionProtobuf")
     api("org.agrona:agrona:$versionAgrona")
-    api("org.antlr:antlr4:$versionAntlr") // TODO remove from runtime-classpath *sigh*
+    api("org.antlr:antlr4:$versionAntlr")
     api("org.antlr:antlr4-runtime:$versionAntlr")
     api("org.apache.tomcat:annotations-api:$versionTomcatAnnotationsApi")
     api("org.assertj:assertj-core:$versionAssertj")
@@ -187,7 +191,9 @@ allprojects {
             }
           }
 
-          if (project.name != "generated-antlr") {
+          // Must exclude the `generated-antlr` project, because otherwise its `antlr` configuration
+          // leaks antlr dependencies downstream.
+          if (project.name != "generated-antlr" && project != rootProject) {
             from(components.firstOrNull { c -> c.name == "javaPlatform" || c.name == "java" })
           }
         }

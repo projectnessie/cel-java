@@ -37,9 +37,9 @@ sourceSets.test {
 }
 
 dependencies {
-    api(platform(rootProject))
+    compileOnly(platform(rootProject))
 
-    api("com.google.protobuf:protobuf-java")
+    api("com.google.protobuf:protobuf-java:${rootProject.extra["versionProtobuf"]}")
 
     // Since we need the protobuf stuff in this cel-core module, it's easy to generate the
     // gRPC code as well. But do not expose the gRPC dependencies "publicly".

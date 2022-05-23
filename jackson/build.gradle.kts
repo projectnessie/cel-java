@@ -28,11 +28,12 @@ plugins {
 dependencies {
     api(project(":core"))
 
-    implementation(platform(rootProject))
-    implementation("com.fasterxml.jackson.core:jackson-databind")
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-protobuf")
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
+    compileOnly(platform(rootProject))
+    implementation("com.fasterxml.jackson.core:jackson-databind:${rootProject.extra["versionJackson"]}")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-protobuf:${rootProject.extra["versionJackson"]}")
+    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:${rootProject.extra["versionJackson"]}")
 
+    testImplementation(platform(rootProject))
     testAnnotationProcessor(platform(rootProject))
     testImplementation(project(":tools"))
     testAnnotationProcessor("org.immutables:value-processor")
