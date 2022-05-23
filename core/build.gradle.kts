@@ -30,10 +30,11 @@ dependencies {
     implementation(project(":generated-antlr", "shadow"))
     api(project(":generated-pb"))
 
-    implementation(platform(rootProject))
+    compileOnly(platform(rootProject))
 
-    implementation("org.agrona:agrona")
+    implementation("org.agrona:agrona:${rootProject.extra["versionAgrona"]}")
 
+    testImplementation(platform(rootProject))
     testImplementation(project(":generated-pb", "testJar"))
     testImplementation("org.assertj:assertj-core")
     testImplementation("org.junit.jupiter:junit-jupiter-api")

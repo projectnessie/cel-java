@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-import com.google.api.expr.v1alpha1.ConformanceServiceGrpc;
 import com.google.api.expr.v1alpha1.Decl;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.tools.ScriptHost;
