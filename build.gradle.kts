@@ -42,7 +42,7 @@ var versionJacoco = "0.8.7"
 val versionJmh = "1.35"
 val versionJSR305 = "3.0.2"
 val versionJunit = "5.8.2"
-val versionProtobuf = "3.20.1"
+val versionProtobuf = "3.21.0"
 val versionTomcatAnnotationsApi = "6.0.53"
 
 extra["versionAgrona"] = versionAgrona
