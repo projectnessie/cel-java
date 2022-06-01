@@ -34,7 +34,7 @@ plugins {
 
 val versionAgrona = "1.15.2"
 val versionAntlr = "4.10.1"
-val versionAssertj = "3.23.0"
+val versionAssertj = "3.23.1"
 val versionGrpc = "1.46.0"
 val versionImmutables = "2.9.0"
 val versionJackson = "2.13.3"
