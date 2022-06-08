@@ -18,12 +18,12 @@ import com.google.protobuf.gradle.protoc
 
 plugins {
   `java-library`
-  id("com.diffplug.spotless")
   id("com.google.protobuf")
   id("com.github.johnrengelman.shadow")
   id("org.caffinitas.gradle.aggregatetestresults")
   id("org.caffinitas.gradle.testsummary")
   id("org.caffinitas.gradle.testrerun")
+  `cel-conventions`
 }
 
 sourceSets.main { java.srcDir(project.buildDir.resolve("generated/source/proto/main/java")) }

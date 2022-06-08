@@ -16,13 +16,11 @@
 
 plugins {
   `java-library`
-  `maven-publish`
   signing
-  jacoco
-  id("com.diffplug.spotless")
   id("org.caffinitas.gradle.aggregatetestresults")
   id("org.caffinitas.gradle.testsummary")
   id("org.caffinitas.gradle.testrerun")
+  `cel-conventions`
 }
 
 dependencies {
