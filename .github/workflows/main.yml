@@ -42,7 +42,6 @@ jobs:
         # Java 8 and 16+ don't run spotless, because google-java-format requires Java 11+ (but doesn't run w/ Java 16)
         uses: gradle/gradle-build-action@v2
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
           arguments: --rerun-tasks --info assemble check publishToMavenLocal -x jmh
 
       - name: Build tool integrations
@@ -50,13 +49,11 @@ jobs:
         # because these tasks intentionally do not depend on the publishToMavenLocal tasks.
         uses: gradle/gradle-build-action@v2
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
           arguments: buildToolIntegrations
 
       - name: Microbenchmarks
         uses: gradle/gradle-build-action@v2
         with:
-          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
           arguments: jmh
 
       - name: Cache Bazel stuff
@@ -106,4 +103,4 @@ jobs:
       - name: Test with Gradle (Java 8)
         if: ${{ matrix.java-version == '11' }}
         run: |
-          ./gradlew test -PtestRerun -Dorg.gradle.jvmargs=""
+          ./gradlew --no-daemon test -PtestRerun -Dorg.gradle.jvmargs=""
