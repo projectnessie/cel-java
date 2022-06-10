@@ -15,22 +15,21 @@
  */
 
 plugins {
-    `java-platform`
-    `maven-publish`
-    signing
+  `java-platform`
+  `maven-publish`
+  signing
+  id("com.diffplug.spotless")
 }
 
 dependencies {
-    constraints {
-        api(project(":core"))
-        api(project(":generated-antlr", "shadow"))
-        api(project(":generated-pb"))
-        api(project(":conformance"))
-        api(project(":jackson"))
-        api(project(":tools"))
-    }
+  constraints {
+    api(project(":core"))
+    api(project(":generated-antlr", "shadow"))
+    api(project(":generated-pb"))
+    api(project(":conformance"))
+    api(project(":jackson"))
+    api(project(":tools"))
+  }
 }
 
-javaPlatform {
-    allowDependencies()
-}
+javaPlatform { allowDependencies() }

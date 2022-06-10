@@ -17,46 +17,41 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
-    `java-library`
-    antlr
-    `maven-publish`
-    signing
-    id("com.github.johnrengelman.shadow")
+  `java-library`
+  antlr
+  `maven-publish`
+  signing
+  id("com.github.johnrengelman.shadow")
+  id("com.diffplug.spotless")
 }
 
 dependencies {
-    antlr(platform(rootProject))
-    antlr("org.antlr:antlr4") // TODO remove from runtime-classpath *sigh*
-    compileOnly(platform(rootProject))
-    implementation("org.antlr:antlr4-runtime")
+  antlr(platform(rootProject))
+  antlr("org.antlr:antlr4") // TODO remove from runtime-classpath *sigh*
+  compileOnly(platform(rootProject))
+  implementation("org.antlr:antlr4-runtime")
 }
 
 // The antlr-plugin should ideally do this
-tasks.named<Jar>("sourcesJar") {
-    dependsOn(tasks.named("generateGrammarSource"))
-}
+tasks.named<Jar>("sourcesJar") { dependsOn(tasks.named("generateGrammarSource")) }
 
-tasks.named<Jar>("jar") {
-    archiveClassifier.set("raw")
-}
+tasks.named<Jar>("jar") { archiveClassifier.set("raw") }
 
 tasks.named<ShadowJar>("shadowJar") {
-    // The antlr-plugin should ideally do this
-    dependsOn(tasks.named("generateGrammarSource"))
+  // The antlr-plugin should ideally do this
+  dependsOn(tasks.named("generateGrammarSource"))
 
-    dependencies {
-        include(dependency("org.antlr:antlr4-runtime"))
-    }
-    relocate("org.antlr.v4.runtime", "org.projectnessie.cel.shaded.org.antlr.v4.runtime")
-    archiveClassifier.set("")
+  dependencies { include(dependency("org.antlr:antlr4-runtime")) }
+  relocate("org.antlr.v4.runtime", "org.projectnessie.cel.shaded.org.antlr.v4.runtime")
+  archiveClassifier.set("")
 }
 
 publishing {
-    publications {
-        getByName<MavenPublication>("maven") {
-            project.shadow.component(this)
-            artifact(project.tasks.findByName("javadocJar"))
-            artifact(project.tasks.findByName("sourcesJar"))
-        }
+  publications {
+    getByName<MavenPublication>("maven") {
+      project.shadow.component(this)
+      artifact(project.tasks.findByName("javadocJar"))
+      artifact(project.tasks.findByName("sourcesJar"))
     }
+  }
 }

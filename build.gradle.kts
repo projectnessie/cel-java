@@ -270,6 +270,31 @@ allprojects {
     }
   }
 
+  plugins.withType<SpotlessPlugin>().configureEach {
+    configure<SpotlessExtension> {
+      if (project == rootProject) {
+        kotlin {
+          ktfmt().googleStyle()
+          licenseHeaderFile(rootProject.file("gradle/license-header-java.txt"), "$")
+          target("*.gradle.kts", "buildSrc/*.gradle.kts", "buildSrc/src/**/kotlin/**")
+          targetExclude("buildSrc/build/**")
+        }
+      } else {
+        kotlinGradle {
+          ktfmt().googleStyle()
+          licenseHeaderFile(rootProject.file("gradle/license-header-java.txt"), "$")
+          target("*.gradle.kts")
+        }
+        java {
+          googleJavaFormat()
+          licenseHeaderFile(rootProject.file("gradle/license-header-java.txt"))
+          target("src/**/java/**")
+          targetExclude("build/**")
+        }
+      }
+    }
+  }
+
   if (this != rootProject) {
     plugins.withType<JacocoPlugin>().configureEach {
       configure<JacocoPluginExtension> { toolVersion = versionJacoco }
@@ -278,16 +303,6 @@ allprojects {
         reports {
           html.required.set(true)
           xml.required.set(true)
-        }
-      }
-    }
-
-    plugins.withType<SpotlessPlugin>().configureEach {
-      configure<SpotlessExtension> {
-        java {
-          googleJavaFormat()
-          licenseHeaderFile(rootProject.file("gradle/license-header-java.txt"))
-          targetExclude("**/build*/**")
         }
       }
     }
