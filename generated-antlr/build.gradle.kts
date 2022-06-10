@@ -22,7 +22,7 @@ plugins {
   `maven-publish`
   signing
   id("com.github.johnrengelman.shadow")
-  id("com.diffplug.spotless")
+  `cel-conventions`
 }
 
 dependencies {
@@ -49,9 +49,8 @@ tasks.named<ShadowJar>("shadowJar") {
 publishing {
   publications {
     getByName<MavenPublication>("maven") {
-      project.shadow.component(this)
-      artifact(project.tasks.findByName("javadocJar"))
-      artifact(project.tasks.findByName("sourcesJar"))
+      artifact(project.tasks.named("javadocJar"))
+      artifact(project.tasks.named("sourcesJar"))
     }
   }
 }

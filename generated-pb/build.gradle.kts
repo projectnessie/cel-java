@@ -23,8 +23,8 @@ plugins {
   `maven-publish`
   signing
   id("com.google.protobuf")
-  id("org.projectnessie.cel.reflectionconfig")
-  id("com.diffplug.spotless")
+  id("org.projectnessie.buildsupport.reflectionconfig")
+  `cel-conventions`
 }
 
 sourceSets.main {
@@ -104,4 +104,6 @@ artifacts {
 }
 
 // The protobuf-plugin should ideally do this
-tasks.named<Jar>("sourcesJar") { dependsOn(tasks.named("generateProto")) }
+tasks.named<Jar>("sourcesJar") {
+  dependsOn(tasks.named("generateProto"), tasks.named("generateReflectionConfig"))
+}

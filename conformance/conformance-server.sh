@@ -27,7 +27,7 @@ function kill_server() {
 
 trap kill_server SIGINT SIGTERM
 
-java -Djava.net.preferIPv4Stack=true -jar "${wd}"/build/libs/cel-java-conformance-*-all.jar "${@}" &
+java -Djava.net.preferIPv4Stack=true -jar "${wd}"/build/libs/cel-conformance-*-all.jar "${@}" &
 java_pid=$!
 echo "${java_pid}" > "${pid_file}"
 wait

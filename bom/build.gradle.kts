@@ -18,7 +18,7 @@ plugins {
   `java-platform`
   `maven-publish`
   signing
-  id("com.diffplug.spotless")
+  `cel-conventions`
 }
 
 dependencies {
