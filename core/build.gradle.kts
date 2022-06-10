@@ -15,68 +15,63 @@
  */
 
 plugins {
-    `java-library`
-    `maven-publish`
-    signing
-    jacoco
-    id("com.diffplug.spotless")
-    id("me.champeau.jmh")
-    id("org.caffinitas.gradle.aggregatetestresults")
-    id("org.caffinitas.gradle.testsummary")
-    id("org.caffinitas.gradle.testrerun")
+  `java-library`
+  `maven-publish`
+  signing
+  jacoco
+  id("com.diffplug.spotless")
+  id("me.champeau.jmh")
+  id("org.caffinitas.gradle.aggregatetestresults")
+  id("org.caffinitas.gradle.testsummary")
+  id("org.caffinitas.gradle.testrerun")
 }
 
 dependencies {
-    implementation(project(":generated-antlr", "shadow"))
-    api(project(":generated-pb"))
+  implementation(project(":generated-antlr", "shadow"))
+  api(project(":generated-pb"))
 
-    compileOnly(platform(rootProject))
+  compileOnly(platform(rootProject))
 
-    implementation("org.agrona:agrona:${rootProject.extra["versionAgrona"]}")
+  implementation("org.agrona:agrona:${rootProject.extra["versionAgrona"]}")
 
-    testImplementation(platform(rootProject))
-    testImplementation(project(":generated-pb", "testJar"))
-    testImplementation("org.assertj:assertj-core")
-    testImplementation("org.junit.jupiter:junit-jupiter-api")
-    testImplementation("org.junit.jupiter:junit-jupiter-params")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
+  testImplementation(platform(rootProject))
+  testImplementation(project(":generated-pb", "testJar"))
+  testImplementation("org.assertj:assertj-core")
+  testImplementation("org.junit.jupiter:junit-jupiter-api")
+  testImplementation("org.junit.jupiter:junit-jupiter-params")
+  testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
 
-    jmhImplementation(platform(rootProject))
-    jmhAnnotationProcessor(platform(rootProject))
+  jmhImplementation(platform(rootProject))
+  jmhAnnotationProcessor(platform(rootProject))
 
-    jmhImplementation("org.openjdk.jmh:jmh-core")
-    jmhAnnotationProcessor("org.openjdk.jmh:jmh-generator-annprocess")
+  jmhImplementation("org.openjdk.jmh:jmh-core")
+  jmhAnnotationProcessor("org.openjdk.jmh:jmh-generator-annprocess")
 }
 
-jmh {
-    jmhVersion.set(rootProject.extra["versionJmh"] as String)
-}
+jmh { jmhVersion.set(rootProject.extra["versionJmh"] as String) }
 
-val testJar by configurations.creating {
+val testJar by
+  configurations.creating {
     isCanBeResolved = true
     isCanBeConsumed = true
-}
+  }
+
 tasks.register<Jar>("testJar") {
-    val testClasses = tasks.getByName<JavaCompile>("compileTestJava")
-    val baseJar = tasks.getByName<Jar>("jar")
-    from(testClasses.destinationDirectory)
-    dependsOn(testClasses)
-    dependsOn(tasks.named("processTestResources"))
-    archiveBaseName.set(baseJar.archiveBaseName)
-    destinationDirectory.set(baseJar.destinationDirectory)
-    archiveClassifier.set("tests")
+  val testClasses = tasks.getByName<JavaCompile>("compileTestJava")
+  val baseJar = tasks.getByName<Jar>("jar")
+  from(testClasses.destinationDirectory)
+  dependsOn(testClasses)
+  dependsOn(tasks.named("processTestResources"))
+  archiveBaseName.set(baseJar.archiveBaseName)
+  destinationDirectory.set(baseJar.destinationDirectory)
+  archiveClassifier.set("tests")
 }
+
 artifacts {
-    val testJar = tasks.getByName<Jar>("testJar")
-    add("testJar", testJar.archiveFile) {
-        builtBy(testJar)
-    }
+  val testJar = tasks.getByName<Jar>("testJar")
+  add("testJar", testJar.archiveFile) { builtBy(testJar) }
 }
 
-tasks.named("check") {
-    dependsOn(tasks.named("jmh"))
-}
+tasks.named("check") { dependsOn(tasks.named("jmh")) }
 
-tasks.named("assemble") {
-    dependsOn(tasks.named("jmhJar"))
-}
+tasks.named("assemble") { dependsOn(tasks.named("jmhJar")) }

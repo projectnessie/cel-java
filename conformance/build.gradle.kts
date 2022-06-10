@@ -17,55 +17,49 @@
 import com.google.protobuf.gradle.protoc
 
 plugins {
-    `java-library`
-    id("com.diffplug.spotless")
-    id("com.google.protobuf")
-    id("com.github.johnrengelman.shadow")
-    id("org.caffinitas.gradle.aggregatetestresults")
-    id("org.caffinitas.gradle.testsummary")
-    id("org.caffinitas.gradle.testrerun")
+  `java-library`
+  id("com.diffplug.spotless")
+  id("com.google.protobuf")
+  id("com.github.johnrengelman.shadow")
+  id("org.caffinitas.gradle.aggregatetestresults")
+  id("org.caffinitas.gradle.testsummary")
+  id("org.caffinitas.gradle.testrerun")
 }
 
-sourceSets.main {
-    java.srcDir(project.buildDir.resolve("generated/source/proto/main/java"))
-}
+sourceSets.main { java.srcDir(project.buildDir.resolve("generated/source/proto/main/java")) }
 
 dependencies {
-    implementation(platform(rootProject))
+  implementation(platform(rootProject))
 
-    implementation(project(":core"))
-    implementation(project(":core", "testJar"))
-    implementation(project(":generated-pb", "testJar"))
+  implementation(project(":core"))
+  implementation(project(":core", "testJar"))
+  implementation(project(":generated-pb", "testJar"))
 
-    implementation("com.google.protobuf:protobuf-java")
+  implementation("com.google.protobuf:protobuf-java")
 
-    implementation("io.grpc:grpc-protobuf")
-    implementation("io.grpc:grpc-stub")
-    runtimeOnly("io.grpc:grpc-netty-shaded")
-    compileOnly("org.apache.tomcat:annotations-api")
+  implementation("io.grpc:grpc-protobuf")
+  implementation("io.grpc:grpc-stub")
+  runtimeOnly("io.grpc:grpc-netty-shaded")
+  compileOnly("org.apache.tomcat:annotations-api")
 
-    testImplementation("org.assertj:assertj-core")
-    testImplementation("org.junit.jupiter:junit-jupiter-api")
-    testImplementation("org.junit.jupiter:junit-jupiter-params")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
+  testImplementation("org.assertj:assertj-core")
+  testImplementation("org.junit.jupiter:junit-jupiter-api")
+  testImplementation("org.junit.jupiter:junit-jupiter-params")
+  testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
 }
 
 tasks.named<Jar>("shadowJar") {
-    manifest {
-        attributes("Main-Class" to "org.projectnessie.cel.server.ConformanceServer")
-    }
+  manifest { attributes("Main-Class" to "org.projectnessie.cel.server.ConformanceServer") }
 }
 
 // *.proto files taken from https://github.com/google/cel-spec/ repo, available as a git submodule
 protobuf {
-    // Configure the protoc executable
-    protobuf.protoc {
-        // Download from repositories
-        artifact = "com.google.protobuf:protoc:${rootProject.extra["versionProtobuf"]}"
-    }
+  // Configure the protoc executable
+  protobuf.protoc {
+    // Download from repositories
+    artifact = "com.google.protobuf:protoc:${rootProject.extra["versionProtobuf"]}"
+  }
 }
 
 // The protobuf-plugin should ideally do this
-tasks.named<Jar>("sourcesJar") {
-    dependsOn(tasks.named("generateProto"))
-}
+tasks.named<Jar>("sourcesJar") { dependsOn(tasks.named("generateProto")) }

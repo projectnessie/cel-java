@@ -15,22 +15,22 @@
  */
 
 plugins {
-    `java-library`
-    `maven-publish`
-    signing
-    jacoco
-    id("com.diffplug.spotless")
-    id("org.caffinitas.gradle.aggregatetestresults")
-    id("org.caffinitas.gradle.testsummary")
-    id("org.caffinitas.gradle.testrerun")
+  `java-library`
+  `maven-publish`
+  signing
+  jacoco
+  id("com.diffplug.spotless")
+  id("org.caffinitas.gradle.aggregatetestresults")
+  id("org.caffinitas.gradle.testsummary")
+  id("org.caffinitas.gradle.testrerun")
 }
 
 dependencies {
-    api(project(":core"))
+  api(project(":core"))
 
-    testImplementation(platform(rootProject))
-    testImplementation("org.assertj:assertj-core")
-    testImplementation("org.junit.jupiter:junit-jupiter-api")
-    testImplementation("org.junit.jupiter:junit-jupiter-params")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
+  testImplementation(platform(rootProject))
+  testImplementation("org.assertj:assertj-core")
+  testImplementation("org.junit.jupiter:junit-jupiter-api")
+  testImplementation("org.junit.jupiter:junit-jupiter-params")
+  testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
 }

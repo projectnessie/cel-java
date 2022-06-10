@@ -15,32 +15,38 @@
  */
 
 plugins {
-    `java-library`
-    `maven-publish`
-    signing
-    jacoco
-    id("com.diffplug.spotless")
-    id("org.caffinitas.gradle.aggregatetestresults")
-    id("org.caffinitas.gradle.testsummary")
-    id("org.caffinitas.gradle.testrerun")
+  `java-library`
+  `maven-publish`
+  signing
+  jacoco
+  id("com.diffplug.spotless")
+  id("org.caffinitas.gradle.aggregatetestresults")
+  id("org.caffinitas.gradle.testsummary")
+  id("org.caffinitas.gradle.testrerun")
 }
 
 dependencies {
-    api(project(":core"))
+  api(project(":core"))
 
-    compileOnly(platform(rootProject))
-    implementation("com.fasterxml.jackson.core:jackson-databind:${rootProject.extra["versionJackson"]}")
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-protobuf:${rootProject.extra["versionJackson"]}")
-    implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:${rootProject.extra["versionJackson"]}")
+  compileOnly(platform(rootProject))
+  implementation(
+    "com.fasterxml.jackson.core:jackson-databind:${rootProject.extra["versionJackson"]}"
+  )
+  implementation(
+    "com.fasterxml.jackson.dataformat:jackson-dataformat-protobuf:${rootProject.extra["versionJackson"]}"
+  )
+  implementation(
+    "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:${rootProject.extra["versionJackson"]}"
+  )
 
-    testImplementation(platform(rootProject))
-    testAnnotationProcessor(platform(rootProject))
-    testImplementation(project(":tools"))
-    testAnnotationProcessor("org.immutables:value-processor")
-    testCompileOnly("org.immutables:value-annotations")
-    testImplementation("com.google.code.findbugs:jsr305")
-    testImplementation("org.assertj:assertj-core")
-    testImplementation("org.junit.jupiter:junit-jupiter-api")
-    testImplementation("org.junit.jupiter:junit-jupiter-params")
-    testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
+  testImplementation(platform(rootProject))
+  testAnnotationProcessor(platform(rootProject))
+  testImplementation(project(":tools"))
+  testAnnotationProcessor("org.immutables:value-processor")
+  testCompileOnly("org.immutables:value-annotations")
+  testImplementation("com.google.code.findbugs:jsr305")
+  testImplementation("org.assertj:assertj-core")
+  testImplementation("org.junit.jupiter:junit-jupiter-api")
+  testImplementation("org.junit.jupiter:junit-jupiter-params")
+  testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
 }
