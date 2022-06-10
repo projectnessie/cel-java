@@ -88,6 +88,28 @@ allprojects {
       useJUnitPlatform {}
       maxParallelForks = Runtime.getRuntime().availableProcessors()
     }
+
+    if (project.hasProperty("alsoTestAgainstJava8")) {
+      afterEvaluate {
+        val javaToolchains = extensions.findByType(JavaToolchainService::class.java)
+        if (javaToolchains != null) {
+          val testWithJava8 =
+            tasks.register<Test>("testWithJava8") {
+              group = "verification"
+              description = "Run unit tests against Java 8"
+
+              dependsOn("test")
+
+              useJUnitPlatform {}
+              maxParallelForks = Runtime.getRuntime().availableProcessors()
+              javaLauncher.set(
+                javaToolchains.launcherFor { languageVersion.set(JavaLanguageVersion.of(8)) }
+              )
+            }
+          tasks.named("check") { dependsOn(testWithJava8) }
+        }
+      }
+    }
   }
 
   tasks.withType<Jar>().configureEach {
@@ -98,7 +120,10 @@ allprojects {
     }
   }
 
-  tasks.withType<JavaCompile>().configureEach { options.encoding = "UTF-8" }
+  tasks.withType<JavaCompile>().configureEach {
+    options.encoding = "UTF-8"
+    options.release.set(8)
+  }
 
   tasks.withType<Javadoc>().configureEach {
     val opt = options as CoreJavadocOptions
