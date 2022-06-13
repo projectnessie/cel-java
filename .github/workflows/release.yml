@@ -99,7 +99,7 @@ jobs:
           ORG_GRADLE_PROJECT_sonatypePassword: ${{ secrets.OSSRH_TOKEN }}
         with:
           cache-read-only: true
-          arguments: --rerun-tasks --info assemble check publishToMavenLocal -x jmh publishToSonatype closeAndReleaseSonatypeStagingRepository -Prelease
+          arguments: --rerun-tasks --no-watch-fs assemble check publishToMavenLocal -x jmh publishToSonatype closeAndReleaseSonatypeStagingRepository -Prelease
 
       - name: Bump to next development version
         run: echo "${NEXT_VERSION}-SNAPSHOT" > version.txt
