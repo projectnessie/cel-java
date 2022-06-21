@@ -438,7 +438,6 @@ public final class FieldDescription extends Description {
     return getValueFromField(desc, (Message) target);
   }
 
-  @SuppressWarnings({"unchecked", "rawtypes"})
   public static Object getValueFromField(FieldDescriptor desc, Message message) {
 
     if (isWellKnownType(desc) && !message.hasField(desc)) {
@@ -466,10 +465,31 @@ public final class FieldDescription extends Description {
       //  There is no way to do a "message.getMapField(desc, key)" (aka a "reflective counterpart"
       //  for the generated map accessor methods like 'getXXXTypeOrThrow()'), too.
       if (v instanceof List) {
-        List<MapEntry> lst = (List) v;
-        Map map = new HashMap(lst.size() * 4 / 3 + 1);
-        for (MapEntry e : lst) {
-          map.put(e.getKey(), e.getValue());
+        List<?> lst = (List<?>) v;
+        Map<Object, Object> map = new HashMap<>(lst.size() * 4 / 3 + 1);
+        for (Object e : lst) {
+          Object key;
+          Object value;
+          if (e instanceof MapEntry) {
+            key = ((MapEntry<?, ?>) e).getKey();
+            value = ((MapEntry<?, ?>) e).getValue();
+          } else if (e instanceof DynamicMessage) {
+            DynamicMessage dynMsg = (DynamicMessage) e;
+            List<FieldDescriptor> fields = dynMsg.getDescriptorForType().getFields();
+            if (fields.size() == 2) {
+              key = dynMsg.getField(fields.get(0));
+              value = dynMsg.getField(fields.get(1));
+            } else {
+              throw new IllegalArgumentException(
+                  String.format(
+                      "Unexpected %s (%s) in list of map fields, dynamic message with != 2 fields",
+                      e.getClass(), e));
+            }
+          } else {
+            throw new IllegalArgumentException(
+                String.format("Unexpected %s (%s) in list of map fields", e.getClass(), e));
+          }
+          map.put(key, value);
         }
         v = map;
       }

@@ -14,10 +14,13 @@
  * limitations under the License.
  */
 
+import com.google.protobuf.gradle.protoc
+
 plugins {
   `java-library`
   signing
   id("com.diffplug.spotless")
+  id("com.google.protobuf")
   id("me.champeau.jmh")
   id("org.caffinitas.gradle.aggregatetestresults")
   id("org.caffinitas.gradle.testsummary")
@@ -48,6 +51,19 @@ dependencies {
 }
 
 jmh { jmhVersion.set(rootProject.extra["versionJmh"] as String) }
+
+sourceSets.test {
+  java.srcDir(project.buildDir.resolve("generated/source/proto/test/java"))
+  java.destinationDirectory.set(project.buildDir.resolve("classes/java/generatedTest"))
+}
+
+protobuf {
+  // Configure the protoc executable
+  protobuf.protoc {
+    // Download from repositories
+    artifact = "com.google.protobuf:protoc:${rootProject.extra["versionProtobuf"]}"
+  }
+}
 
 val testJar by
   configurations.creating {

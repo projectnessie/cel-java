@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+option java_package = "org.projectnessie.cel.proto.tests";
+option java_outer_classname = "ProtoTestTypes";
+option java_generate_equals_and_hash = true;
+
+message EventA {
+  bool property_bool = 5;
+  map<string, string> map_str = 11;
+}
