@@ -28,7 +28,7 @@ plugins {
   `cel-conventions`
 }
 
-val versionAgrona = "1.15.2"
+val versionAgrona = "1.16.0"
 val versionAntlr = "4.10.1"
 val versionAssertj = "3.23.1"
 val versionGoogleJavaFormat = "1.15.0"
