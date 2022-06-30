@@ -24,7 +24,7 @@ plugins {
 }
 
 dependencies {
-  api(project(":core"))
+  api(project(":cel-core"))
 
   compileOnly(platform(rootProject))
   implementation(
@@ -39,7 +39,7 @@ dependencies {
 
   testImplementation(platform(rootProject))
   testAnnotationProcessor(platform(rootProject))
-  testImplementation(project(":tools"))
+  testImplementation(project(":cel-tools"))
   testAnnotationProcessor("org.immutables:value-processor")
   testCompileOnly("org.immutables:value-annotations")
   testImplementation("com.google.code.findbugs:jsr305")

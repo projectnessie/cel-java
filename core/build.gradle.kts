@@ -29,15 +29,15 @@ plugins {
 }
 
 dependencies {
-  implementation(project(":generated-antlr", "shadow"))
-  api(project(":generated-pb"))
+  implementation(project(":cel-generated-antlr", "shadow"))
+  api(project(":cel-generated-pb"))
 
   compileOnly(platform(rootProject))
 
   implementation("org.agrona:agrona:${rootProject.extra["versionAgrona"]}")
 
   testImplementation(platform(rootProject))
-  testImplementation(project(":generated-pb", "testJar"))
+  testImplementation(project(":cel-generated-pb", "testJar"))
   testImplementation("org.assertj:assertj-core")
   testImplementation("org.junit.jupiter:junit-jupiter-api")
   testImplementation("org.junit.jupiter:junit-jupiter-params")

@@ -105,8 +105,5 @@ plugins.withType<JavaPlugin>().configureEach {
 }
 
 if (project != rootProject) {
-  tasks.withType<Jar>().configureEach {
-    duplicatesStrategy = DuplicatesStrategy.WARN
-    archiveBaseName.set("${rootProject.name}-${project.name}")
-  }
+  tasks.withType<Jar>().configureEach { duplicatesStrategy = DuplicatesStrategy.WARN }
 }

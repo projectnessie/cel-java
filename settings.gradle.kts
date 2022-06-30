@@ -92,7 +92,7 @@ pluginManagement {
   }
 }
 
-rootProject.name = "cel"
+rootProject.name = "cel-parent"
 
 gradle.beforeProject {
   group = "org.projectnessie.cel"
@@ -107,21 +107,26 @@ gradle.beforeProject {
     }
 }
 
-include("generated-antlr")
+fun celProject(name: String) {
+  include("cel-$name")
+  project(":cel-$name").projectDir = file(name)
+}
 
-include("generated-pb")
+celProject("generated-antlr")
 
-include("core")
+celProject("generated-pb")
 
-include("jackson")
+celProject("core")
 
-include("conformance")
+celProject("jackson")
 
-include("tools")
+celProject("conformance")
 
-include("jacoco")
+celProject("tools")
 
-include("bom")
+celProject("jacoco")
+
+celProject("bom")
 
 if (false) {
   include("gradle:dependabot")

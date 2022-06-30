@@ -24,7 +24,7 @@ plugins {
 }
 
 dependencies {
-  api(project(":core"))
+  api(project(":cel-core"))
 
   testImplementation(platform(rootProject))
   testImplementation("org.assertj:assertj-core")
