@@ -23,12 +23,12 @@ plugins {
 
 dependencies {
   constraints {
-    api(project(":core"))
-    api(project(":generated-antlr", "shadow"))
-    api(project(":generated-pb"))
-    api(project(":conformance"))
-    api(project(":jackson"))
-    api(project(":tools"))
+    api(project(":cel-core"))
+    api(project(":cel-generated-antlr", "shadow"))
+    api(project(":cel-generated-pb"))
+    api(project(":cel-conformance"))
+    api(project(":cel-jackson"))
+    api(project(":cel-tools"))
   }
 }
 

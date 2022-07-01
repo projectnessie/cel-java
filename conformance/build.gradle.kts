@@ -31,9 +31,9 @@ sourceSets.main { java.srcDir(project.buildDir.resolve("generated/source/proto/m
 dependencies {
   implementation(platform(rootProject))
 
-  implementation(project(":core"))
-  implementation(project(":core", "testJar"))
-  implementation(project(":generated-pb", "testJar"))
+  implementation(project(":cel-core"))
+  implementation(project(":cel-core", "testJar"))
+  implementation(project(":cel-generated-pb", "testJar"))
 
   implementation("com.google.protobuf:protobuf-java")
 

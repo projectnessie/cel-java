@@ -140,5 +140,3 @@ publishingHelper {
   nessieRepoName.set("cel-java")
   inceptionYear.set("2021")
 }
-
-extra["maven.artifactId"] = "cel-parent"

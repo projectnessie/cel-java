@@ -19,7 +19,7 @@ wd="$(dirname $0)"
 
 cd "${wd}/.." || exit 1
 
-./gradlew :conformance:shadowJar || exit 1
+./gradlew :cel-conformance:shadowJar || exit 1
 
 server_pid_file="$(realpath ./conformance/conformance-server.pid)"
 
