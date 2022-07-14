@@ -45,7 +45,7 @@ public final class EnumValueDescription {
 
   /** Value returns the (numeric) value of the enum. */
   public int value() {
-    return desc.getIndex();
+    return desc.getNumber();
   }
 
   @Override

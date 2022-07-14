@@ -69,6 +69,7 @@ import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Indexer;
 import org.projectnessie.cel.common.types.traits.Lister;
+import org.projectnessie.cel.test.proto3.OutOfOrderEnumOuterClass;
 
 public class ProviderTest {
 
@@ -87,12 +88,36 @@ public class ProviderTest {
   void typeRegistryEnumValue() {
     ProtoTypeRegistry reg = newEmptyRegistry();
     reg.registerDescriptor(GlobalEnum.getDescriptor().getFile());
+    reg.registerDescriptor(OutOfOrderEnumOuterClass.getDescriptor().getFile());
 
     Val enumVal = reg.enumValue("google.api.expr.test.v1.proto3.GlobalEnum.GOO");
-    assertThat(enumVal).extracting(Val::intValue).isEqualTo((long) GlobalEnum.GOO.ordinal());
+    assertThat(enumVal).extracting(Val::intValue).isEqualTo((long) GlobalEnum.GOO.getNumber());
 
     Val enumVal2 = reg.findIdent("google.api.expr.test.v1.proto3.GlobalEnum.GOO");
     assertThat(enumVal2.equal(enumVal)).isSameAs(True);
+
+    // Previously, we checked `getIndex` on the `EnumValueDescriptor`, which is the same as the
+    // `ordinal` value on the enum.
+    // Test the case where the protobuf-defined value for the enum differs from the generated Java
+    // enum's ordinal() function.
+    assertThat(OutOfOrderEnumOuterClass.OutOfOrderEnum.TWO.ordinal())
+        .isEqualTo(OutOfOrderEnumOuterClass.OutOfOrderEnum.TWO.getValueDescriptor().getIndex())
+        .isNotEqualTo(OutOfOrderEnumOuterClass.OutOfOrderEnum.TWO.getNumber());
+    // Check that we correctly get the protobuf-defined number.
+    Val enumVal3 = reg.enumValue("org.projectnessie.cel.test.proto3.OutOfOrderEnum.TWO");
+    assertThat(enumVal3)
+        .extracting(Val::intValue)
+        .isEqualTo((long) OutOfOrderEnumOuterClass.OutOfOrderEnum.TWO.getNumber());
+
+    // Test also with the case where there's a gap in the enum (FOUR is not defined).
+    assertThat(OutOfOrderEnumOuterClass.OutOfOrderEnum.FIVE.ordinal())
+        .isEqualTo(OutOfOrderEnumOuterClass.OutOfOrderEnum.FIVE.getValueDescriptor().getIndex())
+        .isNotEqualTo(OutOfOrderEnumOuterClass.OutOfOrderEnum.FIVE.getNumber());
+    // Check that we correctly get the protobuf-defined number.
+    Val enumVal4 = reg.enumValue("org.projectnessie.cel.test.proto3.OutOfOrderEnum.FIVE");
+    assertThat(enumVal4)
+        .extracting(Val::intValue)
+        .isEqualTo((long) OutOfOrderEnumOuterClass.OutOfOrderEnum.FIVE.getNumber());
   }
 
   @Test

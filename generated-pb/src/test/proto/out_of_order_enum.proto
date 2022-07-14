@@ -1,0 +1,14 @@
+package org.projectnessie.cel.test.proto3;
+
+// Enum intended to provide test values where the ordinal/index of the
+// enum variant differs from the actual enum value.
+enum OutOfOrderEnum {
+  ZERO = 0;
+  // TWO is set to have a value of 2, but it's in the 1-indexed position
+  // because it is out of order.
+  TWO = 2;
+  ONE = 1;
+  // FIVE is set to have a value of 5, but it's in the 3-indexed position
+  // because there is a gap in the sequence of enum values.
+  FIVE = 5;
+}
