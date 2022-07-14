@@ -1,0 +1,7 @@
+package org.projectnessie.test.proto3;
+
+enum OutOfOrderEnum {
+  ZERO = 0;
+  TWO = 2;
+  ONE = 1;
+}
