@@ -32,7 +32,6 @@ import org.projectnessie.buildtools.publishing.PublishingHelperPlugin
 plugins {
   id("org.projectnessie.buildsupport.jacoco")
   id("org.projectnessie.buildsupport.spotless")
-  `maven-publish`
 }
 
 if (project.name != "conformance" && project.name != "jacoco") {

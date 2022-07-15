@@ -19,6 +19,7 @@ import com.google.protobuf.gradle.protoc
 plugins {
   `java-library`
   signing
+  `maven-publish`
   id("com.diffplug.spotless")
   id("com.google.protobuf")
   id("me.champeau.jmh")
