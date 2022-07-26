@@ -45,12 +45,3 @@ tasks.named<ShadowJar>("shadowJar") {
   relocate("org.antlr.v4.runtime", "org.projectnessie.cel.shaded.org.antlr.v4.runtime")
   archiveClassifier.set("")
 }
-
-publishing {
-  publications {
-    getByName<MavenPublication>("maven") {
-      artifact(project.tasks.named("javadocJar"))
-      artifact(project.tasks.named("sourcesJar"))
-    }
-  }
-}
