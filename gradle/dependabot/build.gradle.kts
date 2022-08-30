@@ -33,7 +33,7 @@ plugins {
   id("com.github.vlsi.jandex") version "1.82"
   id("com.google.protobuf") version "0.8.19"
   id("io.github.gradle-nexus.publish-plugin") version "1.1.0"
-  id("me.champeau.jmh") version "0.6.6"
+  id("me.champeau.jmh") version "0.6.7"
   id("org.caffinitas.gradle.aggregatetestresults") version "0.1"
   id("org.caffinitas.gradle.testsummary") version "0.1.1"
   id("org.caffinitas.gradle.testrerun") version "0.1"
