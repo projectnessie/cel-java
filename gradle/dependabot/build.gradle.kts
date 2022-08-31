@@ -38,7 +38,7 @@ plugins {
   id("org.caffinitas.gradle.testsummary") version "0.1.1"
   id("org.caffinitas.gradle.testrerun") version "0.1"
   id("org.jetbrains.gradle.plugin.idea-ext") version "1.1.6"
-  id("org.projectnessie.buildsupport.spotless") version "0.2.8"
+  id("org.projectnessie.buildsupport.spotless") version "0.2.10"
   // The above version "includes" the ones below
   //  org.projectnessie.buildsupport.attach-test-jar
   //  org.projectnessie.buildsupport.checkstyle
