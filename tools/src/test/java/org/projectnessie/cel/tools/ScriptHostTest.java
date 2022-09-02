@@ -54,6 +54,34 @@ class ScriptHostTest {
   }
 
   @Test
+  void function() throws Exception {
+    ScriptHost scriptHost = ScriptHost.newBuilder().build();
+
+    // create the script, will be parsed and checked
+    Script script =
+        scriptHost
+            .buildScript("x + ' ' + y")
+            // Variable declarations - we need `x` and `y` in this example
+            .withDeclarations(Decls.newVar("x", Decls.String), Decls.newVar("y", Decls.String))
+            .build();
+
+    String result =
+        script.execute(
+            String.class,
+            arg -> {
+              if ("x".equals(arg)) {
+                return "hello";
+              } else if ("y".equals(arg)) {
+                return "world";
+              } else {
+                return null;
+              }
+            });
+
+    assertThat(result).isEqualTo("hello world");
+  }
+
+  @Test
   void execFail() throws Exception {
     ScriptHost scriptHost = ScriptHost.newBuilder().build();
 

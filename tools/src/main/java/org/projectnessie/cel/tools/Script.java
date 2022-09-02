@@ -20,6 +20,7 @@ import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Function;
 import org.projectnessie.cel.Env;
 import org.projectnessie.cel.Program;
 import org.projectnessie.cel.Program.EvalResult;
@@ -35,8 +36,17 @@ public final class Script {
     this.prg = prg;
   }
 
-  @SuppressWarnings("unchecked")
+  public <T> T execute(Class<T> resultType, Function<String, Object> arguments)
+      throws ScriptException {
+    return evaluate(resultType, arguments);
+  }
+
   public <T> T execute(Class<T> resultType, Map<String, Object> arguments) throws ScriptException {
+    return evaluate(resultType, arguments);
+  }
+
+  @SuppressWarnings("unchecked")
+  private <T> T evaluate(Class<T> resultType, Object arguments) throws ScriptExecutionException {
     Objects.requireNonNull(resultType, "resultType missing");
     Objects.requireNonNull(arguments, "arguments missing");
 
