@@ -18,6 +18,7 @@ package org.projectnessie.cel.interpreter;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import org.projectnessie.cel.common.types.ref.Val;
 
@@ -69,6 +70,9 @@ public interface Activation {
     if (bindings instanceof Map) {
       return new MapActivation((Map<String, Object>) bindings);
     }
+    if (bindings instanceof Function) {
+      return new FunctionActivation((Function<String, Object>) bindings);
+    }
     throw new IllegalArgumentException(
         String.format(
             "activation input must be an activation or map[string]interface: got %s",
@@ -111,6 +115,32 @@ public interface Activation {
     @Override
     public String toString() {
       return "MapActivation{" + "bindings=" + bindings + '}';
+    }
+  }
+
+  /** functionActivation which implements Activation and a provider of named values. */
+  final class FunctionActivation implements Activation {
+    private final Function<String, Object> provider;
+
+    FunctionActivation(Function<String, Object> provider) {
+      this.provider = provider;
+    }
+
+    /** Parent implements the Activation interface method. */
+    @Override
+    public Activation parent() {
+      return null;
+    }
+
+    /** ResolveName implements the Activation interface method. */
+    @Override
+    public Object resolveName(String name) {
+      return provider.apply(name);
+    }
+
+    @Override
+    public String toString() {
+      return "FunctionActivation{" + "provider=" + provider + '}';
     }
   }
 
