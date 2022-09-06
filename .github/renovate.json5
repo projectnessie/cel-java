@@ -1,0 +1,27 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  extends: ["config:base"],
+
+  "labels": ["dependencies"],
+
+  packageRules: [
+    // Check for updates, merge automatically
+    {
+      matchManagers: ["maven", "gradle", "gradle-wrapper"],
+      matchUpdateTypes: ["minor", "patch"],
+      automerge: true,
+      platformAutomerge: true
+    },
+
+    // Check for major updates, but do not merge automatically
+    {
+      matchManagers: ["maven", "gradle", "gradle-wrapper"],
+      matchUpdateTypes: ["major"],
+      automerge: false
+    }
+  ],
+
+  // Max 50 PRs in total, 10 per hour
+  prConcurrentLimit: 50,
+  prHourlyLimit: 10
+}
