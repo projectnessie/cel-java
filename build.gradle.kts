@@ -38,7 +38,7 @@ val versionJackson = "2.13.4"
 val versionJacoco = "0.8.8"
 val versionJmh = "1.35"
 val versionJSR305 = "3.0.2"
-val versionJunit = "5.9.0"
+val versionJunit = "5.9.1"
 val versionProtobuf = "3.21.6"
 val versionTomcatAnnotationsApi = "6.0.53"
 
