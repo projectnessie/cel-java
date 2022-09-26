@@ -104,7 +104,7 @@ jobs:
         if: ${{ matrix.java-version == '11' }}
         run: conformance/run-conformance-tests.sh
 
-      - uses: codecov/codecov-action@v2
+      - uses: codecov/codecov-action@v3
         if: ${{ matrix.java-version == '11' }}
         with:
           files: jacoco/build/reports/jacoco/codeCoverageReport/codeCoverageReport.xml
