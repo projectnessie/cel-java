@@ -96,7 +96,7 @@ jobs:
 
       - name: Setup bazel
         if: ${{ matrix.java-version == '11' }}
-        uses: jwlawson/actions-setup-bazel@v1.7.0
+        uses: jwlawson/actions-setup-bazel@v1.8.1
         with:
           bazel-version: '3.5.1'
 
