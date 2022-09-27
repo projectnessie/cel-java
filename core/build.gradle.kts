@@ -22,10 +22,10 @@ plugins {
   `maven-publish`
   id("com.diffplug.spotless")
   id("com.google.protobuf")
-  id("me.champeau.jmh")
-  id("org.caffinitas.gradle.aggregatetestresults")
-  id("org.caffinitas.gradle.testsummary")
-  id("org.caffinitas.gradle.testrerun")
+  alias(libs.plugins.jmh)
+  alias(libs.plugins.aggregatetestresults)
+  alias(libs.plugins.testsummary)
+  alias(libs.plugins.testrerun)
   `cel-conventions`
 }
 
@@ -33,25 +33,19 @@ dependencies {
   implementation(project(":cel-generated-antlr", "shadow"))
   api(project(":cel-generated-pb"))
 
-  compileOnly(platform(rootProject))
+  implementation(libs.agrona)
 
-  implementation("org.agrona:agrona:${rootProject.extra["versionAgrona"]}")
-
-  testImplementation(platform(rootProject))
   testImplementation(project(":cel-generated-pb", "testJar"))
-  testImplementation("org.assertj:assertj-core")
-  testImplementation("org.junit.jupiter:junit-jupiter-api")
-  testImplementation("org.junit.jupiter:junit-jupiter-params")
-  testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
 
-  jmhImplementation(platform(rootProject))
-  jmhAnnotationProcessor(platform(rootProject))
+  testImplementation(platform(libs.junit.bom))
+  testImplementation(libs.bundles.junit.testing)
+  testRuntimeOnly(libs.junit.jupiter.engine)
 
-  jmhImplementation("org.openjdk.jmh:jmh-core")
-  jmhAnnotationProcessor("org.openjdk.jmh:jmh-generator-annprocess")
+  jmhImplementation(libs.jmh.core)
+  jmhAnnotationProcessor(libs.jmh.generator.annprocess)
 }
 
-jmh { jmhVersion.set(rootProject.extra["versionJmh"] as String) }
+jmh { jmhVersion.set(libs.versions.jmh.get()) }
 
 sourceSets.test {
   java.srcDir(project.buildDir.resolve("generated/source/proto/test/java"))
@@ -62,7 +56,7 @@ protobuf {
   // Configure the protoc executable
   protobuf.protoc {
     // Download from repositories
-    artifact = "com.google.protobuf:protoc:${rootProject.extra["versionProtobuf"]}"
+    artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.get()}"
   }
 }
 

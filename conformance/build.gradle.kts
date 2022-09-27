@@ -29,23 +29,20 @@ plugins {
 sourceSets.main { java.srcDir(project.buildDir.resolve("generated/source/proto/main/java")) }
 
 dependencies {
-  implementation(platform(rootProject))
-
   implementation(project(":cel-core"))
   implementation(project(":cel-core", "testJar"))
   implementation(project(":cel-generated-pb", "testJar"))
 
-  implementation("com.google.protobuf:protobuf-java")
+  implementation(libs.protobuf.java)
 
-  implementation("io.grpc:grpc-protobuf")
-  implementation("io.grpc:grpc-stub")
-  runtimeOnly("io.grpc:grpc-netty-shaded")
-  compileOnly("org.apache.tomcat:annotations-api")
+  implementation(libs.grpc.protobuf)
+  implementation(libs.grpc.stub)
+  runtimeOnly(libs.grpc.netty.shaded)
+  compileOnly(libs.tomcat.annotations.api)
 
-  testImplementation("org.assertj:assertj-core")
-  testImplementation("org.junit.jupiter:junit-jupiter-api")
-  testImplementation("org.junit.jupiter:junit-jupiter-params")
-  testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
+  testImplementation(platform(libs.junit.bom))
+  testImplementation(libs.bundles.junit.testing)
+  testRuntimeOnly(libs.junit.jupiter.engine)
 }
 
 tasks.named<Jar>("shadowJar") {
@@ -57,7 +54,7 @@ protobuf {
   // Configure the protoc executable
   protobuf.protoc {
     // Download from repositories
-    artifact = "com.google.protobuf:protoc:${rootProject.extra["versionProtobuf"]}"
+    artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.get()}"
   }
 }
 
