@@ -41,7 +41,7 @@ grpc-stub = { module = "io.grpc:grpc-stub", version.ref = "grpc" }
 grpc-netty-shaded = { module = "io.grpc:grpc-netty-shaded", version.ref = "grpc" }
 immutables-value-annotations = { module = "org.immutables:value-annotations", version.ref = "immutables" }
 immutables-value-processor = { module = "org.immutables:value-processor", version.ref = "immutables" }
-jackson-bom = { module = "com.fasterxml.jackson:jackson-bom", version = "2.13.4.20221012" }
+jackson-bom = { module = "com.fasterxml.jackson:jackson-bom", version = "2.13.4.20221013" }
 jackson-core = { module = "com.fasterxml.jackson.core:jackson-databind" }
 jackson-dataformat-protobuf = { module = "com.fasterxml.jackson.dataformat:jackson-dataformat-protobuf" }
 jackson-dataformat-yaml = { module = "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml" }
