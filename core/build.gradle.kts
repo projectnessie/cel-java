@@ -14,14 +14,12 @@
  * limitations under the License.
  */
 
-import com.google.protobuf.gradle.protoc
-
 plugins {
   `java-library`
   signing
   `maven-publish`
   id("com.diffplug.spotless")
-  id("com.google.protobuf")
+  alias(libs.plugins.protobuf)
   alias(libs.plugins.jmh)
   alias(libs.plugins.aggregatetestresults)
   alias(libs.plugins.testsummary)

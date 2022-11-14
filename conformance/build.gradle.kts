@@ -14,11 +14,9 @@
  * limitations under the License.
  */
 
-import com.google.protobuf.gradle.protoc
-
 plugins {
   `java-library`
-  id("com.google.protobuf")
+  alias(libs.plugins.protobuf)
   id("com.github.johnrengelman.shadow")
   id("org.caffinitas.gradle.aggregatetestresults")
   id("org.caffinitas.gradle.testsummary")
