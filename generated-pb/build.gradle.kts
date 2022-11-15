@@ -14,15 +14,11 @@
  * limitations under the License.
  */
 
-import com.google.protobuf.gradle.generateProtoTasks
-import com.google.protobuf.gradle.plugins
-import com.google.protobuf.gradle.protoc
-
 plugins {
   `java-library`
   `maven-publish`
   signing
-  id("com.google.protobuf")
+  alias(libs.plugins.protobuf)
   id("org.projectnessie.buildsupport.reflectionconfig")
   `cel-conventions`
 }
