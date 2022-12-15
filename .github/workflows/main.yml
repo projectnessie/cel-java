@@ -66,12 +66,12 @@ jobs:
         with:
           # Spotless must run in a different invocation, because
           # it has some weird Gradle configuration/variant issue
-          arguments: spotlessCheck
+          arguments: spotlessCheck --scan
 
       - name: Build with Gradle
         uses: gradle/gradle-build-action@v2
         with:
-          arguments: --rerun-tasks assemble ${{ env.ADDITIONAL_GRADLE_OPTS }} check publishToMavenLocal -x jmh -x spotlessCheck
+          arguments: --rerun-tasks assemble ${{ env.ADDITIONAL_GRADLE_OPTS }} check publishToMavenLocal -x jmh -x spotlessCheck --scan
 
       - name: Build tool integrations
         # The buildToolIntegration* tasks require publishToMavenLocal, run it as a separate step,
