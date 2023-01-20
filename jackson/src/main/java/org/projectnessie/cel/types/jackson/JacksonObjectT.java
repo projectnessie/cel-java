@@ -82,6 +82,7 @@ final class JacksonObjectT extends ObjectT {
     if (typeDesc.isAssignableFrom(getClass())) {
       return (T) this;
     }
-    throw new UnsupportedOperationException();
+    throw new IllegalArgumentException(
+        newTypeConversionError(value.getClass().getName(), typeDesc).toString());
   }
 }
