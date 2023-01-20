@@ -128,21 +128,21 @@ jobs:
           LAST_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1))
           NUM_COMMITS=$(git log --format='format:%h' ${LAST_TAG}..HEAD | wc -l)
 
-          git log --perl-regexp --author '^(?!.*dependabot|.*cel-java-release-workflow).*$' --format='format:* %s' ${LAST_TAG}..${GIT_TAG} | grep -v '^\* \[release\] .*$' > ${DIR}/release-log
+          git log --perl-regexp --author '^(?!.*dependabot|.*renovate|.*cel-java-release-workflow).*$' --format='format:* %s' ${LAST_TAG}..${GIT_TAG} | grep -v '^\* \[release\] .*$' > ${DIR}/release-log
 
           cat <<EOF > ${NOTES_FILE}
           # Version ${RELEASE_VERSION}
 
           ${NUM_COMMITS} commits since ${LAST_TAG#v}
 
-          ## Full Changelog (minus dependabot commits):
+          ## Full Changelog (minus dependabot/renovate commits):
 
           $(cat ${DIR}/release-log)
           EOF
 
-          echo ::set-output name=NOTES_FILE::${NOTES_FILE}
+          echo "NOTES_FILE=${NOTES_FILE}" >> ${GITHUB_ENV}
 
       - name: Create Release in GitHub
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | gh auth login --with-token
-          gh release create ${GIT_TAG} --notes-file ${{ steps.prep_release.outputs.NOTES_FILE }} --title "CEL-Java ${RELEASE_VERSION}"
+          gh release create ${GIT_TAG} --notes-file ${NOTES_FILE} --title "CEL-Java ${RELEASE_VERSION}"

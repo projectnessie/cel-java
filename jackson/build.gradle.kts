@@ -27,25 +27,17 @@ plugins {
 dependencies {
   api(project(":cel-core"))
 
-  compileOnly(platform(rootProject))
-  implementation(
-    "com.fasterxml.jackson.core:jackson-databind:${rootProject.extra["versionJackson"]}"
-  )
-  implementation(
-    "com.fasterxml.jackson.dataformat:jackson-dataformat-protobuf:${rootProject.extra["versionJackson"]}"
-  )
-  implementation(
-    "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:${rootProject.extra["versionJackson"]}"
-  )
+  implementation(platform(libs.jackson.bom))
+  implementation(libs.jackson.core)
+  implementation(libs.jackson.dataformat.protobuf)
+  implementation(libs.jackson.dataformat.yaml)
 
-  testImplementation(platform(rootProject))
-  testAnnotationProcessor(platform(rootProject))
   testImplementation(project(":cel-tools"))
-  testAnnotationProcessor("org.immutables:value-processor")
-  testCompileOnly("org.immutables:value-annotations")
-  testImplementation("com.google.code.findbugs:jsr305")
-  testImplementation("org.assertj:assertj-core")
-  testImplementation("org.junit.jupiter:junit-jupiter-api")
-  testImplementation("org.junit.jupiter:junit-jupiter-params")
-  testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
+  testAnnotationProcessor(libs.immutables.value.processor)
+  testCompileOnly(libs.immutables.value.annotations)
+  testImplementation(libs.findbugs.jsr305)
+
+  testImplementation(platform(libs.junit.bom))
+  testImplementation(libs.bundles.junit.testing)
+  testRuntimeOnly(libs.junit.jupiter.engine)
 }

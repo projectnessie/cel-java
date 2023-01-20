@@ -1,0 +1,75 @@
+[versions]
+antlr4 = "4.11.1"
+checkstyle = "10.3.4"
+errorprone = "2.15.0"
+googleJavaFormat = "1.15.0"
+grpc = "1.52.1"
+guava = "31.1-jre"
+immutables = "2.9.3"
+jacoco = "0.8.8"
+jandex = "2.4.3.Final"
+jandexPlugin = "1.86"
+jmh = "1.36"
+junit = "5.9.2"
+nessieBuildPlugins = "0.2.15"
+nessieRunPlugin = "0.27.3"
+protobuf = "3.21.12"
+protobufPlugin = "0.9.2"
+shadowPlugin = "7.1.2"
+slf4j = "1.7.36"
+spotlessPlugin = "6.13.0"
+
+[bundles]
+# Bundles serve two purposes:
+# 1. Group dependencies together for renovatebot, which cares about bundles. Those bundles, that
+#    _solely_ exist to for dependency management via renovatebot, start with `managed-`.
+# 2. Bundles used in build files to group dependencies that are commonly used together.
+managed-grpc = ["grpc-protobuf", "grpc-stub", "grpc-netty-shaded"]
+managed-immutables = ["immutables-value-annotations", "immutables-value-processor"]
+managed-jmh = ["jmh-core", "jmh-generator-annprocess"]
+
+junit-testing = ["assertj-core", "junit-jupiter-api", "junit-jupiter-params"]
+
+[libraries]
+agrona = { module = "org.agrona:agrona", version = "1.17.1" }
+antlr-antlr4 = { module = "org.antlr:antlr4", version.ref = "antlr4" }
+antlr-antlr4-runtime = { module = "org.antlr:antlr4-runtime", version.ref = "antlr4" }
+assertj-core = { module = "org.assertj:assertj-core", version = "3.24.2" }
+findbugs-jsr305 = { module = "com.google.code.findbugs:jsr305", version = "3.0.2" }
+google-java-format = { module = "com.google.googlejavaformat:google-java-format", version.ref = "googleJavaFormat" }
+grpc-protobuf = { module = "io.grpc:grpc-protobuf", version.ref = "grpc" }
+grpc-stub = { module = "io.grpc:grpc-stub", version.ref = "grpc" }
+grpc-netty-shaded = { module = "io.grpc:grpc-netty-shaded", version.ref = "grpc" }
+immutables-value-annotations = { module = "org.immutables:value-annotations", version.ref = "immutables" }
+immutables-value-processor = { module = "org.immutables:value-processor", version.ref = "immutables" }
+jackson-bom = { module = "com.fasterxml.jackson:jackson-bom", version = "2.14.1" }
+jackson-core = { module = "com.fasterxml.jackson.core:jackson-databind" }
+jackson-dataformat-protobuf = { module = "com.fasterxml.jackson.dataformat:jackson-dataformat-protobuf" }
+jackson-dataformat-yaml = { module = "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml" }
+jacoco-maven-plugin = { module = "org.jacoco:jacoco-maven-plugin", version.ref = "jacoco" }
+jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
+jmh-generator-annprocess = { module = "org.openjdk.jmh:jmh-generator-annprocess", version.ref = "jmh" }
+junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
+junit-jupiter-api = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junit" }
+junit-jupiter-engine = { module = "org.junit.jupiter:junit-jupiter-engine" }
+junit-jupiter-params = { module = "org.junit.jupiter:junit-jupiter-params" }
+protobuf-java = { module = "com.google.protobuf:protobuf-java", version.ref = "protobuf" }
+tomcat-annotations-api = { module = "org.apache.tomcat:annotations-api", version = "6.0.53" }
+
+[plugins]
+aggregatetestresults = { id = "org.caffinitas.gradle.aggregatetestresults", version = "0.1" }
+errorprone = { id = "net.ltgt.errorprone", version = "3.0.1" }
+idea-ext = { id = "org.jetbrains.gradle.plugin.idea-ext", version = "1.1.7" }
+jandex = { id = "com.github.vlsi.jandex", version.ref = "jandexPlugin" }
+jmh = { id = "me.champeau.jmh", version = "0.6.8" }
+nessie-build-checkstyle = { id = "org.projectnessie.buildsupport.checkstyle", version.ref = "nessieBuildPlugins" }
+nessie-build-errorprone = { id = "org.projectnessie.buildsupport.errorprone", version.ref = "nessieBuildPlugins" }
+nessie-build-ide-integration = { id = "org.projectnessie.buildsupport.ide-integration", version.ref = "nessieBuildPlugins" }
+nessie-build-jandex = { id = "org.projectnessie.buildsupport.jandex", version.ref = "nessieBuildPlugins" }
+nessie-build-spotless = { id = "org.projectnessie.buildsupport.spotless", version.ref = "nessieBuildPlugins" }
+nexus-publish = { id = "io.github.gradle-nexus.publish-plugin", version = "1.1.0" }
+protobuf = { id = "com.google.protobuf", version.ref = "protobufPlugin" }
+shadow = { id = "com.github.johnrengelman.shadow", version.ref = "shadowPlugin" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotlessPlugin" }
+testrerun = { id = "org.caffinitas.gradle.testrerun", version = "0.1" }
+testsummary = { id = "org.caffinitas.gradle.testsummary", version = "0.1.1" }

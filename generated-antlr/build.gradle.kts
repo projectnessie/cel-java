@@ -26,10 +26,8 @@ plugins {
 }
 
 dependencies {
-  antlr(platform(rootProject))
-  antlr("org.antlr:antlr4") // TODO remove from runtime-classpath *sigh*
-  compileOnly(platform(rootProject))
-  implementation("org.antlr:antlr4-runtime")
+  antlr(libs.antlr.antlr4) // TODO remove from runtime-classpath *sigh*
+  implementation(libs.antlr.antlr4.runtime)
 }
 
 // The antlr-plugin should ideally do this

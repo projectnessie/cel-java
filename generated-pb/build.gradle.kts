@@ -14,15 +14,11 @@
  * limitations under the License.
  */
 
-import com.google.protobuf.gradle.generateProtoTasks
-import com.google.protobuf.gradle.plugins
-import com.google.protobuf.gradle.protoc
-
 plugins {
   `java-library`
   `maven-publish`
   signing
-  id("com.google.protobuf")
+  alias(libs.plugins.protobuf)
   id("org.projectnessie.buildsupport.reflectionconfig")
   `cel-conventions`
 }
@@ -39,15 +35,13 @@ sourceSets.test {
 }
 
 dependencies {
-  compileOnly(platform(rootProject))
-
-  api("com.google.protobuf:protobuf-java:${rootProject.extra["versionProtobuf"]}")
+  api(libs.protobuf.java)
 
   // Since we need the protobuf stuff in this cel-core module, it's easy to generate the
   // gRPC code as well. But do not expose the gRPC dependencies "publicly".
-  compileOnly("io.grpc:grpc-protobuf")
-  compileOnly("io.grpc:grpc-stub")
-  compileOnly("org.apache.tomcat:annotations-api")
+  compileOnly(libs.grpc.protobuf)
+  compileOnly(libs.grpc.stub)
+  compileOnly(libs.tomcat.annotations.api)
 }
 
 // *.proto files taken from https://github.com/googleapis/googleapis/ repo, available as a git
@@ -56,12 +50,10 @@ protobuf {
   // Configure the protoc executable
   protobuf.protoc {
     // Download from repositories
-    artifact = "com.google.protobuf:protoc:${rootProject.extra["versionProtobuf"]}"
+    artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.get()}"
   }
   protobuf.plugins {
-    this.create("grpc") {
-      artifact = "io.grpc:protoc-gen-grpc-java:${rootProject.extra["versionGrpc"]}"
-    }
+    this.create("grpc") { artifact = "io.grpc:protoc-gen-grpc-java:${libs.versions.grpc.get()}" }
   }
   protobuf.generateProtoTasks { all().configureEach { this.plugins.create("grpc") {} } }
 }
