@@ -15,6 +15,7 @@
  */
 package org.projectnessie.cel.types.jackson;
 
+import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchField;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.Types.boolOf;

@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.checker.Decls;
+import org.projectnessie.cel.common.types.ObjectT;
 import org.projectnessie.cel.tools.Script;
 import org.projectnessie.cel.tools.ScriptHost;
 import org.projectnessie.cel.types.jackson.types.ClassWithEnum;
@@ -45,6 +46,16 @@ public class JacksonScriptHostTest {
 
     assertThat(script.execute(Boolean.class, singletonMap("param", cmMatch))).isTrue();
     assertThat(script.execute(Boolean.class, singletonMap("param", cmNoMatch))).isFalse();
+
+    script =
+        scriptHost
+            .buildScript("param")
+            .withDeclarations(Decls.newVar("param", Decls.newObjectType(MetaTest.class.getName())))
+            .withTypes(MetaTest.class)
+            .build();
+
+    assertThat(script.execute(Object.class, singletonMap("param", cmMatch))).isEqualTo(cmMatch);
+    assertThat(script.execute(ObjectT.class, singletonMap("param", cmMatch)).value()).isEqualTo(cmMatch);
   }
 
   @Test
