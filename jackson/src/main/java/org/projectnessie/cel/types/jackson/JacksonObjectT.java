@@ -15,6 +15,7 @@
  */
 package org.projectnessie.cel.types.jackson;
 
+import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchField;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.Types.boolOf;
@@ -76,6 +77,13 @@ final class JacksonObjectT extends ObjectT {
 
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
-    throw new UnsupportedOperationException();
+    if (typeDesc.isAssignableFrom(value.getClass())) {
+      return (T) value;
+    }
+    if (typeDesc.isAssignableFrom(getClass())) {
+      return (T) this;
+    }
+    throw new IllegalArgumentException(
+        newTypeConversionError(value.getClass().getName(), typeDesc).toString());
   }
 }
