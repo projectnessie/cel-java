@@ -55,7 +55,8 @@ public class JacksonScriptHostTest {
             .build();
 
     assertThat(script.execute(Object.class, singletonMap("param", cmMatch))).isEqualTo(cmMatch);
-    assertThat(script.execute(ObjectT.class, singletonMap("param", cmMatch)).value()).isEqualTo(cmMatch);
+    assertThat(script.execute(ObjectT.class, singletonMap("param", cmMatch)).value())
+        .isEqualTo(cmMatch);
   }
 
   @Test
