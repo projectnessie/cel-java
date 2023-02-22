@@ -67,7 +67,7 @@ nessie-build-errorprone = { id = "org.projectnessie.buildsupport.errorprone", ve
 nessie-build-ide-integration = { id = "org.projectnessie.buildsupport.ide-integration", version.ref = "nessieBuildPlugins" }
 nessie-build-jandex = { id = "org.projectnessie.buildsupport.jandex", version.ref = "nessieBuildPlugins" }
 nessie-build-spotless = { id = "org.projectnessie.buildsupport.spotless", version.ref = "nessieBuildPlugins" }
-nexus-publish = { id = "io.github.gradle-nexus.publish-plugin", version = "1.1.0" }
+nexus-publish = { id = "io.github.gradle-nexus.publish-plugin", version = "1.2.0" }
 protobuf = { id = "com.google.protobuf", version.ref = "protobufPlugin" }
 shadow = { id = "com.github.johnrengelman.shadow", version.ref = "shadowPlugin" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotlessPlugin" }
