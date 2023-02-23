@@ -61,7 +61,7 @@ aggregatetestresults = { id = "org.caffinitas.gradle.aggregatetestresults", vers
 errorprone = { id = "net.ltgt.errorprone", version = "3.0.1" }
 idea-ext = { id = "org.jetbrains.gradle.plugin.idea-ext", version = "1.1.7" }
 jandex = { id = "com.github.vlsi.jandex", version.ref = "jandexPlugin" }
-jmh = { id = "me.champeau.jmh", version = "0.6.8" }
+jmh = { id = "me.champeau.jmh", version = "0.7.0" }
 nessie-build-checkstyle = { id = "org.projectnessie.buildsupport.checkstyle", version.ref = "nessieBuildPlugins" }
 nessie-build-errorprone = { id = "org.projectnessie.buildsupport.errorprone", version.ref = "nessieBuildPlugins" }
 nessie-build-ide-integration = { id = "org.projectnessie.buildsupport.ide-integration", version.ref = "nessieBuildPlugins" }
