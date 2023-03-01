@@ -14,18 +14,22 @@
  * limitations under the License.
  */
 
+import com.google.protobuf.gradle.ProtobufExtension
+import com.google.protobuf.gradle.ProtobufPlugin
+
 plugins {
   `java-library`
   signing
   `maven-publish`
   id("com.diffplug.spotless")
-  alias(libs.plugins.protobuf)
   alias(libs.plugins.jmh)
   alias(libs.plugins.aggregatetestresults)
   alias(libs.plugins.testsummary)
   alias(libs.plugins.testrerun)
   `cel-conventions`
 }
+
+apply<ProtobufPlugin>()
 
 dependencies {
   implementation(project(":cel-generated-antlr", "shadow"))
@@ -45,14 +49,20 @@ dependencies {
 
 jmh { jmhVersion.set(libs.versions.jmh.get()) }
 
+tasks.named("compileJmhJava") { dependsOn(tasks.named("processTestJandexIndex")) }
+
+tasks.named("jmhCompileGeneratedClasses") { dependsOn(tasks.named("processJmhJandexIndex")) }
+
+tasks.named("jmhRunBytecodeGenerator") { dependsOn(tasks.named("processJmhJandexIndex")) }
+
 sourceSets.test {
   java.srcDir(project.buildDir.resolve("generated/source/proto/test/java"))
   java.destinationDirectory.set(project.buildDir.resolve("classes/java/generatedTest"))
 }
 
-protobuf {
+configure<ProtobufExtension> {
   // Configure the protoc executable
-  protobuf.protoc {
+  protoc {
     // Download from repositories
     artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.get()}"
   }

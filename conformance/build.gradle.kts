@@ -14,15 +14,19 @@
  * limitations under the License.
  */
 
+import com.google.protobuf.gradle.ProtobufExtension
+import com.google.protobuf.gradle.ProtobufPlugin
+
 plugins {
   `java-library`
-  alias(libs.plugins.protobuf)
   id("com.github.johnrengelman.shadow")
   id("org.caffinitas.gradle.aggregatetestresults")
   id("org.caffinitas.gradle.testsummary")
   id("org.caffinitas.gradle.testrerun")
   `cel-conventions`
 }
+
+apply<ProtobufPlugin>()
 
 sourceSets.main { java.srcDir(project.buildDir.resolve("generated/source/proto/main/java")) }
 
@@ -48,9 +52,9 @@ tasks.named<Jar>("shadowJar") {
 }
 
 // *.proto files taken from https://github.com/google/cel-spec/ repo, available as a git submodule
-protobuf {
+configure<ProtobufExtension> {
   // Configure the protoc executable
-  protobuf.protoc {
+  protoc {
     // Download from repositories
     artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.get()}"
   }

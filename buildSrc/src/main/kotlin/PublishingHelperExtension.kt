@@ -14,18 +14,9 @@
  * limitations under the License.
  */
 
-if (project.name != "conformance" && project.name != "jacoco") {
-  apply<PublishingHelperPlugin>()
-}
+import org.gradle.api.Project
 
-nessieConfigureSpotless()
-
-nessieConfigureJandex()
-
-nessieConfigureJava()
-
-nessieIde()
-
-if (projectDir.resolve("src/test/java").exists()) {
-  nessieConfigureTestTasks()
+open class PublishingHelperExtension(project: Project) {
+  val nessieRepoName = project.objects.property(String::class.java)
+  val inceptionYear = project.objects.property(String::class.java)
 }

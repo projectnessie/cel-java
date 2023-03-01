@@ -22,21 +22,12 @@ plugins {
   alias(libs.plugins.aggregatetestresults)
   alias(libs.plugins.testsummary)
   alias(libs.plugins.testrerun)
-  id("org.projectnessie.buildsupport.ide-integration")
   alias(libs.plugins.nexus.publish)
   `cel-conventions`
 }
 
-mapOf(
-    // TODO update the Nessie Gradle plugins to not depend on these properties / move some of the
-    //  plugins into the Nessie repository.
-    "versionCheckstyle" to libs.versions.checkstyle.get(),
-    "versionErrorProneCore" to libs.versions.errorprone.get(),
-    "versionGoogleJavaFormat" to libs.versions.googleJavaFormat.get(),
-    "versionJacoco" to libs.versions.jacoco.get(),
-    "versionJandex" to libs.versions.jandex.get()
-  )
-  .forEach { (k, v) -> extra[k.toString()] = v }
+mapOf("versionJacoco" to libs.versions.jacoco.get(), "versionJandex" to libs.versions.jandex.get())
+  .forEach { (k, v) -> extra[k] = v }
 
 tasks.named<Wrapper>("wrapper") { distributionType = Wrapper.DistributionType.ALL }
 

@@ -14,14 +14,18 @@
  * limitations under the License.
  */
 
+import com.google.protobuf.gradle.ProtobufExtension
+import com.google.protobuf.gradle.ProtobufPlugin
+
 plugins {
   `java-library`
   `maven-publish`
   signing
-  alias(libs.plugins.protobuf)
-  id("org.projectnessie.buildsupport.reflectionconfig")
+  alias(libs.plugins.nessie.build.reflectionconfig)
   `cel-conventions`
 }
+
+apply<ProtobufPlugin>()
 
 sourceSets.main {
   java.srcDir(project.buildDir.resolve("generated/source/proto/main/java"))
@@ -46,16 +50,16 @@ dependencies {
 
 // *.proto files taken from https://github.com/googleapis/googleapis/ repo, available as a git
 // submodule
-protobuf {
+configure<ProtobufExtension> {
   // Configure the protoc executable
-  protobuf.protoc {
+  protoc {
     // Download from repositories
     artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.get()}"
   }
-  protobuf.plugins {
+  plugins {
     this.create("grpc") { artifact = "io.grpc:protoc-gen-grpc-java:${libs.versions.grpc.get()}" }
   }
-  protobuf.generateProtoTasks { all().configureEach { this.plugins.create("grpc") {} } }
+  generateProtoTasks { all().configureEach { this.plugins.create("grpc") {} } }
 }
 
 reflectionConfig {
