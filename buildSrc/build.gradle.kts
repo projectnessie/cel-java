@@ -28,7 +28,7 @@ dependencies {
   implementation(gradleKotlinDsl())
   val ver = libs.versions
   implementation("com.diffplug.spotless:spotless-plugin-gradle:${ver.spotlessPlugin.get()}")
-  implementation("gradle.plugin.com.github.johnrengelman:shadow:${ver.shadowPlugin.get()}")
+  implementation("com.github.johnrengelman:shadow:${ver.shadowPlugin.get()}")
   val nessieVer = ver.nessieBuildPlugins.get()
   implementation("org.projectnessie.buildsupport:ide-integration:$nessieVer")
   implementation("org.projectnessie.buildsupport:jacoco:$nessieVer")
