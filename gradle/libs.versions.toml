@@ -74,7 +74,7 @@ idea-ext = { id = "org.jetbrains.gradle.plugin.idea-ext", version = "1.1.7" }
 jandex = { id = "com.github.vlsi.jandex", version.ref = "jandexPlugin" }
 jmh = { id = "me.champeau.jmh", version = "0.7.0" }
 nessie-build-reflectionconfig = { id = "org.projectnessie.buildsupport.reflectionconfig", version.ref = "nessieBuildPlugins" }
-nexus-publish = { id = "io.github.gradle-nexus.publish-plugin", version = "1.2.0" }
+nexus-publish = { id = "io.github.gradle-nexus.publish-plugin", version = "1.3.0" }
 protobuf = { id = "com.google.protobuf", version.ref = "protobufPlugin" }
 shadow = { id = "com.github.johnrengelman.shadow", version.ref = "shadowPlugin" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotlessPlugin" }
