@@ -83,20 +83,20 @@ val testJar by
     isCanBeConsumed = true
   }
 
-tasks.register<Jar>("testJar") {
-  val testClasses = tasks.getByName<JavaCompile>("compileTestJava")
-  val baseJar = tasks.getByName<Jar>("jar")
-  from(testClasses.destinationDirectory, project.buildDir.resolve("resources/test"))
-  dependsOn(testClasses, tasks.named("processJandexIndex"), tasks.named("processTestResources"))
-  archiveBaseName.set(baseJar.archiveBaseName)
-  destinationDirectory.set(baseJar.destinationDirectory)
-  archiveClassifier.set("tests")
-}
+tasks.named<Jar>("jar") { dependsOn("processJandexIndex") }
 
-artifacts {
-  val testJar = tasks.getByName<Jar>("testJar")
-  add("testJar", testJar.archiveFile) { builtBy(testJar) }
-}
+val testJarTask =
+  tasks.register<Jar>("testJar") {
+    val testClasses = tasks.getByName<JavaCompile>("compileTestJava")
+    val baseJar = tasks.getByName<Jar>("jar")
+    from(testClasses.destinationDirectory, project.buildDir.resolve("resources/test"))
+    dependsOn(testClasses, tasks.named("processJandexIndex"), tasks.named("processTestResources"))
+    archiveBaseName.set(baseJar.archiveBaseName)
+    destinationDirectory.set(baseJar.destinationDirectory)
+    archiveClassifier.set("tests")
+  }
+
+artifacts { add("testJar", testJarTask.get().archiveFile) { builtBy(testJarTask.get()) } }
 
 // The protobuf-plugin should ideally do this
 tasks.named<Jar>("sourcesJar") {
