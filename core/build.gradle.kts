@@ -14,9 +14,6 @@
  * limitations under the License.
  */
 
-import com.google.protobuf.gradle.ProtobufExtension
-import com.google.protobuf.gradle.ProtobufPlugin
-
 plugins {
   `java-library`
   signing
@@ -28,8 +25,6 @@ plugins {
   alias(libs.plugins.testrerun)
   `cel-conventions`
 }
-
-apply<ProtobufPlugin>()
 
 dependencies {
   implementation(project(":cel-generated-antlr", "shadow"))
@@ -58,14 +53,6 @@ tasks.named("jmhRunBytecodeGenerator") { dependsOn(tasks.named("processJmhJandex
 sourceSets.test {
   java.srcDir(project.buildDir.resolve("generated/source/proto/test/java"))
   java.destinationDirectory.set(project.buildDir.resolve("classes/java/generatedTest"))
-}
-
-configure<ProtobufExtension> {
-  // Configure the protoc executable
-  protoc {
-    // Download from repositories
-    artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.get()}"
-  }
 }
 
 val testJar by

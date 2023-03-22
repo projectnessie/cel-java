@@ -18,10 +18,7 @@ import com.google.protobuf.gradle.ProtobufExtract
 import com.google.protobuf.gradle.ProtobufPlugin
 import org.gradle.api.Plugin
 import org.gradle.api.Project
-import org.gradle.api.plugins.JavaPluginExtension
-import org.gradle.api.plugins.quality.Checkstyle
 import org.gradle.kotlin.dsl.apply
-import org.gradle.kotlin.dsl.getByType
 import org.gradle.kotlin.dsl.withType
 
 /** Makes the generated sources available to IDEs, disables Checkstyle on generated code. */
@@ -30,25 +27,6 @@ class ProtobufHelperPlugin : Plugin<Project> {
   override fun apply(project: Project): Unit =
     project.run {
       apply<ProtobufPlugin>()
-      plugins.withType<ProtobufPlugin>().configureEach {
-        val sourceSets = project.extensions.getByType<JavaPluginExtension>().sourceSets
-
-        val sourceSetJavaMain = sourceSets.getByName("main").java
-        sourceSetJavaMain.srcDir(project.buildDir.resolve("generated/source/proto/main/java"))
-        sourceSetJavaMain.destinationDirectory.set(
-          project.buildDir.resolve("classes/java/generated")
-        )
-
-        val sourceSetJavaTest = sourceSets.getByName("test").java
-        sourceSetJavaTest.srcDir(project.buildDir.resolve("generated/source/proto/test/java"))
-        sourceSetJavaTest.destinationDirectory.set(
-          project.buildDir.resolve("classes/java/generatedTest")
-        )
-      }
-
-      tasks.withType(Checkstyle::class.java).configureEach {
-        exclude("org/projectnessie/**/*Types.java")
-      }
 
       tasks.withType(ProtobufExtract::class.java).configureEach {
         dependsOn(tasks.named("processJandexIndex"))
