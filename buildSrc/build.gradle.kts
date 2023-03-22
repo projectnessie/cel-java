@@ -32,7 +32,6 @@ dependencies {
   implementation(libs.shadow.plugin)
   implementation(libs.protobuf.plugin)
   implementation(libs.errorprone.plugin)
-  implementation(libs.nessie.buildsupport.jacoco)
 }
 
 java {

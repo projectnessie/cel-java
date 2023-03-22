@@ -59,8 +59,6 @@ junit-bom = { module = "org.junit:junit-bom", version.ref = "junit" }
 junit-jupiter-api = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junit" }
 junit-jupiter-engine = { module = "org.junit.jupiter:junit-jupiter-engine" }
 junit-jupiter-params = { module = "org.junit.jupiter:junit-jupiter-params" }
-nessie-buildsupport-jacoco = { module = "org.projectnessie.buildsupport:jacoco", version.ref = "nessieBuildPlugins" }
-nessie-buildsupport-jacoco-aggregator = { module = "org.projectnessie.buildsupport:jacoco-aggregator", version.ref = "nessieBuildPlugins" }
 protobuf-java = { module = "com.google.protobuf:protobuf-java", version.ref = "protobuf" }
 protobuf-plugin = { module = "com.google.protobuf:protobuf-gradle-plugin", version.ref = "protobufPlugin" }
 shadow-plugin = { module = "com.github.johnrengelman:shadow", version.ref = "shadowPlugin" }

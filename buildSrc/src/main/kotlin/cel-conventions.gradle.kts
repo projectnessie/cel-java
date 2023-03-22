@@ -26,6 +26,8 @@ nessieConfigureJava()
 
 nessieIde()
 
+apply<CelCodeCoveragePlugin>()
+
 if (projectDir.resolve("src/test/java").exists()) {
   nessieConfigureTestTasks()
 }
