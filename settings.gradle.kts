@@ -96,6 +96,4 @@ celProject("conformance")
 
 celProject("tools")
 
-celProject("jacoco")
-
 celProject("bom")
