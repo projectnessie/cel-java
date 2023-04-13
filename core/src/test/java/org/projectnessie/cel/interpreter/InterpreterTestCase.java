@@ -116,5 +116,7 @@ public enum InterpreterTestCase {
   select_custom_pb3_compare,
   select_relative,
   select_subsumed_field,
-  select_empty_repeated_nested
+  select_empty_repeated_nested,
+  root_null_handling,
+  root_no_such_attribute
 }

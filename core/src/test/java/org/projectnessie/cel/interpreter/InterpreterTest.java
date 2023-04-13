@@ -1152,7 +1152,17 @@ class InterpreterTest {
               "a[a[a[a[a[a[a[a[a[a[a[a[a[a[a[a[a[a[a[a[a[a[a[a[a[a[a[a[a[a[a[a[0]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]]")
           .env(Decls.newVar("a", Decls.newListType(Decls.Int)))
           .in("a", new long[] {0})
-          .out(intOf(0))
+          .out(intOf(0)),
+      new TestCase(InterpreterTestCase.root_null_handling)
+          .expr("a == null")
+          .env(Decls.newVar("a", Decls.Any))
+          .in("a", null)
+          .out(true),
+      new TestCase(InterpreterTestCase.root_no_such_attribute)
+          .expr("a == null")
+          .env(Decls.newVar("a", Decls.Any))
+          .in("b", null)
+          .err("undeclared reference to 'id: 1, names: [a]' (in container '')"),
     };
   }
 
