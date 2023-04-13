@@ -32,6 +32,7 @@ import java.util.function.Supplier;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.misc.Pair;
 
 public class ActivationTest {
 
@@ -49,7 +50,8 @@ public class ActivationTest {
   @Test
   void resolve() {
     Activation activation = newActivation(Collections.singletonMap("a", True));
-    assertThat(activation.resolveName("a")).isSameAs(True);
+    assertThat(activation.resolveName("a").a).isSameAs(True);
+    assertThat(activation.resolveName("a").b).isSameAs(true);
   }
 
   @Test
@@ -65,9 +67,11 @@ public class ActivationTest {
     Map<String, Object> map = new HashMap<>();
     map.put("now", now);
     Activation a = newActivation(map);
-    Object first = a.resolveName("now");
-    Object second = a.resolveName("now");
-    assertThat(first).isSameAs(second);
+    Pair<Object, Boolean> first = a.resolveName("now");
+    Pair<Object, Boolean> second = a.resolveName("now");
+    assertThat(first.b).isSameAs(true);
+    assertThat(second.b).isSameAs(true);
+    assertThat(first.a).isSameAs(second.a);
   }
 
   @Test
@@ -85,10 +89,13 @@ public class ActivationTest {
     Activation combined = newHierarchicalActivation(parent, child);
 
     // Resolve the shadowed child value.
-    assertThat(combined.resolveName("a")).isSameAs(True);
+    assertThat(combined.resolveName("a").b).isSameAs(true);
+    assertThat(combined.resolveName("a").a).isSameAs(True);
     // Resolve the parent only value.
-    assertThat(combined.resolveName("b")).isEqualTo(intOf(-42));
+    assertThat(combined.resolveName("b").b).isSameAs(true);
+    assertThat(combined.resolveName("b").a).isEqualTo(intOf(-42));
     // Resolve the child only value.
-    assertThat(combined.resolveName("c")).isEqualTo(stringOf("universe"));
+    assertThat(combined.resolveName("c").b).isSameAs(true);
+    assertThat(combined.resolveName("c").a).isEqualTo(stringOf("universe"));
   }
 }
