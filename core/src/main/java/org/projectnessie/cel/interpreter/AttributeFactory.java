@@ -50,6 +50,7 @@ import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Indexer;
 import org.projectnessie.cel.common.types.traits.Mapper;
 import org.projectnessie.cel.interpreter.AttributePattern.QualifierValueEquator;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.misc.Pair;
 
 /** AttributeFactory provides methods creating Attribute and Qualifier values. */
 public interface AttributeFactory {
@@ -159,7 +160,7 @@ public interface AttributeFactory {
      * attribute cannot be resolved within the Activation, the result must be: `nil`, `false`,
      * `nil`.
      */
-    Object tryResolve(Activation a);
+    Pair<Object, Boolean> tryResolve(Activation a);
   }
 
   /**
@@ -338,11 +339,11 @@ public interface AttributeFactory {
      */
     @Override
     public Object resolve(org.projectnessie.cel.interpreter.Activation vars) {
-      Object obj = tryResolve(vars);
-      if (obj == null) {
+      Pair<Object, Boolean> obj = tryResolve(vars);
+      if (!obj.b) {
         throw noSuchAttributeException(this);
       }
-      return obj;
+      return obj.a;
     }
 
     /**
@@ -353,34 +354,35 @@ public interface AttributeFactory {
      * type, then the result is `nil`, `false`, `nil` per the interface requirement.
      */
     @Override
-    public Object tryResolve(org.projectnessie.cel.interpreter.Activation vars) {
+    public Pair<Object, Boolean> tryResolve(org.projectnessie.cel.interpreter.Activation vars) {
       for (String nm : namespaceNames) {
         // If the variable is found, process it. Otherwise, wait until the checks to
         // determine whether the type is unknown before returning.
-        Object op = vars.resolveName(nm);
-        if (op != null) {
+        Pair<Object, Boolean> obj = vars.resolveName(nm);
+        if (obj.b) {
+          Object op = obj.a;
           for (Qualifier qual : qualifiers) {
             Object op2 = qual.qualify(vars, op);
             if (op2 instanceof Err) {
-              return op2;
+              return new Pair<>(op2, true);
             }
             if (op2 == null) {
               break;
             }
             op = op2;
           }
-          return op;
+          return new Pair<>(op, true);
         }
         // Attempt to resolve the qualified type name if the name is not a variable identifier.
         Val typ = provider.findIdent(nm);
         if (typ != null) {
           if (qualifiers.isEmpty()) {
-            return typ;
+            return new Pair<>(typ, true);
           }
           throw noSuchAttributeException(this);
         }
       }
-      return null;
+      return new Pair<>(null, false);
     }
 
     /** String implements the Stringer interface method. */
@@ -609,10 +611,10 @@ public interface AttributeFactory {
     @Override
     public Object resolve(org.projectnessie.cel.interpreter.Activation vars) {
       for (NamespacedAttribute attr : attrs) {
-        Object obj = attr.tryResolve(vars);
+        Pair<Object, Boolean> obj = attr.tryResolve(vars);
         // If the object was found, return it.
-        if (obj != null) {
-          return obj;
+        if (obj.b) {
+          return obj.a;
         }
       }
       // Else, produce a no such attribute error.

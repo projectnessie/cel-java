@@ -21,6 +21,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.misc.Pair;
 
 /**
  * Activation used to resolve identifiers by name and references by id.
@@ -32,7 +33,7 @@ public interface Activation {
    * ResolveName returns a value from the activation by qualified name, or false if the name could
    * not be found.
    */
-  Object resolveName(String name);
+  Pair<Object, Boolean> resolveName(String name);
 
   /**
    * Parent returns the parent of the current activation, may be nil. If non-nil, the parent will be
@@ -100,16 +101,17 @@ public interface Activation {
 
     /** ResolveName implements the Activation interface method. */
     @Override
-    public Object resolveName(String name) {
-      Object obj = bindings.get(name);
-      if (obj == null) {
-        return null;
+    public Pair<Object, Boolean> resolveName(String name) {
+      if (!bindings.containsKey(name)) {
+        return new Pair<>(null, false);
       }
+      Object obj = bindings.get(name);
+
       if (obj instanceof Supplier) {
         obj = ((Supplier) obj).get();
         bindings.put(name, obj);
       }
-      return obj;
+      return new Pair<>(obj, true);
     }
 
     @Override
@@ -134,8 +136,8 @@ public interface Activation {
 
     /** ResolveName implements the Activation interface method. */
     @Override
-    public Object resolveName(String name) {
-      return provider.apply(name);
+    public Pair<Object, Boolean> resolveName(String name) {
+      return new Pair<>(provider.apply(name), true);
     }
 
     @Override
@@ -164,9 +166,9 @@ public interface Activation {
 
     /** ResolveName implements the Activation interface method. */
     @Override
-    public Object resolveName(String name) {
-      Object object = child.resolveName(name);
-      if (object != null) {
+    public Pair<Object, Boolean> resolveName(String name) {
+      Pair<Object, Boolean> object = child.resolveName(name);
+      if (object.b) {
         return object;
       }
       return parent.resolveName(name);
@@ -224,7 +226,7 @@ public interface Activation {
     }
 
     @Override
-    public Object resolveName(String name) {
+    public Pair<Object, Boolean> resolveName(String name) {
       return delegate.resolveName(name);
     }
 
@@ -266,9 +268,9 @@ public interface Activation {
 
     /** ResolveName implements the Activation interface method. */
     @Override
-    public Object resolveName(String name) {
+    public Pair<Object, Boolean> resolveName(String name) {
       if (name.equals(this.name)) {
-        return val;
+        return new Pair<>(val, true);
       }
       return parent.resolveName(name);
     }

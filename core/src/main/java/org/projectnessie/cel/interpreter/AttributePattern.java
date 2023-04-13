@@ -34,6 +34,7 @@ import org.projectnessie.cel.interpreter.Activation.PartialActivation;
 import org.projectnessie.cel.interpreter.AttributeFactory.Attribute;
 import org.projectnessie.cel.interpreter.AttributeFactory.NamespacedAttribute;
 import org.projectnessie.cel.interpreter.AttributeFactory.Qualifier;
+import org.projectnessie.cel.shaded.org.antlr.v4.runtime.misc.Pair;
 
 /**
  * AttributePattern represents a top-level variable with an optional set of qualifier patterns.
@@ -409,11 +410,11 @@ public final class AttributePattern {
      */
     @Override
     public Object resolve(org.projectnessie.cel.interpreter.Activation vars) {
-      Object obj = tryResolve(vars);
-      if (obj == null) {
+      Pair<Object, Boolean> obj = tryResolve(vars);
+      if (!obj.b) {
         throw noSuchAttributeException(this);
       }
-      return obj;
+      return obj.a;
     }
 
     /**
@@ -422,13 +423,13 @@ public final class AttributePattern {
      * standard Resolve logic applies.
      */
     @Override
-    public Object tryResolve(org.projectnessie.cel.interpreter.Activation vars) {
+    public Pair<Object, Boolean> tryResolve(org.projectnessie.cel.interpreter.Activation vars) {
       long id = attr.id();
       if (vars instanceof PartialActivation) {
         PartialActivation partial = (PartialActivation) vars;
         Object unk = fac.matchesUnknownPatterns(partial, id, candidateVariableNames(), qualifiers);
         if (unk != null) {
-          return unk;
+          return new Pair<>(unk, true);
         }
       }
       return attr.tryResolve(vars);

@@ -1696,10 +1696,7 @@ public interface Interpretable {
     public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
       try {
         Object v = attr.resolve(ctx);
-        if (v != null) {
-          return adapter.nativeToValue(v);
-        }
-        return newErr(String.format("eval failed, ctx: %s", ctx));
+        return adapter.nativeToValue(v);
       } catch (Exception e) {
         return newErr(e, e.toString());
       }
