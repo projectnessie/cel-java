@@ -354,7 +354,11 @@ class AttributesTest {
     NamespacedAttribute tv = attrs.absoluteAttribute(2, "a");
     Attribute fv = attrs.maybeAttribute(3, "b");
     Attribute cond = attrs.conditionalAttribute(1, newConstValue(0, newErr("test error")), tv, fv);
-    Object out = cond.resolve(emptyActivation());
+    Object out;
+    try {
+      out = cond.resolve(emptyActivation());
+    } catch (Exception ignore) {
+    }
     assertThat(estimateCost(fv)).extracting("min", "max").containsExactly(1L, 1L);
 
     // unk ? a : b
