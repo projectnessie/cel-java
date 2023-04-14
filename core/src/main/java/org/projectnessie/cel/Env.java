@@ -201,7 +201,7 @@ public final class Env {
     // The once call will ensure that this value is set or nil for all invocations.
     if (chkErr != null) {
       Errors errs = new Errors(ast.getSource());
-      errs.reportError(NoLocation, "%s", chkErr.toString());
+      errs.reportError(chkErr, NoLocation, "%s", chkErr.toString());
       return new AstIssuesTuple(null, newIssues(errs));
     }
 
