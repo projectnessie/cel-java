@@ -15,7 +15,6 @@
  */
 package org.projectnessie.cel.interpreter;
 
-import static org.projectnessie.cel.common.types.Err.noSuchAttributeException;
 import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
 import static org.projectnessie.cel.interpreter.AttributeFactory.newAttributeFactory;
@@ -409,11 +408,7 @@ public final class AttributePattern {
      */
     @Override
     public Object resolve(org.projectnessie.cel.interpreter.Activation vars) {
-      Object obj = tryResolve(vars);
-      if (obj == null) {
-        throw noSuchAttributeException(this);
-      }
-      return obj;
+      return tryResolve(vars);
     }
 
     /**

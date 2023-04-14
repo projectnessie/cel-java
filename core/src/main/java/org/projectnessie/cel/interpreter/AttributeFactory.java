@@ -17,6 +17,7 @@ package org.projectnessie.cel.interpreter;
 
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
+import static org.projectnessie.cel.common.types.Err.ErrException;
 import static org.projectnessie.cel.common.types.Err.indexOutOfBoundsException;
 import static org.projectnessie.cel.common.types.Err.isError;
 import static org.projectnessie.cel.common.types.Err.maybeNoSuchOverloadErr;
@@ -338,11 +339,7 @@ public interface AttributeFactory {
      */
     @Override
     public Object resolve(org.projectnessie.cel.interpreter.Activation vars) {
-      Object obj = tryResolve(vars);
-      if (obj == null) {
-        throw noSuchAttributeException(this);
-      }
-      return obj;
+      return tryResolve(vars);
     }
 
     /**
@@ -357,8 +354,9 @@ public interface AttributeFactory {
       for (String nm : namespaceNames) {
         // If the variable is found, process it. Otherwise, wait until the checks to
         // determine whether the type is unknown before returning.
-        Object op = vars.resolveName(nm);
-        if (op != null) {
+        ResolvedValue obj = vars.resolveName(nm);
+        if (obj.present()) {
+          Object op = obj.value();
           for (Qualifier qual : qualifiers) {
             Object op2 = qual.qualify(vars, op);
             if (op2 instanceof Err) {
@@ -380,7 +378,7 @@ public interface AttributeFactory {
           throw noSuchAttributeException(this);
         }
       }
-      return null;
+      throw noSuchAttributeException(this);
     }
 
     /** String implements the Stringer interface method. */
@@ -464,7 +462,7 @@ public interface AttributeFactory {
         throw noSuchAttributeException(this);
       }
       if (isError(val)) {
-        return null;
+        throw new ErrException("message: %s", val);
       }
       if (val == True) {
         return truthy.resolve(vars);
@@ -609,10 +607,9 @@ public interface AttributeFactory {
     @Override
     public Object resolve(org.projectnessie.cel.interpreter.Activation vars) {
       for (NamespacedAttribute attr : attrs) {
-        Object obj = attr.tryResolve(vars);
-        // If the object was found, return it.
-        if (obj != null) {
-          return obj;
+        try {
+          return attr.tryResolve(vars);
+        } catch (ErrException ignore) {
         }
       }
       // Else, produce a no such attribute error.
@@ -690,7 +687,7 @@ public interface AttributeFactory {
       // First, evaluate the operand.
       Val v = operand.eval(vars);
       if (isError(v)) {
-        return null;
+        throw new ErrException("message: %s", v);
       }
       if (isUnknown(v)) {
         return v;

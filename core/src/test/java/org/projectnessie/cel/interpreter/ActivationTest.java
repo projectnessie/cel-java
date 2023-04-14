@@ -49,7 +49,8 @@ public class ActivationTest {
   @Test
   void resolve() {
     Activation activation = newActivation(Collections.singletonMap("a", True));
-    assertThat(activation.resolveName("a")).isSameAs(True);
+    assertThat(activation.resolveName("a").present()).isTrue();
+    assertThat(activation.resolveName("a").value()).isSameAs(True);
   }
 
   @Test
@@ -65,9 +66,11 @@ public class ActivationTest {
     Map<String, Object> map = new HashMap<>();
     map.put("now", now);
     Activation a = newActivation(map);
-    Object first = a.resolveName("now");
-    Object second = a.resolveName("now");
-    assertThat(first).isSameAs(second);
+    ResolvedValue first = a.resolveName("now");
+    ResolvedValue second = a.resolveName("now");
+    assertThat(first.present()).isTrue();
+    assertThat(second.present()).isTrue();
+    assertThat(first.value()).isSameAs(second.value());
   }
 
   @Test
@@ -85,10 +88,13 @@ public class ActivationTest {
     Activation combined = newHierarchicalActivation(parent, child);
 
     // Resolve the shadowed child value.
-    assertThat(combined.resolveName("a")).isSameAs(True);
+    assertThat(combined.resolveName("a").present()).isTrue();
+    assertThat(combined.resolveName("a").value()).isSameAs(True);
     // Resolve the parent only value.
-    assertThat(combined.resolveName("b")).isEqualTo(intOf(-42));
+    assertThat(combined.resolveName("b").present()).isTrue();
+    assertThat(combined.resolveName("b").value()).isEqualTo(intOf(-42));
     // Resolve the child only value.
-    assertThat(combined.resolveName("c")).isEqualTo(stringOf("universe"));
+    assertThat(combined.resolveName("c").present()).isTrue();
+    assertThat(combined.resolveName("c").value()).isEqualTo(stringOf("universe"));
   }
 }
