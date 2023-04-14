@@ -29,7 +29,11 @@ public class Errors {
 
   /** ReportError records an error at a source location. */
   public void reportError(Location l, String format, Object... args) {
-    CELError err = new CELError(l, String.format(format, args));
+    reportError(null, l, format, args);
+  }
+
+  public void reportError(Exception e, Location l, String format, Object... args) {
+    CELError err = new CELError(e, l, String.format(format, args));
     errors.add(err);
   }
 

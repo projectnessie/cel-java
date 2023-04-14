@@ -15,7 +15,9 @@
  */
 package org.projectnessie.cel.tools;
 
+import java.util.Objects;
 import org.projectnessie.cel.Issues;
+import org.projectnessie.cel.common.CELError;
 
 public final class ScriptCreateException extends ScriptException {
 
@@ -24,6 +26,10 @@ public final class ScriptCreateException extends ScriptException {
   public ScriptCreateException(String message, Issues issues) {
     super(String.format("%s: %s", message, issues));
     this.issues = issues;
+    issues.getErrors().stream()
+        .map(CELError::getException)
+        .filter(Objects::nonNull)
+        .forEach(this::addSuppressed);
   }
 
   public Issues getIssues() {

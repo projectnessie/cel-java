@@ -28,10 +28,16 @@ public final class CELError implements Comparable<CELError> {
   // private static final char wideInd = '\uFF3E'; // result of Go's width.Widen("^")
   private final Location location;
   private final String message;
+  private final Exception exception;
 
-  public CELError(Location location, String message) {
+  public CELError(Exception e, Location location, String message) {
+    this.exception = e;
     this.location = location;
     this.message = message;
+  }
+
+  public Exception getException() {
+    return exception;
   }
 
   public Location getLocation() {

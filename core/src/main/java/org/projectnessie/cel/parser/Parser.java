@@ -164,7 +164,7 @@ public final class Parser {
         expr = inner.exprVisit(parser.start());
       }
     } catch (RecoveryLimitError | RecursionError e) {
-      errors.reportError(Location.NoLocation, "%s", e.getMessage());
+      errors.reportError(e, Location.NoLocation, "%s", e.getMessage());
     }
 
     if (errors.hasErrors()) {

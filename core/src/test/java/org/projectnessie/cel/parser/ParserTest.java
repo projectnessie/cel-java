@@ -1345,6 +1345,7 @@ class ParserTest {
     assertThat(parseResult.getErrors().getErrors())
         .containsExactly(
             new CELError(
+                null,
                 Location.newLocation(-1, -1),
                 "expression code point size exceeds limit: size: 3, limit 2"));
   }
