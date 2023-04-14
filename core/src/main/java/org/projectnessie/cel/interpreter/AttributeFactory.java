@@ -43,7 +43,6 @@ import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Indexer;
 import org.projectnessie.cel.common.types.traits.Mapper;
 import org.projectnessie.cel.interpreter.AttributePattern.QualifierValueEquator;
-import org.projectnessie.cel.shaded.org.antlr.v4.runtime.misc.Pair;
 
 /** AttributeFactory provides methods creating Attribute and Qualifier values. */
 public interface AttributeFactory {
@@ -347,9 +346,9 @@ public interface AttributeFactory {
       for (String nm : namespaceNames) {
         // If the variable is found, process it. Otherwise, wait until the checks to
         // determine whether the type is unknown before returning.
-        Pair<Object, Boolean> obj = vars.resolveName(nm);
-        if (obj.b) {
-          Object op = obj.a;
+        ResolvedValue obj = vars.resolveName(nm);
+        if (obj.present()) {
+          Object op = obj.value();
           for (Qualifier qual : qualifiers) {
             Object op2 = qual.qualify(vars, op);
             if (op2 instanceof Err) {
