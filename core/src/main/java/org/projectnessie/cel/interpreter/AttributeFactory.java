@@ -17,14 +17,7 @@ package org.projectnessie.cel.interpreter;
 
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
-import static org.projectnessie.cel.common.types.Err.indexOutOfBoundsException;
-import static org.projectnessie.cel.common.types.Err.isError;
-import static org.projectnessie.cel.common.types.Err.maybeNoSuchOverloadErr;
-import static org.projectnessie.cel.common.types.Err.noSuchAttributeException;
-import static org.projectnessie.cel.common.types.Err.noSuchKey;
-import static org.projectnessie.cel.common.types.Err.noSuchKeyException;
-import static org.projectnessie.cel.common.types.Err.noSuchOverload;
-import static org.projectnessie.cel.common.types.Err.throwErrorAsIllegalStateException;
+import static org.projectnessie.cel.common.types.Err.*;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.Types.boolOf;
@@ -462,7 +455,7 @@ public interface AttributeFactory {
         throw noSuchAttributeException(this);
       }
       if (isError(val)) {
-        return null;
+        throw new ErrException("message: %s", val);
       }
       if (val == True) {
         return truthy.resolve(vars);
@@ -687,7 +680,7 @@ public interface AttributeFactory {
       // First, evaluate the operand.
       Val v = operand.eval(vars);
       if (isError(v)) {
-        throw noSuchAttributeException(this);
+        throw new ErrException("message: %s", v);
       }
       if (isUnknown(v)) {
         return v;
