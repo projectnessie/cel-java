@@ -160,7 +160,7 @@ public interface AttributeFactory {
      * attribute cannot be resolved within the Activation, the result must be: `nil`, `false`,
      * `nil`.
      */
-    Pair<Object, Boolean> tryResolve(Activation a);
+    Object tryResolve(Activation a);
   }
 
   /**
@@ -339,11 +339,7 @@ public interface AttributeFactory {
      */
     @Override
     public Object resolve(org.projectnessie.cel.interpreter.Activation vars) {
-      Pair<Object, Boolean> obj = tryResolve(vars);
-      if (!obj.b) {
-        throw noSuchAttributeException(this);
-      }
-      return obj.a;
+      return tryResolve(vars);
     }
 
     /**
@@ -354,7 +350,7 @@ public interface AttributeFactory {
      * type, then the result is `nil`, `false`, `nil` per the interface requirement.
      */
     @Override
-    public Pair<Object, Boolean> tryResolve(org.projectnessie.cel.interpreter.Activation vars) {
+    public Object tryResolve(org.projectnessie.cel.interpreter.Activation vars) {
       for (String nm : namespaceNames) {
         // If the variable is found, process it. Otherwise, wait until the checks to
         // determine whether the type is unknown before returning.
@@ -364,25 +360,25 @@ public interface AttributeFactory {
           for (Qualifier qual : qualifiers) {
             Object op2 = qual.qualify(vars, op);
             if (op2 instanceof Err) {
-              return new Pair<>(op2, true);
+              return op2;
             }
             if (op2 == null) {
               break;
             }
             op = op2;
           }
-          return new Pair<>(op, true);
+          return op;
         }
         // Attempt to resolve the qualified type name if the name is not a variable identifier.
         Val typ = provider.findIdent(nm);
         if (typ != null) {
           if (qualifiers.isEmpty()) {
-            return new Pair<>(typ, true);
+            return typ;
           }
           throw noSuchAttributeException(this);
         }
       }
-      return new Pair<>(null, false);
+      throw noSuchAttributeException(this);
     }
 
     /** String implements the Stringer interface method. */
@@ -611,10 +607,9 @@ public interface AttributeFactory {
     @Override
     public Object resolve(org.projectnessie.cel.interpreter.Activation vars) {
       for (NamespacedAttribute attr : attrs) {
-        Pair<Object, Boolean> obj = attr.tryResolve(vars);
-        // If the object was found, return it.
-        if (obj.b) {
-          return obj.a;
+        try {
+          return attr.tryResolve(vars);
+        } catch (Exception ignore) {
         }
       }
       // Else, produce a no such attribute error.
@@ -692,7 +687,7 @@ public interface AttributeFactory {
       // First, evaluate the operand.
       Val v = operand.eval(vars);
       if (isError(v)) {
-        return null;
+        throw noSuchAttributeException(this);
       }
       if (isUnknown(v)) {
         return v;
