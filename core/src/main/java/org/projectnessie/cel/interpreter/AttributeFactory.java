@@ -17,7 +17,15 @@ package org.projectnessie.cel.interpreter;
 
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
-import static org.projectnessie.cel.common.types.Err.*;
+import static org.projectnessie.cel.common.types.Err.ErrException;
+import static org.projectnessie.cel.common.types.Err.indexOutOfBoundsException;
+import static org.projectnessie.cel.common.types.Err.isError;
+import static org.projectnessie.cel.common.types.Err.maybeNoSuchOverloadErr;
+import static org.projectnessie.cel.common.types.Err.noSuchAttributeException;
+import static org.projectnessie.cel.common.types.Err.noSuchKey;
+import static org.projectnessie.cel.common.types.Err.noSuchKeyException;
+import static org.projectnessie.cel.common.types.Err.noSuchOverload;
+import static org.projectnessie.cel.common.types.Err.throwErrorAsIllegalStateException;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.Types.boolOf;
