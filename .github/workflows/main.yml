@@ -26,7 +26,7 @@ jobs:
     strategy:
       max-parallel: 4
       matrix:
-        java-version: [11, 17, 19]
+        java-version: [11, 17, 20]
     steps:
       - uses: actions/checkout@v3
         with:

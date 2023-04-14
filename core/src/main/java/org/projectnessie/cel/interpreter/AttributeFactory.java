@@ -601,7 +601,7 @@ public interface AttributeFactory {
       for (NamespacedAttribute attr : attrs) {
         try {
           return attr.tryResolve(vars);
-        } catch (Exception ignore) {
+        } catch (ErrException ignore) {
         }
       }
       // Else, produce a no such attribute error.
