@@ -34,6 +34,7 @@ public interface IteratorT extends Val {
 
   /** HasNext returns true if there are unvisited elements in the Iterator. */
   Val hasNext();
+
   /** Next returns the next element. */
   Val next();
 

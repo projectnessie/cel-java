@@ -32,6 +32,7 @@ public final class NullT extends BaseVal {
 
   /** NullType singleton. */
   public static final Type NullType = TypeT.newTypeValue(TypeEnum.Null);
+
   /** NullValue singleton. */
   public static final NullT NullValue = new NullT();
 

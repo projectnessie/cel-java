@@ -48,6 +48,7 @@ public class CheckerTest {
     String i;
     // R contains the result output. */
     String r;
+
     /** Type is the expected type of the expression */
     Type type;
 

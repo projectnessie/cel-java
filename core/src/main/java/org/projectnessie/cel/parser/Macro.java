@@ -30,6 +30,7 @@ import org.projectnessie.cel.common.operators.Operator;
 public final class Macro {
   /** AccumulatorName is the traditional variable name assigned to the fold accumulator variable. */
   public static final String AccumulatorName = "__result__";
+
   /** AllMacros includes the list of all spec-supported macros. */
   public static final List<Macro> AllMacros =
       asList(

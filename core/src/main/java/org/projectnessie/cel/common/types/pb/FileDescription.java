@@ -107,8 +107,10 @@ public final class FileDescription {
   static final class FileMetadata {
     /** msgTypes maps from fully-qualified message name to descriptor. */
     final Map<String, Descriptor> msgTypes;
+
     /** enumValues maps from fully-qualified enum value to enum value descriptor. */
     final Map<String, EnumValueDescriptor> enumValues;
+
     // TODO: support enum type definitions for use in future type-check enhancements.
 
     private FileMetadata(
