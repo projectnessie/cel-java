@@ -42,6 +42,7 @@ public final class FieldDescription extends Description {
 
   /** KeyType holds the key FieldDescription for map fields. */
   final FieldDescription keyType;
+
   /** ValueType holds the value FieldDescription for map fields. */
   final FieldDescription valueType;
 

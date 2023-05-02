@@ -33,14 +33,19 @@ public final class Err extends BaseVal {
 
   /** errIntOverflow is an error representing integer overflow. */
   public static final Val errIntOverflow = newErr("integer overflow");
+
   /** errUintOverflow is an error representing unsigned integer overflow. */
   public static final Val errUintOverflow = newErr("unsigned integer overflow");
+
   /** errDurationOverflow is an error representing duration overflow. */
   public static final Val errDurationOverflow = newErr("duration overflow");
+
   /** errDurationOutOfRange is an error representing duration out of range. */
   public static final Val errDurationOutOfRange = newErr("duration out of range");
+
   /** errTimestampOverflow is an error representing timestamp overflow. */
   public static final Val errTimestampOverflow = newErr("timestamp overflow");
+
   /** errTimestampOutOfRange is an error representing duration out of range. */
   public static final Val errTimestampOutOfRange = newErr("timestamp out of range");
 

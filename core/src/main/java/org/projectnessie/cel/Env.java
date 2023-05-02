@@ -71,6 +71,7 @@ public final class Env {
   TypeAdapter adapter;
   TypeProvider provider;
   private final Set<EnvFeature> features;
+
   /** program options tied to the environment. */
   private final List<ProgramOption> progOpts;
 

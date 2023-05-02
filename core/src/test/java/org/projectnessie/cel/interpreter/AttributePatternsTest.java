@@ -52,14 +52,17 @@ class AttributePatternsTest {
      * variable and function resolution step.
      */
     boolean unchecked;
+
     /**
      * container simulates the expression container and is only relevant on 'unchecked' test inputs
      * + as the container is used to resolve the potential fully qualified variable names
      * represented + by an identifier or select expression.
      */
     String container = "";
+
     /** variable name, fully qualified unless the attr is marked as unchecked=true */
     final String name;
+
     /** quals contains a list of static qualifiers. */
     Object[] quals;
 

@@ -72,8 +72,10 @@ public final class IntT extends BaseVal
 
   public static final IntT IntOne = new IntT(1);
   public static final IntT IntNegOne = new IntT(-1);
+
   /** maxIntJSON is defined as the Number.MAX_SAFE_INTEGER value per EcmaScript 6. */
   public static final long maxIntJSON = (1L << 53) - 1;
+
   /** minIntJSON is defined as the Number.MIN_SAFE_INTEGER value per EcmaScript 6. */
   public static final long minIntJSON = -maxIntJSON;
 

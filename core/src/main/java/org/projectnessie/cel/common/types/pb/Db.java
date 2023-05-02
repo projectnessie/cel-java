@@ -45,6 +45,7 @@ import java.util.Set;
 public final class Db {
 
   private final Map<String, FileDescription> revFileDescriptorMap;
+
   /** files contains the deduped set of FileDescriptions whose types are contained in the pb.Db. */
   private final List<FileDescription> files;
 
