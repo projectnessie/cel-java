@@ -34,9 +34,4 @@ dependencies {
   implementation(libs.errorprone.plugin)
 }
 
-java {
-  sourceCompatibility = JavaVersion.VERSION_11
-  targetCompatibility = JavaVersion.VERSION_11
-}
-
-kotlinDslPluginOptions { jvmTarget.set(JavaVersion.VERSION_11.toString()) }
+java { toolchain { languageVersion.set(JavaLanguageVersion.of(11)) } }
