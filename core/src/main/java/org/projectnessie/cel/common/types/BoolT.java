@@ -38,6 +38,7 @@ public final class BoolT extends BaseVal implements Comparer, Negater {
   /** BoolType singleton. */
   public static final Type BoolType =
       TypeT.newTypeValue(TypeEnum.Bool, Trait.ComparerType, Trait.NegatorType);
+
   /** Boolean constants */
   public static final BoolT False = new BoolT(false);
 

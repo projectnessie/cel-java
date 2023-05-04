@@ -85,6 +85,7 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
 
   /** Number of seconds between `0001-01-01T00:00:00Z` and the Unix epoch. */
   public static final long minUnixTime = -62135596800L;
+
   /** Number of seconds between `9999-12-31T23:59:59.999999999Z` and the Unix epoch. */
   public static final long maxUnixTime = 253402300799L;
 

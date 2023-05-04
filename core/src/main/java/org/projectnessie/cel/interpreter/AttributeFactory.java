@@ -254,6 +254,7 @@ public interface AttributeFactory {
 
   final class AbsoluteAttribute implements Qualifier, NamespacedAttribute, Coster {
     final long id;
+
     /**
      * namespaceNames represent the names the variable could have based on declared container
      * (package) of the expression.
