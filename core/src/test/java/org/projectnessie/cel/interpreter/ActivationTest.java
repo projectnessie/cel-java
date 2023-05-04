@@ -29,10 +29,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
-
-import com.google.protobuf.NullValue;
 import org.junit.jupiter.api.Test;
-import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 
@@ -82,31 +79,6 @@ public class ActivationTest {
     Map<String, Object> parentMap = new HashMap<>();
     parentMap.put("a", stringOf("world"));
     parentMap.put("b", intOf(-42));
-    Activation parent = newActivation(parentMap);
-    // compose the child such that it shadows the parent
-    Map<String, Object> childMap = new HashMap<>();
-    childMap.put("a", True);
-    childMap.put("c", stringOf("universe"));
-    Activation child = newActivation(childMap);
-    Activation combined = newHierarchicalActivation(parent, child);
-
-    // Resolve the shadowed child value.
-    assertThat(combined.resolveName("a").present()).isTrue();
-    assertThat(combined.resolveName("a").value()).isSameAs(True);
-    // Resolve the parent only value.
-    assertThat(combined.resolveName("b").present()).isTrue();
-    assertThat(combined.resolveName("b").value()).isEqualTo(intOf(-42));
-    // Resolve the child only value.
-    assertThat(combined.resolveName("c").present()).isTrue();
-    assertThat(combined.resolveName("c").value()).isEqualTo(stringOf("universe"));
-  }
-
-  @Test
-  void hierarchicalFunctionActivation() {
-    // compose a parent with more properties than the child
-    Map<String, Object> parentMap = new HashMap<>();
-    parentMap.put("a", stringOf("world"));
-    parentMap.put("b", intOf(-42));
     parentMap.put("d", stringOf("child value for d"));
     Activation parent = new Activation.FunctionActivation(parentMap::get);
     // compose the child such that it shadows the parent
@@ -118,16 +90,15 @@ public class ActivationTest {
     Activation combined = newHierarchicalActivation(parent, child);
 
     // Resolve the shadowed child value.
-    assertThat(combined.resolveName("a").present()).isTrue();
-    assertThat(combined.resolveName("a").value()).isSameAs(True);
+    assertThat(combined.resolveName("a")).isEqualTo(ResolvedValue.resolvedValue(True));
     // Resolve the parent only value.
-    assertThat(combined.resolveName("b").present()).isTrue();
-    assertThat(combined.resolveName("b").value()).isEqualTo(intOf(-42));
+    assertThat(combined.resolveName("b")).isEqualTo(ResolvedValue.resolvedValue(intOf(-42)));
     // Resolve the child only value.
-    assertThat(combined.resolveName("c").present()).isTrue();
-    assertThat(combined.resolveName("c").value()).isEqualTo(stringOf("universe"));
+    assertThat(combined.resolveName("c"))
+        .isEqualTo(ResolvedValue.resolvedValue(stringOf("universe")));
     // Resolve the child value as null without looking to parent.
-    assertThat(combined.resolveName("d").present()).isTrue();
-    assertThat(combined.resolveName("d").value()).isNull();
+    assertThat(combined.resolveName("d")).isSameAs(ResolvedValue.NULL_VALUE);
+    // Absent
+    assertThat(combined.resolveName("e")).isSameAs(ResolvedValue.ABSENT);
   }
 }
