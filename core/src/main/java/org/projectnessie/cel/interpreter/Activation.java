@@ -140,7 +140,14 @@ public interface Activation {
     /** ResolveName implements the Activation interface method. */
     @Override
     public ResolvedValue resolveName(String name) {
-      return ResolvedValue.resolvedValue(provider.apply(name));
+      Object result = provider.apply(name);
+      if (result instanceof ResolvedValue) {
+        return (ResolvedValue) result;
+      } else if (result == null) {
+        return ResolvedValue.ABSENT;
+      } else {
+        return ResolvedValue.resolvedValue(result);
+      }
     }
 
     @Override

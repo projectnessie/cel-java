@@ -40,4 +40,27 @@ public final class ResolvedValue {
   public boolean present() {
     return present;
   }
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+
+    ResolvedValue that = (ResolvedValue) o;
+
+    if (present != that.present) return false;
+    return Objects.equals(value, that.value);
+  }
+
+  @Override
+  public int hashCode() {
+    int result = value != null ? value.hashCode() : 0;
+    result = 31 * result + (present ? 1 : 0);
+    return result;
+  }
+
+  @Override
+  public String toString() {
+    return "ResolvedValue{present=" + present + ", value=" + value + '}';
+  }
 }
