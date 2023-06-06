@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+import com.google.protobuf.gradle.ProtobufExtension
+import com.google.protobuf.gradle.ProtobufPlugin
+
 plugins {
   `java-library`
   `maven-publish`
@@ -24,10 +27,30 @@ plugins {
   `cel-conventions`
 }
 
+apply<ProtobufPlugin>()
+
 dependencies {
   api(project(":cel-core"))
 
   testImplementation(platform(libs.junit.bom))
   testImplementation(libs.bundles.junit.testing)
   testRuntimeOnly(libs.junit.jupiter.engine)
+}
+
+// *.proto files taken from https://github.com/googleapis/googleapis/ repo, available as a git
+// submodule
+configure<ProtobufExtension> {
+  // Configure the protoc executable
+  protoc {
+    // Download from repositories
+    artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.get()}"
+  }
+}
+
+tasks.named("extractIncludeTestProto") {
+  dependsOn(":cel-core:processJandexIndex", ":cel-generated-pb:processJandexIndex")
+}
+
+tasks.named("extractIncludeProto") {
+  dependsOn(":cel-core:processJandexIndex", ":cel-generated-pb:processJandexIndex")
 }

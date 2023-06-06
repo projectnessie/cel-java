@@ -18,6 +18,8 @@ package org.projectnessie.cel.types.jackson;
 import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.HashMap;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.ObjectT;
@@ -26,6 +28,7 @@ import org.projectnessie.cel.tools.ScriptHost;
 import org.projectnessie.cel.types.jackson.types.ClassWithEnum;
 import org.projectnessie.cel.types.jackson.types.ClassWithEnum.ClassEnum;
 import org.projectnessie.cel.types.jackson.types.MetaTest;
+import org.projectnessie.cel.types.jackson.types.MyPojo;
 import org.projectnessie.cel.types.jackson.types.ObjectListEnum;
 
 public class JacksonScriptHostTest {
@@ -57,6 +60,31 @@ public class JacksonScriptHostTest {
     assertThat(script.execute(Object.class, singletonMap("param", cmMatch))).isEqualTo(cmMatch);
     assertThat(script.execute(ObjectT.class, singletonMap("param", cmMatch)).value())
         .isEqualTo(cmMatch);
+  }
+
+  @Test
+  void readmeExample() throws Exception {
+    ScriptHost scriptHost = ScriptHost.newBuilder().registry(JacksonRegistry.newRegistry()).build();
+
+    Script script =
+        scriptHost
+            .buildScript("inp.property == checkName")
+            .withDeclarations(
+                Decls.newVar("inp", Decls.newObjectType(MyPojo.class.getName())),
+                Decls.newVar("checkName", Decls.String))
+            .withTypes(MyPojo.class)
+            .build();
+
+    MyPojo pojo = new MyPojo();
+    pojo.setProperty("test");
+
+    String checkName = "test";
+
+    Map<String, Object> arguments = new HashMap<>();
+    arguments.put("inp", pojo);
+    arguments.put("checkName", checkName);
+
+    assertThat(script.execute(Boolean.class, arguments)).isTrue();
   }
 
   @Test
