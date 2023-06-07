@@ -84,7 +84,6 @@ Protobuf (via `com.google.protobuf:protobuf-java`) objects and schema is support
 
 ```protobuf
 syntax = "proto3";
-package org.projectnessie.cel.toolstests;
 
 message MyPojo {
   string Property1 = 1;
@@ -93,7 +92,7 @@ message MyPojo {
 
 ```java
 public class MyClass {
-  public Boolean evalWIthProtobuf() {
+  public Boolean evalWithProtobuf() {
     ScriptHost scriptHost = ScriptHost.newBuilder().build();
 
     Script script =
@@ -101,13 +100,13 @@ public class MyClass {
             .buildScript("inp.Property1 == checkName")
             .withDeclarations(
                 // protobuf types need the type's full name
-                Decls.newVar("inp", Decls.newObjectType(Dummy.MyPojo.getDescriptor().getFullName())),
+                Decls.newVar("inp", Decls.newObjectType(MyPojo.getDescriptor().getFullName())),
                 Decls.newVar("checkName", Decls.String))
             // protobuf types need the default instance
-            .withTypes(Dummy.MyPojo.getDefaultInstance())
+            .withTypes(MyPojo.getDefaultInstance())
             .build();
 
-    Dummy.MyPojo pojo = Dummy.MyPojo.newBuilder().setProperty1("test").build();
+    MyPojo pojo = MyPojo.newBuilder().setProperty1("test").build();
 
     String checkName = "test";
 

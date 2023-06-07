@@ -37,8 +37,6 @@ dependencies {
   testRuntimeOnly(libs.junit.jupiter.engine)
 }
 
-// *.proto files taken from https://github.com/googleapis/googleapis/ repo, available as a git
-// submodule
 configure<ProtobufExtension> {
   // Configure the protoc executable
   protoc {
