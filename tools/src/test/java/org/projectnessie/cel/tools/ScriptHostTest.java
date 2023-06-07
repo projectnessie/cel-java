@@ -30,6 +30,7 @@ import org.projectnessie.cel.ProgramOption;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.interpreter.functions.Overload;
+import org.projectnessie.cel.toolstests.Dummy;
 
 class ScriptHostTest {
   @Test
@@ -136,5 +137,30 @@ class ScriptHostTest {
     Script script = scriptHost.buildScript("foo()").withLibraries(new MyLib()).build();
 
     assertThat(script.execute(Integer.class, Collections.emptyMap())).isEqualTo(42);
+  }
+
+  @Test
+  void readmeExample() throws Exception {
+    ScriptHost scriptHost = ScriptHost.newBuilder().build();
+
+    Script script =
+        scriptHost
+            .buildScript("inp.Property1 == checkName")
+            .withDeclarations(
+                Decls.newVar(
+                    "inp", Decls.newObjectType(Dummy.MyPojo.getDescriptor().getFullName())),
+                Decls.newVar("checkName", Decls.String))
+            .withTypes(Dummy.MyPojo.getDefaultInstance())
+            .build();
+
+    Dummy.MyPojo pojo = Dummy.MyPojo.newBuilder().setProperty1("test").build();
+
+    String checkName = "test";
+
+    Map<String, Object> arguments = new HashMap<>();
+    arguments.put("inp", pojo);
+    arguments.put("checkName", checkName);
+
+    assertThat(script.execute(Boolean.class, arguments)).isTrue();
   }
 }

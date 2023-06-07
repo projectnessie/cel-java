@@ -80,6 +80,49 @@ public class MyClass {
 
 Protobuf (via `com.google.protobuf:protobuf-java`) objects and schema is supported out of the box.
 
+### Protobuf example
+
+```protobuf
+syntax = "proto3";
+
+message MyPojo {
+  string Property1 = 1;
+}
+```
+
+```java
+public class MyClass {
+  public Boolean evalWithProtobuf() {
+    ScriptHost scriptHost = ScriptHost.newBuilder().build();
+
+    Script script =
+        scriptHost
+            .buildScript("inp.Property1 == checkName")
+            .withDeclarations(
+                // protobuf types need the type's full name
+                Decls.newVar("inp", Decls.newObjectType(MyPojo.getDescriptor().getFullName())),
+                Decls.newVar("checkName", Decls.String))
+            // protobuf types need the default instance
+            .withTypes(MyPojo.getDefaultInstance())
+            .build();
+
+    MyPojo pojo = MyPojo.newBuilder().setProperty1("test").build();
+
+    String checkName = "test";
+
+    Map<String, Object> arguments = new HashMap<>();
+    arguments.put("inp", pojo);
+    arguments.put("checkName", checkName);
+
+    Boolean result = script.execute(Boolean.class, arguments);
+
+    return result;
+  }
+}
+```
+
+### Jackson example
+
 It is also possible to use plain Java and Jackson objects as arguments by using the 
 `org.projectnessie.cel.types.jackson.JacksonRegistry` in `org.projectnessie.cel:cel-jackson`.
 
@@ -88,9 +131,10 @@ Code sample similar to the one above. It takes a user-provided object type `MyIn
 import org.projectnessie.cel.types.jackson.JacksonRegistry;
 
 public class MyClass {
-  public void evalWithJacksonObject(MyInput input, String checkName) {
+  public Boolean evalWithJacksonObject(MyInput input, String checkName) {
     // Build the script factory
     ScriptHost scriptHost = ScriptHost.newBuilder()
+        // IMPORTANT: use the Jackson registry
         .registry(JacksonRegistry.newRegistry())
         .build();
 
@@ -100,9 +144,10 @@ public class MyClass {
     Script script = scriptHost.buildScript("inp.name == checkName")
         // Variable declarations - we need `inp` +  `checkName` in this example
         .withDeclarations(
+            // types for Jackson need the fully qualified class name 
             Decls.newVar("inp", Decls.newObjectType(MyInput.class.getName())),
             Decls.newVar("checkName", Decls.String))
-        // Register our Jackson object input type
+        // Register our Jackson object input type (as a java.lang.Class)
         .withTypes(MyInput.class)
         .build();
 

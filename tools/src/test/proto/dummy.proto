@@ -1,0 +1,6 @@
+syntax = "proto3";
+package org.projectnessie.cel.toolstests;
+
+message MyPojo {
+  string Property1 = 1;
+}
