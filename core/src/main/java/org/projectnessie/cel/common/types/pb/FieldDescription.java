@@ -453,11 +453,6 @@ public final class FieldDescription extends Description {
               || type == FieldDescriptor.Type.FIXED64)) {
         v = ULong.valueOf(((Number) v).longValue());
       }
-    } else if (!desc.isMapField() && desc.isRepeated()) {
-      if (v instanceof List) {
-        List<?> lst = (List<?>) v;
-        v = lst;
-      }
     } else if (desc.isMapField()) {
       // TODO protobuf-java inefficiency
       //  protobuf-java does NOT have a generic way to retrieve the underlying map, but instead
