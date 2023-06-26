@@ -1215,6 +1215,17 @@ public interface AttributeFactory {
       }
       return elem;
     }
+    if (celVal instanceof Lister) {
+      Lister lister = (Lister) celVal;
+      if (idx.type() == StringT.StringType) {
+        // Index type of string means there's an overloaded function for the given list.
+        String index = idx.convertToNative(String.class);
+        return lister; 
+      } else {
+        // Assume idx is an integer type.
+        return lister.get(idx);
+      }
+    }
     if (celVal instanceof Indexer) {
       Indexer indexer = (Indexer) celVal;
       return indexer.get(idx);
