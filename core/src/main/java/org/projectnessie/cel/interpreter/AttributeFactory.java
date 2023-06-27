@@ -51,6 +51,7 @@ import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Indexer;
+import org.projectnessie.cel.common.types.traits.Lister;
 import org.projectnessie.cel.common.types.traits.Mapper;
 import org.projectnessie.cel.interpreter.AttributePattern.QualifierValueEquator;
 
