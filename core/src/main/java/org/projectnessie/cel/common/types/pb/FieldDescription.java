@@ -31,7 +31,10 @@ import com.google.protobuf.MapEntry;
 import com.google.protobuf.Message;
 import com.google.protobuf.NullValue;
 import java.lang.reflect.Array;
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import org.projectnessie.cel.common.ULong;
 
 /** FieldDescription holds metadata related to fields declared within a type. */
