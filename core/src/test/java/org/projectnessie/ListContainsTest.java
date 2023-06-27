@@ -13,35 +13,35 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.projectnessie.cel;
 
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+
+import java.util.HashMap;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.tools.Script;
 import org.projectnessie.cel.tools.ScriptException;
 import org.projectnessie.cel.tools.ScriptHost;
 
-import java.util.HashMap;
-import java.util.Map;
-
-import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
-
 public class ListContainsTest {
-    @Test
-    public void testInForList() throws ScriptException {
-        ScriptHost scriptHost = ScriptHost.newBuilder().build();
-        Script script = scriptHost.buildScript("!(this in dyn(rules)['in']) ? 'value must be in list' : ''")
-                .withDeclarations(
-                        // Variable declarations - we need `this` and `rules` in this example
-                        Decls.newVar("this", Decls.String),
-                        Decls.newVar("rules", Decls.newListType(Decls.String))).build();
+  @Test
+  public void testInForList() throws ScriptException {
+    ScriptHost scriptHost = ScriptHost.newBuilder().build();
+    Script script = scriptHost
+            .buildScript("!(this in dyn(rules)['in']) ? 'value must be in list' : ''")
+            .withDeclarations(
+                // Variable declarations - we need `this` and `rules` in this example
+                Decls.newVar("this", Decls.String),
+                Decls.newVar("rules", Decls.newListType(Decls.String)))
+            .build();
 
-        Map<String, Object> arguments = new HashMap<>();
-        arguments.put("this", "nothello");
-        arguments.put("rules", new String[]{"hello", "world"});
+    Map<String, Object> arguments = new HashMap<>();
+    arguments.put("this", "nothello");
+    arguments.put("rules", new String[] {"hello", "world"});
 
-        String result = script.execute(String.class, arguments);
-        assertThat(result).isEqualTo("value must be in list");
-    }
+    String result = script.execute(String.class, arguments);
+    assertThat(result).isEqualTo("value must be in list");
+  }
 }
