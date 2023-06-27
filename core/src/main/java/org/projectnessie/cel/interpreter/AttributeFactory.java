@@ -44,6 +44,7 @@ import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.NullT;
+import org.projectnessie.cel.common.types.pb.PbObjectT;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
@@ -1207,7 +1208,10 @@ public interface AttributeFactory {
    */
   static Val refResolve(TypeAdapter adapter, Val idx, Object obj) {
     Val celVal = adapter.nativeToValue(obj);
-    if (celVal instanceof Mapper) {
+    if (celVal instanceof PbObjectT) {
+      PbObjectT pbObject = (PbObjectT) celVal;
+      return pbObject.get(idx);
+    } else if (celVal instanceof Mapper) {
       Mapper mapper = (Mapper) celVal;
       Val elem = mapper.find(idx);
       if (elem == null) {
