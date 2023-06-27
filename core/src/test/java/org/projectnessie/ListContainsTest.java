@@ -17,10 +17,9 @@ package org.projectnessie.cel;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
+import com.google.api.expr.v1alpha1.UnknownSet;
 import java.util.HashMap;
 import java.util.Map;
-
-import com.google.api.expr.v1alpha1.UnknownSet;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.tools.Script;
@@ -31,10 +30,10 @@ public class ListContainsTest {
   @Test
   public void listTypeResolutionFieldLookupSuccess() throws ScriptException {
     ScriptHost scriptHost = ScriptHost.newBuilder().build();
-    Script script = scriptHost
+    Script script =
+        scriptHost
             .buildScript("!(this in dyn(rules)['in']) ? 'value must be in list' : ''")
             .withDeclarations(
-                // Variable declarations - we need `this` and `rules` in this example
                 Decls.newVar("this", Decls.String),
                 Decls.newVar("rules", Decls.newListType(Decls.String)))
             .build();
@@ -50,10 +49,10 @@ public class ListContainsTest {
   @Test
   public void listTypeResolutionFieldLookupFailure() throws ScriptException {
     ScriptHost scriptHost = ScriptHost.newBuilder().build();
-    Script script = scriptHost
+    Script script =
+        scriptHost
             .buildScript("!(this in dyn(rules)['in']) ? 'value must be in list' : ''")
             .withDeclarations(
-                // Variable declarations - we need `this` and `rules` in this example
                 Decls.newVar("this", Decls.String),
                 Decls.newVar("rules", Decls.newListType(Decls.String)))
             .build();
@@ -70,13 +69,14 @@ public class ListContainsTest {
   public void dynamicProtobufFieldLookupSuccess() throws ScriptException {
     UnknownSet rule = UnknownSet.newBuilder().addExprs(1).addExprs(2).build();
     ScriptHost scriptHost = ScriptHost.newBuilder().build();
-    Script script = scriptHost
+    Script script =
+        scriptHost
             .buildScript("!(this in dyn(rules)['exprs']) ? 'value must be in list' : ''")
             .withTypes(rule)
             .withDeclarations(
-                // Variable declarations - we need `this` and `rules` in this example
                 Decls.newVar("this", Decls.Int),
-                Decls.newVar("rules", Decls.newObjectType(rule.getDescriptorForType().getFullName())))
+                Decls.newVar(
+                    "rules", Decls.newObjectType(rule.getDescriptorForType().getFullName())))
             .build();
     Map<String, Object> arguments = new HashMap<>();
     arguments.put("this", 1);
@@ -90,12 +90,14 @@ public class ListContainsTest {
   public void dynamicProtobufFieldLookupFailure() throws ScriptException {
     UnknownSet rule = UnknownSet.newBuilder().addExprs(1).addExprs(2).build();
     ScriptHost scriptHost = ScriptHost.newBuilder().build();
-    Script script = scriptHost
+    Script script =
+        scriptHost
             .buildScript("!(this in dyn(rules)['exprs']) ? 'value must be in list' : ''")
             .withTypes(rule)
             .withDeclarations(
                 Decls.newVar("this", Decls.Int),
-                Decls.newVar("rules", Decls.newObjectType(rule.getDescriptorForType().getFullName())))
+                Decls.newVar(
+                    "rules", Decls.newObjectType(rule.getDescriptorForType().getFullName())))
             .build();
     Map<String, Object> arguments = new HashMap<>();
     arguments.put("this", 15);
