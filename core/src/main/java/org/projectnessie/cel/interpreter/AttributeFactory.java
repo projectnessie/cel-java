@@ -43,6 +43,7 @@ import java.util.Objects;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.types.Err;
+import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.pb.PbObjectT;
 import org.projectnessie.cel.common.types.ref.FieldType;
@@ -1221,13 +1222,12 @@ public interface AttributeFactory {
     }
     if (celVal instanceof Lister) {
       Lister lister = (Lister) celVal;
-      if (idx.type() == StringT.StringType) {
-        // Index type of string means there's an overloaded function for the given list.
-        String index = idx.convertToNative(String.class);
-        return lister; 
-      } else {
+      if (idx.type() == IntT.IntType) {
         // Assume idx is an integer type.
         return lister.get(idx);
+      } else {
+        // Index type of string means there's an overloaded function for the given list.
+        return lister;
       }
     }
     if (celVal instanceof Indexer) {
