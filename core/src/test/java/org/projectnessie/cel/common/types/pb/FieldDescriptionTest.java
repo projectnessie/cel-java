@@ -32,6 +32,7 @@ import com.google.protobuf.Struct;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
 import java.time.Instant;
+import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -106,7 +107,8 @@ public class FieldDescriptionTest {
           .want(
               Struct.newBuilder()
                   .putFields("null", Value.newBuilder().setNullValue(NullValue.NULL_VALUE).build())
-                  .build())
+                  .build()),
+      new GetFromTestCase().field("repeated_uint32").want(Arrays.asList(1, 2, 3)),
     };
   }
 
@@ -114,21 +116,22 @@ public class FieldDescriptionTest {
   @MethodSource("getFromTestCases")
   void getFrom(GetFromTestCase tc) {
     Db pbdb = newDb();
-    TestAllTypes msg =
-        TestAllTypes.newBuilder()
-            .setSingleUint64(12)
-            .setSingleDuration(Duration.newBuilder().setSeconds(1234))
-            .setSingleTimestamp(Timestamp.newBuilder().setSeconds(12345).setNanos(0))
-            .setSingleBoolWrapper(BoolValue.of(false))
-            .setSingleInt32Wrapper(Int32Value.of(42))
-            .setStandaloneEnum(NestedEnum.BAR)
-            .setSingleNestedMessage(NestedMessage.newBuilder().setBb(123))
-            .setSingleValue(Value.newBuilder().setStringValue("hello world"))
-            .setSingleStruct(
-                Struct.newBuilder()
-                    .putFields(
-                        "null", Value.newBuilder().setNullValue(NullValue.NULL_VALUE).build()))
-            .build();
+    TestAllTypes.Builder builder = TestAllTypes.newBuilder();
+    builder.setSingleUint64(12);
+    builder.setSingleDuration(Duration.newBuilder().setSeconds(1234));
+    builder.setSingleTimestamp(Timestamp.newBuilder().setSeconds(12345).setNanos(0));
+    builder.setSingleBoolWrapper(BoolValue.of(false));
+    builder.setSingleInt32Wrapper(Int32Value.of(42));
+    builder.setStandaloneEnum(NestedEnum.BAR);
+    builder.setSingleNestedMessage(NestedMessage.newBuilder().setBb(123));
+    builder.setSingleValue(Value.newBuilder().setStringValue("hello world"));
+    builder.setSingleStruct(
+        Struct.newBuilder()
+            .putFields("null", Value.newBuilder().setNullValue(NullValue.NULL_VALUE).build()));
+    builder.addRepeatedUint32(1);
+    builder.addRepeatedUint32(2);
+    builder.addRepeatedUint32(3);
+    TestAllTypes msg = builder.build();
     String msgName = msg.getDescriptorForType().getFullName();
     pbdb.registerMessage(msg);
     PbTypeDescription td = pbdb.describeType(msgName);

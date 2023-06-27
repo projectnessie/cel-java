@@ -447,7 +447,7 @@ public final class FieldDescription extends Description {
 
     Object v = message.getField(desc);
 
-    if (!desc.isMapField()) {
+    if (!desc.isMapField() && !desc.isRepeated()) {
       FieldDescriptor.Type type = desc.getType();
       if (v != null
           && (type == FieldDescriptor.Type.UINT32
@@ -456,7 +456,7 @@ public final class FieldDescription extends Description {
               || type == FieldDescriptor.Type.FIXED64)) {
         v = ULong.valueOf(((Number) v).longValue());
       }
-    } else {
+    } else if (desc.isMapField()) {
       // TODO protobuf-java inefficiency
       //  protobuf-java does NOT have a generic way to retrieve the underlying map, but instead
       //  getField() returns a list of com.google.protobuf.MapEntry. It's not great that we have
