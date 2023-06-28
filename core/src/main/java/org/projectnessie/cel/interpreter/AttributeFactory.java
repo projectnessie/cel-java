@@ -1224,8 +1224,7 @@ public interface AttributeFactory {
         // Assume idx is an integer type.
         return lister.get(idx);
       } else {
-        // Index type of string means there's an overloaded function for the given list.
-        return lister;
+        return noSuchOverload(celVal, "lister-get", null);
       }
     }
     if (celVal instanceof Indexer) {
