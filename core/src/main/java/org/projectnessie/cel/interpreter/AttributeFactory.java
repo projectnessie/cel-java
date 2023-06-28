@@ -45,7 +45,6 @@ import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.NullT;
-import org.projectnessie.cel.common.types.pb.PbObjectT;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
