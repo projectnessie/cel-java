@@ -1210,10 +1210,7 @@ public interface AttributeFactory {
    */
   static Val refResolve(TypeAdapter adapter, Val idx, Object obj) {
     Val celVal = adapter.nativeToValue(obj);
-    if (celVal instanceof PbObjectT) {
-      PbObjectT pbObject = (PbObjectT) celVal;
-      return pbObject.get(idx);
-    } else if (celVal instanceof Mapper) {
+    if (celVal instanceof Mapper) {
       Mapper mapper = (Mapper) celVal;
       Val elem = mapper.find(idx);
       if (elem == null) {
