@@ -207,7 +207,7 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
 
   @Override
   public int hashCode() {
-    int result = super.hashCode();
+    int result = 0;
     result = 31 * result + Arrays.hashCode(b);
     return result;
   }
