@@ -130,4 +130,27 @@ public class ListContainsTest {
     Boolean result = script.execute(Boolean.class, arguments);
     assertThat(result).isTrue();
   }
+
+  @Test
+  public void uintNotInList() throws ScriptException {
+    TestAllTypesProto.TestAllTypes rule =
+        TestAllTypesProto.TestAllTypes.newBuilder()
+            .addRepeatedFixed32(2)
+            .addRepeatedFixed32(3)
+            .build();
+    ScriptHost scriptHost = ScriptHost.newBuilder().build();
+    Script script =
+        scriptHost
+            .buildScript("10u in rules.repeated_fixed32")
+            .withTypes(rule.getDefaultInstanceForType())
+            .withDeclarations(
+                Decls.newVar(
+                    "rules", Decls.newObjectType(rule.getDescriptorForType().getFullName())))
+            .build();
+    Map<String, Object> arguments = new HashMap<>();
+    arguments.put("rules", rule);
+
+    Boolean result = script.execute(Boolean.class, arguments);
+    assertThat(result).isFalse();
+  }
 }
