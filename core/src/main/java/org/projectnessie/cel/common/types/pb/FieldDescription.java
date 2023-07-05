@@ -138,7 +138,6 @@ public final class FieldDescription extends Description {
       case INT32:
       case SFIXED32:
       case SINT32:
-      case FIXED32:
         return Integer.class;
       case INT64:
       case SFIXED64:
@@ -146,6 +145,7 @@ public final class FieldDescription extends Description {
         return Long.class;
       case UINT32:
       case UINT64:
+      case FIXED32:
       case FIXED64:
         return ULong.class;
       case ENUM:
