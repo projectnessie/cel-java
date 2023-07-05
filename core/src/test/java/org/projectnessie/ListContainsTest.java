@@ -29,44 +29,6 @@ import org.projectnessie.cel.tools.ScriptHost;
 
 public class ListContainsTest {
   @Test
-  public void listTypeResolutionFieldLookupSuccess() throws ScriptException {
-    ScriptHost scriptHost = ScriptHost.newBuilder().build();
-    Script script =
-        scriptHost
-            .buildScript("!(this in dyn(rules)['in']) ? 'value must be in list' : ''")
-            .withDeclarations(
-                Decls.newVar("this", Decls.String),
-                Decls.newVar("rules", Decls.newListType(Decls.String)))
-            .build();
-
-    Map<String, Object> arguments = new HashMap<>();
-    arguments.put("this", "hello");
-    arguments.put("rules", new String[] {"hello", "world"});
-
-    String result = script.execute(String.class, arguments);
-    assertThat(result).isEqualTo("");
-  }
-
-  @Test
-  public void listTypeResolutionFieldLookupFailure() throws ScriptException {
-    ScriptHost scriptHost = ScriptHost.newBuilder().build();
-    Script script =
-        scriptHost
-            .buildScript("!(this in dyn(rules)['in']) ? 'value must be in list' : ''")
-            .withDeclarations(
-                Decls.newVar("this", Decls.String),
-                Decls.newVar("rules", Decls.newListType(Decls.String)))
-            .build();
-
-    Map<String, Object> arguments = new HashMap<>();
-    arguments.put("this", "nothello");
-    arguments.put("rules", new String[] {"hello", "world"});
-
-    String result = script.execute(String.class, arguments);
-    assertThat(result).isEqualTo("value must be in list");
-  }
-
-  @Test
   public void dynamicProtobufFieldLookupSuccess() throws ScriptException {
     UnknownSet rule = UnknownSet.newBuilder().addExprs(1).addExprs(2).build();
     ScriptHost scriptHost = ScriptHost.newBuilder().build();

@@ -1222,8 +1222,6 @@ public interface AttributeFactory {
       if (idx.type() == IntT.IntType) {
         // Assume idx is an integer type.
         return lister.get(idx);
-      } else {
-        return noSuchOverload(celVal, "lister-get", null);
       }
     }
     if (celVal instanceof Indexer) {

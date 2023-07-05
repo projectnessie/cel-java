@@ -108,7 +108,9 @@ public class FieldDescriptionTest {
               Struct.newBuilder()
                   .putFields("null", Value.newBuilder().setNullValue(NullValue.NULL_VALUE).build())
                   .build()),
-      new GetFromTestCase().field("repeated_uint32").want(Arrays.asList(1, 2, 3)),
+      new GetFromTestCase()
+          .field("repeated_uint32")
+          .want(Arrays.asList(ULong.valueOf(1L), ULong.valueOf(2L), ULong.valueOf(3L))),
     };
   }
 
