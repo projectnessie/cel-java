@@ -447,23 +447,7 @@ public final class FieldDescription extends Description {
     }
 
     Object v = message.getField(desc);
-    if (desc.isRepeated()) {
-      FieldDescriptor.Type type = desc.getType();
-      // Ensure the right Java representation is used in resulting array.
-      if (v != null
-          && (type == FieldDescriptor.Type.UINT32
-              || type == FieldDescriptor.Type.UINT64
-              || type == FieldDescriptor.Type.FIXED32
-              || type == FieldDescriptor.Type.FIXED64)) {
-        List<ULong> result = new ArrayList<>();
-        List<Object> repeated = (List<Object>) v;
-        for (Object o : repeated) {
-          ULong casted = ULong.valueOf(((Number) o).longValue());
-          result.add(casted);
-        }
-        v = result;
-      }
-    } else if (!desc.isMapField() && !desc.isRepeated()) {
+    if (!desc.isMapField() && !desc.isRepeated()) {
       FieldDescriptor.Type type = desc.getType();
       if (v != null
           && (type == FieldDescriptor.Type.UINT32
@@ -509,6 +493,22 @@ public final class FieldDescription extends Description {
           map.put(key, value);
         }
         v = map;
+      }
+    } else if (desc.isRepeated()) {
+      FieldDescriptor.Type type = desc.getType();
+      // Ensure the right Java representation is used in resulting array.
+      if (v != null
+              && (type == FieldDescriptor.Type.UINT32
+              || type == FieldDescriptor.Type.UINT64
+              || type == FieldDescriptor.Type.FIXED32
+              || type == FieldDescriptor.Type.FIXED64)) {
+        List<ULong> result = new ArrayList<>();
+        List<Object> repeated = (List<Object>) v;
+        for (Object o : repeated) {
+          ULong casted = ULong.valueOf(((Number) o).longValue());
+          result.add(casted);
+        }
+        v = result;
       }
     }
     return v;
