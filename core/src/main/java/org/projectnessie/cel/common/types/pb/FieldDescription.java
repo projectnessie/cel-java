@@ -498,7 +498,7 @@ public final class FieldDescription extends Description {
       FieldDescriptor.Type type = desc.getType();
       // Ensure the right Java representation is used in resulting array.
       if (v != null
-              && (type == FieldDescriptor.Type.UINT32
+          && (type == FieldDescriptor.Type.UINT32
               || type == FieldDescriptor.Type.UINT64
               || type == FieldDescriptor.Type.FIXED32
               || type == FieldDescriptor.Type.FIXED64)) {
