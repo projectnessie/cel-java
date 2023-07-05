@@ -1220,7 +1220,6 @@ public interface AttributeFactory {
     if (celVal instanceof Lister) {
       Lister lister = (Lister) celVal;
       if (idx.type() == IntT.IntType) {
-        // Assume idx is an integer type.
         return lister.get(idx);
       }
     }
