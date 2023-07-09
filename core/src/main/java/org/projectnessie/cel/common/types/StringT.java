@@ -203,7 +203,7 @@ public final class StringT extends BaseVal implements Adder, Comparer, Matcher, 
   /** Size implements traits.Sizer.Size. */
   @Override
   public Val size() {
-    return intOf(s.length());
+    return intOf(s.codePointCount(0, s.length()));
   }
 
   /** Type implements ref.Val.Type. */
