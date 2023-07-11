@@ -217,4 +217,10 @@ public class StringTest {
     assertThat(stringOf("hello world").size()).isEqualTo(intOf(11));
     assertThat(stringOf("\u65e5\u672c\u8a9e").size()).isEqualTo(intOf(3));
   }
+
+  @Test
+  void stringSizeEmoji() {
+    assertThat(stringOf("").size()).isSameAs(IntZero);
+    assertThat(stringOf("\uD83D\uDE05\uD83D\uDE04\uD83D\uDC7E").size()).isEqualTo(intOf(3));
+  }
 }

@@ -35,6 +35,7 @@ import com.google.protobuf.Value;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
+import org.projectnessie.cel.common.types.ref.Val;
 
 public class BytesTest {
 
@@ -109,5 +110,12 @@ public class BytesTest {
   @Test
   void bytesSize() {
     assertThat(bytesOf("1234567890").size().equal(intOf(10))).isSameAs(True);
+  }
+
+  @Test
+  void bytesContains() {
+    Val bar1 = bytesOf(ByteString.copyFromUtf8("bar"));
+    Val bar2 = bytesOf(ByteString.copyFromUtf8("bar"));
+    assertThat(bar1.hashCode()).isEqualTo(bar2.hashCode());
   }
 }
