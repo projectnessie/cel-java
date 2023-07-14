@@ -84,17 +84,13 @@ public final class Debug {
         sb.append("\"");
         return sb.toString();
       case DOUBLE_VALUE:
-        String s = Double.toString(c.getDoubleValue());
-        if (s.endsWith(".0")) {
-          return s.substring(0, s.length() - 2);
-        }
-        return s;
+        return Double.toString(c.getDoubleValue());
       case INT64_VALUE:
         return Long.toString(c.getInt64Value());
       case STRING_VALUE:
         sb = new StringBuilder();
         sb.append('\"');
-        s = c.getStringValue();
+        String s = c.getStringValue();
         for (int i = 0; i < s.length(); i++) {
           char ch = s.charAt(i);
           switch (ch) {

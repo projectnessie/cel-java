@@ -620,7 +620,7 @@ class ParserTest {
         "x * 2.0",
         "_*_(\n"
             + "  x^#1:*expr.Expr_IDENT_EXPR#,\n"
-            + "  2^#3:*expr.Constant_DOUBLE_VALUE#\n"
+            + "  2.0^#3:*expr.Constant_DOUBLE_VALUE#\n"
             + ")^#2:*expr.Expr_CALL_EXPR#",
         "",
         "",
