@@ -314,9 +314,9 @@ public class CheckerTest {
       new TestCase()
           .i("1.0 + 2.0 * 3.0 - 1.0 / 2.20202 != 66.6")
           .r(
-              "_!=_(_-_(_+_(1~double, _*_(2~double, 3~double)~double^multiply_double)\n"
+              "_!=_(_-_(_+_(1.0~double, _*_(2.0~double, 3.0~double)~double^multiply_double)\n"
                   + "           ~double^add_double,\n"
-                  + "           _/_(1~double, 2.20202~double)~double^divide_double)\n"
+                  + "           _/_(1.0~double, 2.20202~double)~double^divide_double)\n"
                   + "       ~double^subtract_double,\n"
                   + "      66.6~double)\n"
                   + "  ~bool^not_equals")
@@ -479,7 +479,7 @@ public class CheckerTest {
                   + "		)~bool^equals,\n"
                   + "		_==_(\n"
                   + "			z~dyn^z,\n"
-                  + "			1~double\n"
+                  + "			1.0~double\n"
                   + "		)~bool^equals\n"
                   + "	)~bool^logical_and\n"
                   + ")~bool^logical_and")
@@ -797,13 +797,13 @@ public class CheckerTest {
                   + "		)~bool^logical_and,\n"
                   + "		_!=_(\n"
                   + "			x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_double_wrapper~wrapper(double),\n"
-                  + "			2~double\n"
+                  + "			2.0~double\n"
                   + "		)~bool^not_equals\n"
                   + "		)~bool^logical_and,\n"
                   + "		_&&_(\n"
                   + "		_==_(\n"
                   + "			x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_float_wrapper~wrapper(double),\n"
-                  + "			1~double\n"
+                  + "			1.0~double\n"
                   + "		)~bool^equals,\n"
                   + "		_!=_(\n"
                   + "			x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_int32_wrapper~wrapper(int),\n"
