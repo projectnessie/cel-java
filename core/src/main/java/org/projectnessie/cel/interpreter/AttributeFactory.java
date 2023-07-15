@@ -43,14 +43,12 @@ import java.util.Objects;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.types.Err;
-import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Indexer;
-import org.projectnessie.cel.common.types.traits.Lister;
 import org.projectnessie.cel.common.types.traits.Mapper;
 import org.projectnessie.cel.interpreter.AttributePattern.QualifierValueEquator;
 
@@ -1216,12 +1214,6 @@ public interface AttributeFactory {
         return noSuchKey(idx);
       }
       return elem;
-    }
-    if (celVal instanceof Lister) {
-      Lister lister = (Lister) celVal;
-      if (idx.type() == IntT.IntType) {
-        return lister.get(idx);
-      }
     }
     if (celVal instanceof Indexer) {
       Indexer indexer = (Indexer) celVal;
