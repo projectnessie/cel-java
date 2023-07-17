@@ -33,6 +33,7 @@ dependencies {
   implementation(libs.agrona)
 
   testImplementation(project(":cel-generated-pb", "testJar"))
+  testImplementation(project(":cel-tools"))
 
   testImplementation(platform(libs.junit.bom))
   testImplementation(libs.bundles.junit.testing)

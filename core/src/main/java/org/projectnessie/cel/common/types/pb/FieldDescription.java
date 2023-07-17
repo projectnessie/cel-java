@@ -31,6 +31,7 @@ import com.google.protobuf.MapEntry;
 import com.google.protobuf.Message;
 import com.google.protobuf.NullValue;
 import java.lang.reflect.Array;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -137,7 +138,6 @@ public final class FieldDescription extends Description {
       case INT32:
       case SFIXED32:
       case SINT32:
-      case FIXED32:
         return Integer.class;
       case INT64:
       case SFIXED64:
@@ -145,6 +145,7 @@ public final class FieldDescription extends Description {
         return Long.class;
       case UINT32:
       case UINT64:
+      case FIXED32:
       case FIXED64:
         return ULong.class;
       case ENUM:
@@ -446,7 +447,6 @@ public final class FieldDescription extends Description {
     }
 
     Object v = message.getField(desc);
-
     if (!desc.isMapField() && !desc.isRepeated()) {
       FieldDescriptor.Type type = desc.getType();
       if (v != null
@@ -493,6 +493,22 @@ public final class FieldDescription extends Description {
           map.put(key, value);
         }
         v = map;
+      }
+    } else if (desc.isRepeated()) {
+      FieldDescriptor.Type type = desc.getType();
+      // Ensure the right Java representation is used in resulting array.
+      if (v != null
+          && (type == FieldDescriptor.Type.UINT32
+              || type == FieldDescriptor.Type.UINT64
+              || type == FieldDescriptor.Type.FIXED32
+              || type == FieldDescriptor.Type.FIXED64)) {
+        List<ULong> result = new ArrayList<>();
+        List<Object> repeated = (List<Object>) v;
+        for (Object o : repeated) {
+          ULong casted = ULong.valueOf(((Number) o).longValue());
+          result.add(casted);
+        }
+        v = result;
       }
     }
     return v;
