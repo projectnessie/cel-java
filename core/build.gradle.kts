@@ -52,8 +52,8 @@ tasks.named("jmhCompileGeneratedClasses") { dependsOn(tasks.named("processJmhJan
 tasks.named("jmhRunBytecodeGenerator") { dependsOn(tasks.named("processJmhJandexIndex")) }
 
 sourceSets.test {
-  java.srcDir(project.buildDir.resolve("generated/source/proto/test/java"))
-  java.destinationDirectory.set(project.buildDir.resolve("classes/java/generatedTest"))
+  java.srcDir(layout.buildDirectory.dir("generated/source/proto/test/java"))
+  java.destinationDirectory.set(layout.buildDirectory.dir("classes/java/generatedTest"))
 }
 
 val testJar by
