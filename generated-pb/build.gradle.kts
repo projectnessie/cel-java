@@ -28,14 +28,14 @@ plugins {
 apply<ProtobufPlugin>()
 
 sourceSets.main {
-  java.srcDir(project.buildDir.resolve("generated/source/proto/main/java"))
-  java.srcDir(project.buildDir.resolve("generated/source/proto/main/grpc"))
-  java.destinationDirectory.set(project.buildDir.resolve("classes/java/generated"))
+  java.srcDir(layout.buildDirectory.dir("generated/source/proto/main/java"))
+  java.srcDir(layout.buildDirectory.dir("generated/source/proto/main/grpc"))
+  java.destinationDirectory.set(layout.buildDirectory.dir("classes/java/generated"))
 }
 
 sourceSets.test {
-  java.srcDir(project.buildDir.resolve("generated/source/proto/test/java"))
-  java.destinationDirectory.set(project.buildDir.resolve("classes/java/generatedTest"))
+  java.srcDir(layout.buildDirectory.dir("generated/source/proto/test/java"))
+  java.destinationDirectory.set(layout.buildDirectory.dir("classes/java/generatedTest"))
 }
 
 dependencies {
@@ -89,7 +89,7 @@ val testJarTask =
   tasks.register<Jar>("testJar") {
     val testClasses = tasks.getByName<JavaCompile>("compileTestJava")
     val baseJar = tasks.getByName<Jar>("jar")
-    from(testClasses.destinationDirectory, project.buildDir.resolve("resources/test"))
+    from(testClasses.destinationDirectory, layout.buildDirectory.dir("resources/test"))
     dependsOn(testClasses, tasks.named("processJandexIndex"), tasks.named("processTestResources"))
     archiveBaseName.set(baseJar.archiveBaseName)
     destinationDirectory.set(baseJar.destinationDirectory)

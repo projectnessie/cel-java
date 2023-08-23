@@ -28,7 +28,7 @@ plugins {
 
 apply<ProtobufPlugin>()
 
-sourceSets.main { java.srcDir(project.buildDir.resolve("generated/source/proto/main/java")) }
+sourceSets.main { java.srcDir(layout.buildDirectory.dir("generated/source/proto/main/java")) }
 
 dependencies {
   implementation(project(":cel-core"))
