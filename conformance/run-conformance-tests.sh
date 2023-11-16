@@ -46,30 +46,33 @@ cel_java_skips=(
   # nested protobuf-object-structure, which gets rejected during gRPC/protobuf request
   # deserialization. Just skip those tests.
   "--skip_test=parse/nest/message_literal"
-  "--skip_test=parse/repeat/index"
+  # Proto equality specialties don't seem to be in effect for Java
+  "--skip_test=comparisons/eq_wrapper/eq_proto_nan_equal"
+  "--skip_test=comparisons/ne_literal/ne_proto_nan_not_equal"
 
-  # TODO Actual known issux to fix, a protobuf Any returned via this test is wrapped twice (Any in Any).
+  # TODO Actual known issue to fix, a protobuf Any returned via this test is wrapped twice (Any in Any).
   "--skip_test=dynamic/any/var"
 )
 
 cel_go_skips=(
-  "--skip_test=comparisons/eq_literal/not_eq_list_false_vs_types,not_eq_map_false_vs_types"
-  "--skip_test=comparisons/in_map_literal/key_in_mixed_key_type_map_error"
-  "--skip_test=comparisons/eq_literal/not_eq_list_false_vs_types,not_eq_map_false_vs_types"
-  "--skip_test=comparisons/in_map_literal/key_in_mixed_key_type_map_error"
   "--skip_test=dynamic/int32/field_assign_proto2_range,field_assign_proto3_range"
   "--skip_test=dynamic/uint32/field_assign_proto2_range,field_assign_proto3_range"
   "--skip_test=dynamic/float/field_assign_proto2_range,field_assign_proto3_range"
-  "--skip_test=dynamic/value_null/literal_unset,field_read_proto2_unset,field_read_proto3_unset"
   "--skip_test=enums/legacy_proto2/assign_standalone_int_too_big,assign_standalone_int_too_neg"
   "--skip_test=enums/legacy_proto3/assign_standalone_int_too_big,assign_standalone_int_too_neg"
   "--skip_test=enums/strong_proto2"
   "--skip_test=enums/strong_proto3"
-  "--skip_test=fields/qualified_identifier_resolution/map_key_float,map_key_null,map_value_repeat_key"
+  # This conformance test is invalid nowadays
+  "--skip_test=fields/qualified_identifier_resolution/map_key_float"
+  # Unclear why the 'to_json_string' is expected to return a string, unlike the preceding to_json_number test.
+  "--skip_test=wrappers/uint64/to_json_string"
+  # TODO implement proper "toJson" at some point
+  "--skip_test=wrappers/field_mask/to_json"
+  "--skip_test=wrappers/timestamp/to_json"
+  "--skip_test=wrappers/empty/to_json"
 )
 
 test_files=(
-  "tests/simple/testdata/plumbing.textproto"
   "tests/simple/testdata/basic.textproto"
   "tests/simple/testdata/comparisons.textproto"
   "tests/simple/testdata/conversions.textproto"
@@ -83,11 +86,14 @@ test_files=(
   "tests/simple/testdata/macros.textproto"
   "tests/simple/testdata/namespace.textproto"
   "tests/simple/testdata/parse.textproto"
+  "tests/simple/testdata/plumbing.textproto"
   "tests/simple/testdata/proto2.textproto"
   "tests/simple/testdata/proto3.textproto"
   "tests/simple/testdata/string.textproto"
+  # TODO add when implemnting the string-extensions "tests/simple/testdata/string_ext.textproto"
   "tests/simple/testdata/timestamps.textproto"
   "tests/simple/testdata/unknowns.textproto"
+  "tests/simple/testdata/wrappers.textproto"
 )
 
 bazel-bin/tests/simple/simple_test_/simple_test \

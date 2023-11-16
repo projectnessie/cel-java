@@ -15,6 +15,7 @@
  */
 package org.projectnessie.cel.common.types;
 
+import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.Err.errDurationOutOfRange;
 import static org.projectnessie.cel.common.types.Err.errDurationOverflow;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
@@ -26,6 +27,7 @@ import static org.projectnessie.cel.common.types.Types.boolOf;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.Value;
+import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
@@ -76,7 +78,17 @@ public final class DurationT extends BaseVal
     try {
       dur = Duration.parse("PT" + s);
     } catch (DateTimeParseException e) {
-      dur = Duration.parse("P" + s);
+      try {
+        dur = Duration.parse("P" + s);
+      } catch (DateTimeParseException e2) {
+        // Not sure whether ns is the only case here, but this is at least the only case that
+        // triggered a conformance-test failure.
+        if (s.endsWith("ns")) {
+          dur = Duration.ofNanos(Long.parseLong(s.substring(0, s.length() - 2)));
+        } else {
+          throw new DateTimeException("Cannot parse duration '" + s + "'", e2);
+        }
+      }
     }
     return durationOf(dur);
   }
@@ -216,10 +228,14 @@ public final class DurationT extends BaseVal
   /** Equal implements ref.Val.Equal. */
   @Override
   public Val equal(Val other) {
-    if (!(other instanceof DurationT)) {
-      return noSuchOverload(this, "equal", other);
+    switch (other.type().typeEnum()) {
+      case Duration:
+        return boolOf(d.equals(((DurationT) other).d));
+      case Null:
+        return False;
+      default:
+        return noSuchOverload(this, "equal", other);
     }
-    return boolOf(d.equals(((DurationT) other).d));
   }
 
   /** Negate implements traits.Negater.Negate. */
@@ -299,8 +315,6 @@ public final class DurationT extends BaseVal
   }
 
   public static Val timeGetMilliseconds(Duration duration) {
-    return IntT.intOf(
-        TimeUnit.SECONDS.toMillis(duration.getSeconds())
-            + TimeUnit.NANOSECONDS.toMillis(duration.getNano()));
+    return IntT.intOf(TimeUnit.NANOSECONDS.toMillis(duration.getNano()));
   }
 }

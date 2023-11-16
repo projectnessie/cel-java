@@ -107,10 +107,14 @@ public final class BoolT extends BaseVal implements Comparer, Negater {
   /** Equal implements the ref.Val interface method. */
   @Override
   public Val equal(Val other) {
-    if (!(other instanceof BoolT)) {
-      return noSuchOverload(this, "equal", other);
+    switch (other.type().typeEnum()) {
+      case Bool:
+        return Types.boolOf(b == ((BoolT) other).b);
+      case Null:
+        return False;
+      default:
+        return noSuchOverload(this, "equal", other);
     }
-    return Types.boolOf(b == ((BoolT) other).b);
   }
 
   /** Negate implements the traits.Negater interface method. */

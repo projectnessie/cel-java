@@ -90,16 +90,6 @@ public final class StringT extends BaseVal implements Adder, Comparer, Matcher, 
     return new StringT(s + ((StringT) other).s);
   }
 
-  /** Compare implements traits.Comparer.Compare. */
-  @Override
-  public Val compare(Val other) {
-    if (!(other instanceof StringT)) {
-      return noSuchOverload(this, "compare", other);
-    }
-
-    return intOfCompare(s.compareTo(((StringT) other).s));
-  }
-
   /** ConvertToNative implements ref.Val.ConvertToNative. */
   @SuppressWarnings("unchecked")
   @Override
@@ -164,13 +154,35 @@ public final class StringT extends BaseVal implements Adder, Comparer, Matcher, 
     }
   }
 
+  /** Compare implements traits.Comparer.Compare. */
+  @Override
+  public Val compare(Val other) {
+    switch (other.type().typeEnum()) {
+      case String:
+        return intOfCompare(s.compareTo(((StringT) other).s));
+      case Null:
+        return False;
+      default:
+        return noSuchOverload(this, "compare", other);
+    }
+  }
+
   /** Equal implements ref.Val.Equal. */
   @Override
   public Val equal(Val other) {
-    if (!(other instanceof StringT)) {
-      return noSuchOverload(this, "equal", other);
+    switch (other.type().typeEnum()) {
+      case String:
+        return boolOf(s.equals(((StringT) other).s));
+      case Int:
+      case Uint:
+      case Double:
+      case Bool:
+        return boolOf(s.equals(((StringT) other.convertToType(StringType)).s));
+      case Null:
+        return False;
+      default:
+        return noSuchOverload(this, "equal", other);
     }
-    return boolOf(s.equals(((StringT) other).s));
   }
 
   /** Match implements traits.Matcher.Match. */

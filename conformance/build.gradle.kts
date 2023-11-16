@@ -28,7 +28,10 @@ plugins {
 
 apply<ProtobufPlugin>()
 
-sourceSets.main { java.srcDir(layout.buildDirectory.dir("generated/source/proto/main/java")) }
+sourceSets.main {
+  java.srcDir(layout.buildDirectory.dir("generated/source/proto/main/java"))
+  java.srcDir(layout.buildDirectory.dir("generated/source/proto/main/grpc"))
+}
 
 dependencies {
   implementation(project(":cel-core"))
@@ -58,6 +61,10 @@ configure<ProtobufExtension> {
     // Download from repositories
     artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.get()}"
   }
+  plugins {
+    this.create("grpc") { artifact = "io.grpc:protoc-gen-grpc-java:${libs.versions.grpc.get()}" }
+  }
+  generateProtoTasks { all().configureEach { this.plugins.create("grpc") {} } }
 }
 
 // The protobuf-plugin should ideally do this

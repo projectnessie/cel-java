@@ -162,13 +162,13 @@ final class Standard {
         Decls.newFunction(
             Operator.Equals.id,
             Decls.newParameterizedOverload(
-                Overloads.Equals, asList(paramA, paramA), Decls.Bool, typeParamAList)));
+                Overloads.Equals, asList(paramA, paramB), Decls.Bool, typeParamABList)));
 
     idents.add(
         Decls.newFunction(
             Operator.NotEquals.id,
             Decls.newParameterizedOverload(
-                Overloads.NotEquals, asList(paramA, paramA), Decls.Bool, typeParamAList)));
+                Overloads.NotEquals, asList(paramA, paramB), Decls.Bool, typeParamABList)));
 
     // Algebra.
 

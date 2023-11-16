@@ -15,6 +15,8 @@
  */
 package org.projectnessie.cel.common.types;
 
+import static org.projectnessie.cel.common.types.Types.boolOf;
+
 import java.util.Objects;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
@@ -70,7 +72,7 @@ public final class UnknownT extends BaseVal {
   /** Equal implements ref.Val.Equal. */
   @Override
   public Val equal(Val other) {
-    return this;
+    return boolOf(other.type().typeEnum() == TypeEnum.Unknown);
   }
 
   /** Type implements ref.Val.Type. */

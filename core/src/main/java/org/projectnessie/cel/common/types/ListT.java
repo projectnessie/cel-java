@@ -196,8 +196,11 @@ public abstract class ListT extends BaseVal implements Lister {
         if (isError(e2)) {
           return e2;
         }
-        if (e1.type() != e2.type()) {
-          return noSuchOverload(e1, Operator.Equals.id, e2);
+        if (!e1.type().equals(e2.type())) {
+          e2 = e2.convertToType(e2.type());
+          if (e2.type().typeEnum() == TypeEnum.Err) {
+            return noSuchOverload(e1, Operator.Equals.id, e2);
+          }
         }
         if (e1.equal(e2) != True) {
           return False;
@@ -208,22 +211,11 @@ public abstract class ListT extends BaseVal implements Lister {
 
     @Override
     public Val contains(Val value) {
-      Type firstType = null;
-      Type mixedType = null;
       for (long i = 0; i < size; i++) {
         Val elem = get(intOf(i));
-        Type elemType = elem.type();
-        if (firstType == null) {
-          firstType = elemType;
-        } else if (!firstType.equals(elemType)) {
-          mixedType = elemType;
-        }
         if (value.equal(elem) == True) {
           return True;
         }
-      }
-      if (mixedType != null) {
-        return noSuchOverload(value, Operator.In.id, firstType, mixedType);
       }
       return False;
     }
@@ -303,8 +295,18 @@ public abstract class ListT extends BaseVal implements Lister {
 
     @Override
     public Val get(Val index) {
-      if (!(index instanceof IntT)) {
-        return valOrErr(index, "unsupported index type '%s' in list", index.type());
+      switch (index.type().typeEnum()) {
+        case Int:
+        case Uint:
+          break;
+        case Double:
+          double od = index.doubleValue();
+          if (Math.rint(od) != od) {
+            return newErr("invalid_argument");
+          }
+          break;
+        default:
+          return valOrErr(index, "unsupported index type '%s' in list", index.type());
       }
       int sz = array.length;
       int i = (int) index.intValue();
@@ -369,8 +371,18 @@ public abstract class ListT extends BaseVal implements Lister {
 
     @Override
     public Val get(Val index) {
-      if (!(index instanceof IntT)) {
-        return valOrErr(index, "unsupported index type '%s' in list", index.type());
+      switch (index.type().typeEnum()) {
+        case Int:
+        case Uint:
+          break;
+        case Double:
+          double od = index.doubleValue();
+          if (Math.rint(od) != od) {
+            return newErr("invalid_argument");
+          }
+          break;
+        default:
+          return valOrErr(index, "unsupported index type '%s' in list", index.type());
       }
       int sz = array.length;
       int i = (int) index.intValue();

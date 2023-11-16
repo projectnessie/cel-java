@@ -15,6 +15,8 @@
  */
 package org.projectnessie.cel.common.types;
 
+import static org.projectnessie.cel.common.types.BoolT.False;
+import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.Err.divideByZero;
 import static org.projectnessie.cel.common.types.Err.errIntOverflow;
@@ -36,7 +38,6 @@ import com.google.protobuf.Int32Value;
 import com.google.protobuf.Int64Value;
 import com.google.protobuf.Value;
 import java.time.Instant;
-import java.util.Objects;
 import org.projectnessie.cel.common.types.Overflow.OverflowException;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
@@ -113,26 +114,9 @@ public final class IntT extends BaseVal
     return i;
   }
 
-  /** Add implements traits.Adder.Add. */
   @Override
-  public Val add(Val other) {
-    if (!(other instanceof IntT)) {
-      return noSuchOverload(this, "add", other);
-    }
-    try {
-      return IntT.intOf(Overflow.addInt64Checked(i, ((IntT) other).i));
-    } catch (OverflowException e) {
-      return errIntOverflow;
-    }
-  }
-
-  /** Compare implements traits.Comparer.Compare. */
-  @Override
-  public Val compare(Val other) {
-    if (!(other instanceof IntT)) {
-      return noSuchOverload(this, "compare", other);
-    }
-    return IntT.intOf(Long.compare(i, ((IntT) other).i));
+  public double doubleValue() {
+    return (double) i;
   }
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
@@ -216,6 +200,62 @@ public final class IntT extends BaseVal
     return newTypeConversionError(IntType, typeValue);
   }
 
+  /** Compare implements traits.Comparer.Compare. */
+  @Override
+  public Val compare(Val other) {
+    switch (other.type().typeEnum()) {
+      case Double:
+        DoubleT cmp = (DoubleT) convertToType(DoubleType);
+        return cmp.compare(other);
+      case Uint:
+        if (i < 0L) {
+          // this int is negative, so it MUST be smaller than any uint
+          return IntNegOne;
+        }
+        if (other.intValue() < 0L) {
+          // the OTHER uint is > Integer.MAX_VALUE, so THIS int MUST be smaller
+          return IntNegOne;
+        }
+        return intOfCompare(Long.compareUnsigned(i, other.intValue()));
+      case Int:
+        Val converted = other.convertToType(type());
+        if (converted.type().typeEnum() == TypeEnum.Err) {
+          return converted;
+        }
+        return intOfCompare(Long.compare(i, converted.intValue()));
+      default:
+        return noSuchOverload(this, "compare", other);
+    }
+  }
+
+  /** Equal implements ref.Val.Equal. */
+  @Override
+  public Val equal(Val other) {
+    switch (other.type().typeEnum()) {
+      case Double:
+        DoubleT cmp = (DoubleT) convertToType(DoubleType);
+        return cmp.equal(other);
+      case Uint:
+        if (other.intValue() < 0L) {
+          return False;
+        }
+      case Int:
+      case String:
+        Val converted = other.convertToType(type());
+        if (converted.type().typeEnum() == TypeEnum.Err) {
+          return converted;
+        }
+        return boolOf(i == converted.intValue());
+      case Null:
+      case Bytes:
+      case List:
+      case Map:
+        return False;
+      default:
+        return noSuchOverload(this, "equal", other);
+    }
+  }
+
   /** Divide implements traits.Divider.Divide. */
   @Override
   public Val divide(Val other) {
@@ -231,15 +271,6 @@ public final class IntT extends BaseVal
     } catch (OverflowException e) {
       return errIntOverflow;
     }
-  }
-
-  /** Equal implements ref.Val.Equal. */
-  @Override
-  public Val equal(Val other) {
-    if (!(other instanceof IntT)) {
-      return noSuchOverload(this, "equal", other);
-    }
-    return boolOf(i == ((IntT) other).i);
   }
 
   /** Modulo implements traits.Modder.Modulo. */
@@ -282,6 +313,19 @@ public final class IntT extends BaseVal
     }
   }
 
+  /** Add implements traits.Adder.Add. */
+  @Override
+  public Val add(Val other) {
+    if (!(other instanceof IntT)) {
+      return noSuchOverload(this, "add", other);
+    }
+    try {
+      return IntT.intOf(Overflow.addInt64Checked(i, ((IntT) other).i));
+    } catch (OverflowException e) {
+      return errIntOverflow;
+    }
+  }
+
   /** Subtract implements traits.Subtractor.Subtract. */
   @Override
   public Val subtract(Val other) {
@@ -312,22 +356,16 @@ public final class IntT extends BaseVal
     if (this == o) {
       return true;
     }
-    if (o == null || getClass() != o.getClass()) {
+    if (!(o instanceof Val)) {
       return false;
     }
-    IntT intT = (IntT) o;
-    return i == intT.i;
+    // Defer to CEL's equal functionality to allow heterogeneous numeric map keys
+    return equal((Val) o).booleanValue();
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(super.hashCode(), i);
-  }
-
-  /**
-   * isJSONSafe indicates whether the int is safely representable as a floating point value in JSON.
-   */
-  public boolean isJSONSafe() {
-    return i >= minIntJSON && i <= maxIntJSON;
+    // Used to allow heterogeneous numeric map keys
+    return (int) i;
   }
 }

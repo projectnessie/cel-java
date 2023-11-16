@@ -28,6 +28,7 @@ import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.IntT.IntZero;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.IntT.maxIntJSON;
+import static org.projectnessie.cel.common.types.NullT.NullValue;
 import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.TimestampT.TimestampType;
@@ -73,6 +74,15 @@ public class IntTest {
         .isInstanceOf(Err.class)
         .extracting(Object::toString)
         .isEqualTo("no such overload: int.compare(type)");
+
+    assertThat(intOf(-5).compare(uintOf(5))).isSameAs(IntNegOne);
+    assertThat(intOf(5).compare(uintOf(5))).isSameAs(IntZero);
+    assertThat(intOf(5).compare(uintOf(0x8000000000000000L))).isSameAs(IntNegOne);
+
+    assertThat(intOf(-5).compare(doubleOf(5))).isSameAs(IntNegOne);
+    assertThat(intOf(5).compare(doubleOf(5))).isSameAs(IntZero);
+    assertThat(intOf(5).compare(doubleOf(1e70d))).isSameAs(IntNegOne);
+    assertThat(intOf(5).compare(doubleOf(1e-70d))).isSameAs(IntOne);
   }
 
   @Test
@@ -177,6 +187,19 @@ public class IntTest {
         .isInstanceOf(Err.class)
         .extracting(Object::toString)
         .isEqualTo("no such overload: int.equal(bool)");
+    assertThat(intOf(0).equal(NullValue)).isSameAs(False);
+    assertThat(intOf(0).equal(stringOf("0"))).isSameAs(True);
+    assertThat(intOf(0).equal(stringOf("1"))).isSameAs(False);
+    assertThat(intOf(0).equal(intOf(0))).isSameAs(True);
+    assertThat(intOf(0).equal(intOf(1))).isSameAs(False);
+    assertThat(intOf(0).equal(uintOf(0))).isSameAs(True);
+    assertThat(intOf(0).equal(uintOf(1))).isSameAs(False);
+    assertThat(intOf(0x8000000000000000L).equal(uintOf(0x8000000000000000L))).isSameAs(False);
+    assertThat(intOf(0xffffffffffffffffL).equal(uintOf(0xffffffffffffffffL))).isSameAs(False);
+    assertThat(intOf(0).equal(doubleOf(0))).isSameAs(True);
+    assertThat(intOf(0).equal(doubleOf(1))).isSameAs(False);
+    assertThat(intOf(0).equal(stringOf("0"))).isSameAs(True);
+    assertThat(intOf(0).equal(stringOf("1"))).isSameAs(False);
   }
 
   @Test

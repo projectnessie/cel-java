@@ -15,6 +15,8 @@
  */
 package org.projectnessie.cel.common.types;
 
+import static org.projectnessie.cel.common.types.BoolT.False;
+import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.Err.divideByZero;
 import static org.projectnessie.cel.common.types.Err.errUintOverflow;
@@ -22,7 +24,9 @@ import static org.projectnessie.cel.common.types.Err.modulusByZero;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.Err.rangeError;
+import static org.projectnessie.cel.common.types.IntT.IntOne;
 import static org.projectnessie.cel.common.types.IntT.intOf;
+import static org.projectnessie.cel.common.types.IntT.intOfCompare;
 import static org.projectnessie.cel.common.types.IntT.maxIntJSON;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.Types.boolOf;
@@ -32,7 +36,6 @@ import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
 import com.google.protobuf.Value;
 import java.math.BigInteger;
-import java.util.Objects;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.Overflow.OverflowException;
 import org.projectnessie.cel.common.types.ref.BaseVal;
@@ -87,26 +90,9 @@ public final class UintT extends BaseVal
     return i;
   }
 
-  /** Add implements traits.Adder.Add. */
   @Override
-  public Val add(Val other) {
-    if (other.type() != UintType) {
-      return noSuchOverload(this, "add", other);
-    }
-    try {
-      return uintOf(Overflow.addUint64Checked(i, ((UintT) other).i));
-    } catch (OverflowException e) {
-      return errUintOverflow;
-    }
-  }
-
-  /** Compare implements traits.Comparer.Compare. */
-  @Override
-  public Val compare(Val other) {
-    if (other.type() != UintType) {
-      return noSuchOverload(this, "compare", other);
-    }
-    return intOf(Long.compareUnsigned(i, ((UintT) other).i));
+  public double doubleValue() {
+    return (double) i;
   }
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
@@ -114,13 +100,12 @@ public final class UintT extends BaseVal
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
     if (typeDesc == Long.class || typeDesc == long.class || typeDesc == Object.class) {
-      if (i < 0) {
-        Err.throwErrorAsIllegalStateException(rangeError(i, "Java long"));
-      }
+      // no "is negative" check here, because there is no Java representation of an
+      // unsigned long, reusing Java's signed long
       return (T) Long.valueOf(i);
     }
     if (typeDesc == Integer.class || typeDesc == int.class) {
-      if (i < 0 || i > Integer.MAX_VALUE) {
+      if (i < Integer.MIN_VALUE || i > Integer.MAX_VALUE) {
         Err.throwErrorAsIllegalStateException(rangeError(i, "Java int"));
       }
       return (T) Integer.valueOf((int) i);
@@ -180,6 +165,80 @@ public final class UintT extends BaseVal
     return newTypeConversionError(UintType, typeValue);
   }
 
+  /** Compare implements traits.Comparer.Compare. */
+  @Override
+  public Val compare(Val other) {
+    switch (other.type().typeEnum()) {
+      case Int:
+        if (other.type().typeEnum() == TypeEnum.Err) {
+          return other;
+        }
+        if (other.intValue() < 0L) {
+          // the other int is < 0, so any uint is greater
+          return IntOne;
+        }
+        if (i < 0L) {
+          // this uint is > Long.MAX_VALUE, so it MUST be greater than any signed int
+          return IntOne;
+        }
+        return intOfCompare(Long.compareUnsigned(i, other.intValue()));
+      case Double:
+        if (other.type().typeEnum() == TypeEnum.Err) {
+          return other;
+        }
+        if (other.doubleValue() < 0d) {
+          // the other int is < 0, so any uint is greater
+          return IntOne;
+        }
+        DoubleT cmp = (DoubleT) convertToType(DoubleType);
+        return cmp.compare(other);
+      case Uint:
+        Val converted = other.convertToType(type());
+        if (converted.type().typeEnum() == TypeEnum.Err) {
+          return converted;
+        }
+        return intOfCompare(Long.compareUnsigned(i, ((UintT) converted).i));
+      default:
+        return noSuchOverload(this, "compare", other);
+    }
+  }
+
+  /** Equal implements ref.Val.Equal. */
+  @Override
+  public Val equal(Val other) {
+    switch (other.type().typeEnum()) {
+      case Int:
+        if (other.type().typeEnum() == TypeEnum.Err) {
+          return other;
+        }
+        if (other.intValue() < 0L) {
+          // the other int is < 0, so no uint can be equal
+          return False;
+        }
+        if (i < 0L) {
+          // this uint is > Long.MAX_VALUE, so it CANNOT be equal
+          return False;
+        }
+        return boolOf(i == other.intValue());
+      case Double:
+        return other.equal(this);
+      case Uint:
+      case String:
+        Val converted = other.convertToType(type());
+        if (converted.type().typeEnum() == TypeEnum.Err) {
+          return converted;
+        }
+        return boolOf(i == converted.intValue());
+      case Null:
+      case Bytes:
+      case List:
+      case Map:
+        return False;
+      default:
+        return noSuchOverload(this, "equal", other);
+    }
+  }
+
   /** Divide implements traits.Divider.Divide. */
   @Override
   public Val divide(Val other) {
@@ -191,15 +250,6 @@ public final class UintT extends BaseVal
       return divideByZero();
     }
     return uintOf(i / otherInt);
-  }
-
-  /** Equal implements ref.Val.Equal. */
-  @Override
-  public Val equal(Val other) {
-    if (other.type() != UintType) {
-      return noSuchOverload(this, "equal", other);
-    }
-    return boolOf(i == ((UintT) other).i);
   }
 
   /** Modulo implements traits.Modder.Modulo. */
@@ -223,6 +273,19 @@ public final class UintT extends BaseVal
     }
     try {
       return uintOf(Overflow.multiplyUint64Checked(i, ((UintT) other).i));
+    } catch (OverflowException e) {
+      return errUintOverflow;
+    }
+  }
+
+  /** Add implements traits.Adder.Add. */
+  @Override
+  public Val add(Val other) {
+    if (other.type() != UintType) {
+      return noSuchOverload(this, "add", other);
+    }
+    try {
+      return uintOf(Overflow.addUint64Checked(i, ((UintT) other).i));
     } catch (OverflowException e) {
       return errUintOverflow;
     }
@@ -258,23 +321,20 @@ public final class UintT extends BaseVal
     if (this == o) {
       return true;
     }
-    if (o == null || getClass() != o.getClass()) {
+    if (!(o instanceof Val)) {
       return false;
     }
-    UintT uintT = (UintT) o;
-    return i == uintT.i;
+    // Defer to CEL's equal functionality to allow heterogeneous numeric map keys
+    return equal((Val) o).booleanValue();
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(super.hashCode(), i);
+    // Used to allow heterogeneous numeric map keys
+    return (int) i;
   }
 
-  /**
-   * isJSONSafe indicates whether the uint is safely representable as a floating point value in
-   * JSON.
-   */
-  public boolean isJSONSafe() {
-    return i >= 0 && i <= IntT.maxIntJSON;
+  public String toString() {
+    return String.format("%s{%s}", type().typeName(), Long.toUnsignedString(i));
   }
 }

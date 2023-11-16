@@ -50,4 +50,6 @@ public interface Val {
   boolean booleanValue();
 
   long intValue();
+
+  double doubleValue();
 }

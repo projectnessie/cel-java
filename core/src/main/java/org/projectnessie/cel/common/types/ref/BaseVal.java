@@ -17,6 +17,7 @@ package org.projectnessie.cel.common.types.ref;
 
 import static org.projectnessie.cel.common.types.BoolT.BoolType;
 import static org.projectnessie.cel.common.types.BoolT.True;
+import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
 import static org.projectnessie.cel.common.types.IntT.IntType;
 
 public abstract class BaseVal implements Val {
@@ -47,5 +48,10 @@ public abstract class BaseVal implements Val {
   @Override
   public long intValue() {
     return convertToType(IntType).intValue();
+  }
+
+  @Override
+  public double doubleValue() {
+    return convertToType(DoubleType).doubleValue();
   }
 }

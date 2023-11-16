@@ -15,6 +15,7 @@
  */
 package org.projectnessie.cel.common.types;
 
+import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.DurationT.durationOf;
 import static org.projectnessie.cel.common.types.Err.errDurationOverflow;
 import static org.projectnessie.cel.common.types.Err.errTimestampOutOfRange;
@@ -352,10 +353,14 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
   /** Equal implements ref.Val.Equal. */
   @Override
   public Val equal(Val other) {
-    if (TimestampType != other.type()) {
-      return noSuchOverload(this, "equal", other);
+    switch (other.type().typeEnum()) {
+      case Timestamp:
+        return boolOf(t.equals(((TimestampT) other).t));
+      case Null:
+        return False;
+      default:
+        return noSuchOverload(this, "equal", other);
     }
-    return boolOf(t.equals(((TimestampT) other).t));
   }
 
   /** Receive implements traits.Reciever.Receive. */

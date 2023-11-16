@@ -751,10 +751,9 @@ public class CheckerTest {
                   .idents(
                       Decls.newVar(
                           "x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))))
-          .error(
-              "ERROR: <input>:1:16: found no matching overload for '_!=_' applied to '(int, null)'\n"
-                  + " | x.single_int64 != null\n"
-                  + " | ...............^"),
+          .r(
+              "_!=_(x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_int64~int,null~null)~bool^not_equals")
+          .type(Decls.Bool),
       new TestCase()
           .i("x.single_int64_wrapper == null")
           .env(
