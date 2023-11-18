@@ -84,3 +84,21 @@ publishingHelper {
   nessieRepoName.set("cel-java")
   inceptionYear.set("2021")
 }
+
+idea.project.settings {
+  taskTriggers {
+    afterSync(
+      ":cel-generated-pb:jar",
+      ":cel-generated-pb:testJar",
+      ":cel-generated-antlr:shadowJar"
+    )
+  }
+}
+
+subprojects.forEach {
+  it.tasks.register("compileAll").configure {
+    group = "build"
+    description = "Runs all compilation and jar tasks"
+    dependsOn(tasks.withType<AbstractCompile>(), tasks.withType<ProcessResources>())
+  }
+}

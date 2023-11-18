@@ -155,10 +155,7 @@ public class StringTest {
   void stringEqual() {
     assertThat(stringOf("hello").equal(stringOf("hello"))).isSameAs(True);
     assertThat(stringOf("hello").equal(stringOf("hell"))).isSameAs(False);
-    assertThat(stringOf("c").equal(intOf(99)))
-        .isInstanceOf(Err.class)
-        .extracting(Object::toString)
-        .isEqualTo("no such overload: string.equal(int)");
+    assertThat(stringOf("c").equal(intOf(99))).isSameAs(False);
   }
 
   @Test

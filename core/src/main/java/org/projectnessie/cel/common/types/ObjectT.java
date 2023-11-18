@@ -15,8 +15,8 @@
  */
 package org.projectnessie.cel.common.types;
 
+import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
-import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.Types.boolOf;
 
 import java.util.Objects;
@@ -24,6 +24,7 @@ import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeDescription;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.FieldTester;
 import org.projectnessie.cel.common.types.traits.Indexer;
@@ -57,9 +58,13 @@ public abstract class ObjectT extends BaseVal implements FieldTester, Indexer, T
 
   @Override
   public Val equal(Val other) {
-    if (!typeDesc.name().equals(other.type().typeName())) {
-      return noSuchOverload(this, "equal", other);
+    if (other.type().typeEnum() != TypeEnum.Object) {
+      return False;
     }
+    if (!typeDesc.name().equals(other.type().typeName())) {
+      return False;
+    }
+
     return boolOf(this.value.equals(other.value()));
   }
 

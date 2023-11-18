@@ -18,8 +18,8 @@ package org.projectnessie.cel.common.types;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.Err.isError;
+import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
-import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.TypeT.TypeType;
 import static org.projectnessie.cel.common.types.Types.boolOf;
@@ -30,7 +30,6 @@ import com.google.protobuf.Value;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
@@ -58,7 +57,17 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
 
   public static Val newMaybeWrappedMap(TypeAdapter adapter, Map<?, ?> value) {
     Map<Val, Val> newMap = new HashMap<>(value.size() * 4 / 3 + 1);
-    value.forEach((k, v) -> newMap.put(adapter.nativeToValue(k), adapter.nativeToValue(v)));
+    for (Map.Entry<?, ?> entry : value.entrySet()) {
+      Val k = adapter.nativeToValue(entry.getKey());
+      Val v = adapter.nativeToValue(entry.getValue());
+      if (k.type().typeEnum() == TypeEnum.Null) {
+        return newErr("unsupported key type");
+      }
+      if (newMap.putIfAbsent(k, v) != null) {
+        // Prevent duplicate keys, error out.
+        return newErr("Failed with repeated key");
+      }
+    }
     return newWrappedMap(adapter, newMap);
   }
 
@@ -165,10 +174,19 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
         if (isError(oVal)) {
           return val;
         }
-        if (val.type() != oVal.type()) {
-          return noSuchOverload(val, Operator.Equals.id, oVal);
-        }
+
         Val eq = val.equal(oVal);
+        if (eq == True) {
+          continue;
+        }
+        if (eq == False) {
+          return False;
+        }
+
+        if (!val.type().equals(oVal.type())) {
+          return False;
+        }
+        eq = val.equal(oVal);
         if (eq instanceof Err) {
           return eq;
         }
@@ -188,12 +206,12 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
 
     @Override
     public Val contains(Val value) {
-      return boolOf(map.containsKey(value));
+      return boolOf(find(value) != null);
     }
 
     @Override
     public Val get(Val index) {
-      return map.get(index);
+      return find(index);
     }
 
     @Override
@@ -203,6 +221,8 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
 
     @Override
     public Val find(Val key) {
+      // Note: no special handling for heterogenous numeric map keys needed, the Val type
+      // implementations implement .hashCode() and .equals() do deal with heterogenous numeric keys.
       return map.get(key);
     }
 

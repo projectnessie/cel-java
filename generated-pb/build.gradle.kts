@@ -29,7 +29,6 @@ apply<ProtobufPlugin>()
 
 sourceSets.main {
   java.srcDir(layout.buildDirectory.dir("generated/source/proto/main/java"))
-  java.srcDir(layout.buildDirectory.dir("generated/source/proto/main/grpc"))
   java.destinationDirectory.set(layout.buildDirectory.dir("classes/java/generated"))
 }
 
@@ -56,10 +55,6 @@ configure<ProtobufExtension> {
     // Download from repositories
     artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.get()}"
   }
-  plugins {
-    this.create("grpc") { artifact = "io.grpc:protoc-gen-grpc-java:${libs.versions.grpc.get()}" }
-  }
-  generateProtoTasks { all().configureEach { this.plugins.create("grpc") {} } }
 }
 
 reflectionConfig {

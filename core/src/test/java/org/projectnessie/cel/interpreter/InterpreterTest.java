@@ -239,6 +239,60 @@ class InterpreterTest {
   @SuppressWarnings("unused")
   static TestCase[] testCases() {
     return new TestCase[] {
+      new TestCase(InterpreterTestCase.map_key_null)
+          .expr("{null:false}[null]")
+          .err("message: unsupported key type"),
+      new TestCase(InterpreterTestCase.map_value_repeat_key_heterogeneous)
+          .expr("{0: 1, 0u: 2}[0.0]")
+          .err("message: Failed with repeated key"),
+      new TestCase(InterpreterTestCase.map_key_mixed_numbers_lossy_double_key)
+          .expr("{1u: 1.0, 2: 2.0, 3u: 3.0}[3.1]")
+          .err("no such key: double{3.1}"),
+      new TestCase(InterpreterTestCase.zero_based_double_error)
+          .expr("[7, 8, 9][dyn(0.1)]")
+          .err("invalid_argument"),
+      new TestCase(InterpreterTestCase.zero_based_double).expr("[7, 8, 9][dyn(0.0)]").out(intOf(7)),
+      new TestCase(InterpreterTestCase.not_int32_eq_uint)
+          .expr("Int32Value{value: 34} == dyn(UInt64Value{value: 18446744073709551615u})")
+          .container("google.protobuf")
+          .out(False),
+      new TestCase(InterpreterTestCase.not_uint32_eq_double)
+          .expr("UInt32Value{value: 34u} == dyn(DoubleValue{value: 18446744073709551616.0})")
+          .container("google.protobuf")
+          .out(False),
+      new TestCase(InterpreterTestCase.eq_proto_different_types)
+          .expr("dyn(TestAllTypes{}) == dyn(NestedTestAllTypes{})")
+          .container("google.api.expr.test.v1.proto2")
+          .types(
+              com.google.api.expr.test.v1.proto2.TestAllTypesProto.TestAllTypes
+                  .getDefaultInstance())
+          .out(False),
+      new TestCase(InterpreterTestCase.not_lt_dyn_big_uint_int)
+          .expr("dyn(9223372036854775808u) < 1")
+          .out(False),
+      new TestCase(InterpreterTestCase.lt_dyn_int_big_uint)
+          .expr("dyn(1) < 9223372036854775808u")
+          .out(True),
+      new TestCase(InterpreterTestCase.lt_dyn_uint_big_double)
+          .expr("dyn(18446744073709551615u) < 18446744073709590000.0")
+          .out(True),
+      new TestCase(InterpreterTestCase.not_lt_dyn_uint_small_int)
+          .expr("dyn(1u) < -9223372036854775808")
+          .out(False),
+      new TestCase(InterpreterTestCase.lt_ne_dyn_int_double).expr("dyn(24) != 24.1").out(True),
+      new TestCase(InterpreterTestCase.eq_proto_nan_equal)
+          .expr(
+              "TestAllTypes{single_double: double('NaN')} == TestAllTypes{single_double: double('NaN')}")
+          .container("google.api.expr.test.v1.proto3")
+          .types(
+              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
+                  .getDefaultInstance())
+          // The outcome in the generated Java proto code is different than in the conformance-test,
+          // it is NOT: "For proto equality, fields with NaN value are treated as not equal."
+          .out(True),
+      new TestCase(InterpreterTestCase.eq_bool_not_null)
+          .expr("google.protobuf.BoolValue{} != null")
+          .out(True),
       new TestCase(InterpreterTestCase.literal_any)
           .expr(
               "google.protobuf.Any{type_url: 'type.googleapis.com/google.api.expr.test.v1.proto2.TestAllTypes', value: b'\\x08\\x96\\x01'}")
@@ -272,9 +326,9 @@ class InterpreterTest {
               com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
                   .getDefaultInstance())
           .out(Struct.getDefaultInstance()),
-      new TestCase(InterpreterTestCase.elem_in_mixed_type_list_error)
+      new TestCase(InterpreterTestCase.elem_in_mixed_type_list2)
           .expr("'elem' in [1u, 'str', 2, b'bytes']")
-          .err("no such overload: string.@in(uint,bytes,...)"),
+          .out(False),
       new TestCase(InterpreterTestCase.elem_in_mixed_type_list)
           .expr("'elem' in [1, 'elem', 2]")
           .out(boolOf(true)),
@@ -329,10 +383,22 @@ class InterpreterTest {
                   .setStandaloneEnumValue(-3)
                   .build())
           .out(intOf(-3)),
-      new TestCase(InterpreterTestCase.eq_list_elem_mixed_types_error)
+      new TestCase(InterpreterTestCase.eq_list_mixed_type_numbers)
+          .expr("[1.0, 2.0, 3] == [1u, 2, 3u]")
+          .out(True),
+      new TestCase(InterpreterTestCase.not_eq_list_mixed_type_numbers)
+          .expr("[1.0, 2.1] == [1u, 2]")
+          .out(False),
+      new TestCase(InterpreterTestCase.eq_list_elem_mixed_types_one_element)
           .expr("[1] == [1.0]")
-          .unchecked()
-          .err("no such overload: int._==_(double)"),
+          .out(True),
+      new TestCase(InterpreterTestCase.eq_list_elem_one_element)
+          .expr("['str'] == ['str']")
+          .out(True),
+      new TestCase(InterpreterTestCase.not_eq_list_one_element)
+          .expr("['str'] == ['blah']")
+          .out(False),
+      new TestCase(InterpreterTestCase.not_eq_list_one_element2).expr("[1] == [2]").out(False),
       new TestCase(InterpreterTestCase.parse_nest_message_literal)
           .container("google.api.expr.test.v1.proto3")
           .expr(
@@ -1135,10 +1201,10 @@ class InterpreterTest {
           .env(Decls.newVar("x", Decls.Duration))
           .in(
               "x",
-              com.google.protobuf.Duration.newBuilder().setSeconds(123).setNanos(123456789).build())
+              com.google.protobuf.Duration.newBuilder().setSeconds(123).setNanos(321456789).build())
           .cost(costOf(2, 2))
           .exhaustiveCost(costOf(2, 2))
-          .out(123123),
+          .out(321),
       new TestCase(InterpreterTestCase.timestamp_get_hours_tz)
           .expr("timestamp('2009-02-13T23:31:30Z').getHours('2:00')")
           .out(intOf(1))
@@ -1563,6 +1629,7 @@ class InterpreterTest {
     if (tc.out != null) {
       assertThat(i).isInstanceOf(InterpretableConst.class);
       InterpretableConst ic = (InterpretableConst) i;
+      ic.value().equal(tc.out);
       assertThat(ic.value()).extracting(o -> o.equal(tc.out)).isSameAs(True);
     }
   }

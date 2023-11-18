@@ -26,10 +26,12 @@ import static org.projectnessie.cel.common.types.IntT.IntOne;
 import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.IntT.IntZero;
 import static org.projectnessie.cel.common.types.IntT.intOf;
+import static org.projectnessie.cel.common.types.NullT.NullValue;
 import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.TypeT.TypeType;
 import static org.projectnessie.cel.common.types.UintT.UintType;
+import static org.projectnessie.cel.common.types.UintT.uintOf;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.DoubleValue;
@@ -53,6 +55,16 @@ public class DoubleTest {
     assertThat(gt.compare(lt).equal(IntOne)).isSameAs(True);
     assertThat(gt.compare(gt).equal(IntZero)).isSameAs(True);
     assertThat(gt.compare(TypeType)).matches(Err::isError);
+
+    assertThat(doubleOf(1e70).compare(intOf(5))).isSameAs(IntOne);
+    assertThat(doubleOf(5).compare(intOf(5))).isSameAs(IntZero);
+    assertThat(doubleOf(5).compare(intOf(-5))).isSameAs(IntOne);
+    assertThat(doubleOf(5).compare(intOf(Integer.MAX_VALUE))).isSameAs(IntNegOne);
+
+    assertThat(doubleOf(1e70).compare(doubleOf(5))).isSameAs(IntOne);
+    assertThat(doubleOf(5).compare(doubleOf(5))).isSameAs(IntZero);
+    assertThat(doubleOf(5).compare(doubleOf(1e70d))).isSameAs(IntNegOne);
+    assertThat(doubleOf(5).compare(doubleOf(1e-70d))).isSameAs(IntOne);
   }
 
   @Test
@@ -161,6 +173,15 @@ public class DoubleTest {
   @Test
   void doubleEqual() {
     assertThat(doubleOf(0).equal(False)).matches(Err::isError);
+    assertThat(doubleOf(0).equal(NullValue)).isSameAs(False);
+    assertThat(doubleOf(0).equal(intOf(0))).isSameAs(True);
+    assertThat(doubleOf(0).equal(intOf(1))).isSameAs(False);
+    assertThat(doubleOf(0).equal(uintOf(0))).isSameAs(True);
+    assertThat(doubleOf(0).equal(uintOf(1))).isSameAs(False);
+    assertThat(doubleOf(0).equal(doubleOf(0))).isSameAs(True);
+    assertThat(doubleOf(0).equal(doubleOf(1))).isSameAs(False);
+    assertThat(doubleOf(0).equal(stringOf("0"))).isSameAs(True);
+    assertThat(doubleOf(0).equal(stringOf("1"))).isSameAs(False);
   }
 
   @Test

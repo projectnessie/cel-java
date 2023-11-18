@@ -15,6 +15,7 @@
  */
 package org.projectnessie.cel.common.types;
 
+import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.Err.rangeError;
@@ -31,7 +32,6 @@ import com.google.protobuf.FloatValue;
 import com.google.protobuf.Value;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.util.Objects;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeEnum;
@@ -68,6 +68,11 @@ public final class DoubleT extends BaseVal
     this.d = d;
   }
 
+  @Override
+  public double doubleValue() {
+    return d;
+  }
+
   /** Add implements traits.Adder.Add. */
   @Override
   public Val add(Val other) {
@@ -75,20 +80,6 @@ public final class DoubleT extends BaseVal
       return noSuchOverload(this, "add", other);
     }
     return doubleOf(d + ((DoubleT) other).d);
-  }
-
-  /** Compare implements traits.Comparer.Compare. */
-  @Override
-  public Val compare(Val other) {
-    if (!(other instanceof DoubleT)) {
-      return noSuchOverload(this, "compare", other);
-    }
-    double od = ((DoubleT) other).d;
-    if (d == od) {
-      // work around for special case of -0.0d == 0.0d (IEEE 754)
-      return IntZero;
-    }
-    return intOfCompare(Double.compare(d, od));
   }
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
@@ -141,17 +132,23 @@ public final class DoubleT extends BaseVal
     // (see https://github.com/google/cel-spec/blob/master/doc/langdef.md#numeric-values)
     switch (typeValue.typeEnum()) {
       case Int:
+        if (!Double.isFinite(d)) {
+          return rangeError(d, "int");
+        }
         long r = (long) d; // ?? Math.round(d);
         if (r == Long.MIN_VALUE || r == Long.MAX_VALUE) {
           return rangeError(d, "int");
         }
         return intOf(r);
       case Uint:
+        if (!Double.isFinite(d)) {
+          return rangeError(d, "uint");
+        }
         // hack to support uint64
         BigDecimal dec = new BigDecimal(d);
         BigInteger bi = dec.toBigInteger();
         if (d < 0 || bi.compareTo(MAX_UINT64) > 0) {
-          return rangeError(d, "int");
+          return rangeError(d, "uint");
         }
         return uintOf(bi.longValue());
       case Double:
@@ -173,14 +170,51 @@ public final class DoubleT extends BaseVal
     return doubleOf(d / ((DoubleT) other).d);
   }
 
+  /** Compare implements traits.Comparer.Compare. */
+  @Override
+  public Val compare(Val other) {
+    switch (other.type().typeEnum()) {
+      case Uint:
+      case Int:
+      case Double:
+        Val converted = other.convertToType(type());
+        if (converted.type().typeEnum() == TypeEnum.Err) {
+          return converted;
+        }
+        double od = ((DoubleT) converted).d;
+        if (d == od) {
+          // work around for special case of -0.0d == 0.0d (IEEE 754)
+          return IntZero;
+        }
+        return intOfCompare(Double.compare(d, od));
+      default:
+        return noSuchOverload(this, "compare", other);
+    }
+  }
+
   /** Equal implements ref.Val.Equal. */
   @Override
   public Val equal(Val other) {
-    if (!(other instanceof DoubleT)) {
-      return noSuchOverload(this, "equal", other);
+    switch (other.type().typeEnum()) {
+      case Uint:
+      case Int:
+      case Double:
+      case String:
+        Val converted = other.convertToType(type());
+        if (converted.type().typeEnum() == TypeEnum.Err) {
+          return converted;
+        }
+        double o = ((DoubleT) converted).d;
+        // TODO: Handle NaNs properly.
+        return boolOf(d == o);
+      case Null:
+      case Bytes:
+      case List:
+      case Map:
+        return False;
+      default:
+        return noSuchOverload(this, "equal", other);
     }
-    /** TODO: Handle NaNs properly. */
-    return boolOf(d == ((DoubleT) other).d);
   }
 
   /** Multiply implements traits.Multiplier.Multiply. */
@@ -224,20 +258,16 @@ public final class DoubleT extends BaseVal
     if (this == o) {
       return true;
     }
-    if (o == null || getClass() != o.getClass()) {
+    if (!(o instanceof Val)) {
       return false;
     }
-    DoubleT doubleT = (DoubleT) o;
-    double od = ((DoubleT) o).d;
-    if (d == od) {
-      // work around for special case of -0.0d == 0.0d (IEEE 754)
-      return true;
-    }
-    return Double.compare(doubleT.d, d) == 0;
+    // Defer to CEL's equal functionality to allow heterogeneous numeric map keys
+    return equal((Val) o).booleanValue();
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(super.hashCode(), d);
+    // Used to allow heterogeneous numeric map keys
+    return (int) d;
   }
 }

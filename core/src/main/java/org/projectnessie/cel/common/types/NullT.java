@@ -15,6 +15,7 @@
  */
 package org.projectnessie.cel.common.types;
 
+import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
@@ -95,10 +96,18 @@ public final class NullT extends BaseVal {
   /** Equal implements ref.Val.Equal. */
   @Override
   public Val equal(Val other) {
-    if (NullType != other.type()) {
-      return noSuchOverload(this, "equal", other);
+    switch (other.type().typeEnum()) {
+      case Null:
+        return True;
+      case Int:
+      case Uint:
+      case Double:
+      case String:
+      case Bytes:
+        return False;
+      default:
+        return noSuchOverload(this, "equal", other);
     }
-    return True;
   }
 
   /** Type implements ref.Val.Type. */

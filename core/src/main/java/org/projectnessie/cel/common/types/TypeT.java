@@ -79,6 +79,11 @@ public class TypeT implements Type, Val {
     throw new UnsupportedOperationException();
   }
 
+  @Override
+  public double doubleValue() {
+    throw new UnsupportedOperationException();
+  }
+
   /** ConvertToNative implements ref.Val.ConvertToNative. */
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {

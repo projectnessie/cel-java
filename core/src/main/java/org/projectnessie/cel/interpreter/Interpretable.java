@@ -34,12 +34,14 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.projectnessie.cel.common.operators.Operator;
+import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.IterableT;
 import org.projectnessie.cel.common.types.IteratorT;
 import org.projectnessie.cel.common.types.Overloads;
 import org.projectnessie.cel.common.types.StringT;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Container;
@@ -869,11 +871,17 @@ public interface Interpretable {
         if (isUnknownOrError(keyVal)) {
           return keyVal;
         }
+        if (keyVal.type().typeEnum() == TypeEnum.Null) {
+          return newErr("unsupported key type");
+        }
         Val valVal = vals[i].eval(ctx);
         if (isUnknownOrError(valVal)) {
           return valVal;
         }
-        entries.put(keyVal, valVal);
+        if (entries.putIfAbsent(keyVal, valVal) != null) {
+          // Prevent duplicate keys, error out.
+          return newErr("Failed with repeated key");
+        }
       }
       return adapter.nativeToValue(entries);
     }

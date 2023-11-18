@@ -37,6 +37,8 @@ dependencies {
 
   testImplementation(platform(libs.junit.bom))
   testImplementation(libs.bundles.junit.testing)
+  testImplementation(libs.protobuf.java)
+  testImplementation(libs.guava)
   testRuntimeOnly(libs.junit.jupiter.engine)
 
   jmhImplementation(libs.jmh.core)

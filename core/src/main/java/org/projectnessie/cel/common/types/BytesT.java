@@ -15,6 +15,7 @@
  */
 package org.projectnessie.cel.common.types;
 
+import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
@@ -162,10 +163,14 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
   /** Equal implements the ref.Val interface method. */
   @Override
   public Val equal(Val other) {
-    if (!(other instanceof BytesT)) {
-      return noSuchOverload(this, "equal", other);
+    switch (other.type().typeEnum()) {
+      case Bytes:
+        return boolOf(Arrays.equals(b, ((BytesT) other).b));
+      case Null:
+        return False;
+      default:
+        return noSuchOverload(this, "equal", other);
     }
-    return boolOf(Arrays.equals(b, ((BytesT) other).b));
   }
 
   /** Size implements the traits.Sizer interface method. */

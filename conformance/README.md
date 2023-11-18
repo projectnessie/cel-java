@@ -11,8 +11,11 @@ The CEL-spec conformance test suite is written in Go and uses the bazel build to
 
 Required tools:
 * [Bazel build tool](https://bazel.build/)
-
-    On Ubuntu run `apt-get install bazel-bootstrap` 
+  
+    See [Bazel web site](https://bazel.build/install) for installation instructions.
+    Do **not** use the `bazel-bootstrap` package on Ubuntu, because it comes with
+    pre-compiled classes that are built with Java 17 or newer, preventing it from
+    running bazel using older Java versions.
 * gcc
     
     On Ubuntu run `apt-get install gcc`

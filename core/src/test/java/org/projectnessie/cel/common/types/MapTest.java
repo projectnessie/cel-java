@@ -15,10 +15,89 @@
  */
 package org.projectnessie.cel.common.types;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.projectnessie.cel.common.types.BoolT.True;
+import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
+import static org.projectnessie.cel.common.types.IntT.intOf;
+import static org.projectnessie.cel.common.types.MapT.newWrappedMap;
+import static org.projectnessie.cel.common.types.StringT.stringOf;
+import static org.projectnessie.cel.common.types.Types.boolOf;
+import static org.projectnessie.cel.common.types.UintT.uintOf;
+import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newRegistry;
+
+import com.google.common.collect.ImmutableMap;
+import java.util.HashMap;
+import java.util.Map;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.projectnessie.cel.common.types.ref.Val;
 
 public class MapTest {
+
+  @Test
+  void heterogenousKeys() {
+    Map<Val, Val> javaMap =
+        ImmutableMap.of(
+            intOf(1),
+            stringOf("one"),
+            uintOf(2),
+            stringOf("two"),
+            doubleOf(3.1d),
+            stringOf("three"),
+            boolOf(true),
+            stringOf("true"),
+            stringOf("str"),
+            stringOf("string"));
+    MapT celMap = (MapT) newWrappedMap(newRegistry(), javaMap);
+
+    assertThat(celMap.size()).isEqualTo(intOf(javaMap.size()));
+
+    assertThat(celMap.find(intOf(1))).isEqualTo(stringOf("one"));
+    assertThat(celMap.find(uintOf(1))).isEqualTo(stringOf("one"));
+    assertThat(celMap.find(doubleOf(1))).isEqualTo(stringOf("one"));
+    assertThat(celMap.find(intOf(2))).isEqualTo(stringOf("two"));
+    assertThat(celMap.find(uintOf(2))).isEqualTo(stringOf("two"));
+    assertThat(celMap.find(doubleOf(2))).isEqualTo(stringOf("two"));
+    assertThat(celMap.find(intOf(3))).isNull();
+    assertThat(celMap.find(uintOf(3))).isNull();
+    assertThat(celMap.find(doubleOf(3.1d))).isEqualTo(stringOf("three"));
+    assertThat(celMap.find(boolOf(true))).isEqualTo(stringOf("true"));
+    assertThat(celMap.find(stringOf("str"))).isEqualTo(stringOf("string"));
+
+    assertThat(celMap.get(intOf(1))).isEqualTo(stringOf("one"));
+    assertThat(celMap.get(uintOf(1))).isEqualTo(stringOf("one"));
+    assertThat(celMap.get(doubleOf(1))).isEqualTo(stringOf("one"));
+    assertThat(celMap.get(intOf(2))).isEqualTo(stringOf("two"));
+    assertThat(celMap.get(uintOf(2))).isEqualTo(stringOf("two"));
+    assertThat(celMap.get(doubleOf(2))).isEqualTo(stringOf("two"));
+    assertThat(celMap.get(intOf(3))).isNull();
+    assertThat(celMap.get(uintOf(3))).isNull();
+    assertThat(celMap.get(doubleOf(3.1d))).isEqualTo(stringOf("three"));
+    assertThat(celMap.get(boolOf(true))).isEqualTo(stringOf("true"));
+    assertThat(celMap.get(stringOf("str"))).isEqualTo(stringOf("string"));
+
+    assertThat(celMap.contains(intOf(1))).isSameAs(True);
+    assertThat(celMap.contains(uintOf(1))).isSameAs(True);
+    assertThat(celMap.contains(doubleOf(1))).isSameAs(True);
+
+    assertThat(celMap.contains(intOf(1))).isSameAs(True);
+    assertThat(celMap.contains(uintOf(1))).isSameAs(True);
+    assertThat(celMap.contains(doubleOf(1))).isSameAs(True);
+
+    assertThat(celMap.find(intOf(42))).isNull();
+
+    IteratorT iter = celMap.iterator();
+    Map<Val, Val> mapFromIter = new HashMap<>();
+    while (iter.hasNext() == True) {
+      Val key = iter.next();
+      mapFromIter.put(key, celMap.find(key));
+    }
+    assertThat(mapFromIter).hasSize(javaMap.size()).containsAllEntriesOf(javaMap);
+
+    assertThat(celMap.convertToNative(Map.class))
+        .isEqualTo(
+            ImmutableMap.of(1L, "one", 2L, "two", 3.1d, "three", true, "true", "str", "string"));
+  }
 
   //	type testStruct struct {
   //		M       string

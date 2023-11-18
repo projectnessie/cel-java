@@ -162,9 +162,9 @@ public class DurationTest {
 
   @Test
   void durationGetMilliseconds() {
-    DurationT d = durationOf(ofSeconds(7506, 0));
+    DurationT d = durationOf(ofSeconds(7506, 321456789));
     Val min = d.receive(Overloads.TimeGetMilliseconds, Overloads.DurationToMilliseconds);
-    assertThat(min.equal(intOf(7506000))).isSameAs(True);
+    assertThat(min.equal(intOf(321))).isSameAs(True);
   }
 
   @Test

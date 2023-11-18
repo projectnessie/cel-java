@@ -17,6 +17,7 @@ package org.projectnessie.cel.interpreter;
 
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
+import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.Err.ErrException;
 import static org.projectnessie.cel.common.types.Err.indexOutOfBoundsException;
 import static org.projectnessie.cel.common.types.Err.isError;
@@ -27,6 +28,7 @@ import static org.projectnessie.cel.common.types.Err.noSuchKeyException;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.Err.throwErrorAsIllegalStateException;
 import static org.projectnessie.cel.common.types.IntT.intOf;
+import static org.projectnessie.cel.common.types.NullT.NullValue;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
@@ -43,7 +45,6 @@ import java.util.Objects;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.types.Err;
-import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
@@ -729,12 +730,18 @@ public interface AttributeFactory {
       switch (val.type().typeEnum()) {
         case String:
           return new StringQualifier(id, (String) val.value(), val, adapter);
+        case Double:
+          return new DoubleQualifier(id, (double) val.value(), val, adapter);
         case Int:
           return new IntQualifier(id, val.intValue(), val, adapter);
         case Uint:
           return new UintQualifier(id, val.intValue(), val, adapter);
         case Bool:
           return new BoolQualifier(id, val.booleanValue(), val, adapter);
+        case Null:
+          // Not actually a qualifier, but conformance-tests require this, although it's actually an
+          // error condition.
+          return new NullQualifier(id, val, adapter);
       }
     }
 
@@ -748,6 +755,10 @@ public interface AttributeFactory {
     if ((c == Byte.class) || (c == Short.class) || (c == Integer.class) || (c == Long.class)) {
       long i = ((Number) v).longValue();
       return new IntQualifier(id, i, intOf(i), adapter);
+    }
+    if (c == Double.class) {
+      double b = (Double) v;
+      return new DoubleQualifier(id, b, doubleOf(b), adapter);
     }
     if (c == Boolean.class) {
       boolean b = (Boolean) v;
@@ -828,7 +839,7 @@ public interface AttributeFactory {
         obj = m.get(s);
         if (obj == null) {
           if (m.containsKey(s)) {
-            return NullT.NullValue;
+            return NullValue;
           }
           throw noSuchKeyException(s);
         }
@@ -868,6 +879,105 @@ public interface AttributeFactory {
           + ", value='"
           + value
           + '\''
+          + ", celValue="
+          + celValue
+          + ", adapter="
+          + adapter
+          + '}';
+    }
+  }
+
+  final class DoubleQualifier implements Coster, ConstantQualifierEquator {
+    final long id;
+    final double value;
+    final Val celValue;
+    final TypeAdapter adapter;
+
+    DoubleQualifier(long id, double value, Val celValue, TypeAdapter adapter) {
+      this.id = id;
+      this.value = value;
+      this.celValue = celValue;
+      this.adapter = adapter;
+    }
+
+    /** ID is an implementation of the Qualifier interface method. */
+    @Override
+    public long id() {
+      return id;
+    }
+
+    /** Qualify implements the Qualifier interface method. */
+    @SuppressWarnings("rawtypes")
+    @Override
+    public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
+      double i = value;
+      if (obj instanceof Map) {
+        Map m = (Map) obj;
+        obj = m.get(i);
+        if (obj == null) {
+          obj = m.get((int) i);
+        }
+        if (obj == null) {
+          if (m.containsKey(i) || m.containsKey((int) i)) {
+            return null;
+          }
+          throw noSuchKeyException(i);
+        }
+        return obj;
+      }
+      if (obj.getClass().isArray()) {
+        int l = Array.getLength(obj);
+        if (i < 0 || i >= l) {
+          throw indexOutOfBoundsException(i);
+        }
+        obj = Array.get(obj, (int) i);
+        return obj;
+      }
+      if (obj instanceof List) {
+        List list = (List) obj;
+        int l = list.size();
+        if (i < 0 || i >= l) {
+          throw indexOutOfBoundsException(i);
+        }
+        obj = list.get((int) i);
+        return obj;
+      }
+      if (isUnknown(obj)) {
+        return obj;
+      }
+      return refResolve(adapter, celValue, obj);
+    }
+
+    /** Value implements the ConstantQualifier interface */
+    @Override
+    public Val value() {
+      return celValue;
+    }
+
+    /** Cost returns zero for constant field qualifiers */
+    @Override
+    public Cost cost() {
+      return Cost.None;
+    }
+
+    @Override
+    public boolean qualifierValueEquals(Object value) {
+      if (value instanceof ULong) {
+        return false;
+      }
+      if (value instanceof Number) {
+        return this.value == ((Number) value).doubleValue();
+      }
+      return false;
+    }
+
+    @Override
+    public String toString() {
+      return "DoubleQualifier{"
+          + "id="
+          + id
+          + ", value="
+          + value
           + ", celValue="
           + celValue
           + ", adapter="
@@ -1124,6 +1234,63 @@ public interface AttributeFactory {
           + id
           + ", value="
           + value
+          + ", celValue="
+          + celValue
+          + ", adapter="
+          + adapter
+          + '}';
+    }
+  }
+
+  /**
+   * Not actually a qualifier, but conformance-tests require this, although it's actually an error
+   * condition.
+   */
+  final class NullQualifier implements Coster, ConstantQualifierEquator {
+    final long id;
+    final Val celValue;
+    final TypeAdapter adapter;
+
+    NullQualifier(long id, Val celValue, TypeAdapter adapter) {
+      this.id = id;
+      this.celValue = celValue;
+      this.adapter = adapter;
+    }
+
+    /** ID is an implementation of the Qualifier interface method. */
+    @Override
+    public long id() {
+      return id;
+    }
+
+    /** Qualify implements the Qualifier interface method. */
+    @Override
+    public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
+      return null;
+    }
+
+    /** Value implements the ConstantQualifier interface */
+    @Override
+    public Val value() {
+      return NullValue;
+    }
+
+    /** Cost returns zero for constant field qualifiers */
+    @Override
+    public Cost cost() {
+      return Cost.None;
+    }
+
+    @Override
+    public boolean qualifierValueEquals(Object value) {
+      return value == null || value == NullValue;
+    }
+
+    @Override
+    public String toString() {
+      return "NullQualifier{"
+          + "id="
+          + id
           + ", celValue="
           + celValue
           + ", adapter="

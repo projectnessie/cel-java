@@ -98,7 +98,7 @@ jobs:
         if: ${{ matrix.java-version == '11' }}
         uses: jwlawson/actions-setup-bazel@v1.10.1
         with:
-          bazel-version: '3.5.1'
+          bazel-version: '6.4.0'
 
       - name: Conformance tests
         if: ${{ matrix.java-version == '11' }}
