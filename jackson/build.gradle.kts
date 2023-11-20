@@ -28,9 +28,10 @@ dependencies {
   api(project(":cel-core"))
 
   implementation(platform(libs.jackson.bom))
-  implementation(libs.jackson.core)
-  implementation(libs.jackson.dataformat.protobuf)
-  implementation(libs.jackson.dataformat.yaml)
+  implementation("com.fasterxml.jackson.core:jackson-databind")
+  implementation("com.fasterxml.jackson.core:jackson-core")
+  implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-protobuf")
+  implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
 
   testImplementation(project(":cel-tools"))
   testAnnotationProcessor(libs.immutables.value.processor)

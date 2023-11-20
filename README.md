@@ -201,6 +201,16 @@ dependencies {
 }
 ```
 
+## Dependency-free artifact
+
+The `org.projectnessie.cel:cel-standalone` contains everything from CEL-Java and has no dependencies.
+It comes with relocated dependencies.
+
+Using `cel-standalone` is especially useful when your project requires different versions of
+`protobuf-java`.
+
+Use _either_ `cel-tools` _or_ `cel-standalone` - never both!
+
 ## Motivation to have a CEL-Java port
 
 The [Common Expression Language](https://github.com/google/cel-spec/) allows simple computations

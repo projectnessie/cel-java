@@ -48,9 +48,6 @@ idea-ext = { module = "gradle.plugin.org.jetbrains.gradle.plugin.idea-ext:gradle
 immutables-value-annotations = { module = "org.immutables:value-annotations", version.ref = "immutables" }
 immutables-value-processor = { module = "org.immutables:value-processor", version.ref = "immutables" }
 jackson-bom = { module = "com.fasterxml.jackson:jackson-bom", version = "2.16.0" }
-jackson-core = { module = "com.fasterxml.jackson.core:jackson-databind" }
-jackson-dataformat-protobuf = { module = "com.fasterxml.jackson.dataformat:jackson-dataformat-protobuf" }
-jackson-dataformat-yaml = { module = "com.fasterxml.jackson.dataformat:jackson-dataformat-yaml" }
 jacoco-maven-plugin = { module = "org.jacoco:jacoco-maven-plugin", version.ref = "jacoco" }
 jandex-plugin = { module = "com.github.vlsi.gradle:jandex-plugin", version.ref = "jandexPlugin" }
 jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
