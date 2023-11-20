@@ -75,6 +75,7 @@ gradle.beforeProject {
       "core" -> "Common-Expression-Language - Java - Core Module"
       "tools" -> "Common-Expression-Language - Script Tools"
       "jackson" -> "Common-Expression-Language - Jackson Type Registry"
+      "standalone" -> "Common-Expression-Language - CEL with relocated protobuf-java"
       else -> name
     }
 }
@@ -95,5 +96,7 @@ celProject("jackson")
 celProject("conformance")
 
 celProject("tools")
+
+celProject("standalone")
 
 celProject("bom")
