@@ -204,10 +204,12 @@ dependencies {
 ## Dependency-free artifact
 
 The `org.projectnessie.cel:cel-standalone` contains everything from CEL-Java and has no dependencies.
-It comes with relocated dependencies.
+It comes with relocated protobuf dependencies.
 
 Using `cel-standalone` is especially useful when your project requires different versions of
 `protobuf-java`.
+
+If you need CEL-Java's Jackson functionality, include the Jackson dependencies in your project.
 
 Use _either_ `cel-tools` _or_ `cel-standalone` - never both!
 

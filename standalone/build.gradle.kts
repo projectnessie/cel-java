@@ -31,19 +31,12 @@ dependencies {
 
   compileOnly(libs.protobuf.java)
   compileOnly(libs.agrona)
-
-  compileOnly(platform(libs.jackson.bom))
-  compileOnly("com.fasterxml.jackson.core:jackson-databind")
-  compileOnly("com.fasterxml.jackson.core:jackson-core")
-  compileOnly("com.fasterxml.jackson.dataformat:jackson-dataformat-protobuf")
-  compileOnly("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
 }
 
 val shadowJar = tasks.named<ShadowJar>("shadowJar")
 
 shadowJar.configure {
   relocate("com.google.protobuf", "org.projectnessie.cel.relocated.protobuf")
-  relocate("com.fasterxml.jackson", "org.projectnessie.cel.relocated.jackson")
   relocate("org.agrona", "org.projectnessie.cel.relocated.agrona")
   manifest {
     attributes["Specification-Title"] = "Common-Expression-Language - dependency-free CEL"
@@ -58,11 +51,6 @@ shadowJar.configure {
     include(project(":cel-generated-antlr"))
 
     include(dependency(libs.protobuf.java.get()))
-    include(dependency("com.fasterxml.jackson.core:jackson-databind"))
-    include(dependency("com.fasterxml.jackson.core:jackson-core"))
-    include(dependency("com.fasterxml.jackson.core:jackson-annotations"))
-    include(dependency("com.fasterxml.jackson.dataformat:jackson-dataformat-protobuf"))
-    include(dependency("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml"))
     include(dependency(libs.agrona.get()))
   }
 }
