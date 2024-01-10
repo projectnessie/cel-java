@@ -36,8 +36,9 @@ dependencies {
 val shadowJar = tasks.named<ShadowJar>("shadowJar")
 
 shadowJar.configure {
-  relocate("com.google.protobuf", "org.projectnessie.cel.relocated.protobuf")
-  relocate("org.agrona", "org.projectnessie.cel.relocated.agrona")
+  // relocate com.google.api/protobuf/rpc classes
+  relocate("com.google", "org.projectnessie.cel.relocated.com.google")
+  relocate("org.agrona", "org.projectnessie.cel.relocated.org.agrona")
   manifest {
     attributes["Specification-Title"] = "Common-Expression-Language - dependency-free CEL"
     attributes["Specification-Version"] = libs.protobuf.java.get().version
