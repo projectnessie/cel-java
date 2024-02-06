@@ -25,6 +25,9 @@ server_pid_file="$(realpath ./conformance/conformance-server.pid)"
 
 cd submodules/cel-spec || exit 1
 
+# Bazel version 6.4.0 works, 7.0.2 does not work with the conformance tests
+export USE_BAZEL_VERSION="6.5.0"
+
 bazel build ... || exit 1
 
 cel_java_skips=(
