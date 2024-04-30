@@ -90,16 +90,18 @@ jobs:
           git commit -a -m "[release] v${RELEASE_VERSION}"
           git tag -f ${GIT_TAG}
 
-      - name: Publish to Sonatype
+      - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v3
+        with:
+          cache-read-only: true
+
+      - name: Publish to Sonatype
         env:
           ORG_GRADLE_PROJECT_signingKey: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
           ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
           ORG_GRADLE_PROJECT_sonatypeUsername: ${{ secrets.OSSRH_ACCESS_ID }}
           ORG_GRADLE_PROJECT_sonatypePassword: ${{ secrets.OSSRH_TOKEN }}
-        with:
-          cache-read-only: true
-          arguments: --rerun-tasks --no-watch-fs assemble check publishToMavenLocal -x jmh publishToSonatype closeAndReleaseSonatypeStagingRepository -Prelease
+        run: ./gradlew --rerun-tasks --no-watch-fs assemble check publishToMavenLocal -x jmh publishToSonatype closeAndReleaseSonatypeStagingRepository -Prelease
 
       - name: Bump to next development version
         run: echo "${NEXT_VERSION}-SNAPSHOT" > version.txt
