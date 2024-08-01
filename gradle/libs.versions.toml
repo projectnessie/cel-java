@@ -32,7 +32,7 @@ managed-jmh = ["jmh-core", "jmh-generator-annprocess"]
 junit-testing = ["assertj-core", "junit-jupiter-api", "junit-jupiter-params"]
 
 [libraries]
-agrona = { module = "org.agrona:agrona", version = "1.21.2" }
+agrona = { module = "org.agrona:agrona", version = "1.22.0" }
 antlr-antlr4 = { module = "org.antlr:antlr4", version.ref = "antlr4" }
 antlr-antlr4-runtime = { module = "org.antlr:antlr4-runtime", version.ref = "antlr4" }
 assertj-core = { module = "org.assertj:assertj-core", version = "3.26.3" }
