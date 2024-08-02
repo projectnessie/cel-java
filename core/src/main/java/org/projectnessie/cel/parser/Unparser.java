@@ -92,20 +92,20 @@ public final class Unparser {
     Operator op = Operator.byId(expr.getFunction());
     if (op != null) {
       switch (op) {
-          // ternary operator
+        // ternary operator
         case Conditional:
           visitCallConditional(expr);
           return;
-          // index operator
+        // index operator
         case Index:
           visitCallIndex(expr);
           return;
-          // unary operators
+        // unary operators
         case LogicalNot:
         case Negate:
           visitCallUnary(expr);
           return;
-          // binary operators
+        // binary operators
         case Add:
         case Divide:
         case Equals:

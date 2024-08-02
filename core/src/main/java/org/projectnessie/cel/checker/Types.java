@@ -354,7 +354,7 @@ public final class Types {
 
     // Test for when the types must agree.
     switch (kind1) {
-        // ERROR, TYPE_PARAM, and DYN handled above.
+      // ERROR, TYPE_PARAM, and DYN handled above.
       case kindAbstract:
         return internalIsAssignableAbstractType(m, t1.getAbstractType(), t2.getAbstractType());
       case kindFunction:
