@@ -140,7 +140,7 @@ public final class Unescape {
             buf.put((byte) '?');
             break;
 
-            // 4. Unicode escape sequences, reproduced from `strconv/quote.go`
+          // 4. Unicode escape sequences, reproduced from `strconv/quote.go`
           case 'x':
           case 'X':
           case 'u':
@@ -184,7 +184,7 @@ public final class Unescape {
             }
             break;
 
-            // 5. Octal escape sequences, must be three digits \[0-3][0-7][0-7]
+          // 5. Octal escape sequences, must be three digits \[0-3][0-7][0-7]
           case '0':
           case '1':
           case '2':
@@ -208,7 +208,7 @@ public final class Unescape {
             }
             break;
 
-            // Unknown escape sequence.
+          // Unknown escape sequence.
           default:
             throw unableToUnescapeString();
         }

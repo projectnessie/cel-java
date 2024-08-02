@@ -412,8 +412,8 @@ public final class Parser {
           case CELParser.RULE_fieldInitializerList:
           case CELParser.RULE_mapInitializerList:
             return visitMapInitializerList((MapInitializerListContext) tree);
-            // case CELParser.RULE_exprList:
-            // case CELParser.RULE_literal:
+          // case CELParser.RULE_exprList:
+          // case CELParser.RULE_literal:
           default:
             return reportError(tree, "parser rule '%d'", ruleIndex);
         }
