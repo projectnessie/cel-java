@@ -69,6 +69,7 @@ jobs:
       - name: Spotless Check
           # Spotless must run in a different invocation, because
           # it has some weird Gradle configuration/variant issue
+        if: ${{ matrix.java-version != '11' }}
         run: ./gradlew spotlessCheck --scan
 
       - name: Build
