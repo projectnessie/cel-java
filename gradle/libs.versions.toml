@@ -1,5 +1,5 @@
 [versions]
-antlr4 = "4.13.1"
+antlr4 = "4.13.2"
 checkstyle = "10.3.4"
 errorprone = "2.15.0"
 errorpronePlugin = "4.0.1"
