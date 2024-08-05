@@ -65,7 +65,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
-          java-version: 11
+          java-version: 17
           gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
           gpg-passphrase: MAVEN_GPG_PASSPHRASE
 
@@ -101,7 +101,7 @@ jobs:
           ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
           ORG_GRADLE_PROJECT_sonatypeUsername: ${{ secrets.OSSRH_ACCESS_ID }}
           ORG_GRADLE_PROJECT_sonatypePassword: ${{ secrets.OSSRH_TOKEN }}
-        run: ./gradlew --rerun-tasks --no-watch-fs assemble check publishToMavenLocal -x jmh publishToSonatype closeAndReleaseSonatypeStagingRepository -Prelease
+        run: ./gradlew --rerun-tasks --no-watch-fs -x jmh publishToSonatype closeAndReleaseSonatypeStagingRepository -Prelease
 
       - name: Bump to next development version
         run: echo "${NEXT_VERSION}-SNAPSHOT" > version.txt
