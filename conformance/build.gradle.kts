@@ -35,8 +35,8 @@ sourceSets.main {
 
 dependencies {
   implementation(project(":cel-core"))
-  implementation(project(":cel-core", "testJar"))
-  implementation(project(":cel-generated-pb", "testJar"))
+  implementation(testFixtures(project(":cel-core")))
+  implementation(testFixtures(project(":cel-generated-pb")))
 
   implementation(libs.protobuf.java)
 

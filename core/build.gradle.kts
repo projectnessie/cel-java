@@ -24,7 +24,10 @@ plugins {
   alias(libs.plugins.testsummary)
   alias(libs.plugins.testrerun)
   `cel-conventions`
+  `java-test-fixtures`
 }
+
+configurations.named("jmhImplementation") { extendsFrom(configurations.testFixturesApi.get()) }
 
 dependencies {
   implementation(project(":cel-generated-antlr", "shadow"))
@@ -32,13 +35,12 @@ dependencies {
 
   implementation(libs.agrona)
 
-  testImplementation(project(":cel-generated-pb", "testJar"))
-  testImplementation(project(":cel-tools"))
-
-  testImplementation(platform(libs.junit.bom))
-  testImplementation(libs.bundles.junit.testing)
-  testImplementation(libs.protobuf.java)
-  testImplementation(libs.guava)
+  testFixturesApi(platform(libs.junit.bom))
+  testFixturesApi(libs.bundles.junit.testing)
+  testFixturesApi(libs.protobuf.java)
+  testFixturesApi(libs.guava)
+  testFixturesApi(testFixtures(project(":cel-generated-pb")))
+  testFixturesApi(project(":cel-tools"))
   testRuntimeOnly(libs.junit.jupiter.engine)
 
   jmhImplementation(libs.jmh.core)
@@ -47,37 +49,9 @@ dependencies {
 
 jmh { jmhVersion.set(libs.versions.jmh.get()) }
 
-tasks.named("compileJmhJava") { dependsOn(tasks.named("processTestJandexIndex")) }
-
-tasks.named("jmhCompileGeneratedClasses") { dependsOn(tasks.named("processJmhJandexIndex")) }
-
-tasks.named("jmhRunBytecodeGenerator") { dependsOn(tasks.named("processJmhJandexIndex")) }
-
 sourceSets.test {
   java.srcDir(layout.buildDirectory.dir("generated/source/proto/test/java"))
   java.destinationDirectory.set(layout.buildDirectory.dir("classes/java/generatedTest"))
-}
-
-val testJar by
-  configurations.creating {
-    isCanBeResolved = true
-    isCanBeConsumed = true
-  }
-
-tasks.register<Jar>("testJar") {
-  val testClasses = tasks.getByName<JavaCompile>("compileTestJava")
-  val baseJar = tasks.getByName<Jar>("jar")
-  from(testClasses.destinationDirectory)
-  dependsOn(testClasses)
-  dependsOn(tasks.named("processTestResources"))
-  archiveBaseName.set(baseJar.archiveBaseName)
-  destinationDirectory.set(baseJar.destinationDirectory)
-  archiveClassifier.set("tests")
-}
-
-artifacts {
-  val testJar = tasks.getByName<Jar>("testJar")
-  add("testJar", testJar.archiveFile) { builtBy(testJar) }
 }
 
 tasks.named("check") { dependsOn(tasks.named("jmh")) }

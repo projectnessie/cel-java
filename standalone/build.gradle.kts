@@ -60,7 +60,7 @@ tasks.named("compileJava").configure { finalizedBy(shadowJar) }
 
 tasks.named("processResources").configure { finalizedBy(shadowJar) }
 
-tasks.named("jar").configure { dependsOn("processJandexIndex", "shadowJar") }
+tasks.named("jar").configure { dependsOn("shadowJar") }
 
 shadowJar.configure {
   outputs.cacheIf { false } // do not cache uber/shaded jars

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 The Authors of CEL-Java
+ * Copyright (C) 2024 The Authors of CEL-Java
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 package org.projectnessie.cel;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.fail;
+import static org.assertj.core.api.Assertions.fail;
 
 import java.lang.reflect.Array;
 import java.util.HashMap;

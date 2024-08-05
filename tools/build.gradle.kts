@@ -44,11 +44,3 @@ configure<ProtobufExtension> {
     artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.get()}"
   }
 }
-
-tasks.named("extractIncludeTestProto") {
-  dependsOn(":cel-core:processJandexIndex", ":cel-generated-pb:processJandexIndex")
-}
-
-tasks.named("extractIncludeProto") {
-  dependsOn(":cel-core:processJandexIndex", ":cel-generated-pb:processJandexIndex")
-}
