@@ -15,11 +15,13 @@
  */
 package org.projectnessie.cel;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
+
 import java.lang.reflect.Array;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.assertj.core.api.Assertions;
 import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 
@@ -28,7 +30,7 @@ public class Util {
   @SuppressWarnings({"unchecked"})
   public static <K, V> Map<K, V> mapOf(K k, V v, Object... kvPairs) {
     Map<K, V> map = new HashMap<>();
-    Assertions.assertThat(kvPairs.length % 2).isEqualTo(0);
+    assertThat(kvPairs.length % 2).isEqualTo(0);
     map.put(k, v);
     for (int i = 0; i < kvPairs.length; i += 2) {
       map.put((K) kvPairs[i], (V) kvPairs[i + 1]);
@@ -46,10 +48,10 @@ public class Util {
       return;
     }
     if (a == null) {
-      Assertions.fail(String.format("deepEquals(%s), a==null, b!=null", context));
+      fail(String.format("deepEquals(%s), a==null, b!=null", context));
     }
     if (b == null) {
-      Assertions.fail(String.format("deepEquals(%s), a!=null, b==null", context));
+      fail(String.format("deepEquals(%s), a!=null, b==null", context));
     }
     if (!a.getClass().isAssignableFrom(b.getClass())) {
       if (a instanceof Val && !(b instanceof Val)) {
@@ -60,7 +62,7 @@ public class Util {
         deepEquals(context, a, ((Val) b).value());
         return;
       }
-      Assertions.fail(
+      fail(
           String.format(
               "deepEquals(%s), a.class(%s) is not assignable from b.class(%s)",
               context, a.getClass().getName(), b.getClass().getName()));
@@ -69,7 +71,7 @@ public class Util {
       int al = Array.getLength(a);
       int bl = Array.getLength(b);
       if (al != bl) {
-        Assertions.fail(
+        fail(
             String.format(
                 "deepEquals(%s), %s.length(%d) != %s.length(%d)",
                 context, a.getClass().getName(), al, b.getClass().getName(), bl));
@@ -85,7 +87,7 @@ public class Util {
       int as = al.size();
       int bs = bl.size();
       if (as != bs) {
-        Assertions.fail(
+        fail(
             String.format(
                 "deepEquals(%s), %s.size(%d) != %s.size(%d)",
                 context, a.getClass().getName(), as, b.getClass().getName(), bs));
@@ -99,7 +101,7 @@ public class Util {
       int as = am.size();
       int bs = bm.size();
       if (as != bs) {
-        Assertions.fail(
+        fail(
             String.format(
                 "deepEquals(%s), %s.size(%d) != %s.size(%d)",
                 context, a.getClass().getName(), as, b.getClass().getName(), bs));
@@ -122,7 +124,7 @@ public class Util {
             }
           }
           if (f) {
-            Assertions.fail(
+            fail(
                 String.format(
                     "deepEquals(%s), %s(%s) contains %s, but %s(%s) does not",
                     context, a.getClass().getName(), as, ak, b.getClass().getName(), bs));
@@ -132,7 +134,7 @@ public class Util {
         deepEquals(context + '[' + ak + ']', av, bv);
       }
     } else if (!a.equals(b)) {
-      Assertions.fail(
+      fail(
           String.format(
               "deepEquals(%s), %s(%s) != %s(%s)",
               context, a.getClass().getName(), a, b.getClass().getName(), b));
