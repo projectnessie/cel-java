@@ -21,8 +21,8 @@ plugins {
   `java-library`
   `maven-publish`
   signing
-  alias(libs.plugins.nessie.build.reflectionconfig)
   `cel-conventions`
+  `java-test-fixtures`
 }
 
 apply<ProtobufPlugin>()
@@ -55,45 +55,4 @@ configure<ProtobufExtension> {
     // Download from repositories
     artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.get()}"
   }
-}
-
-reflectionConfig {
-  // Consider classes that extend one of these classes...
-  classExtendsPatterns.set(
-    listOf(
-      "com.google.protobuf.GeneratedMessageV3",
-      "com.google.protobuf.GeneratedMessageV3.Builder"
-    )
-  )
-  // ... and classes the implement this interface.
-  classImplementsPatterns.set(listOf("com.google.protobuf.ProtocolMessageEnum"))
-  // Also include generated classes (e.g. google.protobuf.Empty) via the "runtimeClasspath",
-  // which contains the the "com.google.protobuf:protobuf-java" dependency.
-  includeConfigurations.set(listOf("runtimeClasspath"))
-}
-
-val testJar by
-  configurations.creating {
-    isCanBeResolved = true
-    isCanBeConsumed = true
-  }
-
-tasks.named<Jar>("jar") { dependsOn("processJandexIndex") }
-
-val testJarTask =
-  tasks.register<Jar>("testJar") {
-    val testClasses = tasks.getByName<JavaCompile>("compileTestJava")
-    val baseJar = tasks.getByName<Jar>("jar")
-    from(testClasses.destinationDirectory, layout.buildDirectory.dir("resources/test"))
-    dependsOn(testClasses, tasks.named("processJandexIndex"), tasks.named("processTestResources"))
-    archiveBaseName.set(baseJar.archiveBaseName)
-    destinationDirectory.set(baseJar.destinationDirectory)
-    archiveClassifier.set("tests")
-  }
-
-artifacts { add("testJar", testJarTask.get().archiveFile) { builtBy(testJarTask.get()) } }
-
-// The protobuf-plugin should ideally do this
-tasks.named<Jar>("sourcesJar") {
-  dependsOn(tasks.named("generateProto"), tasks.named("generateReflectionConfig"))
 }

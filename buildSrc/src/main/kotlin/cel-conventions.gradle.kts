@@ -20,8 +20,6 @@ if (project.name != "conformance" && project.name != "jacoco") {
 
 nessieConfigureSpotless()
 
-nessieConfigureJandex()
-
 nessieConfigureJava()
 
 nessieIde()
