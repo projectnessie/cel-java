@@ -33,12 +33,14 @@ sourceSets.main {
   java.srcDir(layout.buildDirectory.dir("generated/source/proto/main/grpc"))
 }
 
+configurations.all { exclude(group = "org.projectnessie.cel", module = "cel-generated-pb") }
+
 dependencies {
   implementation(project(":cel-core"))
   implementation(testFixtures(project(":cel-core")))
-  implementation(testFixtures(project(":cel-generated-pb")))
+  implementation(testFixtures(project(":cel-generated-pb3")))
 
-  implementation(libs.protobuf.java)
+  implementation(libs.protobuf.java) { version { strictly(libs.versions.protobuf3.get()) } }
 
   implementation(libs.grpc.protobuf)
   implementation(libs.grpc.stub)
@@ -59,7 +61,7 @@ configure<ProtobufExtension> {
   // Configure the protoc executable
   protoc {
     // Download from repositories
-    artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.get()}"
+    artifact = "com.google.protobuf:protoc:${libs.versions.protobuf3.get()}"
   }
   plugins {
     this.create("grpc") { artifact = "io.grpc:protoc-gen-grpc-java:${libs.versions.grpc.get()}" }
