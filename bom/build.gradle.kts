@@ -26,6 +26,7 @@ dependencies {
     api(project(":cel-core"))
     api(project(":cel-generated-antlr", "shadow"))
     api(project(":cel-generated-pb"))
+    api(project(":cel-generated-pb3"))
     api(project(":cel-conformance"))
     api(project(":cel-jackson"))
     api(project(":cel-tools"))

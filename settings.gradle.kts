@@ -91,6 +91,8 @@ celProject("generated-antlr")
 
 celProject("generated-pb")
 
+celProject("generated-pb3")
+
 celProject("core")
 
 celProject("jackson")
