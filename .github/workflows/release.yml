@@ -130,7 +130,7 @@ jobs:
           LAST_TAG=$(git describe --abbrev=0 --tags $(git rev-list --tags --skip=1 --max-count=1))
           NUM_COMMITS=$(git log --format='format:%h' ${LAST_TAG}..HEAD | wc -l)
 
-          git log --perl-regexp --author '^(?!.*dependabot|.*renovate|.*cel-java-release-workflow).*$' --format='format:* %s' ${LAST_TAG}..${GIT_TAG} | grep -v '^\* \[release\] .*$' > ${DIR}/release-log
+          git log --perl-regexp --author '^(?!.*dependabot|.*renovate|.*cel-java-release-workflow).*$' --format='format:* %s' ${LAST_TAG}..${GIT_TAG} | grep -v '^\* \[release\] .*$' > ${DIR}/release-log || true 
 
           cat <<EOF > ${NOTES_FILE}
           # Version ${RELEASE_VERSION}
