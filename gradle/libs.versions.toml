@@ -2,7 +2,7 @@
 antlr4 = "4.13.2"
 checkstyle = "10.3.4"
 errorprone = "2.15.0"
-errorpronePlugin = "4.0.1"
+errorpronePlugin = "4.1.0"
 errorproneSlf4j = "0.1.28"
 googleJavaFormat = "1.24.0"
 grpc = "1.68.0"
