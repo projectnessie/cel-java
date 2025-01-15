@@ -231,7 +231,7 @@ class PublishingHelperPlugin : Plugin<Project> {
   private fun findDependency(
     config: Configuration?,
     depGroup: String,
-    depName: String
+    depName: String,
   ): DependencyResult? {
     if (config != null) {
       val depResult =
