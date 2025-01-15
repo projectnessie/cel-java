@@ -45,7 +45,7 @@ develocity {
           "GITHUB_RUN_ID",
           "GITHUB_RUN_NUMBER",
           "GITHUB_SHA",
-          "GITHUB_WORKFLOW"
+          "GITHUB_WORKFLOW",
         )
         .forEach { e ->
           val v = System.getenv(e)

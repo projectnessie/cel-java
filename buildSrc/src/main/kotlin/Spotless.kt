@@ -80,7 +80,7 @@ fun Project.nessieConfigureSpotless() {
             scalafmt()
             licenseHeaderFile(
               rootProject.file("codestyle/copyright-header-java.txt"),
-              "^(package|import) .*$"
+              "^(package|import) .*$",
             )
             target("src/**/scala/**")
             targetExclude("buildSrc/build/**")
