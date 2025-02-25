@@ -40,7 +40,8 @@ dependencies {
   testFixturesApi(libs.guava)
   testFixturesApi(testFixtures(project(":cel-generated-pb")))
   testFixturesApi(project(":cel-tools"))
-  testRuntimeOnly(libs.junit.jupiter.engine)
+  testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
+  testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
   jmhImplementation(libs.jmh.core)
   jmhAnnotationProcessor(libs.jmh.generator.annprocess)
