@@ -18,7 +18,6 @@ plugins {
   `java-library`
   `maven-publish`
   signing
-  id("org.caffinitas.gradle.aggregatetestresults")
   id("org.caffinitas.gradle.testsummary")
   id("org.caffinitas.gradle.testrerun")
   `cel-conventions`

@@ -19,7 +19,6 @@ import org.jetbrains.gradle.ext.*
 plugins {
   signing
   `maven-publish`
-  alias(libs.plugins.aggregatetestresults)
   alias(libs.plugins.testsummary)
   alias(libs.plugins.testrerun)
   alias(libs.plugins.nexus.publish)
