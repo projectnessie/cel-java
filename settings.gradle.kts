@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 
+if (!JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_17)) {
+  throw GradleException("Build requires Java 17")
+}
+
 val baseVersion = file("version.txt").readText().trim()
 
 pluginManagement {
