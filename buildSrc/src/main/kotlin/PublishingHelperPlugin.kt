@@ -25,7 +25,6 @@ import org.gradle.api.artifacts.component.ModuleComponentSelector
 import org.gradle.api.artifacts.result.DependencyResult
 import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
-import org.gradle.api.publish.maven.plugins.MavenPublishPlugin
 import org.gradle.api.publish.tasks.GenerateModuleMetadata
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.kotlin.dsl.configure
@@ -43,7 +42,7 @@ class PublishingHelperPlugin : Plugin<Project> {
     project.run {
       extensions.create("publishingHelper", PublishingHelperExtension::class.java, this)
 
-      plugins.withType<MavenPublishPlugin>().configureEach {
+      plugins.withId("io.github.zenhelix.maven-central-publish") {
         configure<PublishingExtension> {
           publications {
             register<MavenPublication>("maven") {
@@ -63,6 +62,8 @@ class PublishingHelperPlugin : Plugin<Project> {
               suppressPomMetadataWarningsFor("testJavadocElements")
               suppressPomMetadataWarningsFor("testRuntimeElements")
               suppressPomMetadataWarningsFor("testSourcesElements")
+              suppressPomMetadataWarningsFor("testFixturesApiElements")
+              suppressPomMetadataWarningsFor("testFixturesRuntimeElements")
 
               groupId = "$group"
               version = project.version.toString()
@@ -196,6 +197,10 @@ class PublishingHelperPlugin : Plugin<Project> {
             useInMemoryPgpKeys(signingKey, signingPassword)
             val publishing = project.extensions.getByType(PublishingExtension::class.java)
             afterEvaluate { sign(publishing.publications.getByName("maven")) }
+
+            if (project.hasProperty("useGpgAgent")) {
+              useGpgCmd()
+            }
           }
         }
       }
