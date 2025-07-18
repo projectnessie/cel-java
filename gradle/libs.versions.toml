@@ -48,7 +48,7 @@ guava = { module = "com.google.guava:guava", version = "33.4.8-jre" }
 idea-ext = { module = "gradle.plugin.org.jetbrains.gradle.plugin.idea-ext:gradle-idea-ext", version = "1.2" }
 immutables-value-annotations = { module = "org.immutables:value-annotations", version.ref = "immutables" }
 immutables-value-processor = { module = "org.immutables:value-processor", version.ref = "immutables" }
-jackson-bom = { module = "com.fasterxml.jackson:jackson-bom", version = "2.19.1" }
+jackson-bom = { module = "com.fasterxml.jackson:jackson-bom", version = "2.19.2" }
 jacoco-maven-plugin = { module = "org.jacoco:jacoco-maven-plugin", version.ref = "jacoco" }
 jandex-plugin = { module = "com.github.vlsi.gradle:jandex-plugin", version.ref = "jandexPlugin" }
 jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
