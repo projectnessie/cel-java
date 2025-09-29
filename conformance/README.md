@@ -10,7 +10,7 @@ If your environment is already setup, just run the shell script
 The CEL-spec conformance test suite is written in Go and uses the bazel build tool.
 
 Required tools:
-* [Bazel build tool](https://bazel.build/)
+* [Bazel build tool](https://bazel.build/) (see [bazelisk](https://github.com/bazelbuild/bazelisk?tab=readme-ov-file#installation))
   
     See [Bazel web site](https://bazel.build/install) for installation instructions.
     Do **not** use the `bazel-bootstrap` package on Ubuntu, because it comes with

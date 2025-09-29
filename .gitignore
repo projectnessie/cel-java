@@ -2,6 +2,7 @@
 # Gradle
 build/
 .gradle/
+buildSrc/.kotlin/
 
 # Maven
 **/.mvn/wrapper/maven-wrapper.jar

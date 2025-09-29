@@ -34,4 +34,4 @@ dependencies {
   implementation(libs.errorprone.plugin)
 }
 
-java { toolchain { languageVersion.set(JavaLanguageVersion.of(11)) } }
+java { toolchain { languageVersion.set(JavaLanguageVersion.of(21)) } }
