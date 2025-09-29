@@ -61,11 +61,11 @@ jobs:
           SHA=$(git rev-parse HEAD)
           gh api repos/projectnessie/cel-java/commits/${SHA}/check-runs --jq 'if ([.check_runs[] | select(.name | endswith("Release") or startswith("Dependabot ") or startswith("codecov/") or startswith("Report") | not ) | .conclusion // "pending" ] | unique == ["success"] or unique == []) then "OK" else error("Commit checks are not OK") end'
 
-      - name: Set up JDK 11
+      - name: Set up JDK
         uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
-          java-version: 17
+          java-version: 21
           gpg-private-key: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
           gpg-passphrase: MAVEN_GPG_PASSPHRASE
 

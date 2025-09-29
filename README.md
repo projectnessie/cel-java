@@ -296,7 +296,7 @@ Those submodules are required to build the CEL-Java project.
 You need to run `git submodule init` and `git submodule update` after a fresh clone of this repo.
 
 Build requirements:
-* Java 11 or newer, it's a Gradle-wrapper build (it's fast ;) )
+* Java 21 or newer, it's a Gradle-wrapper build (it's fast ;) )
 
 Runtime requirements:
 * Java 8 or newer
