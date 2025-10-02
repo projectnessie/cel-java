@@ -30,7 +30,7 @@ pluginManagement {
   }
 }
 
-plugins { id("com.gradle.develocity") version ("4.2") }
+plugins { id("com.gradle.develocity") version ("4.2.1") }
 
 develocity {
   if (System.getenv("CI") != null) {
