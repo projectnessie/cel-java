@@ -91,7 +91,7 @@ jobs:
           git tag -f ${GIT_TAG}
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
         with:
           cache-read-only: true
 
