@@ -21,7 +21,7 @@ plugins {
   antlr
   `maven-publish`
   signing
-  id("com.github.johnrengelman.shadow")
+  id("com.gradleup.shadow")
   `cel-conventions`
 }
 

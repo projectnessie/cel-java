@@ -179,7 +179,7 @@ allprojects.forEach { p ->
 }
 
 val buildToolIntegrationGradle by
-  tasks.creating(Exec::class) {
+  tasks.registering(Exec::class) {
     group = "Verification"
     description =
       "Checks whether bom works fine with Gradle, requires preceding publishToMavenLocal in a separate Gradle invocation"
@@ -189,7 +189,7 @@ val buildToolIntegrationGradle by
   }
 
 val buildToolIntegrationMaven by
-  tasks.creating(Exec::class) {
+  tasks.registering(Exec::class) {
     group = "Verification"
     description =
       "Checks whether bom works fine with Maven, requires preceding publishToMavenLocal in a separate Gradle invocation"
@@ -199,7 +199,7 @@ val buildToolIntegrationMaven by
   }
 
 val buildToolIntegrations by
-  tasks.creating {
+  tasks.registering {
     group = "Verification"
     description =
       "Checks whether bom works fine with build tools, requires preceding publishToMavenLocal in a separate Gradle invocation"
