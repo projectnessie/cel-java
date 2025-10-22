@@ -101,7 +101,7 @@ jobs:
           ORG_GRADLE_PROJECT_signingPassword: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
           ORG_GRADLE_PROJECT_sonatypeUsername: ${{ secrets.OSSRH_ACCESS_ID }}
           ORG_GRADLE_PROJECT_sonatypePassword: ${{ secrets.OSSRH_TOKEN }}
-        run: ./gradlew publishAllModulesToMavenCentralPortalRepository -Prelease --no-scan --stacktrace
+        run: ./gradlew publishAggregateMavenCentralDeployment -Prelease --no-scan --stacktrace
 
       - name: Bump to next development version
         run: echo "${NEXT_VERSION}-SNAPSHOT" > version.txt
