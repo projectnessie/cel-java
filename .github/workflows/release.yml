@@ -50,7 +50,7 @@ jobs:
             exit 1
           fi
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6
         with:
           fetch-depth: '0'
           submodules: 'true'
@@ -62,7 +62,7 @@ jobs:
           gh api repos/projectnessie/cel-java/commits/${SHA}/check-runs --jq 'if ([.check_runs[] | select(.name | endswith("Release") or startswith("Dependabot ") or startswith("codecov/") or startswith("Report") | not ) | .conclusion // "pending" ] | unique == ["success"] or unique == []) then "OK" else error("Commit checks are not OK") end'
 
       - name: Set up JDK
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@dded0888837ed1f317902acf8a20df0ad188d165 # v5
         with:
           distribution: 'temurin'
           java-version: 21
@@ -91,7 +91,7 @@ jobs:
           git tag -f ${GIT_TAG}
 
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v5
+        uses: gradle/actions/setup-gradle@4d9f0ba0025fe599b4ebab900eb7f3a1d93ef4c2 # v5
         with:
           cache-read-only: true
 
