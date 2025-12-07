@@ -36,6 +36,7 @@ import org.gradle.api.publish.PublishingExtension
 import org.gradle.api.publish.maven.MavenPublication
 import org.gradle.api.publish.tasks.GenerateModuleMetadata
 import org.gradle.api.tasks.PathSensitivity
+import org.gradle.kotlin.dsl.apply
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.extra
 import org.gradle.kotlin.dsl.provideDelegate
@@ -53,7 +54,10 @@ constructor(private val softwareComponentFactory: SoftwareComponentFactory) : Pl
     project.run {
       extensions.create("publishingHelper", PublishingHelperExtension::class.java, this)
 
-      plugins.withId("io.github.zenhelix.maven-central-publish") {
+      apply(plugin = "maven-publish")
+      apply(plugin = "signing")
+
+      plugins.withId("publishing") {
         configure<PublishingExtension> {
           publications {
             register<MavenPublication>("maven") {
