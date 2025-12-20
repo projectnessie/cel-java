@@ -29,3 +29,9 @@ apply<CelCodeCoveragePlugin>()
 if (projectDir.resolve("src/test/java").exists()) {
   nessieConfigureTestTasks()
 }
+
+tasks.register("compileAll").configure {
+  group = "build"
+  description = "Runs all compilation and jar tasks"
+  dependsOn(tasks.withType<AbstractCompile>(), tasks.withType<ProcessResources>())
+}
