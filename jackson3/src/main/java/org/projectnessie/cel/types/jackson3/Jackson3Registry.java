@@ -13,17 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.projectnessie.cel.types.jackson;
+package org.projectnessie.cel.types.jackson3;
 
 import static org.projectnessie.cel.common.types.Err.newErr;
 
-import com.fasterxml.jackson.databind.JavaType;
-import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.databind.JsonSerializer;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializerProvider;
-import com.fasterxml.jackson.databind.ser.std.EnumSerializer;
-import com.fasterxml.jackson.databind.type.TypeFactory;
 import java.util.HashMap;
 import java.util.Map;
 import org.projectnessie.cel.common.types.ref.FieldType;
@@ -31,17 +24,26 @@ import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeAdapterSupport;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
+import tools.jackson.databind.JavaType;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ValueSerializer;
+import tools.jackson.databind.cfg.GeneratorSettings;
+import tools.jackson.databind.cfg.SerializationContexts;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.ser.SerializationContextExt;
+import tools.jackson.databind.ser.jdk.EnumSerializer;
+import tools.jackson.databind.type.TypeFactory;
 
 /**
- * CEL-Java {@link TypeRegistry} to use Jackson 2 objects as input values for CEL scripts.
+ * CEL-Java {@link TypeRegistry} to use Jackson 3 objects as input values for CEL scripts.
  *
  * <p>The implementation does not support the construction of Jackson objects in CEL expressions and
  * therefore returning Jackson objects from CEL expressions is not possible/implemented and results
  * in {@link UnsupportedOperationException}s.
  */
-public final class JacksonRegistry implements TypeRegistry {
+public final class Jackson3Registry implements TypeRegistry {
   final ObjectMapper objectMapper;
-  private final SerializerProvider serializationProvider;
+  private final SerializationContextExt serializationContextExt;
   private final TypeFactory typeFactory;
   private final Map<Class<?>, JacksonTypeDescription> knownTypes = new HashMap<>();
   private final Map<String, JacksonTypeDescription> knownTypesByName = new HashMap<>();
@@ -49,14 +51,23 @@ public final class JacksonRegistry implements TypeRegistry {
   private final Map<Class<?>, JacksonEnumDescription> enumMap = new HashMap<>();
   private final Map<String, JacksonEnumValue> enumValues = new HashMap<>();
 
-  private JacksonRegistry() {
-    this.objectMapper = new ObjectMapper();
-    this.serializationProvider = objectMapper.getSerializerProviderInstance();
+  private Jackson3Registry() {
+    JsonMapper.Builder b = JsonMapper.builder();
+    SerializationContexts serializationContexts = b.serializationContexts();
+    this.objectMapper = b.build();
+    SerializationContexts forMapper =
+        serializationContexts.forMapper(
+            objectMapper,
+            objectMapper.serializationConfig(),
+            objectMapper.tokenStreamFactory(),
+            b.serializerFactory());
+    this.serializationContextExt =
+        forMapper.createContext(objectMapper.serializationConfig(), GeneratorSettings.empty());
     this.typeFactory = objectMapper.getTypeFactory();
   }
 
   public static TypeRegistry newRegistry() {
-    return new JacksonRegistry();
+    return new Jackson3Registry();
   }
 
   @Override
@@ -162,19 +173,15 @@ public final class JacksonRegistry implements TypeRegistry {
   }
 
   private JacksonEnumDescription computeEnumDescription(Class<?> clazz) {
-    try {
-      JsonSerializer<?> ser = serializationProvider.findValueSerializer(clazz);
-      JavaType javaType = typeFactory.constructType(clazz);
+    ValueSerializer<?> ser = serializationContextExt.findValueSerializer(clazz);
+    JavaType javaType = typeFactory.constructType(clazz);
 
-      JacksonEnumDescription enumDesc = new JacksonEnumDescription(javaType, (EnumSerializer) ser);
-      enumMap.put(clazz, enumDesc);
+    JacksonEnumDescription enumDesc = new JacksonEnumDescription(javaType, (EnumSerializer) ser);
+    enumMap.put(clazz, enumDesc);
 
-      enumDesc.buildValues().forEach(v -> enumValues.put(v.fullyQualifiedName(), v));
+    enumDesc.buildValues().forEach(v -> enumValues.put(v.fullyQualifiedName(), v));
 
-      return enumDesc;
-    } catch (JsonMappingException e) {
-      throw new RuntimeException(e);
-    }
+    return enumDesc;
   }
 
   JacksonTypeDescription typeDescription(Class<?> clazz) {
@@ -192,17 +199,13 @@ public final class JacksonRegistry implements TypeRegistry {
   }
 
   private JacksonTypeDescription computeTypeDescription(Class<?> clazz) {
-    try {
-      JsonSerializer<Object> ser = serializationProvider.findValueSerializer(clazz);
-      JavaType javaType = typeFactory.constructType(clazz);
+    ValueSerializer<Object> ser = serializationContextExt.findValueSerializer(clazz);
+    JavaType javaType = typeFactory.constructType(clazz);
 
-      JacksonTypeDescription typeDesc = new JacksonTypeDescription(javaType, ser, this::typeQuery);
-      knownTypesByName.put(clazz.getName(), typeDesc);
+    JacksonTypeDescription typeDesc = new JacksonTypeDescription(javaType, ser, this::typeQuery);
+    knownTypesByName.put(clazz.getName(), typeDesc);
 
-      return typeDesc;
-    } catch (JsonMappingException e) {
-      throw new RuntimeException(e);
-    }
+    return typeDesc;
   }
 
   private com.google.api.expr.v1alpha1.Type typeQuery(JavaType javaType) {

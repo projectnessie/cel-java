@@ -31,7 +31,7 @@ import org.projectnessie.cel.types.jackson.types.MetaTest;
 import org.projectnessie.cel.types.jackson.types.MyPojo;
 import org.projectnessie.cel.types.jackson.types.ObjectListEnum;
 
-public class JacksonScriptHostTest {
+public class Jackson2ScriptHostTest {
 
   @Test
   void simple() throws Exception {

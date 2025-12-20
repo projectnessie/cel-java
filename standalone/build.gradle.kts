@@ -48,6 +48,7 @@ shadowJar.configure {
     include(project(":cel-tools"))
     include(project(":cel-core"))
     include(project(":cel-jackson"))
+    include(project(":cel-jackson3"))
     include(project(":cel-generated-pb"))
     include(project(":cel-generated-antlr"))
 

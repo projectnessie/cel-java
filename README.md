@@ -122,19 +122,21 @@ public class MyClass {
 
 ### Jackson example
 
+The following example refers to Jackson 3. Support for Jackson 2 is, see [below](#jackson-2-example).
+
 It is also possible to use plain Java and Jackson objects as arguments by using the 
-`org.projectnessie.cel.types.jackson.JacksonRegistry` in `org.projectnessie.cel:cel-jackson`.
+`org.projectnessie.cel.types.jackson3.Jackson3Registry` in `org.projectnessie.cel:cel-jackson3`.
 
 Code sample similar to the one above. It takes a user-provided object type `MyInput`.
 ```java
-import org.projectnessie.cel.types.jackson.JacksonRegistry;
+import org.projectnessie.cel.types.jackson3.Jackson3Registry;
 
 public class MyClass {
   public Boolean evalWithJacksonObject(MyInput input, String checkName) {
     // Build the script factory
     ScriptHost scriptHost = ScriptHost.newBuilder()
         // IMPORTANT: use the Jackson registry
-        .registry(JacksonRegistry.newRegistry())
+        .registry(Jackson3Registry.newRegistry())
         .build();
 
     // Create the script, will be parsed and checked.
@@ -164,7 +166,7 @@ public class MyClass {
 Note that the Jackson field-names are used as property names in CEL-Java. It is not necessary to
 annotate "plain Java" classes with Jackson annotations.
 
-To use the `JacksonRegistry` in your application code, add the `cel-jackson` dependency in
+To use the `Jackson3Registry` in your application code, add the `cel-jackson3` dependency in
 addition to `cel-core` or `cel-tools`.
 
 ```xml
@@ -183,7 +185,7 @@ addition to `cel-core` or `cel-tools`.
 <dependencies>
   <dependency>
     <groupId>org.projectnessie.cel</groupId>
-    <artifactId>cel-jackson</artifactId>
+    <artifactId>cel-jackson3</artifactId>
   </dependency>
   <dependency>
     <groupId>org.projectnessie.cel</groupId>
@@ -196,9 +198,16 @@ or Gradle project.
 dependencies {
   implementation(enforcedPlatform("org.projectnessie.cel:cel-bom:0.5.3"))
   implementation("org.projectnessie.cel:cel-tools")
-  implementation("org.projectnessie.cel:cel-jackson")
+  implementation("org.projectnessie.cel:cel-jackson3")
 }
 ```
+
+### Jackson 2 example
+
+Support for Jackson 2 is similar to Jackson 3, with a few differences:
+
+* Use `JacksonRegistry` from `org.projectnessie.cel.types.jackson.JacksonRegistry`
+* Use `org.projectnessie.cel:cel-jackson` dependency instead of `org.projectnessie.cel:cel-jackson3`
 
 ## Dependency-free artifact
 

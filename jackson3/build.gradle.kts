@@ -23,16 +23,16 @@ plugins {
   `cel-conventions`
 }
 
-description = "CEL Jackson 2 support"
+description = "CEL Jackson 3 support"
 
 dependencies {
   api(project(":cel-core"))
 
-  implementation(platform(libs.jackson2.bom))
-  implementation("com.fasterxml.jackson.core:jackson-databind")
-  implementation("com.fasterxml.jackson.core:jackson-core")
-  implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-protobuf")
-  implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
+  implementation(platform(libs.jackson3.bom))
+  implementation("tools.jackson.core:jackson-databind")
+  implementation("tools.jackson.core:jackson-core")
+  implementation("tools.jackson.dataformat:jackson-dataformat-protobuf")
+  implementation("tools.jackson.dataformat:jackson-dataformat-yaml")
 
   testImplementation(project(":cel-tools"))
   testAnnotationProcessor(libs.immutables.value.processor)

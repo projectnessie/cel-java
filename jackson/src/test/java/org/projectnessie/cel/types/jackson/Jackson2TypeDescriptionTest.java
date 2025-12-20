@@ -54,7 +54,7 @@ import org.projectnessie.cel.types.jackson.types.AnEnum;
 import org.projectnessie.cel.types.jackson.types.CollectionsObject;
 import org.projectnessie.cel.types.jackson.types.InnerType;
 
-class JacksonTypeDescriptionTest {
+class Jackson2TypeDescriptionTest {
 
   @Test
   void basics() {
