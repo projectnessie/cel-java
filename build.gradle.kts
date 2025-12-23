@@ -96,11 +96,3 @@ idea.project.settings {
     )
   }
 }
-
-subprojects.forEach {
-  it.tasks.register("compileAll").configure {
-    group = "build"
-    description = "Runs all compilation and jar tasks"
-    dependsOn(tasks.withType<AbstractCompile>(), tasks.withType<ProcessResources>())
-  }
-}
