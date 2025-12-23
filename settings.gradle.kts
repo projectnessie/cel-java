@@ -101,6 +101,8 @@ celProject("core")
 
 celProject("jackson")
 
+celProject("jackson3")
+
 celProject("conformance")
 
 celProject("tools")

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.projectnessie.cel.types.jackson;
+package org.projectnessie.cel.types.jackson3;
 
 import static java.util.Collections.emptyMap;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,13 +36,13 @@ import org.projectnessie.cel.common.types.ObjectT;
 import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
-import org.projectnessie.cel.types.jackson.types.MetaTest;
-import org.projectnessie.cel.types.jackson.types.RefVariantB;
+import org.projectnessie.cel.types.jackson3.types.MetaTest;
+import org.projectnessie.cel.types.jackson3.types.RefVariantB;
 
-class JacksonRegistryTest {
+class Jackson3RegistryTest {
   @Test
   void nessieBranch() {
-    TypeRegistry reg = JacksonRegistry.newRegistry();
+    TypeRegistry reg = Jackson3Registry.newRegistry();
 
     RefVariantB refVariantB = RefVariantB.of("main", "cafebabe123412341234123412341234");
 
@@ -69,7 +69,7 @@ class JacksonRegistryTest {
 
   @Test
   void nessieCommitMetaFull() {
-    TypeRegistry reg = JacksonRegistry.newRegistry();
+    TypeRegistry reg = Jackson3Registry.newRegistry();
 
     Instant now = Instant.now();
     Instant nowMinus5 = now.minus(5, ChronoUnit.MINUTES);
@@ -124,7 +124,7 @@ class JacksonRegistryTest {
 
   @Test
   void nessieCommitMetaPart() {
-    TypeRegistry reg = JacksonRegistry.newRegistry();
+    TypeRegistry reg = Jackson3Registry.newRegistry();
 
     Instant now = Instant.now();
 
@@ -169,13 +169,13 @@ class JacksonRegistryTest {
 
   @Test
   void copy() {
-    TypeRegistry reg = JacksonRegistry.newRegistry();
+    TypeRegistry reg = Jackson3Registry.newRegistry();
     assertThat(reg).extracting(TypeRegistry::copy).isSameAs(reg);
   }
 
   @Test
   void registerType() {
-    TypeRegistry reg = JacksonRegistry.newRegistry();
+    TypeRegistry reg = Jackson3Registry.newRegistry();
     assertThatThrownBy(() -> reg.registerType(IntT.IntType))
         .isInstanceOf(UnsupportedOperationException.class);
   }
