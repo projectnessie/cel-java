@@ -33,6 +33,8 @@ jobs:
       GIT_TAG: v${{ github.event.inputs.releaseVersion }}
       RELEASE_VERSION: ${{ github.event.inputs.releaseVersion }}
       NEXT_VERSION: ${{ github.event.inputs.nextVersion }}
+    permissions:
+      contents: write
 
     steps:
       - name: Check parameters
@@ -54,6 +56,7 @@ jobs:
         with:
           fetch-depth: '0'
           submodules: 'true'
+          token: ${{ secrets.NESSIE_BUILDER }}
 
       - name: Check commit status
         run: |
@@ -111,16 +114,7 @@ jobs:
 
       - name: Push tag + branch
         run: |
-          # Push directly using the remote repo URL, which includes the secret so this job can push to the repo
-          UPSTREAM="https://${{ secrets.NESSIE_BUILDER }}@github.com/${GITHUB_REPOSITORY}.git"
-
-          # Move the default auth settings in ~/.gitconfig out of the way, so the git-push can use the token
-          git config --rename-section http.https://github.com/ http.https://save.github.com/
-
-          git push --no-verify "${UPSTREAM}" HEAD:${GITHUB_REF} ${GIT_TAG}
-
-          # Move the default auth settings in ~/.gitconfig back
-          git config --rename-section http.https://save.github.com/ http.https://github.com/
+          git push --no-verify origin HEAD:main ${GIT_TAG}
 
       - name: Prepare Release Notes
         id: prep_release
