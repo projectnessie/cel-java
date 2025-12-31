@@ -68,7 +68,7 @@ tomcat-annotations-api = { module = "org.apache.tomcat:annotations-api", version
 idea-ext = { id = "org.jetbrains.gradle.plugin.idea-ext", version = "1.3" }
 jandex = { id = "com.github.vlsi.jandex", version.ref = "jandexPlugin" }
 jmh = { id = "me.champeau.jmh", version = "0.7.3" }
-nmcp = { id = "com.gradleup.nmcp.aggregation", version = "1.4.1" }
+nmcp = { id = "com.gradleup.nmcp.aggregation", version = "1.4.2" }
 protobuf = { id = "com.google.protobuf", version.ref = "protobufPlugin" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadowPlugin" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotlessPlugin" }
