@@ -19,7 +19,7 @@ protobuf3 = "3.25.4"
 protobufPlugin = "0.9.6"
 shadowPlugin = "9.3.1"
 slf4j = "1.7.36"
-spotlessPlugin = "8.1.0"
+spotlessPlugin = "8.2.0"
 
 [bundles]
 # Bundles serve two purposes:
