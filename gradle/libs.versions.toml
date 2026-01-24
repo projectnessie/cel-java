@@ -36,7 +36,7 @@ junit-testing = ["assertj-core", "junit-jupiter-api", "junit-jupiter-params"]
 agrona = { module = "org.agrona:agrona", version = "1.22.0" }
 antlr-antlr4 = { module = "org.antlr:antlr4", version.ref = "antlr4" }
 antlr-antlr4-runtime = { module = "org.antlr:antlr4-runtime", version.ref = "antlr4" }
-assertj-core = { module = "org.assertj:assertj-core", version = "3.27.6" }
+assertj-core = { module = "org.assertj:assertj-core", version = "3.27.7" }
 errorprone-plugin = { module = "net.ltgt.gradle:gradle-errorprone-plugin", version.ref = "errorpronePlugin" }
 errorprone-slf4j = { module = "jp.skypencil.errorprone.slf4j:errorprone-slf4j", version.ref = "errorproneSlf4j" }
 findbugs-jsr305 = { module = "com.google.code.findbugs:jsr305", version = "3.0.2" }
