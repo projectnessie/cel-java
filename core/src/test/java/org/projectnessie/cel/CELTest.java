@@ -49,7 +49,6 @@ import static org.projectnessie.cel.ProgramOption.evalOptions;
 import static org.projectnessie.cel.ProgramOption.functions;
 import static org.projectnessie.cel.ProgramOption.globals;
 import static org.projectnessie.cel.Util.mapOf;
-import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.Err.isError;
 import static org.projectnessie.cel.common.types.Err.newErr;
@@ -657,10 +656,10 @@ public class CELTest {
     assertThat(astIss.hasIssues()).isFalse();
     Program prg = e.program(astIss.getAst(), evalOptions(OptTrackState, OptPartialEval));
     EvalResult outDet = prg.eval(unkVars);
-    assertThat(outDet.getVal()).isSameAs(False);
+    assertThat(outDet.getVal()).isInstanceOf(UnknownT.class);
     Ast residual = e.residualAst(astIss.getAst(), outDet.getEvalDetails());
     String expr = astToString(residual);
-    assertThat(expr).isEqualTo("false");
+    assertThat(expr).isEqualTo("request.auth.claims.email == \"wiley@acme.co\"");
   }
 
   @Test

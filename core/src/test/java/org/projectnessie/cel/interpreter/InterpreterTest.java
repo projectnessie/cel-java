@@ -1505,6 +1505,32 @@ class InterpreterTest {
     assertThat(result).isInstanceOf(Err.class);
   }
 
+  @Test
+  void equalityWithUnknownOperandStaysUnknown() {
+    assertThat(evalWithUnknownStringX("x == 'foo'")).isInstanceOf(UnknownT.class);
+    assertThat(evalWithUnknownStringX("x != 'foo'")).isInstanceOf(UnknownT.class);
+    assertThat(evalWithUnknownStringX("false || x == 'foo'")).isInstanceOf(UnknownT.class);
+    assertThat(evalWithUnknownStringX("false && x == 'foo'")).isSameAs(False);
+  }
+
+  private static Val evalWithUnknownStringX(String expr) {
+    Source src = newTextSource(expr);
+    ParseResult parsed = Parser.parseAllMacros(src);
+    assertThat(parsed.hasErrors()).withFailMessage(parsed.getErrors()::toDisplayString).isFalse();
+
+    Container cont = testContainer("test");
+    TypeRegistry reg = newRegistry();
+    CheckerEnv env = newStandardCheckerEnv(cont, reg);
+    env.add(Decls.newVar("x", Decls.String));
+    CheckResult checkResult = Checker.Check(parsed, src, env);
+
+    AttributeFactory attrs = newPartialAttributeFactory(cont, reg, reg);
+    Interpreter interp = newStandardInterpreter(cont, reg, reg, attrs);
+    Interpretable i = interp.newInterpretable(checkResult.getCheckedExpr());
+    Activation vars = newPartialActivation(mapOf(), newAttributePattern("x"));
+    return i.eval(vars);
+  }
+
   static class ConvTestCase {
     final String in;
     Val out;

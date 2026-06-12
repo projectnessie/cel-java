@@ -396,6 +396,13 @@ public interface Interpretable {
     public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
       Val lVal = lhs.eval(ctx);
       Val rVal = rhs.eval(ctx);
+      // Early return if any argument to the function is unknown or error.
+      if (isUnknownOrError(lVal)) {
+        return lVal;
+      }
+      if (isUnknownOrError(rVal)) {
+        return rVal;
+      }
       return lVal.equal(rVal);
     }
 
@@ -439,6 +446,13 @@ public interface Interpretable {
     public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
       Val lVal = lhs.eval(ctx);
       Val rVal = rhs.eval(ctx);
+      // Early return if any argument to the function is unknown or error.
+      if (isUnknownOrError(lVal)) {
+        return lVal;
+      }
+      if (isUnknownOrError(rVal)) {
+        return rVal;
+      }
       Val eqVal = lVal.equal(rVal);
       switch (eqVal.type().typeEnum()) {
         case Err:
