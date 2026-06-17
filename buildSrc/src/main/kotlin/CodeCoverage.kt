@@ -27,32 +27,31 @@ import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
 import org.gradle.testing.jacoco.tasks.JacocoReport
 
 class CelCodeCoveragePlugin : Plugin<Project> {
-  override fun apply(project: Project): Unit =
-    project.run {
-      apply<JacocoPlugin>()
-      apply<JacocoReportAggregationPlugin>()
+  override fun apply(project: Project): Unit = project.run {
+    apply<JacocoPlugin>()
+    apply<JacocoReportAggregationPlugin>()
 
-      tasks.withType<JacocoReport>().configureEach {
-        reports {
-          html.required.set(true)
-          xml.required.set(true)
-        }
-      }
-
-      configure<JacocoPluginExtension> { toolVersion = libsRequiredVersion("jacoco") }
-
-      if (plugins.hasPlugin("io.quarkus")) {
-        tasks.named("classes") { dependsOn(tasks.named("compileQuarkusGeneratedSourcesJava")) }
-
-        tasks.withType<Test>().configureEach {
-          extensions.configure(JacocoTaskExtension::class.java) {
-            val excluded = excludeClassLoaders
-            excludeClassLoaders =
-              listOf("*QuarkusClassLoader") + (if (excluded != null) excluded else emptyList())
-          }
-          systemProperty("quarkus.jacoco.report", "false")
-          systemProperty("quarkus.jacoco.reuse-data-file", "true")
-        }
+    tasks.withType<JacocoReport>().configureEach {
+      reports {
+        html.required.set(true)
+        xml.required.set(true)
       }
     }
+
+    configure<JacocoPluginExtension> { toolVersion = libsRequiredVersion("jacoco") }
+
+    if (plugins.hasPlugin("io.quarkus")) {
+      tasks.named("classes") { dependsOn(tasks.named("compileQuarkusGeneratedSourcesJava")) }
+
+      tasks.withType<Test>().configureEach {
+        extensions.configure(JacocoTaskExtension::class.java) {
+          val excluded = excludeClassLoaders
+          excludeClassLoaders =
+            listOf("*QuarkusClassLoader") + (if (excluded != null) excluded else emptyList())
+        }
+        systemProperty("quarkus.jacoco.report", "false")
+        systemProperty("quarkus.jacoco.reuse-data-file", "true")
+      }
+    }
+  }
 }
