@@ -72,15 +72,14 @@ val buildToolIntegrationMaven by
     commandLine("./mvnw", "clean", "package", "-Dcel.version=${project.version}")
   }
 
-val buildToolIntegrations by
-  tasks.registering {
-    group = "Verification"
-    description =
-      "Checks whether bom works fine with build tools, requires preceding publishToMavenLocal in a separate Gradle invocation"
+val buildToolIntegrations by tasks.registering {
+  group = "Verification"
+  description =
+    "Checks whether bom works fine with build tools, requires preceding publishToMavenLocal in a separate Gradle invocation"
 
-    dependsOn(buildToolIntegrationGradle)
-    dependsOn(buildToolIntegrationMaven)
-  }
+  dependsOn(buildToolIntegrationGradle)
+  dependsOn(buildToolIntegrationMaven)
+}
 
 publishingHelper {
   nessieRepoName.set("cel-java")

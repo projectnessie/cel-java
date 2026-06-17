@@ -24,12 +24,11 @@ import org.gradle.kotlin.dsl.withType
 /** Makes the generated sources available to IDEs, disables Checkstyle on generated code. */
 @Suppress("unused")
 class ProtobufHelperPlugin : Plugin<Project> {
-  override fun apply(project: Project): Unit =
-    project.run {
-      apply<ProtobufPlugin>()
+  override fun apply(project: Project): Unit = project.run {
+    apply<ProtobufPlugin>()
 
-      tasks.withType(ProtobufExtract::class.java).configureEach {
-        dependsOn(tasks.named("processJandexIndex"))
-      }
+    tasks.withType(ProtobufExtract::class.java).configureEach {
+      dependsOn(tasks.named("processJandexIndex"))
     }
+  }
 }
