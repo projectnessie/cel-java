@@ -31,7 +31,6 @@ import tools.jackson.databind.cfg.GeneratorSettings;
 import tools.jackson.databind.cfg.SerializationContexts;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.ser.SerializationContextExt;
-import tools.jackson.databind.ser.jdk.EnumSerializer;
 import tools.jackson.databind.type.TypeFactory;
 
 /**
@@ -173,10 +172,9 @@ public final class Jackson3Registry implements TypeRegistry {
   }
 
   private JacksonEnumDescription computeEnumDescription(Class<?> clazz) {
-    ValueSerializer<?> ser = serializationContextExt.findValueSerializer(clazz);
     JavaType javaType = typeFactory.constructType(clazz);
 
-    JacksonEnumDescription enumDesc = new JacksonEnumDescription(javaType, (EnumSerializer) ser);
+    JacksonEnumDescription enumDesc = new JacksonEnumDescription(javaType);
     enumMap.put(clazz, enumDesc);
 
     enumDesc.buildValues().forEach(v -> enumValues.put(v.fullyQualifiedName(), v));
