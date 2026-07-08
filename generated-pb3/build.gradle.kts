@@ -21,7 +21,7 @@ plugins {
   `java-library`
   `maven-publish`
   signing
-  `cel-conventions`
+  id("cel-conventions")
   `java-test-fixtures`
 }
 

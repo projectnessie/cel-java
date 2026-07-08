@@ -18,7 +18,7 @@ plugins {
   `java-platform`
   `maven-publish`
   signing
-  `cel-conventions`
+  id("cel-conventions")
 }
 
 dependencies {

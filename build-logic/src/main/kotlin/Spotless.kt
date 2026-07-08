@@ -36,15 +36,15 @@ fun Project.nessieConfigureSpotless() {
           ktfmt().googleStyle()
           licenseHeaderFile(rootProject.file("codestyle/copyright-header-java.txt"), "$")
           if (project == rootProject) {
-            target("*.gradle.kts", "buildSrc/*.gradle.kts")
+            target("*.gradle.kts", "build-logic/*.gradle.kts")
           }
         }
         if (project == rootProject) {
           kotlin {
             ktfmt().googleStyle()
             licenseHeaderFile(rootProject.file("codestyle/copyright-header-java.txt"), "$")
-            target("buildSrc/src/**/kotlin/**")
-            targetExclude("buildSrc/build/**")
+            target("build-logic/src/**/kotlin/**")
+            targetExclude("build-logic/build/**")
           }
         }
 
@@ -83,7 +83,7 @@ fun Project.nessieConfigureSpotless() {
               "^(package|import) .*$",
             )
             target("src/**/scala/**")
-            targetExclude("buildSrc/build/**")
+            targetExclude("build-logic/build/**")
           }
         }
         if (sourceLangs.contains("kotlin")) {

@@ -18,7 +18,7 @@ plugins {
   `java-library`
   `maven-publish`
   signing
-  `cel-conventions`
+  id("cel-conventions")
 }
 
 description = "CEL Jackson 2 support"

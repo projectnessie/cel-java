@@ -14,41 +14,18 @@
  * limitations under the License.
  */
 
-import java.time.Duration
 import org.jetbrains.gradle.ext.settings
 import org.jetbrains.gradle.ext.taskTriggers
 
 plugins {
   signing
-  alias(libs.plugins.nmcp)
-  `cel-conventions`
+  id("cel-conventions")
 }
 
 mapOf("versionJacoco" to libs.versions.jacoco.get(), "versionJandex" to libs.versions.jandex.get())
   .forEach { (k, v) -> extra[k] = v }
 
 tasks.named<Wrapper>("wrapper") { distributionType = Wrapper.DistributionType.ALL }
-
-// Pass environment variables:
-//    ORG_GRADLE_PROJECT_sonatypeUsername
-//    ORG_GRADLE_PROJECT_sonatypePassword
-// Gradle targets:
-//    publishAggregationToCentralPortal
-//    publishAggregationToCentralPortalSnapshots
-//    (zipAggregateMavenCentralDeployment to just generate the single, aggregated deployment zip)
-// Ref: Maven Central Publisher API:
-//    https://central.sonatype.org/publish/publish-portal-api/#uploading-a-deployment-bundle
-nmcpAggregation {
-  centralPortal {
-    username.value(provider { System.getenv("ORG_GRADLE_PROJECT_sonatypeUsername") })
-    password.value(provider { System.getenv("ORG_GRADLE_PROJECT_sonatypePassword") })
-    publishingType = if (System.getenv("CI") != null) "AUTOMATIC" else "USER_MANAGED"
-    publishingTimeout = Duration.ofMinutes(120)
-    validationTimeout = Duration.ofMinutes(120)
-    publicationName = "${project.name}-$version"
-  }
-  publishAllProjectsProbablyBreakingProjectIsolation()
-}
 
 val buildToolIntegrationGradle by
   tasks.registering(Exec::class) {

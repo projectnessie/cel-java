@@ -22,7 +22,7 @@ plugins {
   `maven-publish`
   signing
   id("com.gradleup.shadow")
-  `cel-conventions`
+  id("cel-conventions")
 }
 
 dependencies {

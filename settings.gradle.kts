@@ -15,6 +15,7 @@
  */
 
 import com.gradle.develocity.agent.gradle.scan.BuildScanPublishingConfiguration
+import java.time.Duration
 import org.gradle.api.specs.Spec
 
 if (!JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_17)) {
@@ -27,6 +28,8 @@ val isCI = providers.environmentVariable("CI").isPresent
 val isBuildScanRequested = gradle.startParameter.isBuildScan
 
 pluginManagement {
+  includeBuild("build-logic") { name = "cel-java-build-logic" }
+
   repositories {
     mavenCentral() // prefer Maven Central, in case Gradle's repo has issues
     gradlePluginPortal()
@@ -36,7 +39,10 @@ pluginManagement {
   }
 }
 
-plugins { id("com.gradle.develocity") version ("4.5.0") }
+plugins {
+  id("com.gradle.develocity") version ("4.5.0")
+  id("com.gradleup.nmcp.settings") version ("1.6.1")
+}
 
 develocity {
   if (isCI) {
@@ -84,6 +90,26 @@ class RequestedBuildScanPublishingSpec(private val enabled: Boolean) :
 }
 
 rootProject.name = "cel-parent"
+
+// Pass environment variables:
+//    ORG_GRADLE_PROJECT_sonatypeUsername
+//    ORG_GRADLE_PROJECT_sonatypePassword
+// Gradle targets:
+//    publishAggregationToCentralPortal
+//    publishAggregationToCentralPortalSnapshots
+//    (nmcpZipAggregation to just generate the single, aggregated deployment zip)
+// Ref: Maven Central Publisher API:
+//    https://central.sonatype.org/publish/publish-portal-api/#uploading-a-deployment-bundle
+nmcpSettings {
+  centralPortal {
+    providers.environmentVariable("ORG_GRADLE_PROJECT_sonatypeUsername").orNull?.let(username::set)
+    providers.environmentVariable("ORG_GRADLE_PROJECT_sonatypePassword").orNull?.let(password::set)
+    publishingType.set(if (isCI) "AUTOMATIC" else "USER_MANAGED")
+    publishingTimeout.set(Duration.ofMinutes(120))
+    validationTimeout.set(Duration.ofMinutes(120))
+    publicationName.set("cel-parent-${baseVersion.get()}")
+  }
+}
 
 gradle.beforeProject {
   group = "org.projectnessie.cel"

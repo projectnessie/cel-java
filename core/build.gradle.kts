@@ -20,7 +20,7 @@ plugins {
   `maven-publish`
   id("com.diffplug.spotless")
   alias(libs.plugins.jmh)
-  `cel-conventions`
+  id("cel-conventions")
   `java-test-fixtures`
 }
 

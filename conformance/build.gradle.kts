@@ -20,7 +20,7 @@ import com.google.protobuf.gradle.ProtobufPlugin
 plugins {
   `java-library`
   id("com.gradleup.shadow")
-  `cel-conventions`
+  id("cel-conventions")
 }
 
 apply<ProtobufPlugin>()
