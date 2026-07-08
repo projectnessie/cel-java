@@ -17,6 +17,7 @@
 import com.gradle.develocity.agent.gradle.scan.BuildScanPublishingConfiguration
 import java.time.Duration
 import org.gradle.api.specs.Spec
+import org.gradle.kotlin.dsl.support.serviceOf
 
 if (!JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_17)) {
   throw GradleException("Build requires Java 17")
@@ -26,6 +27,14 @@ val baseVersion =
   providers.fileContents(layout.settingsDirectory.file("version.txt")).asText.map { it.trim() }
 val isCI = providers.environmentVariable("CI").isPresent
 val isBuildScanRequested = gradle.startParameter.isBuildScan
+val configurationCacheRequested =
+  gradle.serviceOf<BuildFeatures>().configurationCache.requested.getOrElse(false)
+
+if (isCI && configurationCacheRequested) {
+  throw GradleException(
+    "Gradle configuration cache must not be enabled in CI because it can persist build configuration state to disk."
+  )
+}
 
 pluginManagement {
   includeBuild("build-logic") { name = "cel-java-build-logic" }
