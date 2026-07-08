@@ -72,5 +72,3 @@ nmcp = { id = "com.gradleup.nmcp.aggregation", version = "1.6.1" }
 protobuf = { id = "com.google.protobuf", version.ref = "protobufPlugin" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadowPlugin" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotlessPlugin" }
-testrerun = { id = "org.caffinitas.gradle.testrerun", version = "0.1" }
-testsummary = { id = "org.caffinitas.gradle.testsummary", version = "0.1.1" }

@@ -20,8 +20,6 @@ import org.jetbrains.gradle.ext.taskTriggers
 
 plugins {
   signing
-  alias(libs.plugins.testsummary)
-  alias(libs.plugins.testrerun)
   alias(libs.plugins.nmcp)
   `cel-conventions`
 }

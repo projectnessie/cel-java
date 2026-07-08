@@ -14,17 +14,23 @@
  * limitations under the License.
  */
 
+import com.gradle.develocity.agent.gradle.scan.BuildScanPublishingConfiguration
+import org.gradle.api.specs.Spec
+
 if (!JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_17)) {
   throw GradleException("Build requires Java 17")
 }
 
-val baseVersion = file("version.txt").readText().trim()
+val baseVersion =
+  providers.fileContents(layout.settingsDirectory.file("version.txt")).asText.map { it.trim() }
+val isCI = providers.environmentVariable("CI").isPresent
+val isBuildScanRequested = gradle.startParameter.isBuildScan
 
 pluginManagement {
   repositories {
     mavenCentral() // prefer Maven Central, in case Gradle's repo has issues
     gradlePluginPortal()
-    if (System.getProperty("withMavenLocal").toBoolean()) {
+    if (providers.systemProperty("withMavenLocal").map(String::toBoolean).getOrElse(false)) {
       mavenLocal()
     }
   }
@@ -33,10 +39,11 @@ pluginManagement {
 plugins { id("com.gradle.develocity") version ("4.5.0") }
 
 develocity {
-  if (System.getenv("CI") != null) {
+  if (isCI) {
     buildScan {
       termsOfUseUrl = "https://gradle.com/terms-of-service"
       termsOfUseAgree = "yes"
+      publishing.onlyIf(RequestedBuildScanPublishingSpec(true))
       // Add some potentially interesting information from the environment
       listOf(
           "GITHUB_ACTION_REPOSITORY",
@@ -52,29 +59,35 @@ develocity {
           "GITHUB_WORKFLOW",
         )
         .forEach { e ->
-          val v = System.getenv(e)
+          val v = providers.environmentVariable(e).orNull
           if (v != null) {
             value(e, v)
           }
         }
-      val ghUrl = System.getenv("GITHUB_SERVER_URL")
+      val ghUrl = providers.environmentVariable("GITHUB_SERVER_URL").orNull
       if (ghUrl != null) {
-        val ghRepo = System.getenv("GITHUB_REPOSITORY")
-        val ghRunId = System.getenv("GITHUB_RUN_ID")
+        val ghRepo = providers.environmentVariable("GITHUB_REPOSITORY").orNull
+        val ghRunId = providers.environmentVariable("GITHUB_RUN_ID").orNull
         link("Summary", "$ghUrl/$ghRepo/actions/runs/$ghRunId")
         link("PRs", "$ghUrl/$ghRepo/pulls")
       }
     }
   } else {
-    buildScan { publishing { onlyIf { gradle.startParameter.isBuildScan } } }
+    buildScan { publishing.onlyIf(RequestedBuildScanPublishingSpec(isBuildScanRequested)) }
   }
+}
+
+class RequestedBuildScanPublishingSpec(private val enabled: Boolean) :
+  Spec<BuildScanPublishingConfiguration.PublishingContext> {
+  override fun isSatisfiedBy(context: BuildScanPublishingConfiguration.PublishingContext): Boolean =
+    enabled
 }
 
 rootProject.name = "cel-parent"
 
 gradle.beforeProject {
   group = "org.projectnessie.cel"
-  version = baseVersion
+  version = baseVersion.get()
   description =
     when (name) {
       "cel" -> "Common-Expression-Language - Java implementation"

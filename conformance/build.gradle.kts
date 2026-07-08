@@ -20,8 +20,6 @@ import com.google.protobuf.gradle.ProtobufPlugin
 plugins {
   `java-library`
   id("com.gradleup.shadow")
-  id("org.caffinitas.gradle.testsummary")
-  id("org.caffinitas.gradle.testrerun")
   `cel-conventions`
 }
 
