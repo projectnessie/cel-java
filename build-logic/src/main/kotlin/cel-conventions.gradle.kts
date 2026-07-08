@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-if (project.name != "conformance" && project.name != "jacoco") {
-  apply<PublishingHelperPlugin>()
-}
-
 nessieConfigureSpotless()
 
 nessieConfigureJava()
+
+if (project.name != "conformance" && project.name != "jacoco") {
+  apply<PublishingHelperPlugin>()
+}
 
 nessieIde()
 
