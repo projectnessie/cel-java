@@ -27,6 +27,7 @@ plugins {
 dependencies {
   api(project(":cel-tools"))
   api(project(":cel-jackson"))
+  api(project(":cel-jackson3"))
   api(project(":cel-generated-antlr", configuration = "shadow"))
 
   compileOnly(libs.protobuf.java)

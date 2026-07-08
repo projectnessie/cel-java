@@ -29,6 +29,7 @@ dependencies {
     api(project(":cel-generated-pb3"))
     api(project(":cel-conformance"))
     api(project(":cel-jackson"))
+    api(project(":cel-jackson3"))
     api(project(":cel-tools"))
     api(project(":cel-standalone"))
   }
