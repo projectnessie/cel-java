@@ -27,8 +27,8 @@ mapOf("versionJacoco" to libs.versions.jacoco.get(), "versionJandex" to libs.ver
 
 tasks.named<Wrapper>("wrapper") { distributionType = Wrapper.DistributionType.ALL }
 
-val buildToolIntegrationGradle by
-  tasks.registering(Exec::class) {
+val buildToolIntegrationGradle =
+  tasks.register<Exec>("buildToolIntegrationGradle") {
     group = "Verification"
     description =
       "Checks whether bom works fine with Gradle, requires preceding publishToMavenLocal in a separate Gradle invocation"
@@ -37,8 +37,8 @@ val buildToolIntegrationGradle by
     commandLine("./gradlew", "jar", "-Dcel.version=${project.version}")
   }
 
-val buildToolIntegrationMaven by
-  tasks.registering(Exec::class) {
+val buildToolIntegrationMaven =
+  tasks.register<Exec>("buildToolIntegrationMaven") {
     group = "Verification"
     description =
       "Checks whether bom works fine with Maven, requires preceding publishToMavenLocal in a separate Gradle invocation"
@@ -47,14 +47,15 @@ val buildToolIntegrationMaven by
     commandLine("./mvnw", "clean", "package", "-Dcel.version=${project.version}")
   }
 
-val buildToolIntegrations by tasks.registering {
-  group = "Verification"
-  description =
-    "Checks whether bom works fine with build tools, requires preceding publishToMavenLocal in a separate Gradle invocation"
+val buildToolIntegrations =
+  tasks.register("buildToolIntegrations") {
+    group = "Verification"
+    description =
+      "Checks whether bom works fine with build tools, requires preceding publishToMavenLocal in a separate Gradle invocation"
 
-  dependsOn(buildToolIntegrationGradle)
-  dependsOn(buildToolIntegrationMaven)
-}
+    dependsOn(buildToolIntegrationGradle)
+    dependsOn(buildToolIntegrationMaven)
+  }
 
 publishingHelper {
   nessieRepoName.set("cel-java")
