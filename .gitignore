@@ -4,6 +4,10 @@ build/
 .gradle/
 buildSrc/.kotlin/
 
+# Ignore Gradle wrapper jar file
+gradle/wrapper/gradle-wrapper.jar
+gradle/wrapper/gradle-wrapper-*.sha256
+
 # Maven
 **/.mvn/wrapper/maven-wrapper.jar
 target/
@@ -13,3 +17,5 @@ target/
 out/
 
 conformance/conformance-server.pid
+
+/.env
