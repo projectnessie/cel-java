@@ -87,8 +87,11 @@ fun Project.nessieIde() {
     // the Gradle project)
     val ideaDir = layout.projectDirectory.dir(".idea").asFile
 
-    if (ideaDir.isDirectory) {
-      ideaDir.resolve(".name").writeText(ideName)
+    if (java.lang.Boolean.getBoolean("idea.sync.active") && ideaDir.isDirectory) {
+      val ideaNameFile = ideaDir.resolve(".name")
+      if (!ideaNameFile.isFile || ideaNameFile.readText() != ideName) {
+        ideaNameFile.writeText(ideName)
+      }
     }
 
     configure<EclipseModel> { project { name = ideName } }

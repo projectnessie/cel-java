@@ -16,6 +16,9 @@
 
 import com.google.protobuf.gradle.ProtobufExtension
 import com.google.protobuf.gradle.ProtobufPlugin
+import org.gradle.api.file.SourceDirectorySet
+import org.gradle.api.tasks.Sync
+import org.gradle.api.tasks.compile.JavaCompile
 
 plugins {
   `java-library`
@@ -27,14 +30,57 @@ plugins {
 
 apply<ProtobufPlugin>()
 
+val syncedMainProtoDir = layout.buildDirectory.dir("pb-src/proto")
+val mainProtoResourcesDir = layout.buildDirectory.dir("generated/proto-resources/main")
+val syncMainProtoSources =
+  tasks.register<Sync>("syncMainProtoSources") {
+    into(syncedMainProtoDir)
+    from(layout.settingsDirectory.dir("submodules/googleapis/google/rpc")) { into("google/rpc") }
+    from(layout.settingsDirectory.dir("submodules/googleapis/google/api/expr/v1alpha1")) {
+      into("google/api/expr/v1alpha1")
+    }
+  }
+
+val emptyTestProtoDir = layout.buildDirectory.dir("pb-src/test/proto")
+val syncedTestFixturesProtoDir = layout.buildDirectory.dir("pb-src/testFixtures/proto")
+val testFixturesProtoResourcesDir =
+  layout.buildDirectory.dir("generated/proto-resources/testFixtures")
+val syncTestFixturesProtoSources =
+  tasks.register<Sync>("syncTestFixturesProtoSources") {
+    into(syncedTestFixturesProtoDir)
+    from(layout.settingsDirectory.dir("generated-pb/src/testFixtures/proto")) { include("*.proto") }
+    from(layout.settingsDirectory.dir("submodules/cel-spec/proto/test/v1/proto2")) {
+      into("proto/test/v1/proto2")
+    }
+    from(layout.settingsDirectory.dir("submodules/cel-spec/proto/test/v1/proto3")) {
+      into("proto/test/v1/proto3")
+    }
+  }
+
 sourceSets.main {
-  java.srcDir(layout.buildDirectory.dir("generated/source/proto/main/java"))
+  java.setSrcDirs(listOf(layout.buildDirectory.dir("generated/sources/proto/main/java")))
   java.destinationDirectory.set(layout.buildDirectory.dir("classes/java/generated"))
+  resources.setSrcDirs(listOf(mainProtoResourcesDir))
+  extensions.configure<SourceDirectorySet>("proto") {
+    setSrcDirs(listOf(syncedMainProtoDir))
+  }
 }
 
 sourceSets.test {
-  java.srcDir(layout.buildDirectory.dir("generated/source/proto/test/java"))
+  java.setSrcDirs(listOf(layout.buildDirectory.dir("generated/sources/proto/test/java")))
   java.destinationDirectory.set(layout.buildDirectory.dir("classes/java/generatedTest"))
+  resources.setSrcDirs(emptyList<Any>())
+  extensions.configure<SourceDirectorySet>("proto") {
+    setSrcDirs(listOf(emptyTestProtoDir))
+  }
+}
+
+sourceSets.testFixtures {
+  java.setSrcDirs(listOf(layout.buildDirectory.dir("generated/sources/proto/testFixtures/java")))
+  resources.setSrcDirs(listOf(testFixturesProtoResourcesDir))
+  extensions.configure<SourceDirectorySet>("proto") {
+    setSrcDirs(listOf(syncedTestFixturesProtoDir))
+  }
 }
 
 dependencies {
@@ -55,4 +101,29 @@ configure<ProtobufExtension> {
     // Download from repositories
     artifact = "com.google.protobuf:protoc:${libs.versions.protobuf3.get()}"
   }
+}
+
+tasks.named("generateProto") { dependsOn(syncMainProtoSources) }
+
+tasks.named<JavaCompile>("compileJava") { dependsOn(tasks.named("generateProto")) }
+
+tasks.named("processProtoResources") { dependsOn(syncMainProtoSources) }
+
+tasks.named("processResources") { dependsOn(tasks.named("processProtoResources")) }
+
+tasks.named<Jar>("sourcesJar") {
+  dependsOn(tasks.named("generateProto"))
+  dependsOn(tasks.named("processProtoResources"))
+}
+
+tasks.named("generateTestFixturesProto") { dependsOn(syncTestFixturesProtoSources) }
+
+tasks.named<JavaCompile>("compileTestFixturesJava") {
+  dependsOn(tasks.named("generateTestFixturesProto"))
+}
+
+tasks.named("processTestFixturesProtoResources") { dependsOn(syncTestFixturesProtoSources) }
+
+tasks.named("processTestFixturesResources") {
+  dependsOn(tasks.named("processTestFixturesProtoResources"))
 }

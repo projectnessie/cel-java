@@ -16,13 +16,13 @@
 
 import com.diffplug.gradle.spotless.SpotlessExtension
 import com.diffplug.gradle.spotless.SpotlessPlugin
+import com.diffplug.spotless.LineEnding
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.apply
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.withType
 
 fun Project.nessieConfigureSpotless() {
-
   apply<SpotlessPlugin>()
   if (!java.lang.Boolean.getBoolean("idea.sync.active")) {
     val copyrightHeader = layout.settingsDirectory.file("codestyle/copyright-header-java.txt")
@@ -30,6 +30,8 @@ fun Project.nessieConfigureSpotless() {
 
     plugins.withType<SpotlessPlugin>().configureEach {
       configure<SpotlessExtension> {
+        lineEndings = LineEnding.UNIX
+
         format("xml") {
           target("src/**/*.xml", "src/**/*.xsd")
           eclipseWtp(com.diffplug.spotless.extra.wtp.EclipseWtpFormatterStep.XML)
@@ -76,7 +78,7 @@ fun Project.nessieConfigureSpotless() {
           java {
             googleJavaFormat(libsRequiredVersion("googleJavaFormat"))
             licenseHeaderFile(copyrightHeader.asFile)
-            target("src/**/java/**")
+            target("src/**/*.java")
             targetExclude("build/**")
           }
         }

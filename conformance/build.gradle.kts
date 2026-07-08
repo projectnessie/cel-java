@@ -16,6 +16,9 @@
 
 import com.google.protobuf.gradle.ProtobufExtension
 import com.google.protobuf.gradle.ProtobufPlugin
+import org.gradle.api.file.SourceDirectorySet
+import org.gradle.api.tasks.Sync
+import org.gradle.api.tasks.compile.JavaCompile
 
 plugins {
   `java-library`
@@ -25,9 +28,39 @@ plugins {
 
 apply<ProtobufPlugin>()
 
+val syncedMainProtoDir = layout.buildDirectory.dir("pb-src/proto")
+val mainProtoResourcesDir = layout.buildDirectory.dir("generated/proto-resources/main")
+val syncMainProtoSources =
+  tasks.register<Sync>("syncMainProtoSources") {
+    into(syncedMainProtoDir)
+    from(layout.settingsDirectory.dir("submodules/googleapis/google/rpc")) { into("google/rpc") }
+    from(layout.settingsDirectory.dir("submodules/googleapis/google/api/expr/conformance")) {
+      into("google/api/expr/conformance")
+    }
+  }
+
+val emptyTestProtoDir = layout.buildDirectory.dir("pb-src/test/proto")
+
 sourceSets.main {
-  java.srcDir(layout.buildDirectory.dir("generated/source/proto/main/java"))
-  java.srcDir(layout.buildDirectory.dir("generated/source/proto/main/grpc"))
+  java.setSrcDirs(
+    listOf(
+      layout.projectDirectory.dir("src/main/java"),
+      layout.buildDirectory.dir("generated/sources/proto/main/java"),
+      layout.buildDirectory.dir("generated/sources/proto/main/grpc"),
+    )
+  )
+  resources.setSrcDirs(listOf(mainProtoResourcesDir))
+  extensions.configure<SourceDirectorySet>("proto") {
+    setSrcDirs(listOf(syncedMainProtoDir))
+  }
+}
+
+sourceSets.test {
+  java.setSrcDirs(listOf(layout.projectDirectory.dir("src/test/java")))
+  resources.setSrcDirs(emptyList<Any>())
+  extensions.configure<SourceDirectorySet>("proto") {
+    setSrcDirs(listOf(emptyTestProtoDir))
+  }
 }
 
 configurations.all { exclude(group = "org.projectnessie.cel", module = "cel-generated-pb") }
@@ -67,5 +100,20 @@ configure<ProtobufExtension> {
   generateProtoTasks { all().configureEach { this.plugins.create("grpc") {} } }
 }
 
+tasks.named("generateProto") { dependsOn(syncMainProtoSources) }
+
+tasks.named<JavaCompile>("compileJava") { dependsOn(tasks.named("generateProto")) }
+
+tasks.named("processProtoResources") { dependsOn(syncMainProtoSources) }
+
+tasks.named("processResources") { dependsOn(tasks.named("processProtoResources")) }
+
+tasks.named("generateTestProto") { enabled = false }
+
+tasks.named("processTestProtoResources") { enabled = false }
+
 // The protobuf-plugin should ideally do this
-tasks.named<Jar>("sourcesJar") { dependsOn(tasks.named("generateProto")) }
+tasks.named<Jar>("sourcesJar") {
+  dependsOn(tasks.named("generateProto"))
+  dependsOn(tasks.named("processProtoResources"))
+}
