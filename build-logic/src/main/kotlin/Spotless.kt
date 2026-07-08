@@ -25,30 +25,35 @@ fun Project.nessieConfigureSpotless() {
 
   apply<SpotlessPlugin>()
   if (!java.lang.Boolean.getBoolean("idea.sync.active")) {
+    val copyrightHeader = layout.settingsDirectory.file("codestyle/copyright-header-java.txt")
+    val rootProjectOnly = path == ":"
+
     plugins.withType<SpotlessPlugin>().configureEach {
       configure<SpotlessExtension> {
         format("xml") {
           target("src/**/*.xml", "src/**/*.xsd")
           eclipseWtp(com.diffplug.spotless.extra.wtp.EclipseWtpFormatterStep.XML)
-            .configFile(rootProject.projectDir.resolve("codestyle/org.eclipse.wst.xml.core.prefs"))
+            .configFile(
+              layout.settingsDirectory.file("codestyle/org.eclipse.wst.xml.core.prefs").asFile
+            )
         }
         kotlinGradle {
           ktfmt().googleStyle()
-          licenseHeaderFile(rootProject.file("codestyle/copyright-header-java.txt"), "$")
-          if (project == rootProject) {
+          licenseHeaderFile(copyrightHeader.asFile, "$")
+          if (rootProjectOnly) {
             target("*.gradle.kts", "build-logic/*.gradle.kts")
           }
         }
-        if (project == rootProject) {
+        if (rootProjectOnly) {
           kotlin {
             ktfmt().googleStyle()
-            licenseHeaderFile(rootProject.file("codestyle/copyright-header-java.txt"), "$")
+            licenseHeaderFile(copyrightHeader.asFile, "$")
             target("build-logic/src/**/kotlin/**")
             targetExclude("build-logic/build/**")
           }
         }
 
-        val dirsInSrc = projectDir.resolve("src").listFiles()
+        val dirsInSrc = layout.projectDirectory.dir("src").asFile.listFiles()
         val sourceLangs =
           if (dirsInSrc != null)
             dirsInSrc
@@ -62,7 +67,7 @@ fun Project.nessieConfigureSpotless() {
 
         if (sourceLangs.contains("antlr4")) {
           antlr4 {
-            licenseHeaderFile(rootProject.file("codestyle/copyright-header-java.txt"))
+            licenseHeaderFile(copyrightHeader.asFile)
             target("src/**/antlr4/**")
             targetExclude("build/**")
           }
@@ -70,7 +75,7 @@ fun Project.nessieConfigureSpotless() {
         if (sourceLangs.contains("java")) {
           java {
             googleJavaFormat(libsRequiredVersion("googleJavaFormat"))
-            licenseHeaderFile(rootProject.file("codestyle/copyright-header-java.txt"))
+            licenseHeaderFile(copyrightHeader.asFile)
             target("src/**/java/**")
             targetExclude("build/**")
           }
@@ -79,7 +84,7 @@ fun Project.nessieConfigureSpotless() {
           scala {
             scalafmt()
             licenseHeaderFile(
-              rootProject.file("codestyle/copyright-header-java.txt"),
+              copyrightHeader.asFile,
               "^(package|import) .*$",
             )
             target("src/**/scala/**")
@@ -89,7 +94,7 @@ fun Project.nessieConfigureSpotless() {
         if (sourceLangs.contains("kotlin")) {
           kotlin {
             ktfmt().googleStyle()
-            licenseHeaderFile(rootProject.file("codestyle/copyright-header-java.txt"), "$")
+            licenseHeaderFile(copyrightHeader.asFile, "$")
             target("src/**/kotlin/**")
             targetExclude("build/**")
           }

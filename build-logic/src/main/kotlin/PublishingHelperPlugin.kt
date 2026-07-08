@@ -105,14 +105,14 @@ constructor(private val softwareComponentFactory: SoftwareComponentFactory) : Pl
                   }
                 )
                 description.set(project.description)
-                if (project != rootProject) {
+                if (path != ":") {
                   withXml {
                     val projectNode = asNode()
 
                     val parentNode = projectNode.appendNode("parent")
-                    parentNode.appendNode("groupId", parent!!.group)
-                    parentNode.appendNode("artifactId", parent!!.name)
-                    parentNode.appendNode("version", parent!!.version)
+                    parentNode.appendNode("groupId", group)
+                    parentNode.appendNode("artifactId", "cel-parent")
+                    parentNode.appendNode("version", version)
 
                     addMissingMandatoryDependencyVersions(projectNode)
                   }
@@ -120,10 +120,10 @@ constructor(private val softwareComponentFactory: SoftwareComponentFactory) : Pl
                   val nessieRepoName = e.nessieRepoName.get()
 
                   inputs
-                    .file(rootProject.file("gradle/developers.csv"))
+                    .file(layout.settingsDirectory.file("gradle/developers.csv"))
                     .withPathSensitivity(PathSensitivity.RELATIVE)
                   inputs
-                    .file(rootProject.file("gradle/contributors.csv"))
+                    .file(layout.settingsDirectory.file("gradle/contributors.csv"))
                     .withPathSensitivity(PathSensitivity.RELATIVE)
                   doFirst {
                     inceptionYear.set(e.inceptionYear.get())
@@ -160,7 +160,9 @@ constructor(private val softwareComponentFactory: SoftwareComponentFactory) : Pl
                       url.set("https://github.com/projectnessie/$nessieRepoName/issues")
                     }
                     developers {
-                      file(rootProject.file("gradle/developers.csv"))
+                      layout.settingsDirectory
+                        .file("gradle/developers.csv")
+                        .asFile
                         .readLines()
                         .map { line -> line.trim() }
                         .filter { line -> line.isNotEmpty() && !line.startsWith("#") }
@@ -179,7 +181,9 @@ constructor(private val softwareComponentFactory: SoftwareComponentFactory) : Pl
                         }
                     }
                     contributors {
-                      file(rootProject.file("gradle/contributors.csv"))
+                      layout.settingsDirectory
+                        .file("gradle/contributors.csv")
+                        .asFile
                         .readLines()
                         .map { line -> line.trim() }
                         .filter { line -> line.isNotEmpty() && !line.startsWith("#") }

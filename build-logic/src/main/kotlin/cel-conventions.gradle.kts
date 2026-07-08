@@ -26,7 +26,7 @@ nessieIde()
 
 apply<CelCodeCoveragePlugin>()
 
-if (projectDir.resolve("src/test/java").exists()) {
+if (layout.projectDirectory.dir("src/test/java").asFile.exists()) {
   nessieConfigureTestTasks()
 }
 

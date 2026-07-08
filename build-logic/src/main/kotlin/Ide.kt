@@ -31,11 +31,10 @@ import org.jetbrains.gradle.ext.settings
 fun Project.nessieIde() {
   apply<EclipsePlugin>()
 
-  if (this == rootProject) {
+  if (path == ":") {
 
-    val projectName = rootProject.file("ide-name.txt").readText().trim()
-    val ideName =
-      "$projectName ${rootProject.version.toString().replace(Regex("^([0-9.]+).*"), "$1")}"
+    val projectName = layout.settingsDirectory.file("ide-name.txt").asFile.readText().trim()
+    val ideName = "$projectName ${version.toString().replace(Regex("^([0-9.]+).*"), "$1")}"
 
     apply<IdeaExtPlugin>()
     configure<IdeaModel> {
@@ -51,7 +50,11 @@ fun Project.nessieIde() {
           profiles.create("Nessie-ASF") {
             // strip trailing LF
             val copyrightText =
-              rootProject.file("codestyle/copyright-header.txt").readLines().joinToString("\n")
+              layout.settingsDirectory
+                .file("codestyle/copyright-header.txt")
+                .asFile
+                .readLines()
+                .joinToString("\n")
             notice = copyrightText
           }
         }
@@ -63,8 +66,9 @@ fun Project.nessieIde() {
           defaults = true
 
           jvmArgs =
-            rootProject.projectDir
-              .resolve("gradle.properties")
+            layout.settingsDirectory
+              .file("gradle.properties")
+              .asFile
               .reader()
               .use {
                 val rules = java.util.Properties()
@@ -81,7 +85,7 @@ fun Project.nessieIde() {
 
     // There's no proper way to set the name of the IDEA project (when "just importing" or syncing
     // the Gradle project)
-    val ideaDir = projectDir.resolve(".idea")
+    val ideaDir = layout.projectDirectory.dir(".idea").asFile
 
     if (ideaDir.isDirectory) {
       ideaDir.resolve(".name").writeText(ideName)

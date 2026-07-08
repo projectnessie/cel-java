@@ -65,7 +65,7 @@ fun Project.nessieConfigureJava() {
     }
   }
 
-  if (project != rootProject) {
+  if (path != ":") {
     tasks.withType<Jar>().configureEach { duplicatesStrategy = DuplicatesStrategy.WARN }
   }
 }
