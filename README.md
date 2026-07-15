@@ -4,12 +4,35 @@
 [![Maven Central](https://img.shields.io/maven-central/v/org.projectnessie.cel/cel-core)](https://search.maven.org/artifact/org.projectnessie.cel/cel-core)
 
 This is a Java port of the [Common-Expression-Language (CEL)](https://opensource.google/projects/cel).
-
 The CEL specification can be found [here](https://github.com/google/cel-spec).
+
+## Contents
+
+- [Getting started](#getting-started)
+- [Usage](#usage)
+  - [Basic scripts](#basic-scripts)
+  - [Protobuf objects](#protobuf-objects)
+  - [Jackson objects](#jackson-objects)
+  - [Authorization-style expressions](#authorization-style-expressions)
+  - [Custom functions](#custom-functions)
+- [Artifacts](#artifacts)
+  - [Which artifact should I use?](#which-artifact-should-i-use)
+  - [Dependency-free artifact](#dependency-free-artifact)
+- [Implementation notes](#implementation-notes)
+  - [Motivation](#motivation)
+  - [Arbitrary Java classes](#arbitrary-java-classes)
+  - [Unsigned 64-bit `uint`](#unsigned-64-bit-uint)
+  - [Native image and package verification](#native-image-and-package-verification)
+  - [Not yet implemented](#not-yet-implemented)
+  - [Unclear double-to-int rounding behavior](#unclear-double-to-int-rounding-behavior)
+- [Building and testing CEL-Java](#building-and-testing-cel-java)
 
 ## Getting started
 
-The easiest way to get started is to add a dependency to your Maven project
+The easiest way to get started is to add the CEL-Java BOM and `cel-tools` to your project.
+
+Maven:
+
 ```xml
 <dependencyManagement>
   <dependencies>
@@ -30,7 +53,9 @@ The easiest way to get started is to add a dependency to your Maven project
   </dependency>
 </dependencies>
 ```
-or Gradle project.
+
+Gradle:
+
 ```groovy
 dependencies {
   implementation(enforcedPlatform("org.projectnessie.cel:cel-bom:0.6.2"))
@@ -38,13 +63,16 @@ dependencies {
 }
 ```
 
-(Note: `cel-bom` is available for CEL-Java version 0.3.0 and newer.)
+The `cel-bom` artifact is available for CEL-Java version 0.3.0 and newer.
 
-The `cel-tools` artifact provides a simple entry point `ScriptHost` to produce `Script` instances.
-A very simple start:
+## Usage
+
+### Basic scripts
+
+The `cel-tools` artifact provides `ScriptHost` as a simple entry point for producing reusable
+`Script` instances.
 
 ```java
-import com.google.api.expr.v1alpha1.Decl;
 import java.util.HashMap;
 import java.util.Map;
 import org.projectnessie.cel.checker.Decls;
@@ -53,13 +81,10 @@ import org.projectnessie.cel.tools.ScriptHost;
 
 public class MyClass {
   public void myScriptUsage() {
-    // Build the script factory
     ScriptHost scriptHost = ScriptHost.newBuilder().build();
 
-    // create the script, will be parsed and checked
     Script script = scriptHost.buildScript("x + ' ' + y")
         .withDeclarations(
-            // Variable declarations - we need `x` and `y` in this example
             Decls.newVar("x", Decls.String),
             Decls.newVar("y", Decls.String))
         .build();
@@ -75,11 +100,9 @@ public class MyClass {
 }
 ```
 
-## Protobuf and Jackson and plain Java objects
+### Protobuf objects
 
-Protobuf (via `com.google.protobuf:protobuf-java`) objects and schema is supported out of the box.
-
-### Protobuf example
+Protobuf objects and schemas are supported out of the box via `com.google.protobuf:protobuf-java`.
 
 ```protobuf
 syntax = "proto3";
@@ -107,48 +130,35 @@ public class MyClass {
 
     MyPojo pojo = MyPojo.newBuilder().setProperty1("test").build();
 
-    String checkName = "test";
-
     Map<String, Object> arguments = new HashMap<>();
     arguments.put("inp", pojo);
-    arguments.put("checkName", checkName);
+    arguments.put("checkName", "test");
 
-    Boolean result = script.execute(Boolean.class, arguments);
-
-    return result;
+    return script.execute(Boolean.class, arguments);
   }
 }
 ```
 
-### Jackson example
+### Jackson objects
 
-The following example refers to Jackson 3. Support for Jackson 2 is, see [below](#jackson-2-example).
+Plain Java and Jackson objects can be used as arguments with the
+`org.projectnessie.cel.types.jackson3.Jackson3Registry` from `org.projectnessie.cel:cel-jackson3`.
 
-It is also possible to use plain Java and Jackson objects as arguments by using the 
-`org.projectnessie.cel.types.jackson3.Jackson3Registry` in `org.projectnessie.cel:cel-jackson3`.
-
-Code sample similar to the one above. It takes a user-provided object type `MyInput`.
 ```java
 import org.projectnessie.cel.types.jackson3.Jackson3Registry;
 
 public class MyClass {
   public Boolean evalWithJacksonObject(MyInput input, String checkName) {
-    // Build the script factory
     ScriptHost scriptHost = ScriptHost.newBuilder()
-        // IMPORTANT: use the Jackson registry
         .registry(Jackson3Registry.newRegistry())
         .build();
 
-    // Create the script, will be parsed and checked.
-    // It checks whether the property `name` in the "Jackson-ized" class `MyInput` is
-    // equal to the value of `checkName`.
     Script script = scriptHost.buildScript("inp.name == checkName")
-        // Variable declarations - we need `inp` +  `checkName` in this example
         .withDeclarations(
-            // types for Jackson need the fully qualified class name 
+            // types for Jackson need the fully qualified class name
             Decls.newVar("inp", Decls.newObjectType(MyInput.class.getName())),
             Decls.newVar("checkName", Decls.String))
-        // Register our Jackson object input type (as a java.lang.Class)
+        // Register the Jackson object input type as a java.lang.Class.
         .withTypes(MyInput.class)
         .build();
 
@@ -156,44 +166,16 @@ public class MyClass {
     arguments.put("inp", input);
     arguments.put("checkName", checkName);
 
-    Boolean result = script.execute(Boolean.class, arguments);
-
-    return result;
+    return script.execute(Boolean.class, arguments);
   }
 }
 ```
 
-Note that the Jackson field-names are used as property names in CEL-Java. It is not necessary to
-annotate "plain Java" classes with Jackson annotations.
+Jackson field names are used as CEL-Java property names. It is not necessary to annotate plain Java
+classes with Jackson annotations.
 
-To use the `Jackson3Registry` in your application code, add the `cel-jackson3` dependency in
-addition to `cel-core` or `cel-tools`.
+To use Jackson 3, add `cel-jackson3` in addition to `cel-tools` or `cel-core`:
 
-```xml
-<dependencyManagement>
-  <dependencies>
-    <dependency>
-      <groupId>org.projectnessie.cel</groupId>
-      <artifactId>cel-bom</artifactId>
-      <version>0.6.2</version>
-      <type>pom</type>
-      <scope>import</scope>
-    </dependency>
-  </dependencies>
-</dependencyManagement>
-
-<dependencies>
-  <dependency>
-    <groupId>org.projectnessie.cel</groupId>
-    <artifactId>cel-jackson3</artifactId>
-  </dependency>
-  <dependency>
-    <groupId>org.projectnessie.cel</groupId>
-    <artifactId>cel-tools</artifactId>
-  </dependency>
-</dependencies>
-```
-or Gradle project.
 ```groovy
 dependencies {
   implementation(enforcedPlatform("org.projectnessie.cel:cel-bom:0.6.2"))
@@ -202,51 +184,149 @@ dependencies {
 }
 ```
 
-### Jackson 2 example
+Jackson 2 support is similar:
 
-Support for Jackson 2 is similar to Jackson 3, with a few differences:
+- Use `JacksonRegistry` from `org.projectnessie.cel.types.jackson.JacksonRegistry`.
+- Use `org.projectnessie.cel:cel-jackson` instead of `org.projectnessie.cel:cel-jackson3`.
 
-* Use `JacksonRegistry` from `org.projectnessie.cel.types.jackson.JacksonRegistry`
-* Use `org.projectnessie.cel:cel-jackson` dependency instead of `org.projectnessie.cel:cel-jackson3`
+### Authorization-style expressions
 
-## Dependency-free artifact
+CEL-Java can be embedded behind an application-owned authorization decision point. CEL evaluates the
+expression, but the application remains responsible for defining available attributes, principal and
+role semantics, resource inheritance, and the final fail-closed decision.
 
-The `org.projectnessie.cel:cel-standalone` contains everything from CEL-Java and has no dependencies.
-It comes with relocated protobuf dependencies.
+An authorization expression can be compiled once and evaluated many times with different arguments:
+
+```java
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
+import org.projectnessie.cel.checker.Decls;
+import org.projectnessie.cel.tools.Script;
+import org.projectnessie.cel.tools.ScriptException;
+import org.projectnessie.cel.tools.ScriptHost;
+
+public class AuthorizationExample {
+  private static final String EXPRESSION =
+      "resource.service == \"storage.googleapis.com\""
+          + " && resource.type == \"storage.googleapis.com/Object\""
+          + " && resource.name.startsWith(\"projects/_/buckets/example/objects/reports/\")"
+          + " && request.time < timestamp(\"2026-08-01T00:00:00Z\")";
+
+  private final Script condition;
+
+  public AuthorizationExample() throws ScriptException {
+    condition =
+        ScriptHost.newBuilder()
+            .build()
+            .buildScript(EXPRESSION)
+            .withDeclarations(
+                Decls.newVar("resource.service", Decls.String),
+                Decls.newVar("resource.type", Decls.String),
+                Decls.newVar("resource.name", Decls.String),
+                Decls.newVar("request.time", Decls.Timestamp))
+            .build();
+  }
+
+  public boolean grants(String service, String type, String name, Instant requestTime) {
+    Map<String, Object> arguments = new HashMap<>();
+    arguments.put("resource.service", service);
+    arguments.put("resource.type", type);
+    arguments.put("resource.name", name);
+    arguments.put("request.time", requestTime);
+
+    try {
+      return Boolean.TRUE.equals(condition.execute(Boolean.class, arguments));
+    } catch (ScriptException | RuntimeException e) {
+      return false;
+    }
+  }
+}
+```
+
+For authorization uses, parse/check failures while building the `Script`, runtime errors while
+evaluating it, unknown results, and non-boolean results should be treated as non-granting unless the
+host application intentionally defines different behavior. The broad `RuntimeException` catch above
+is intentional at the authorization boundary because native conversion failures and unexpected
+evaluation failures should not grant access.
+
+### Custom functions
+
+Custom functions can be added by implementing the
+[`org.projectnessie.cel.Library`](https://github.com/projectnessie/cel-java/blob/main/core/src/main/java/org/projectnessie/cel/Library.java)
+interface. The interface provides declarations via `List<EnvOption> getCompileOptions()` and
+runtime implementations via `List<ProgramOption> getProgramOptions()`.
+
+Examples are:
+
+- [`StdLibrary`](./core/src/main/java/org/projectnessie/cel/Library.java)
+- [`StringsLib`](./core/src/main/java/org/projectnessie/cel/extension/StringsLib.java)
+- [`MyLib` in `ScriptHostTest`](./tools/src/test/java/org/projectnessie/cel/tools/ScriptHostTest.java)
+- CEL-Go examples for [encoders](https://github.com/google/cel-go/blob/master/ext/encoders.go) and
+  [strings](https://github.com/google/cel-go/blob/master/ext/strings.go)
+
+Receiver-style functions are declared with `Decls.newInstanceOverload(...)`; the receiver value is
+passed to the runtime function as the first argument. This is the right place for application-specific
+helpers such as resource-name parsing. Such helpers are host extensions, not portable CEL standard
+functions.
+
+`ScriptHost` currently builds scripts with CEL's standard library. Hosts that need stricter function
+or macro subsets can use the lower-level `Env.newCustomEnv(...)` API; `ScriptHost` does not
+currently expose a no-standard-library construction option.
+
+## Artifacts
+
+### Which artifact should I use?
+
+| Need | Use |
+| --- | --- |
+| Normal embedding with `ScriptHost` | `cel-tools` |
+| Dependency isolation / relocated protobuf dependencies | `cel-standalone` |
+| Jackson 3 object access | `cel-tools` or `cel-core` plus `cel-jackson3` |
+| Jackson 2 object access | `cel-tools` or `cel-core` plus `cel-jackson` |
+
+Use either `cel-tools` or `cel-standalone`, never both.
+
+### Dependency-free artifact
+
+The `org.projectnessie.cel:cel-standalone` artifact contains everything from CEL-Java and has no
+dependencies. It comes with relocated protobuf dependencies.
 
 Using `cel-standalone` is especially useful when your project requires different versions of
 `protobuf-java`.
 
 If you need CEL-Java's Jackson functionality, include the Jackson dependencies in your project.
 
-Use _either_ `cel-tools` _or_ `cel-standalone` - never both!
+## Implementation notes
 
-## Motivation to have a CEL-Java port
+### Motivation
 
 The [Common Expression Language](https://github.com/google/cel-spec/) allows simple computations
 against data structures.
 
-[Project Nessie](https://projectnessie.org/) aims to use CEL to enforce security policies and
-for various filtering expressions.
+[Project Nessie](https://projectnessie.org/) aims to use CEL to enforce security policies and for
+various filtering expressions.
 
 This Java implementation of CEL is based on the [CEL-Go](https://github.com/google/cel-go)
-implementation.   
+implementation.
 
-Typed data structures should be defined using protobuf, but arbitrary data structures using
-Java wrapper data types (like `java.lang.Long`/`Double`/`String`), lists (`java.util.List`) and maps
-(`java.util.Map`) work, too.
+Typed data structures should be defined using protobuf, but arbitrary data structures using Java
+wrapper data types, lists, and maps work too.
 
-The following example expression (from the [CEL-Go codelab exercise7](https://github.com/google/cel-go/blob/master/codelab/solution/codelab.go))
+For example, this expression from the
+[CEL-Go codelab exercise7](https://github.com/google/cel-go/blob/master/codelab/solution/codelab.go)
+checks whether the `extra_claims` map of a JWT contains an entry with a key starting with `group`
+and a value ending with `@acme.co`:
+
 ```groovy
 jwt.extra_claims.exists(c, c.startsWith('group'))
   && jwt.extra_claims.filter(c, c.startsWith('group'))
     .all(c, jwt.extra_claims[c]
     .all(g, g.endsWith('@acme.co')))
 ```
-can be used to check whether the 'extra_claims' map of a JWT contains an entry with a key starting
-with `group` and a value ending with `@acme.co`.
 
-The JWT argument can be expressed using a non-protobuf data structure representing the JSON-web-token:
+The JWT argument can be represented as a map:
+
 ```java
 import java.util.List;
 import java.util.Map;
@@ -265,114 +345,109 @@ Map<String, Object> jwt = Map.of(
     );
 ```
 
-## Unsigned 64-bit `uint`
+### Arbitrary Java classes
 
-Note that the [CEL type system](https://github.com/google/cel-spec/blob/master/doc/langdef.md#values)
-has 2 64-bit integer types: a signed 64-bit integer `int` and an unsigned 64-bit integer `uint`.
-Objects/fields of different types must be explicitly casted in CEL. The "primitive" Java wrapper
-type class for the 64-bit unsigned `uint` in CEL-Java is `org.projectnessie.cel.common.ULong`.
+CEL-Java does not support access to arbitrary Java classes. This means you cannot access standard
+Java functionality from a CEL expression, nor is it intended or planned to do so.
+
+CEL is intentionally non-Turing-complete: it ends in a finite amount of time and has no loops or
+other blocking operations.
+
+Use [custom functions](#custom-functions) to provide application-owned functionality to CEL scripts.
+
+### Unsigned 64-bit `uint`
+
+The [CEL type system](https://github.com/google/cel-spec/blob/master/doc/langdef.md#values) has two
+64-bit integer types: signed `int` and unsigned `uint`. Objects and fields of different types must
+be explicitly cast in CEL. The Java wrapper type for CEL-Java's unsigned `uint` is
+`org.projectnessie.cel.common.ULong`.
+
 If you do not explicitly define a `uint` type or indirectly use `uint` via protobuf, you will
 probably never notice it.
 
-## Arbitrary Java classes
+Java does not have a native primitive `uint32` or `uint64`. To maintain conformance to the CEL spec,
+CEL-Java treats CEL's `uint` type differently from `int`. For example, `123 == 123u` is not true,
+but `123u == 123u` and `123 == 123` are.
 
-CEL-Java does *not* support access arbitrary Java classes. This means, you cannot access
-"standard Java functionality" from a CEL expression nor is it intended or planned to do so.
+If you have a `uint32` or `uint64` in protobuf objects, or use `uint`s in CEL expressions, wrap those
+values with `org.projectnessie.cel.common.ULong`.
 
-CEL is intentionally non-turing-complete, this means it ends in a finite amount of time, has no
-loops or other "blocking" operations.
+### Native image and package verification
 
-You can however provide own custom functionality as a library, which then provides functions
-to CEL scripts running in environments that have been configured to use that library.
+Native-image and package behavior must be verified in the consuming application's exact build.
+`cel-standalone` can reduce dependency conflicts by relocating protobuf dependencies, but it does not
+prove Quarkus native-image or package compatibility for every application.
 
-## Adding custom functions
-
-Custom functions can be easily added by implementing the [`org.projectnessie.cel.Library`](https://github.com/projectnessie/cel-java/blob/main/core/src/main/java/org/projectnessie/cel/Library.java)
-interface. The interface provides the necessary declarations (function definitions) via
-`List<EnvOption> getCompileOptions()` and the function implementations via 
-`List<ProgramOption> getProgramOptions()`. Examples are
-[here (`StdLibrary` class)](./core/src/main/java/org/projectnessie/cel/Library.java),
-[here (`StringsLb` class)](./core/src/main/java/org/projectnessie/cel/extension/StringsLib.java),
-[here (`MyLib` class)](./tools/src/test/java/org/projectnessie/cel/tools/ScriptHostTest.java),
-[here](https://github.com/google/cel-go/blob/master/ext/encoders.go) and
-[here](https://github.com/google/cel-go/blob/master/ext/strings.go)
-
-## Building and testing CEL-Java
-
-The CEL-Java repo uses git submodules to pull in required APIs from Google and the CEL-spec.
-Those submodules are required to build the CEL-Java project.
-
-You need to run `git submodule init` and `git submodule update` after a fresh clone of this repo.
-
-Build requirements:
-* Java 21 or newer, it's a Gradle-wrapper build (it's fast ;) )
-
-Runtime requirements:
-* Java 8 or newer
-
-`./gradlew publishToMavenLocal` deploy the current development to the local Maven repo, in
-case you want to pull it the CEL-Java "snapshot" artifacts another project.
-
-`./gradlew test` builds the production code and runs the unit tests.
-
-The project uses the Google Java code style and uses the Spotless plugin. Run
-`./gradlew spotlessApply` to fix formatting issues.
-
-To run the CEL-spec conformance tests, Go, the bazel build tool plus toolchains are required.
-Form the CEL-Java repo, just run `conformance/run-conformance-tests.sh`. That script performs
-the necessary Gradle and bazel builds.
-
-## CEL-Java implementation specifics
+Before using CEL conditions in release-critical authorization paths, run JVM condition tests, the
+consuming project's normal build, dependency tree review for protobuf/ANTLR/Jackson conflicts, and
+package/native-image verification if native execution is part of the release path.
 
 ### Not yet implemented
 
-* JSON extension ([see spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md#json-data-conversion) and for example `nonFinite` in `com_github_golang_protobuf/jsonpb/decode.go`, around line 441)
-* Encoders extension ([like in Go](https://github.com/google/cel-go/blob/master/ext/encoders.go)),
-  not difficult to port to Java, it's just work to be done at some point.
-
-### Unsigned integer
-
-Java does not have a native (primitive) type "unsigned int/long" or `uint32`/`uint64`.
-Support for the CEL type `uint` is therefore a bit more work in Java.
-
-To maintain conformance to the CEL-spec, the CEL-Java implementation treats CEL's `uint` type
-differently. This means, that for example the expression `123 == 123u` is *not* true, but
-`123u == 123u` and `123 == 123` are.
-
-TL;DR If you have a `uint32`/`uint64` in your protobuf objects or use `uint`s in your CEL
-expression, you *must* wrap those with the `org.projectnessie.cel.common.ULong` type.
+- JSON extension ([see spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md#json-data-conversion)
+  and for example `nonFinite` in `com_github_golang_protobuf/jsonpb/decode.go`, around line 441)
+- Encoders extension ([like in Go](https://github.com/google/cel-go/blob/master/ext/encoders.go)),
+  not difficult to port to Java, but work to be done at some point.
 
 ### Unclear double-to-int rounding behavior
 
-Rounding/truncating of numeric values, especially when converting the CEL type `double` to
-`int` or `uint`. The CEL spec says: _CEL provides no way to control the finer points of
+Rounding/truncating of numeric values, especially when converting the CEL type `double` to `int` or
+`uint`, is ambiguous. The CEL spec says: _CEL provides no way to control the finer points of
 floating-point arithmetic, such as expression evaluation, **rounding mode**, or exception handling.
 However, any two not-a-number values will compare equal even if their underlying properties are
 different._ ([see spec](https://github.com/google/cel-spec/blob/master/doc/langdef.md#numeric-values)).
 
-The technical situation is ambiguous. The CEL-Go unit test
-`common/types/double_test.go/TestDoubleConvertToType` asserts on the result `-5` for the CEL
-expression `int(-4.5)`, because CEL-Go uses the `math.Round(float64)` function.
+The CEL-Go unit test `common/types/double_test.go/TestDoubleConvertToType` asserts on `-5` for the
+CEL expression `int(-4.5)`, because CEL-Go uses `math.Round(float64)`.
 
-Since the CEL-spec is not clear, and the CEL-conformance-tests assert on double-to-int "truncation"
-(aka think Java-ish: `double doubleValue; long res = (long) doubleValue;`), the CEL-Java
-implementation just implements the functionality that passes the CEL-spec conformance tests.
+Since the CEL spec is not clear, and the CEL conformance tests assert on double-to-int truncation
+(Java-like: `double doubleValue; long res = (long) doubleValue;`), CEL-Java implements the behavior
+that passes the CEL-spec conformance tests.
 
-(Note: the implementation of Go's `math.Round(float64)` behaves differently to Java's
-`Math.round(double)` (or `Math.rint()`) and a 1:1 port of the CEL-Go behavior is rather not
-that trivial.)
+Go's `math.Round(float64)` behaves differently from Java's `Math.round(double)` or `Math.rint()`,
+so a 1:1 port of the CEL-Go behavior is not trivial.
 
-Note: The CEL-Go implementation does not pass the CEL-spec conformance tests:
+The CEL-Go implementation does not pass these CEL-spec conformance tests:
 
-    --- FAIL: TestSimpleFile/conversions/int/double_truncate (0.01s)
-        simple_test.go:219: double_truncate: Eval got [int64_value:2], want [int64_value:1]
-    --- FAIL: TestSimpleFile/conversions/int/double_truncate_neg (0.01s)
-        simple_test.go:219: double_truncate_neg: Eval got [int64_value:-8], want [int64_value:-7]
-    --- FAIL: TestSimpleFile/conversions/int/double_half_pos (0.01s)
-        simple_test.go:219: double_half_pos: Eval got [int64_value:12], want [int64_value:11]
-    --- FAIL: TestSimpleFile/conversions/int/double_half_neg (0.01s)
-        simple_test.go:219: double_half_neg: Eval got [int64_value:-4], want [int64_value:-3]
-    --- FAIL: TestSimpleFile/conversions/uint/double_truncate (0.01s)
-        simple_test.go:219: double_truncate: Eval got [uint64_value:2], want [uint64_value:1]
-    --- FAIL: TestSimpleFile/conversions/uint/double_half (0.01s)
-        simple_test.go:219: double_half: Eval got [uint64_value:26], want [uint64_value:25]
+```text
+--- FAIL: TestSimpleFile/conversions/int/double_truncate (0.01s)
+    simple_test.go:219: double_truncate: Eval got [int64_value:2], want [int64_value:1]
+--- FAIL: TestSimpleFile/conversions/int/double_truncate_neg (0.01s)
+    simple_test.go:219: double_truncate_neg: Eval got [int64_value:-8], want [int64_value:-7]
+--- FAIL: TestSimpleFile/conversions/int/double_half_pos (0.01s)
+    simple_test.go:219: double_half_pos: Eval got [int64_value:12], want [int64_value:11]
+--- FAIL: TestSimpleFile/conversions/int/double_half_neg (0.01s)
+    simple_test.go:219: double_half_neg: Eval got [int64_value:-4], want [int64_value:-3]
+--- FAIL: TestSimpleFile/conversions/uint/double_truncate (0.01s)
+    simple_test.go:219: double_truncate: Eval got [uint64_value:2], want [uint64_value:1]
+--- FAIL: TestSimpleFile/conversions/uint/double_half (0.01s)
+    simple_test.go:219: double_half: Eval got [uint64_value:26], want [uint64_value:25]
+```
+
+## Building and testing CEL-Java
+
+The CEL-Java repo uses git submodules to pull in required APIs from Google and the CEL spec.
+Those submodules are required to build the CEL-Java project.
+
+Run `git submodule init` and `git submodule update` after a fresh clone.
+
+Build requirements:
+
+- Java 21 or newer
+- Gradle wrapper from this repository
+
+Runtime requirements:
+
+- Java 8 or newer
+
+`./gradlew publishToMavenLocal` deploys the current development version to the local Maven
+repository, in case you want to use CEL-Java snapshot artifacts from another project.
+
+`./gradlew test` builds the production code and runs the unit tests.
+
+The project uses Google Java style and the Spotless plugin. Run `./gradlew spotlessApply` to fix
+formatting issues.
+
+To run the CEL-spec conformance tests, Go, Bazel, and their toolchains are required. From the
+CEL-Java repo, run `conformance/run-conformance-tests.sh`. That script performs the necessary Gradle
+and Bazel builds.

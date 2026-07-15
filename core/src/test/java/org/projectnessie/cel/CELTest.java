@@ -55,6 +55,7 @@ import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.valOrErr;
 import static org.projectnessie.cel.common.types.IntT.IntOne;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
+import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newEmptyRegistry;
 import static org.projectnessie.cel.interpreter.Activation.emptyActivation;
 import static org.projectnessie.cel.interpreter.Interpretable.newConstValue;
@@ -239,6 +240,47 @@ public class CELTest {
     Program prg = e.program(astIss.getAst());
     EvalResult out = prg.eval(mapOf("a.b.c", true));
     assertThat(out.getVal()).isSameAs(True);
+  }
+
+  @Test
+  void CustomEnvCanSubsetStandardLibrary() {
+    Env withoutStdLib = newCustomEnv(declarations(Decls.newVar("resource.name", Decls.String)));
+    AstIssuesTuple missingStartsWith =
+        withoutStdLib.compile("resource.name.startsWith(\"projects/\")");
+    assertThat(missingStartsWith.hasIssues()).isTrue();
+
+    Env withSelectedStartsWith =
+        newCustomEnv(
+            declarations(
+                Decls.newVar("resource.name", Decls.String),
+                Decls.newFunction(
+                    Overloads.StartsWith,
+                    Decls.newInstanceOverload(
+                        Overloads.StartsWithString,
+                        asList(Decls.String, Decls.String),
+                        Decls.Bool))));
+    AstIssuesTuple astIss =
+        withSelectedStartsWith.compile("resource.name.startsWith(\"projects/\")");
+    assertThat(astIss.hasIssues()).isFalse();
+
+    Program prg =
+        withSelectedStartsWith.program(
+            astIss.getAst(),
+            functions(
+                Overload.binary(
+                    Overloads.StartsWith,
+                    (value, prefix) -> {
+                      if (!(value instanceof StringT) || !(prefix instanceof StringT)) {
+                        return newErr("invalid arguments to startsWith");
+                      }
+                      return boolOf(
+                          value
+                              .convertToNative(String.class)
+                              .startsWith(prefix.convertToNative(String.class)));
+                    })));
+
+    assertThat(prg.eval(mapOf("resource.name", "projects/example")).getVal()).isSameAs(True);
+    assertThat(prg.eval(mapOf("resource.name", "buckets/example")).getVal()).isSameAs(BoolT.False);
   }
 
   @Test
