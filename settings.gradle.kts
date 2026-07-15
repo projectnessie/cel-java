@@ -157,4 +157,8 @@ celProject("tools")
 
 celProject("standalone")
 
+celProject("quarkus-smoke-standalone")
+
+celProject("quarkus-smoke-core-pb3-jackson3")
+
 celProject("bom")

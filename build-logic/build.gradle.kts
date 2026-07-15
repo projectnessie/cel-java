@@ -32,6 +32,16 @@ dependencies {
   implementation(libs.shadow.plugin)
   implementation(libs.protobuf.plugin)
   implementation(libs.errorprone.plugin)
+  implementation(platform(libs.jackson3.bom))
+  implementation("tools.jackson.core:jackson-databind")
+
+  testImplementation(platform(libs.junit.bom))
+  testImplementation(libs.bundles.junit.testing)
+  testImplementation(gradleTestKit())
+  testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
+  testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
 java { toolchain { languageVersion.set(JavaLanguageVersion.of(21)) } }
+
+tasks.test { useJUnitPlatform() }

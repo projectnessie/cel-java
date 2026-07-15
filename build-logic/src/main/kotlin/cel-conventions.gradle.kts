@@ -18,7 +18,15 @@ nessieConfigureSpotless()
 
 nessieConfigureJava()
 
-if (project.name != "conformance" && project.name != "jacoco") {
+val nonPublishedProjects =
+  setOf(
+    "conformance",
+    "jacoco",
+    "cel-quarkus-smoke-standalone",
+    "cel-quarkus-smoke-core-pb3-jackson3",
+  )
+
+if (project.name !in nonPublishedProjects) {
   apply<PublishingHelperPlugin>()
 }
 

@@ -44,7 +44,7 @@ shadowJar.configure {
     attributes["Specification-Title"] = "Common-Expression-Language - dependency-free CEL"
     attributes["Specification-Version"] = libs.protobuf.java.get().version
   }
-  configurations = listOf(project.configurations.getByName("compileClasspath"))
+  configurations = listOf(project.configurations.getByName("runtimeClasspath"))
   dependencies {
     include(project(":cel-tools"))
     include(project(":cel-core"))
@@ -67,7 +67,9 @@ tasks.named("jar").configure { dependsOn("shadowJar") }
 shadowJar.configure {
   outputs.cacheIf { false } // do not cache uber/shaded jars
   archiveClassifier.set("")
+  exclude("META-INF/native-image/**/native-image.properties")
   mergeServiceFiles()
+  transform(NativeImageReflectionConfigTransformer::class.java)
 }
 
 tasks.named<Jar>("jar").configure {
