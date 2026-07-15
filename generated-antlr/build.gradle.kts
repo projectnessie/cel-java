@@ -35,11 +35,35 @@ tasks.named<Jar>("sourcesJar") { dependsOn(tasks.named("generateGrammarSource"))
 
 tasks.named<Jar>("jar") { archiveClassifier.set("raw") }
 
-tasks.named<ShadowJar>("shadowJar") {
-  // The antlr-plugin should ideally do this
-  dependsOn(tasks.named("generateGrammarSource"))
+val shadowJar =
+  tasks.named<ShadowJar>("shadowJar") {
+    // The antlr-plugin should ideally do this
+    dependsOn(tasks.named("generateGrammarSource"))
 
-  dependencies { include(dependency("org.antlr:antlr4-runtime")) }
-  relocate("org.antlr.v4.runtime", "org.projectnessie.cel.shaded.org.antlr.v4.runtime")
-  archiveClassifier.set("")
+    dependencies { include(dependency("org.antlr:antlr4-runtime")) }
+    relocate("org.antlr.v4.runtime", "org.projectnessie.cel.shaded.org.antlr.v4.runtime")
+    archiveClassifier.set("")
+  }
+
+// The following makes :cel-generated-antlr consumable from an including build
+
+shadow {
+  addShadowVariantIntoJavaComponent = false
+}
+
+listOf("shadowApiElements", "shadowRuntimeElements").forEach { configurationName ->
+  configurations.named(configurationName) {
+    isCanBeConsumed = false
+  }
+}
+
+listOf("apiElements", "runtimeElements").forEach { configurationName ->
+  configurations.named(configurationName) {
+    outgoing.artifacts.clear()
+    outgoing.artifact(shadowJar)
+    outgoing.variants.removeAll { true }
+    attributes {
+      attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling.SHADOWED))
+    }
+  }
 }

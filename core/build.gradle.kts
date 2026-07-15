@@ -27,7 +27,7 @@ plugins {
 configurations.named("jmhImplementation") { extendsFrom(configurations.testFixturesApi.get()) }
 
 dependencies {
-  implementation(project(":cel-generated-antlr", "shadow"))
+  implementation(project(":cel-generated-antlr"))
   api(project(":cel-generated-pb"))
 
   implementation(libs.agrona)

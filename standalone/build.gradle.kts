@@ -28,7 +28,7 @@ dependencies {
   api(project(":cel-tools"))
   api(project(":cel-jackson"))
   api(project(":cel-jackson3"))
-  api(project(":cel-generated-antlr", configuration = "shadow"))
+  api(project(":cel-generated-antlr"))
 
   compileOnly(libs.protobuf.java)
   compileOnly(libs.agrona)
@@ -76,3 +76,26 @@ tasks.named<Jar>("jar").configure {
 }
 
 tasks.withType<ShadowJar>().configureEach { exclude("META-INF/jandex.idx") }
+
+// The following makes :cel-standalone consumable from an including build
+
+shadow {
+  addShadowVariantIntoJavaComponent = false
+}
+
+listOf("shadowApiElements", "shadowRuntimeElements").forEach { configurationName ->
+  configurations.named(configurationName) {
+    isCanBeConsumed = false
+  }
+}
+
+listOf("apiElements", "runtimeElements").forEach { configurationName ->
+  configurations.named(configurationName) {
+    outgoing.artifacts.clear()
+    outgoing.artifact(shadowJar)
+    outgoing.variants.removeAll { true }
+    attributes {
+      attribute(Bundling.BUNDLING_ATTRIBUTE, objects.named(Bundling.SHADOWED))
+    }
+  }
+}
