@@ -19,9 +19,11 @@ import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.Err.isError;
 import static org.projectnessie.cel.common.types.Err.newErr;
+import static org.projectnessie.cel.common.types.Err.noSuchAttributeException;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.Err.valOrErr;
 import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
+import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
 import static org.projectnessie.cel.common.types.Util.isUnknownOrError;
 import static org.projectnessie.cel.interpreter.Activation.emptyActivation;
 import static org.projectnessie.cel.interpreter.Coster.Cost.OneOne;
@@ -54,6 +56,7 @@ import org.projectnessie.cel.common.types.traits.Negater;
 import org.projectnessie.cel.common.types.traits.Receiver;
 import org.projectnessie.cel.common.types.traits.Sizer;
 import org.projectnessie.cel.common.types.traits.Trait;
+import org.projectnessie.cel.interpreter.Activation.PartialActivation;
 import org.projectnessie.cel.interpreter.Activation.VarActivation;
 import org.projectnessie.cel.interpreter.AttributeFactory.Attribute;
 import org.projectnessie.cel.interpreter.AttributeFactory.ConditionalAttribute;
@@ -142,6 +145,48 @@ public interface Interpretable {
   }
 
   // Core Interpretable implementations used during the program planning phase.
+
+  /** evalIdent evaluates a checked top-level variable directly from the activation. */
+  final class EvalIdent extends AbstractEval implements Coster {
+    private final String name;
+    private final TypeAdapter adapter;
+
+    EvalIdent(long id, String name, TypeAdapter adapter) {
+      super(id);
+      this.name = Objects.requireNonNull(name);
+      this.adapter = Objects.requireNonNull(adapter);
+    }
+
+    /** Eval implements the Interpretable interface method. */
+    @Override
+    public Val eval(Activation ctx) {
+      if (ctx instanceof PartialActivation) {
+        for (AttributePattern pattern : ((PartialActivation) ctx).unknownAttributePatterns()) {
+          if (pattern.variableMatches(name)) {
+            return unknownOf(id);
+          }
+        }
+      }
+
+      ResolvedValue value = ctx.resolveName(name);
+      if (!value.present()) {
+        RuntimeException err = noSuchAttributeException("id: " + id + ", names: [" + name + "]");
+        return newErr(err, err.toString());
+      }
+      return adapter.nativeToValue(value.value());
+    }
+
+    /** Cost implements the Coster interface method. */
+    @Override
+    public Cost cost() {
+      return OneOne;
+    }
+
+    @Override
+    public String toString() {
+      return "EvalIdent{" + "id=" + id + ", name='" + name + '\'' + '}';
+    }
+  }
 
   final class EvalTestOnly implements Interpretable, Coster {
     private final long id;

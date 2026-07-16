@@ -1580,6 +1580,28 @@ class InterpreterTest {
   }
 
   @Test
+  void checkedTopLevelIdentPreservesActivationSemantics() {
+    Source src = newTextSource("x");
+    ParseResult parsed = Parser.parseAllMacros(src);
+    assertThat(parsed.hasErrors()).withFailMessage(parsed.getErrors()::toDisplayString).isFalse();
+
+    Container cont = testContainer("test");
+    TypeRegistry reg = newRegistry();
+    CheckerEnv env = newStandardCheckerEnv(cont, reg);
+    env.add(Decls.newVar("x", Decls.Bool));
+    CheckResult checkResult = Checker.Check(parsed, src, env);
+
+    AttributeFactory attrs = newPartialAttributeFactory(cont, reg, reg);
+    Interpreter interp = newStandardInterpreter(cont, reg, reg, attrs);
+    Interpretable i = interp.newInterpretable(checkResult.getCheckedExpr());
+
+    assertThat(i.eval(newActivation(mapOf("x", true)))).isSameAs(True);
+    assertThat(i.eval(emptyActivation())).isInstanceOf(Err.class);
+    assertThat(i.eval(newPartialActivation(mapOf("x", true), newAttributePattern("x"))))
+        .isInstanceOf(UnknownT.class);
+  }
+
+  @Test
   void equalityWithUnknownOperandStaysUnknown() {
     assertThat(evalWithUnknownStringX("x == 'foo'")).isInstanceOf(UnknownT.class);
     assertThat(evalWithUnknownStringX("x != 'foo'")).isInstanceOf(UnknownT.class);

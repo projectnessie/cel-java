@@ -55,6 +55,7 @@ import org.projectnessie.cel.interpreter.Interpretable.EvalAttr;
 import org.projectnessie.cel.interpreter.Interpretable.EvalBinary;
 import org.projectnessie.cel.interpreter.Interpretable.EvalEq;
 import org.projectnessie.cel.interpreter.Interpretable.EvalFold;
+import org.projectnessie.cel.interpreter.Interpretable.EvalIdent;
 import org.projectnessie.cel.interpreter.Interpretable.EvalList;
 import org.projectnessie.cel.interpreter.Interpretable.EvalListFold;
 import org.projectnessie.cel.interpreter.Interpretable.EvalMap;
@@ -238,7 +239,11 @@ public interface InterpretablePlanner {
         return newConstValue(id, cVal);
       }
 
-      // Otherwise, return the attribute for the resolved identifier name.
+      // Otherwise, evaluate the checked top-level variable directly for ordinary plans. Decorated
+      // programs keep the attribute shape because custom decorators may inspect attributes.
+      if (decorators.length == 0) {
+        return new EvalIdent(id, identRef.getName(), adapter);
+      }
       return new EvalAttr(adapter, attrFactory.absoluteAttribute(id, identRef.getName()));
     }
 
@@ -261,7 +266,7 @@ public interface InterpretablePlanner {
 
       Select sel = expr.getSelectExpr();
       // Plan the operand evaluation.
-      Interpretable op = plan(sel.getOperand());
+      Interpretable op = planSelectOperand(sel.getOperand());
 
       // Determine the field type if this is a proto message type.
       FieldType fieldType = null;
@@ -312,6 +317,25 @@ public interface InterpretablePlanner {
       }
       relAttr.addQualifier(qual);
       return relAttr;
+    }
+
+    private Interpretable planSelectOperand(Expr operand) {
+      if (operand.getExprKindCase() != Expr.ExprKindCase.IDENT_EXPR) {
+        return plan(operand);
+      }
+
+      Reference identRef = refMap.get(operand.getId());
+      if (identRef == null || identRef.getValue() != Reference.getDefaultInstance().getValue()) {
+        return plan(operand);
+      }
+
+      Type cType = typeMap.get(operand.getId());
+      if (cType != null && cType.getType() != Type.getDefaultInstance()) {
+        return plan(operand);
+      }
+
+      return new EvalAttr(
+          adapter, attrFactory.absoluteAttribute(operand.getId(), identRef.getName()));
     }
 
     private FieldType findFieldType(String messageType, String fieldName) {
