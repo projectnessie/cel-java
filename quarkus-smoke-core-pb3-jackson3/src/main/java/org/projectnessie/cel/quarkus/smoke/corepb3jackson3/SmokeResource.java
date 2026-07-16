@@ -22,7 +22,8 @@ import static org.projectnessie.cel.EnvOption.declarations;
 import static org.projectnessie.cel.EnvOption.types;
 import static org.projectnessie.cel.Library.StdLib;
 
-import com.google.api.expr.v1alpha1.SourceInfo;
+import com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes;
+import com.google.protobuf.Int32Value;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
@@ -45,7 +46,7 @@ public class SmokeResource {
   private static final String JACKSON_EXPRESSION =
       "input.name == \"reports\" && request.time < timestamp(\"2026-08-01T00:00:00Z\")";
 
-  private static final String PROTO_EXPRESSION = "source.location == \"native-smoke\"";
+  private static final String PROTO_EXPRESSION = "proto.single_int32_wrapper == 123";
 
   @GET
   @Produces(MediaType.APPLICATION_JSON)
@@ -82,14 +83,18 @@ public class SmokeResource {
             ProtoTypeRegistry.newRegistry(),
             asList(
                 StdLib(),
-                types(SourceInfo.getDefaultInstance()),
+                types(TestAllTypes.getDefaultInstance()),
                 declarations(
                     Decls.newVar(
-                        "source", Decls.newObjectType(SourceInfo.getDescriptor().getFullName())))));
+                        "proto",
+                        Decls.newObjectType(TestAllTypes.getDescriptor().getFullName())))));
 
     Program program = compile(env, PROTO_EXPRESSION);
     EvalResult result =
-        program.eval(of("source", SourceInfo.newBuilder().setLocation("native-smoke").build()));
+        program.eval(
+            of(
+                "proto",
+                TestAllTypes.newBuilder().setSingleInt32Wrapper(Int32Value.of(123)).build()));
     return booleanResult(result);
   }
 
@@ -117,6 +122,9 @@ public class SmokeResource {
   }
 
   public record SmokeResponse(String engine, boolean jackson, boolean protobuf) {}
+
+  @RegisterForReflection(targets = TestAllTypes.class)
+  static final class ProtobufReflection {}
 
   @RegisterForReflection
   public static final class Input {

@@ -41,6 +41,7 @@ dependencies {
   implementation("io.quarkus:quarkus-rest-jackson")
   implementation(project(":cel-core"))
   implementation(project(":cel-generated-pb3"))
+  implementation(testFixtures(project(":cel-generated-pb3")))
   implementation(project(":cel-jackson3"))
 
   testImplementation("io.quarkus:quarkus-junit5")

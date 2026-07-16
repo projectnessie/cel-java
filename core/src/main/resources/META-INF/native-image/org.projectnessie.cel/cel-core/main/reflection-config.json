@@ -1,6 +1,146 @@
 [
   {
+    "name": "[[B"
+  },
+  {
+    "name": "[Lcom.google.protobuf.Any;"
+  },
+  {
+    "name": "[Lcom.google.protobuf.BoolValue;"
+  },
+  {
+    "name": "[Lcom.google.protobuf.BytesValue;"
+  },
+  {
+    "name": "[Lcom.google.protobuf.DoubleValue;"
+  },
+  {
+    "name": "[Lcom.google.protobuf.Duration;"
+  },
+  {
+    "name": "[Lcom.google.protobuf.FloatValue;"
+  },
+  {
+    "name": "[Lcom.google.protobuf.Int32Value;"
+  },
+  {
+    "name": "[Lcom.google.protobuf.Int64Value;"
+  },
+  {
+    "name": "[Lcom.google.protobuf.ListValue;"
+  },
+  {
+    "name": "[Lcom.google.protobuf.StringValue;"
+  },
+  {
+    "name": "[Lcom.google.protobuf.Struct;"
+  },
+  {
+    "name": "[Lcom.google.protobuf.Timestamp;"
+  },
+  {
+    "name": "[Lcom.google.protobuf.UInt32Value;"
+  },
+  {
+    "name": "[Lcom.google.protobuf.UInt64Value;"
+  },
+  {
+    "name": "[Lcom.google.protobuf.Value;"
+  },
+  {
     "name": "[Lcom.google.protobuf.DynamicMessage;"
+  },
+  {
+    "name": "[Ljava.lang.Boolean;"
+  },
+  {
+    "name": "[Ljava.lang.Double;"
+  },
+  {
+    "name": "[Ljava.lang.Enum;"
+  },
+  {
+    "name": "[Ljava.lang.Float;"
+  },
+  {
+    "name": "[Ljava.lang.Integer;"
+  },
+  {
+    "name": "[Ljava.lang.Long;"
+  },
+  {
+    "name": "[Ljava.lang.String;"
+  },
+  {
+    "name": "[Lorg.projectnessie.cel.common.ULong;"
+  },
+  {
+    "name": "com.google.protobuf.Any",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.BoolValue",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.BytesValue",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.DoubleValue",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.Duration",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.Empty",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.FieldMask",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.FloatValue",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.Int32Value",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.Int64Value",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.ListValue",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.StringValue",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.Struct",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.Timestamp",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.UInt32Value",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.UInt64Value",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.Value",
+    "allDeclaredMethods": true
   },
   {
     "name": "com.google.api.expr.v1alpha1.SourceInfo",
