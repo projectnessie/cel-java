@@ -126,6 +126,10 @@ public interface AttributeFactory {
 
   interface ConstantQualifierEquator extends QualifierValueEquator, ConstantQualifier {}
 
+  interface ValQualifier extends Qualifier {
+    Val qualifyToVal(Activation vars, Object obj);
+  }
+
   /**
    * Attribute values are a variable or value with an optional set of qualifiers, such as field,
    * key, or index accesses.
@@ -359,8 +363,9 @@ public interface AttributeFactory {
         ResolvedValue obj = vars.resolveName(nm);
         if (obj.present()) {
           Object op = obj.value();
-          for (Qualifier qual : qualifiers) {
-            Object op2 = qual.qualify(vars, op);
+          for (int i = 0; i < qualifiers.size(); i++) {
+            Qualifier qual = qualifiers.get(i);
+            Object op2 = qualify(vars, op, qual, i == qualifiers.size() - 1);
             if (op2 instanceof Err) {
               return op2;
             }
@@ -381,6 +386,17 @@ public interface AttributeFactory {
         }
       }
       throw noSuchAttributeException(this);
+    }
+
+    private Object qualify(
+        org.projectnessie.cel.interpreter.Activation vars,
+        Object obj,
+        Qualifier qualifier,
+        boolean last) {
+      if (last && qualifier instanceof ValQualifier) {
+        return ((ValQualifier) qualifier).qualifyToVal(vars, obj);
+      }
+      return qualifier.qualify(vars, obj);
     }
 
     /** String implements the Stringer interface method. */
@@ -696,11 +712,16 @@ public interface AttributeFactory {
       }
       // Next, qualify it. Qualification handles unkonwns as well, so there's no need to recheck.
       Object obj = v;
-      for (Qualifier qual : qualifiers) {
+      for (int i = 0; i < qualifiers.size(); i++) {
+        Qualifier qual = qualifiers.get(i);
         if (obj == null) {
           throw noSuchAttributeException(this);
         }
-        obj = qual.qualify(vars, obj);
+        if (i == qualifiers.size() - 1 && qual instanceof ValQualifier) {
+          obj = ((ValQualifier) qual).qualifyToVal(vars, obj);
+        } else {
+          obj = qual.qualify(vars, obj);
+        }
         if (obj instanceof Err) {
           return obj;
         }
@@ -1304,7 +1325,7 @@ public interface AttributeFactory {
    * type. When the field type is known this can be used to improve the speed and efficiency of
    * field resolution.
    */
-  final class FieldQualifier implements Coster, ConstantQualifierEquator {
+  final class FieldQualifier implements Coster, ConstantQualifierEquator, ValQualifier {
     final long id;
     final String name;
     final FieldType fieldType;
@@ -1330,6 +1351,11 @@ public interface AttributeFactory {
         obj = ((Val) obj).value();
       }
       return fieldType.getFrom.getFrom(obj);
+    }
+
+    @Override
+    public Val qualifyToVal(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
+      return adapter.nativeToValue(qualify(vars, obj));
     }
 
     /** Value implements the ConstantQualifier interface */
