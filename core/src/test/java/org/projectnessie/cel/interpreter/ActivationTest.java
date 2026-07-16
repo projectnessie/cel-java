@@ -54,6 +54,16 @@ public class ActivationTest {
   }
 
   @Test
+  void resolveNullAndAbsentFromMapActivation() {
+    Map<String, Object> map = new HashMap<>();
+    map.put("nullValue", null);
+    Activation activation = newActivation(map);
+
+    assertThat(activation.resolveName("nullValue")).isSameAs(ResolvedValue.NULL_VALUE);
+    assertThat(activation.resolveName("absent")).isSameAs(ResolvedValue.ABSENT);
+  }
+
+  @Test
   void resolveLazy() {
     AtomicReference<Val> v = new AtomicReference<>();
     Supplier<Val> now =

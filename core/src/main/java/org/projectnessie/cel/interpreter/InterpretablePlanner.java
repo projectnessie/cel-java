@@ -352,7 +352,7 @@ public interface InterpretablePlanner {
       // Otherwise, generate Interpretable calls specialized by argument count.
       // Try to find the specific function by overload id.
       Overload fnDef = null;
-      if (resolvedFunc.overloadId != null && resolvedFunc.overloadId.isEmpty()) {
+      if (resolvedFunc.overloadId != null && !resolvedFunc.overloadId.isEmpty()) {
         fnDef = disp.findOverload(resolvedFunc.overloadId);
       }
       // If the overload id couldn't resolve the function, try the simple function name.

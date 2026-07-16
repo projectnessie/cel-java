@@ -101,12 +101,11 @@ public interface Activation {
     /** ResolveName implements the Activation interface method. */
     @Override
     public ResolvedValue resolveName(String name) {
-      if (!bindings.containsKey(name)) {
-        return ResolvedValue.ABSENT;
-      }
-
       Object obj = bindings.get(name);
       if (obj == null) {
+        if (!bindings.containsKey(name)) {
+          return ResolvedValue.ABSENT;
+        }
         return ResolvedValue.NULL_VALUE;
       }
 

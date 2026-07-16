@@ -78,6 +78,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import org.projectnessie.cel.common.types.TypeT;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
@@ -87,11 +88,13 @@ public final class ProtoTypeRegistry implements TypeRegistry {
   private static final ProtoTypeRegistry DEFAULT_REGISTRY = newDefaultRegistry();
 
   private final Map<String, org.projectnessie.cel.common.types.ref.Type> revTypeMap;
+  private final Map<String, FieldType> fieldTypeCache;
   private final Db pbdb;
 
   private ProtoTypeRegistry(
       Map<String, org.projectnessie.cel.common.types.ref.Type> revTypeMap, Db pbdb) {
     this.revTypeMap = revTypeMap;
+    this.fieldTypeCache = new ConcurrentHashMap<>();
     this.pbdb = pbdb;
   }
 
@@ -197,6 +200,11 @@ public final class ProtoTypeRegistry implements TypeRegistry {
 
   @Override
   public FieldType findFieldType(String messageType, String fieldName) {
+    String cacheKey = messageType + '\n' + fieldName;
+    return fieldTypeCache.computeIfAbsent(cacheKey, key -> loadFieldType(messageType, fieldName));
+  }
+
+  private FieldType loadFieldType(String messageType, String fieldName) {
     PbTypeDescription msgType = pbdb.describeType(messageType);
     if (msgType == null) {
       return null;

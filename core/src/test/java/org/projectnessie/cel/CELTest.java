@@ -285,6 +285,31 @@ public class CELTest {
   }
 
   @Test
+  void ProgramUsesCheckedOverloadIdForCustomFunctionDispatch() {
+    Env env =
+        newEnv(
+            declarations(
+                Decls.newVar("value", Decls.Int),
+                Decls.newFunction(
+                    "is_even",
+                    Decls.newOverload("is_even_int", singletonList(Decls.Int), Decls.Bool))));
+
+    AstIssuesTuple astIss = env.compile("is_even(value)");
+    assertThat(astIss.hasIssues()).isFalse();
+
+    Program program =
+        env.program(
+            astIss.getAst(),
+            functions(
+                Overload.unary(
+                    "is_even_int",
+                    value -> boolOf(((Number) value.value()).longValue() % 2 == 0))));
+
+    assertThat(program.eval(mapOf("value", 42L)).getVal()).isSameAs(True);
+    assertThat(program.eval(mapOf("value", 41L)).getVal()).isSameAs(False);
+  }
+
+  @Test
   void HomogeneousAggregateLiterals() {
     Env e =
         newCustomEnv(
