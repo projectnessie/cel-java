@@ -71,7 +71,10 @@ public final class Jackson3Registry implements TypeRegistry {
 
   @Override
   public TypeRegistry copy() {
-    return this;
+    Jackson3Registry copy = new Jackson3Registry();
+    knownTypes.keySet().forEach(copy::typeDescription);
+    enumMap.keySet().forEach(copy::enumDescription);
+    return copy;
   }
 
   @Override

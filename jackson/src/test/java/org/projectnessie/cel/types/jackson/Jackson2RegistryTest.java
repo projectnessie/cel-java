@@ -36,6 +36,8 @@ import org.projectnessie.cel.common.types.ObjectT;
 import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.types.jackson.types.AnEnum;
+import org.projectnessie.cel.types.jackson.types.CollectionsObject;
 import org.projectnessie.cel.types.jackson.types.MetaTest;
 import org.projectnessie.cel.types.jackson.types.RefVariantB;
 
@@ -169,8 +171,24 @@ class Jackson2RegistryTest {
 
   @Test
   void copy() {
-    TypeRegistry reg = JacksonRegistry.newRegistry();
-    assertThat(reg).extracting(TypeRegistry::copy).isSameAs(reg);
+    JacksonRegistry reg = (JacksonRegistry) JacksonRegistry.newRegistry();
+    reg.register(CollectionsObject.class);
+    reg.enumDescription(AnEnum.class);
+
+    JacksonRegistry copy = (JacksonRegistry) reg.copy();
+    assertThat(copy).isNotSameAs(reg);
+    assertThat(copy.findType(CollectionsObject.class.getName())).isNotNull();
+    assertThat(copy.findIdent(AnEnum.class.getName() + "." + AnEnum.ENUM_VALUE_2.name()))
+        .isNotNull();
+
+    copy.register(MetaTest.class);
+    assertThat(copy.findType(MetaTest.class.getName())).isNotNull();
+    assertThat(reg.findType(MetaTest.class.getName())).isNull();
+
+    RefVariantB refVariantB = RefVariantB.of("main", "cafebabe123412341234123412341234");
+    reg.nativeToValue(refVariantB);
+    assertThat(reg.findType(refVariantB.getClass().getName())).isNotNull();
+    assertThat(copy.findType(refVariantB.getClass().getName())).isNull();
   }
 
   @Test
