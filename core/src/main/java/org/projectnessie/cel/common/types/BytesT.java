@@ -50,21 +50,21 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
       TypeT.newTypeValue(TypeEnum.Bytes, Trait.AdderType, Trait.ComparerType, Trait.SizerType);
 
   public static BytesT bytesOf(byte[] b) {
-    return new BytesT(b);
+    return new BytesT(b, true);
   }
 
   public static Val bytesOf(ByteString value) {
-    return bytesOf(value.toByteArray());
+    return new BytesT(value.toByteArray(), false);
   }
 
   public static BytesT bytesOf(String s) {
-    return new BytesT(s.getBytes(StandardCharsets.UTF_8));
+    return new BytesT(s.getBytes(StandardCharsets.UTF_8), false);
   }
 
   private final byte[] b;
 
-  private BytesT(byte[] b) {
-    this.b = b;
+  private BytesT(byte[] b, boolean copy) {
+    this.b = copy ? Arrays.copyOf(b, b.length) : b;
   }
 
   /** Add implements traits.Adder interface method by concatenating byte sequences. */
@@ -76,7 +76,7 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
     byte[] o = ((BytesT) other).b;
     byte[] n = Arrays.copyOf(b, b.length + o.length);
     System.arraycopy(o, 0, n, b.length, o.length);
-    return bytesOf(n);
+    return new BytesT(n, false);
   }
 
   /** Compare implments traits.Comparer interface method by lexicographic ordering. */
@@ -109,7 +109,7 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
       return (T) ByteString.copyFrom(this.b);
     }
     if (typeDesc == byte[].class) {
-      return (T) b;
+      return (T) Arrays.copyOf(b, b.length);
     }
     if (typeDesc == String.class) {
       try {
@@ -125,7 +125,7 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
       return (T) BytesValue.of(ByteString.copyFrom(this.b));
     }
     if (typeDesc == ByteBuffer.class) {
-      return (T) ByteBuffer.wrap(this.b);
+      return (T) ByteBuffer.wrap(Arrays.copyOf(this.b, this.b.length)).asReadOnlyBuffer();
     }
     if (typeDesc == Val.class || typeDesc == BytesT.class) {
       return (T) this;
@@ -188,7 +188,7 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
   /** Value implements the ref.Val interface method. */
   @Override
   public Object value() {
-    return b;
+    return Arrays.copyOf(b, b.length);
   }
 
   @Override

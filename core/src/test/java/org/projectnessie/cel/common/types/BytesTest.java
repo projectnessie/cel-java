@@ -16,6 +16,7 @@
 package org.projectnessie.cel.common.types;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.BytesT.BytesType;
 import static org.projectnessie.cel.common.types.BytesT.bytesOf;
@@ -33,6 +34,7 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.BytesValue;
 import com.google.protobuf.Value;
 import java.nio.ByteBuffer;
+import java.nio.ReadOnlyBufferException;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.common.types.ref.Val;
@@ -79,6 +81,15 @@ public class BytesTest {
   }
 
   @Test
+  void bytesConvertToNative_ByteBufferReadOnlyCopy() {
+    BytesT bytes = bytesOf("123");
+    ByteBuffer val = bytes.convertToNative(ByteBuffer.class);
+    assertThat(val.isReadOnly()).isTrue();
+    assertThatThrownBy(() -> val.put(0, (byte) 57)).isInstanceOf(ReadOnlyBufferException.class);
+    assertThat(bytes).isEqualTo(bytesOf("123"));
+  }
+
+  @Test
   void bytesConvertToNative_Error() {
     assertThat(bytesOf("123").convertToNative(String.class)).isEqualTo("123");
   }
@@ -95,6 +106,29 @@ public class BytesTest {
     byte[] val = bytesOf("123").convertToNative(byte[].class);
     byte[] want = "123".getBytes(StandardCharsets.UTF_8);
     assertThat(val).containsExactly(want);
+  }
+
+  @Test
+  void bytesDefensivelyCopiesInputArray() {
+    byte[] input = new byte[] {49, 50, 51};
+    BytesT bytes = bytesOf(input);
+    input[0] = 57;
+    assertThat(bytes).isEqualTo(bytesOf("123"));
+  }
+
+  @Test
+  void bytesDefensivelyCopiesOutputArrays() {
+    BytesT bytes = bytesOf("123");
+
+    byte[] nativeBytes = bytes.convertToNative(byte[].class);
+    nativeBytes[0] = 57;
+
+    byte[] valueBytes = (byte[]) bytes.value();
+    valueBytes[1] = 57;
+
+    assertThat(bytes).isEqualTo(bytesOf("123"));
+    assertThat(bytes.convertToNative(byte[].class)).containsExactly(49, 50, 51);
+    assertThat((byte[]) bytes.value()).containsExactly(49, 50, 51);
   }
 
   @Test
