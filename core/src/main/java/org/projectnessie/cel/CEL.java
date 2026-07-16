@@ -153,8 +153,7 @@ public final class CEL {
     }
     // When the AST has been checked it contains metadata that can be used to speed up program
     // execution.
-    CheckedExpr checked = astToCheckedExpr(ast);
-    p.interpretable = p.interpreter.newInterpretable(checked, decs);
+    p.interpretable = p.interpreter.newInterpretable(ast.getExpr(), ast.refMap, ast.typeMap, decs);
 
     return p;
   }

@@ -24,6 +24,9 @@ import static org.projectnessie.cel.interpreter.InterpretablePlanner.newUnchecke
 
 import com.google.api.expr.v1alpha1.CheckedExpr;
 import com.google.api.expr.v1alpha1.Expr;
+import com.google.api.expr.v1alpha1.Reference;
+import com.google.api.expr.v1alpha1.Type;
+import java.util.Map;
 import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
@@ -36,6 +39,24 @@ public interface Interpreter {
    * InterpretableDecorator values.
    */
   Interpretable newInterpretable(CheckedExpr checked, InterpretableDecorator... decorators);
+
+  /**
+   * NewInterpretable creates an Interpretable from a checked expression and its metadata without
+   * requiring a CheckedExpr wrapper.
+   */
+  default Interpretable newInterpretable(
+      Expr expr,
+      Map<Long, Reference> refMap,
+      Map<Long, Type> typeMap,
+      InterpretableDecorator... decorators) {
+    CheckedExpr checked =
+        CheckedExpr.newBuilder()
+            .setExpr(expr)
+            .putAllReferenceMap(refMap)
+            .putAllTypeMap(typeMap)
+            .build();
+    return newInterpretable(checked, decorators);
+  }
 
   /**
    * NewUncheckedInterpretable returns an Interpretable from a parsed expression and an optional
@@ -126,6 +147,19 @@ public interface Interpreter {
       InterpretablePlanner p =
           newPlanner(dispatcher, provider, adapter, attrFactory, container, checked, decorators);
       return p.plan(checked.getExpr());
+    }
+
+    /** NewIntepretable implements the Interpreter interface method. */
+    @Override
+    public Interpretable newInterpretable(
+        Expr expr,
+        Map<Long, Reference> refMap,
+        Map<Long, Type> typeMap,
+        InterpretableDecorator... decorators) {
+      InterpretablePlanner p =
+          newPlanner(
+              dispatcher, provider, adapter, attrFactory, container, refMap, typeMap, decorators);
+      return p.plan(expr);
     }
 
     /** NewUncheckedIntepretable implements the Interpreter interface method. */

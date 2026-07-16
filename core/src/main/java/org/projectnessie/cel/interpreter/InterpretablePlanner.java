@@ -102,6 +102,22 @@ public interface InterpretablePlanner {
   }
 
   /**
+   * newPlanner creates an interpretablePlanner from checked expression metadata without requiring a
+   * CheckedExpr wrapper.
+   */
+  static InterpretablePlanner newPlanner(
+      Dispatcher disp,
+      TypeProvider provider,
+      TypeAdapter adapter,
+      AttributeFactory attrFactory,
+      Container cont,
+      Map<Long, Reference> refMap,
+      Map<Long, Type> typeMap,
+      InterpretableDecorator... decorators) {
+    return new Planner(disp, provider, adapter, attrFactory, cont, refMap, typeMap, decorators);
+  }
+
+  /**
    * newUncheckedPlanner creates an interpretablePlanner which references a Dispatcher,
    * TypeProvider, TypeAdapter, and Container to resolve functions and types at plan time.
    * Namespaces present in Select expressions are resolved lazily at evaluation time.
