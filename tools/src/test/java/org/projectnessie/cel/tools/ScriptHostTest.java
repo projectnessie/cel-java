@@ -247,6 +247,8 @@ class ScriptHostTest {
     Map<String, Object> arguments = authorizationArguments("storage.googleapis.com");
     arguments.remove("resource.name");
 
+    assertThatThrownBy(() -> script.execute(Boolean.class, arguments))
+        .isInstanceOf(ScriptExecutionException.class);
     assertThat(grants(script, arguments)).isFalse();
   }
 
@@ -293,6 +295,9 @@ class ScriptHostTest {
             .withLibraries(new AttributeLibrary("prod"))
             .build();
 
+    assertThatThrownBy(() -> script.execute(Boolean.class, Collections.emptyMap()))
+        .isInstanceOf(ScriptExecutionException.class)
+        .hasMessageContaining("forced getAttribute error");
     assertThat(grants(script, Collections.emptyMap())).isFalse();
   }
 
@@ -338,6 +343,14 @@ class ScriptHostTest {
                 Collections.singletonMap(
                     "resource.name", "projects/_/buckets/example/objects/reports/q1.csv")))
         .isFalse();
+    assertThatThrownBy(
+            () ->
+                script.execute(
+                    Boolean.class,
+                    Collections.singletonMap(
+                        "resource.name", "projects/_/buckets/example/objects/reports/q1.csv")))
+        .isInstanceOf(ScriptExecutionException.class)
+        .hasMessageContaining("forced extractAfter error");
   }
 
   private static Script authorizationScript() throws ScriptCreateException {

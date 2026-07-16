@@ -49,6 +49,7 @@ import static org.projectnessie.cel.ProgramOption.evalOptions;
 import static org.projectnessie.cel.ProgramOption.functions;
 import static org.projectnessie.cel.ProgramOption.globals;
 import static org.projectnessie.cel.Util.mapOf;
+import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.Err.isError;
 import static org.projectnessie.cel.common.types.Err.newErr;
@@ -280,7 +281,7 @@ public class CELTest {
                     })));
 
     assertThat(prg.eval(mapOf("resource.name", "projects/example")).getVal()).isSameAs(True);
-    assertThat(prg.eval(mapOf("resource.name", "buckets/example")).getVal()).isSameAs(BoolT.False);
+    assertThat(prg.eval(mapOf("resource.name", "buckets/example")).getVal()).isSameAs(False);
   }
 
   @Test

@@ -141,8 +141,11 @@ public class MyClass {
 
 ### Jackson objects
 
-Plain Java and Jackson objects can be used as arguments with the
+Plain Java objects can also be exposed through Jackson's bean/property model by using the
 `org.projectnessie.cel.types.jackson3.Jackson3Registry` from `org.projectnessie.cel:cel-jackson3`.
+Use this registry when the object is not a protobuf message and CEL-Java should read properties the
+same way Jackson would serialize them, including JavaBean getters, records, fields, and Jackson
+annotations such as `@JsonProperty`.
 
 ```java
 import org.projectnessie.cel.types.jackson3.Jackson3Registry;
@@ -253,7 +256,7 @@ evaluation failures should not grant access.
 ### Custom functions
 
 Custom functions can be added by implementing the
-[`org.projectnessie.cel.Library`](https://github.com/projectnessie/cel-java/blob/main/core/src/main/java/org/projectnessie/cel/Library.java)
+[`org.projectnessie.cel.Library`](./core/src/main/java/org/projectnessie/cel/Library.java)
 interface. The interface provides declarations via `List<EnvOption> getCompileOptions()` and
 runtime implementations via `List<ProgramOption> getProgramOptions()`.
 
