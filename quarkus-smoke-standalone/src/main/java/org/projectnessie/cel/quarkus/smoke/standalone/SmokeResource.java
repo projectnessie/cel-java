@@ -17,14 +17,17 @@ package org.projectnessie.cel.quarkus.smoke.standalone;
 
 import static java.util.Map.of;
 
+import io.quarkus.runtime.annotations.RegisterForReflection;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import java.time.Instant;
+import java.util.List;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.tools.Script;
 import org.projectnessie.cel.tools.ScriptHost;
+import org.projectnessie.cel.types.jackson.JacksonRegistry;
 
 @Path("/cel/native-smoke")
 public class SmokeResource {
@@ -32,9 +35,16 @@ public class SmokeResource {
       "resource.name.startsWith(\"projects/_/buckets/example/objects/reports/\")"
           + " && request.time < timestamp(\"2026-08-01T00:00:00Z\")";
 
+  private static final String JACKSON_EXPRESSION =
+      "input.name == \"reports\" && input.labels.exists(label, label == \"finance\")";
+
   @GET
   @Produces(MediaType.APPLICATION_JSON)
   public SmokeResponse smoke() throws Exception {
+    return new SmokeResponse("cel-standalone", evaluateBaseScript(), evaluateJacksonScript());
+  }
+
+  private boolean evaluateBaseScript() throws Exception {
     Script script =
         ScriptHost.newBuilder()
             .build()
@@ -53,8 +63,44 @@ public class SmokeResource {
                 "request.time",
                 Instant.parse("2026-07-31T23:59:59Z")));
 
-    return new SmokeResponse("cel-standalone", allowed);
+    return allowed;
   }
 
-  public record SmokeResponse(String engine, boolean allowed) {}
+  private boolean evaluateJacksonScript() throws Exception {
+    Script script =
+        ScriptHost.newBuilder()
+            .registry(JacksonRegistry.newRegistry())
+            .build()
+            .buildScript(JACKSON_EXPRESSION)
+            .withDeclarations(Decls.newVar("input", Decls.newObjectType(Input.class.getName())))
+            .withTypes(Input.class)
+            .build();
+
+    Boolean allowed =
+        script.execute(
+            Boolean.class, of("input", new Input("reports", List.of("finance", "quarterly"))));
+
+    return allowed;
+  }
+
+  public record SmokeResponse(String engine, boolean base, boolean jackson) {}
+
+  @RegisterForReflection
+  public static final class Input {
+    private final String name;
+    private final List<String> labels;
+
+    public Input(String name, List<String> labels) {
+      this.name = name;
+      this.labels = labels;
+    }
+
+    public String getName() {
+      return name;
+    }
+
+    public List<String> getLabels() {
+      return labels;
+    }
+  }
 }

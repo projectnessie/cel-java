@@ -15,9 +15,11 @@
  */
 
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import org.gradle.api.plugins.jvm.JvmTestSuite
 
 plugins {
   `java-library`
+  `jvm-test-suite`
   `maven-publish`
   signing
   id("com.gradleup.shadow")
@@ -84,6 +86,67 @@ tasks.named<Jar>("jar").configure {
 }
 
 tasks.withType<ShadowJar>().configureEach { exclude("META-INF/jandex.idx") }
+
+val standaloneJar = files(shadowJar.flatMap { it.archiveFile }).builtBy(shadowJar)
+val projectDependencies = dependencies
+
+fun JvmTestSuite.configureStandaloneSmokeSuite(
+  pbProjectPath: String,
+  jacksonDependencies: JvmComponentDependencies.() -> Unit,
+) {
+  useJUnitJupiter(libs.versions.junit.get())
+  dependencies {
+    implementation(standaloneJar)
+    implementation(projectDependencies.project(mapOf("path" to pbProjectPath)))
+    implementation(libs.assertj.core)
+    jacksonDependencies()
+  }
+  targets.configureEach { testTask.configure { shouldRunAfter(tasks.named("test")) } }
+}
+
+testing {
+  suites {
+    val standaloneJackson2Pb =
+      register<JvmTestSuite>("standaloneJackson2Pb") {
+        sources { java { setSrcDirs(listOf("src/standaloneJackson2Smoke/java")) } }
+        configureStandaloneSmokeSuite(":cel-generated-pb") {
+          implementation(platform(libs.jackson2.bom))
+          implementation("com.fasterxml.jackson.core:jackson-databind")
+        }
+      }
+    val standaloneJackson2Pb3 =
+      register<JvmTestSuite>("standaloneJackson2Pb3") {
+        sources { java { setSrcDirs(listOf("src/standaloneJackson2Smoke/java")) } }
+        configureStandaloneSmokeSuite(":cel-generated-pb3") {
+          implementation(platform(libs.jackson2.bom))
+          implementation("com.fasterxml.jackson.core:jackson-databind")
+        }
+      }
+    val standaloneJackson3Pb =
+      register<JvmTestSuite>("standaloneJackson3Pb") {
+        sources { java { setSrcDirs(listOf("src/standaloneJackson3Smoke/java")) } }
+        configureStandaloneSmokeSuite(":cel-generated-pb") {
+          implementation(platform(libs.jackson3.bom))
+          implementation("tools.jackson.core:jackson-databind")
+        }
+      }
+    val standaloneJackson3Pb3 =
+      register<JvmTestSuite>("standaloneJackson3Pb3") {
+        sources { java { setSrcDirs(listOf("src/standaloneJackson3Smoke/java")) } }
+        configureStandaloneSmokeSuite(":cel-generated-pb3") {
+          implementation(platform(libs.jackson3.bom))
+          implementation("tools.jackson.core:jackson-databind")
+        }
+      }
+
+    tasks.named("check") {
+      dependsOn(standaloneJackson2Pb)
+      dependsOn(standaloneJackson2Pb3)
+      dependsOn(standaloneJackson3Pb)
+      dependsOn(standaloneJackson3Pb3)
+    }
+  }
+}
 
 // The following makes :cel-standalone consumable from an including build
 

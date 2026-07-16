@@ -31,6 +31,7 @@ class SmokeResourceTest {
         .then()
         .statusCode(200)
         .body("engine", equalTo("cel-standalone"))
-        .body("allowed", equalTo(true));
+        .body("base", equalTo(true))
+        .body("jackson", equalTo(true));
   }
 }
