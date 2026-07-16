@@ -30,7 +30,7 @@ final class JacksonEnumValue {
   }
 
   static String fullyQualifiedName(Enum<?> value) {
-    return value.getClass().getName().replace('$', '.') + '.' + value.name();
+    return value.getDeclaringClass().getName().replace('$', '.') + '.' + value.name();
   }
 
   String fullyQualifiedName() {

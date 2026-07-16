@@ -52,6 +52,7 @@ import org.projectnessie.cel.common.types.pb.Checked;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.types.jackson.types.AnEnum;
 import org.projectnessie.cel.types.jackson.types.CollectionsObject;
+import org.projectnessie.cel.types.jackson.types.EnumWithConstantBody;
 import org.projectnessie.cel.types.jackson.types.InnerType;
 
 class Jackson2TypeDescriptionTest {
@@ -115,6 +116,17 @@ class Jackson2TypeDescriptionTest {
 
     assertThatThrownBy(() -> reg.enumDescription(InnerType.class))
         .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void enumConstantSpecificClassBodyUsesDeclaringClassName() {
+    JacksonRegistry reg = (JacksonRegistry) newRegistry();
+    reg.enumDescription(EnumWithConstantBody.class);
+
+    assertThat(reg.findIdent(EnumWithConstantBody.class.getName() + ".SPECIAL"))
+        .isEqualTo(intOf(EnumWithConstantBody.SPECIAL.ordinal()));
+    assertThat(reg.nativeToValue(EnumWithConstantBody.SPECIAL))
+        .isEqualTo(intOf(EnumWithConstantBody.SPECIAL.ordinal()));
   }
 
   @Test
