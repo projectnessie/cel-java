@@ -84,6 +84,8 @@ import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 
 public final class ProtoTypeRegistry implements TypeRegistry {
+  private static final ProtoTypeRegistry DEFAULT_REGISTRY = newDefaultRegistry();
+
   private final Map<String, org.projectnessie.cel.common.types.ref.Type> revTypeMap;
   private final Db pbdb;
 
@@ -99,6 +101,14 @@ public final class ProtoTypeRegistry implements TypeRegistry {
    * FileDescriptor.
    */
   public static ProtoTypeRegistry newRegistry(Message... types) {
+    ProtoTypeRegistry p = DEFAULT_REGISTRY.copy();
+    for (Message msgType : types) {
+      p.registerMessage(msgType);
+    }
+    return p;
+  }
+
+  private static ProtoTypeRegistry newDefaultRegistry() {
     ProtoTypeRegistry p = new ProtoTypeRegistry(new HashMap<>(), newDb());
     p.registerType(
         BoolType,
@@ -143,9 +153,6 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     // This block ensures that the well-known protobuf types are registered by default.
     for (FileDescription fd : p.pbdb.fileDescriptions()) {
       p.registerAllTypes(fd);
-    }
-    for (Message msgType : types) {
-      p.registerMessage(msgType);
     }
     return p;
   }

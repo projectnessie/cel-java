@@ -85,6 +85,21 @@ public class ProviderTest {
   }
 
   @Test
+  void defaultTypeRegistriesRemainIndependent() {
+    ProtoTypeRegistry reg = newRegistry();
+    ProtoTypeRegistry reg2 = newRegistry();
+    String typeName = TestAllTypes.getDefaultInstance().getDescriptorForType().getFullName();
+
+    assertThat(reg.findType(typeName)).isNull();
+    assertThat(reg2.findType(typeName)).isNull();
+
+    reg.registerMessage(TestAllTypes.getDefaultInstance());
+
+    assertThat(reg.findType(typeName)).isNotNull();
+    assertThat(reg2.findType(typeName)).isNull();
+  }
+
+  @Test
   void typeRegistryEnumValue() {
     ProtoTypeRegistry reg = newEmptyRegistry();
     reg.registerDescriptor(GlobalEnum.getDescriptor().getFile());
