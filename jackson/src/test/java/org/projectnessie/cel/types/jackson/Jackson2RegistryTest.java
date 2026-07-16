@@ -27,8 +27,15 @@ import static org.projectnessie.cel.common.types.TimestampT.timestampOf;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.IntT;
@@ -196,5 +203,68 @@ class Jackson2RegistryTest {
     TypeRegistry reg = JacksonRegistry.newRegistry();
     assertThatThrownBy(() -> reg.registerType(IntT.IntType))
         .isInstanceOf(UnsupportedOperationException.class);
+  }
+
+  @Test
+  void concurrentFirstTypeDiscovery() throws Exception {
+    JacksonRegistry reg = (JacksonRegistry) JacksonRegistry.newRegistry();
+    RefVariantB refVariantB = RefVariantB.of("main", "cafebabe123412341234123412341234");
+    ExecutorService executor = Executors.newFixedThreadPool(16);
+    try {
+      CountDownLatch ready = new CountDownLatch(16);
+      CountDownLatch start = new CountDownLatch(1);
+      List<Future<Val>> futures = new ArrayList<>();
+      for (int i = 0; i < 16; i++) {
+        futures.add(
+            executor.submit(
+                () -> {
+                  ready.countDown();
+                  assertThat(start.await(10, TimeUnit.SECONDS)).isTrue();
+                  return reg.nativeToValue(refVariantB);
+                }));
+      }
+
+      assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+      start.countDown();
+
+      for (Future<Val> future : futures) {
+        assertThat(future.get(10, TimeUnit.SECONDS)).isInstanceOf(ObjectT.class);
+      }
+      assertThat(reg.findType(refVariantB.getClass().getName())).isNotNull();
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  @Test
+  void concurrentFirstEnumDiscovery() throws Exception {
+    JacksonRegistry reg = (JacksonRegistry) JacksonRegistry.newRegistry();
+    ExecutorService executor = Executors.newFixedThreadPool(16);
+    try {
+      CountDownLatch ready = new CountDownLatch(16);
+      CountDownLatch start = new CountDownLatch(1);
+      List<Future<JacksonEnumDescription>> futures = new ArrayList<>();
+      for (int i = 0; i < 16; i++) {
+        futures.add(
+            executor.submit(
+                () -> {
+                  ready.countDown();
+                  assertThat(start.await(10, TimeUnit.SECONDS)).isTrue();
+                  return reg.enumDescription(AnEnum.class);
+                }));
+      }
+
+      assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+      start.countDown();
+
+      JacksonEnumDescription first = futures.get(0).get(10, TimeUnit.SECONDS);
+      for (Future<JacksonEnumDescription> future : futures) {
+        assertThat(future.get(10, TimeUnit.SECONDS)).isSameAs(first);
+      }
+      assertThat(reg.findIdent(AnEnum.class.getName() + "." + AnEnum.ENUM_VALUE_2.name()))
+          .isNotNull();
+    } finally {
+      executor.shutdownNow();
+    }
   }
 }
