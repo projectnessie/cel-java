@@ -170,19 +170,28 @@ public final class CheckerEnv {
    */
   Decl addOverload(Decl f, Overload overload, List<String> errMsgs) {
     FunctionDecl function = f.getFunction();
-    Mapping emptyMappings = newMapping();
-    Type overloadFunction =
-        Decls.newFunctionType(overload.getResultType(), overload.getParamsList());
-    Type overloadErased = substitute(emptyMappings, overloadFunction, true);
+    Mapping emptyMappings = null;
+    Type overloadFunction = null;
+    Type overloadErased = null;
     boolean hasErr = false;
     for (Overload existing : function.getOverloadsList()) {
+      if (overload.getIsInstanceFunction() != existing.getIsInstanceFunction()
+          || overload.getParamsCount() != existing.getParamsCount()) {
+        continue;
+      }
+      if (emptyMappings == null) {
+        emptyMappings = newMapping();
+        overloadFunction =
+            Decls.newFunctionType(overload.getResultType(), overload.getParamsList());
+        overloadErased = substitute(emptyMappings, overloadFunction, true);
+      }
       Type existingFunction =
           Decls.newFunctionType(existing.getResultType(), existing.getParamsList());
       Type existingErased = substitute(emptyMappings, existingFunction, true);
       boolean overlap =
           isAssignable(emptyMappings, overloadErased, existingErased) != null
               || isAssignable(emptyMappings, existingErased, overloadErased) != null;
-      if (overlap && overload.getIsInstanceFunction() == existing.getIsInstanceFunction()) {
+      if (overlap) {
         errMsgs.add(
             overlappingOverloadError(
                 f.getName(),

@@ -20,6 +20,7 @@ import static org.projectnessie.cel.checker.CheckerEnv.newStandardCheckerEnv;
 import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newRegistry;
 
 import com.google.api.expr.v1alpha1.Type;
+import java.util.Arrays;
 import java.util.List;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -60,5 +61,21 @@ public class CheckerEnvTest {
                             Overloads.ToDyn, singletonList(paramA), Decls.Dyn, typeParamAList))))
         .hasMessage(
             "overlapping overload for name 'dyn' (type '(type_param: \"A\") -> dyn' with overloadId: 'to_dyn' cannot be distinguished from '(type_param: \"A\") -> dyn' with overloadId: 'to_dyn')");
+  }
+
+  @Test
+  void overloadsWithDifferentArityOrStyleDoNotOverlap() {
+    CheckerEnv env = newStandardCheckerEnv(Container.defaultContainer, newRegistry());
+
+    env.add(
+        Decls.newFunction(
+            "custom",
+            Decls.newOverload("custom_string", singletonList(Decls.String), Decls.String),
+            Decls.newOverload(
+                "custom_string_string", Arrays.asList(Decls.String, Decls.String), Decls.String),
+            Decls.newInstanceOverload(
+                "custom_receiver_string",
+                Arrays.asList(Decls.String, Decls.String),
+                Decls.String)));
   }
 }

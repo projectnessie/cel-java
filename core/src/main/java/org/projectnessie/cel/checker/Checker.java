@@ -408,6 +408,10 @@ public final class Checker {
         // not a compatible call style.
         continue;
       }
+      if (overload.getParamsCount() != argTypes.size()) {
+        // not a compatible arity.
+        continue;
+      }
 
       Type overloadType = Decls.newFunctionType(overload.getResultType(), overload.getParamsList());
       if (overload.getTypeParamsCount() > 0) {
