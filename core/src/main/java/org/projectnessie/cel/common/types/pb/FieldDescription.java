@@ -15,6 +15,12 @@
  */
 package org.projectnessie.cel.common.types.pb;
 
+import static org.projectnessie.cel.common.types.BoolT.True;
+import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
+import static org.projectnessie.cel.common.types.Err.noMoreElements;
+import static org.projectnessie.cel.common.types.IntT.intOf;
+import static org.projectnessie.cel.common.types.TypeT.TypeType;
+import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.pb.PbTypeDescription.reflectTypeOf;
 import static org.projectnessie.cel.common.types.pb.PbTypeDescription.unwrapDynamic;
 
@@ -31,12 +37,17 @@ import com.google.protobuf.MapEntry;
 import com.google.protobuf.Message;
 import com.google.protobuf.NullValue;
 import java.lang.reflect.Array;
-import java.util.ArrayList;
+import java.util.AbstractList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.projectnessie.cel.common.ULong;
+import org.projectnessie.cel.common.types.IteratorT;
+import org.projectnessie.cel.common.types.MapT;
+import org.projectnessie.cel.common.types.ref.BaseVal;
+import org.projectnessie.cel.common.types.ref.TypeAdapter;
+import org.projectnessie.cel.common.types.ref.Val;
 
 /** FieldDescription holds metadata related to fields declared within a type. */
 public final class FieldDescription extends Description {
@@ -440,7 +451,17 @@ public final class FieldDescription extends Description {
   }
 
   public Object getField(Object target) {
-    return getValueFromField(desc, (Message) target);
+    return getField(target, DefaultTypeAdapter.Instance);
+  }
+
+  public Object getField(Object target, TypeAdapter adapter) {
+    Message message = (Message) target;
+    FieldDescriptor fd = fieldDescriptorFor(message);
+    Object value = message.getField(fd);
+    if (fd.isMapField() && value instanceof List) {
+      return new ProtoMapT(adapter, fd, (List<?>) value);
+    }
+    return getValueFromField(fd, message);
   }
 
   public static Object getValueFromField(FieldDescriptor desc, Message message) {
@@ -509,16 +530,202 @@ public final class FieldDescription extends Description {
               || type == FieldDescriptor.Type.UINT64
               || type == FieldDescriptor.Type.FIXED32
               || type == FieldDescriptor.Type.FIXED64)) {
-        List<ULong> result = new ArrayList<>();
-        List<Object> repeated = (List<Object>) v;
-        for (Object o : repeated) {
-          ULong casted = ULong.valueOf(((Number) o).longValue());
-          result.add(casted);
-        }
-        v = result;
+        v = new UnsignedLongList((List<?>) v);
       }
     }
     return v;
+  }
+
+  private FieldDescriptor fieldDescriptorFor(Message message) {
+    Descriptor messageDesc = message.getDescriptorForType();
+    if (messageDesc == desc.getContainingType()) {
+      return desc;
+    }
+    return messageDesc.findFieldByName(name());
+  }
+
+  private static final class UnsignedLongList extends AbstractList<ULong> {
+    private final List<?> repeated;
+
+    private UnsignedLongList(List<?> repeated) {
+      this.repeated = repeated;
+    }
+
+    @Override
+    public ULong get(int index) {
+      return ULong.valueOf(((Number) repeated.get(index)).longValue());
+    }
+
+    @Override
+    public int size() {
+      return repeated.size();
+    }
+  }
+
+  private static final class ProtoMapT extends MapT {
+    private final TypeAdapter adapter;
+    private final List<?> entries;
+    private final FieldDescriptor keyDesc;
+    private final FieldDescriptor valueDesc;
+
+    private ProtoMapT(TypeAdapter adapter, FieldDescriptor field, List<?> entries) {
+      this.adapter = adapter;
+      this.entries = entries;
+      this.keyDesc = field.getMessageType().findFieldByNumber(1);
+      this.valueDesc = field.getMessageType().findFieldByNumber(2);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <T> T convertToNative(Class<T> typeDesc) {
+      return (T) MapT.newMaybeWrappedMap(adapter, toJavaMap()).convertToNative(typeDesc);
+    }
+
+    @Override
+    public Val convertToType(org.projectnessie.cel.common.types.ref.Type typeValue) {
+      if (typeValue == MapT.MapType) {
+        return this;
+      }
+      if (typeValue == TypeType) {
+        return MapT.MapType;
+      }
+      return newTypeConversionError(MapT.MapType, typeValue);
+    }
+
+    @Override
+    public IteratorT iterator() {
+      return new EntryKeyIterator();
+    }
+
+    @Override
+    public Val equal(Val other) {
+      return MapT.newMaybeWrappedMap(adapter, toJavaMap()).equal(other);
+    }
+
+    @Override
+    public Object value() {
+      return toJavaMap();
+    }
+
+    @Override
+    public Val contains(Val value) {
+      return boolOf(find(value) != null);
+    }
+
+    @Override
+    public Val get(Val index) {
+      return find(index);
+    }
+
+    @Override
+    public Val size() {
+      return intOf(entries.size());
+    }
+
+    @Override
+    public Val find(Val key) {
+      for (Object entry : entries) {
+        Val candidate = adapter.nativeToValue(mapEntryKey(entry));
+        if (candidate.equal(key) == True) {
+          return adapter.nativeToValue(mapEntryValue(entry));
+        }
+      }
+      return null;
+    }
+
+    private Map<Object, Object> toJavaMap() {
+      Map<Object, Object> map = new HashMap<>(entries.size() * 4 / 3 + 1);
+      for (Object entry : entries) {
+        map.put(mapEntryKey(entry), mapEntryValue(entry));
+      }
+      return map;
+    }
+
+    private Object mapEntryKey(Object entry) {
+      return normalizeUnsignedValue(entryKeyDescriptor(entry), rawMapEntryValue(entry, 1));
+    }
+
+    private Object mapEntryValue(Object entry) {
+      return normalizeUnsignedValue(entryValueDescriptor(entry), rawMapEntryValue(entry, 2));
+    }
+
+    private FieldDescriptor entryKeyDescriptor(Object entry) {
+      if (entry instanceof DynamicMessage) {
+        List<FieldDescriptor> fields = ((DynamicMessage) entry).getDescriptorForType().getFields();
+        if (fields.size() == 2) {
+          return fields.get(0);
+        }
+      }
+      return keyDesc;
+    }
+
+    private FieldDescriptor entryValueDescriptor(Object entry) {
+      if (entry instanceof DynamicMessage) {
+        List<FieldDescriptor> fields = ((DynamicMessage) entry).getDescriptorForType().getFields();
+        if (fields.size() == 2) {
+          return fields.get(1);
+        }
+      }
+      return valueDesc;
+    }
+
+    private Object rawMapEntryValue(Object entry, int fieldNumber) {
+      if (entry instanceof MapEntry) {
+        MapEntry<?, ?> mapEntry = (MapEntry<?, ?>) entry;
+        return fieldNumber == 1 ? mapEntry.getKey() : mapEntry.getValue();
+      }
+      if (entry instanceof DynamicMessage) {
+        DynamicMessage dynMsg = (DynamicMessage) entry;
+        List<FieldDescriptor> fields = dynMsg.getDescriptorForType().getFields();
+        if (fields.size() == 2) {
+          return dynMsg.getField(fields.get(fieldNumber - 1));
+        }
+      }
+      throw new IllegalArgumentException(
+          String.format("Unexpected %s (%s) in list of map fields", entry.getClass(), entry));
+    }
+
+    private final class EntryKeyIterator extends BaseVal implements IteratorT {
+      private int index;
+
+      @Override
+      public Val hasNext() {
+        return boolOf(index < entries.size());
+      }
+
+      @Override
+      public Val next() {
+        if (index < entries.size()) {
+          return adapter.nativeToValue(mapEntryKey(entries.get(index++)));
+        }
+        return noMoreElements();
+      }
+
+      @Override
+      public <T> T convertToNative(Class<T> typeDesc) {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public Val convertToType(org.projectnessie.cel.common.types.ref.Type typeValue) {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public Val equal(Val other) {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public org.projectnessie.cel.common.types.ref.Type type() {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public Object value() {
+        throw new UnsupportedOperationException();
+      }
+    }
   }
 
   private static Object normalizeUnsignedValue(FieldDescriptor desc, Object value) {

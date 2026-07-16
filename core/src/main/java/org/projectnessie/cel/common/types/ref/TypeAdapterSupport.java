@@ -19,8 +19,12 @@ import static org.projectnessie.cel.common.types.BytesT.bytesOf;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.DurationT.durationOf;
 import static org.projectnessie.cel.common.types.IntT.intOf;
+import static org.projectnessie.cel.common.types.ListT.newDoubleArrayList;
 import static org.projectnessie.cel.common.types.ListT.newGenericArrayList;
+import static org.projectnessie.cel.common.types.ListT.newGenericList;
+import static org.projectnessie.cel.common.types.ListT.newIntArrayList;
 import static org.projectnessie.cel.common.types.ListT.newJSONList;
+import static org.projectnessie.cel.common.types.ListT.newLongArrayList;
 import static org.projectnessie.cel.common.types.ListT.newStringArrayList;
 import static org.projectnessie.cel.common.types.ListT.newValArrayList;
 import static org.projectnessie.cel.common.types.MapT.newJSONStruct;
@@ -43,19 +47,16 @@ import com.google.protobuf.UInt64Value;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZonedDateTime;
-import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Collection;
 import java.util.Date;
 import java.util.IdentityHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
 import org.projectnessie.cel.common.ULong;
-import org.projectnessie.cel.common.types.DoubleT;
-import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.NullT;
-import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
 
 /**
  * Helper class for {@link TypeAdapter} implementations to convert from a Java type to a CEL type.
@@ -84,27 +85,9 @@ public final class TypeAdapterSupport {
     NativeToValueExact.put(Timestamp.class, (a, value) -> timestampOf((Timestamp) value));
     NativeToValueExact.put(ZonedDateTime.class, (a, value) -> timestampOf((ZonedDateTime) value));
     NativeToValueExact.put(Instant.class, (a, value) -> timestampOf((Instant) value));
-    NativeToValueExact.put(
-        // TODO maybe add specialized ListT for int[]
-        int[].class,
-        (a, value) ->
-            newValArrayList(
-                DefaultTypeAdapter.Instance,
-                Arrays.stream((int[]) value).mapToObj(IntT::intOf).toArray(Val[]::new)));
-    NativeToValueExact.put(
-        // TODO maybe add specialized ListT for long[]
-        long[].class,
-        (a, value) ->
-            newValArrayList(
-                DefaultTypeAdapter.Instance,
-                Arrays.stream((long[]) value).mapToObj(IntT::intOf).toArray(Val[]::new)));
-    NativeToValueExact.put(
-        // TODO maybe add specialized ListT for double[]
-        double[].class,
-        (a, value) ->
-            newValArrayList(
-                DefaultTypeAdapter.Instance,
-                Arrays.stream((double[]) value).mapToObj(DoubleT::doubleOf).toArray(Val[]::new)));
+    NativeToValueExact.put(int[].class, (a, value) -> newIntArrayList(a, (int[]) value));
+    NativeToValueExact.put(long[].class, (a, value) -> newLongArrayList(a, (long[]) value));
+    NativeToValueExact.put(double[].class, (a, value) -> newDoubleArrayList(a, (double[]) value));
     NativeToValueExact.put(String[].class, (a, value) -> newStringArrayList((String[]) value));
     NativeToValueExact.put(Val[].class, (a, value) -> newValArrayList(a, (Val[]) value));
     NativeToValueExact.put(NullValue.class, (a, value) -> NullT.NullValue);
@@ -135,6 +118,9 @@ public final class TypeAdapterSupport {
 
     if (value instanceof Object[]) {
       return newGenericArrayList(a, (Object[]) value);
+    }
+    if (value instanceof List) {
+      return newGenericList(a, (List<?>) value);
     }
     if (value instanceof Collection) {
       return newGenericArrayList(a, ((Collection<?>) value).toArray());

@@ -18,6 +18,7 @@ package org.projectnessie.cel.common.types;
 import static java.util.Arrays.asList;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
+import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.Err.isError;
 import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
@@ -61,6 +62,22 @@ public abstract class ListT extends BaseVal implements Lister {
 
   public static Val newGenericArrayList(TypeAdapter adapter, Object[] value) {
     return new GenericListT(adapter, value);
+  }
+
+  public static Val newGenericList(TypeAdapter adapter, List<?> value) {
+    return new ListBackedListT(adapter, value);
+  }
+
+  public static Val newIntArrayList(TypeAdapter adapter, int[] value) {
+    return new IntArrayListT(adapter, value);
+  }
+
+  public static Val newLongArrayList(TypeAdapter adapter, long[] value) {
+    return new LongArrayListT(adapter, value);
+  }
+
+  public static Val newDoubleArrayList(TypeAdapter adapter, double[] value) {
+    return new DoubleArrayListT(adapter, value);
   }
 
   public static Val newValArrayList(TypeAdapter adapter, Val[] value) {
@@ -225,6 +242,50 @@ public abstract class ListT extends BaseVal implements Lister {
       return intOf(size);
     }
 
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (!(o instanceof Val)) {
+        return false;
+      }
+      return equal((Val) o) == True;
+    }
+
+    @Override
+    public int hashCode() {
+      int result = 1;
+      for (long i = 0; i < size; i++) {
+        result = 31 * result + get(intOf(i)).hashCode();
+      }
+      return result;
+    }
+
+    int checkedIndex(Val index, int size) {
+      switch (index.type().typeEnum()) {
+        case Int:
+        case Uint:
+          break;
+        case Double:
+          double od = index.doubleValue();
+          if (Math.rint(od) != od) {
+            throw new InvalidIndexException(newErr("invalid_argument"));
+          }
+          break;
+        default:
+          throw new InvalidIndexException(
+              valOrErr(index, "unsupported index type '%s' in list", index.type()));
+      }
+      int i = (int) index.intValue();
+      if (i < 0 || i >= size) {
+        // Note: the conformance tests assert on 'invalid_argument'
+        throw new InvalidIndexException(
+            newErr("invalid_argument: index '%d' out of range in list of size '%d'", i, size));
+      }
+      return i;
+    }
+
     private final class ArrayListIteratorT extends BaseVal implements IteratorT {
       private long index;
 
@@ -268,6 +329,19 @@ public abstract class ListT extends BaseVal implements Lister {
     }
   }
 
+  private static final class InvalidIndexException extends RuntimeException {
+    private final Val error;
+
+    private InvalidIndexException(Val error) {
+      this.error = error;
+    }
+
+    @Override
+    public synchronized Throwable fillInStackTrace() {
+      return this;
+    }
+  }
+
   static final class GenericListT extends BaseListT {
     private final Object[] array;
 
@@ -287,32 +361,26 @@ public abstract class ListT extends BaseVal implements Lister {
         return noSuchOverload(this, "add", other);
       }
       Lister otherList = (Lister) other;
-      Object[] otherArray = (Object[]) otherList.value();
-      Object[] newArray = Arrays.copyOf(array, array.length + otherArray.length);
-      System.arraycopy(otherArray, 0, newArray, array.length, otherArray.length);
+      int otherSize = (int) otherList.size().intValue();
+      Object[] newArray = Arrays.copyOf(array, array.length + otherSize);
+      Class<?> componentType = array.getClass().getComponentType();
+      for (int i = 0; i < otherSize; i++) {
+        Val otherValue = otherList.get(intOf(i));
+        newArray[array.length + i] =
+            componentType.isInstance(otherValue)
+                ? otherValue
+                : otherValue.convertToNative(componentType);
+      }
       return new GenericListT(adapter, newArray);
     }
 
     @Override
     public Val get(Val index) {
-      switch (index.type().typeEnum()) {
-        case Int:
-        case Uint:
-          break;
-        case Double:
-          double od = index.doubleValue();
-          if (Math.rint(od) != od) {
-            return newErr("invalid_argument");
-          }
-          break;
-        default:
-          return valOrErr(index, "unsupported index type '%s' in list", index.type());
-      }
-      int sz = array.length;
-      int i = (int) index.intValue();
-      if (i < 0 || i >= sz) {
-        // Note: the conformance tests assert on 'invalid_argument'
-        return newErr("invalid_argument: index '%d' out of range in list of size '%d'", i, sz);
+      int i;
+      try {
+        i = checkedIndex(index, array.length);
+      } catch (InvalidIndexException e) {
+        return e.error;
       }
 
       return adapter.nativeToValue(array[i]);
@@ -328,6 +396,49 @@ public abstract class ListT extends BaseVal implements Lister {
           + ", size="
           + size
           + '}';
+    }
+  }
+
+  static final class ListBackedListT extends BaseListT {
+    private final List<?> list;
+
+    ListBackedListT(TypeAdapter adapter, List<?> list) {
+      super(adapter, list.size());
+      this.list = list;
+    }
+
+    @Override
+    public Object value() {
+      return list;
+    }
+
+    @Override
+    public Val add(Val other) {
+      if (!(other instanceof Lister)) {
+        return noSuchOverload(this, "add", other);
+      }
+      Lister otherList = (Lister) other;
+      int otherSize = (int) otherList.size().intValue();
+      Object[] newArray = new Object[list.size() + otherSize];
+      for (int i = 0; i < list.size(); i++) {
+        newArray[i] = list.get(i);
+      }
+      for (int i = 0; i < otherSize; i++) {
+        newArray[list.size() + i] = otherList.get(intOf(i));
+      }
+      return new GenericListT(adapter, newArray);
+    }
+
+    @Override
+    public Val get(Val index) {
+      int i;
+      try {
+        i = checkedIndex(index, list.size());
+      } catch (InvalidIndexException e) {
+        return e.error;
+      }
+
+      return adapter.nativeToValue(list.get(i));
     }
   }
 
@@ -371,45 +482,13 @@ public abstract class ListT extends BaseVal implements Lister {
 
     @Override
     public Val get(Val index) {
-      switch (index.type().typeEnum()) {
-        case Int:
-        case Uint:
-          break;
-        case Double:
-          double od = index.doubleValue();
-          if (Math.rint(od) != od) {
-            return newErr("invalid_argument");
-          }
-          break;
-        default:
-          return valOrErr(index, "unsupported index type '%s' in list", index.type());
-      }
-      int sz = array.length;
-      int i = (int) index.intValue();
-      if (i < 0 || i >= sz) {
-        // Note: the conformance tests assert on 'invalid_argument'
-        return newErr("invalid_argument: index '%d' out of range in list of size '%d'", i, sz);
+      int i;
+      try {
+        i = checkedIndex(index, array.length);
+      } catch (InvalidIndexException e) {
+        return e.error;
       }
       return array[i];
-    }
-
-    @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      ValListT valListT = (ValListT) o;
-      return Arrays.equals(array, valListT.array);
-    }
-
-    @Override
-    public int hashCode() {
-      int result = super.hashCode();
-      result = 31 * result + Arrays.hashCode(array);
-      return result;
     }
 
     @Override
@@ -425,9 +504,107 @@ public abstract class ListT extends BaseVal implements Lister {
     }
   }
 
+  abstract static class PrimitiveArrayListT extends BaseListT {
+    PrimitiveArrayListT(TypeAdapter adapter, long size) {
+      super(adapter, size);
+    }
+
+    @Override
+    public Val add(Val other) {
+      if (!(other instanceof Lister)) {
+        return noSuchOverload(this, "add", other);
+      }
+      Lister otherLister = (Lister) other;
+      int thisSize = (int) size;
+      int otherSize = (int) otherLister.size().intValue();
+      Val[] newArray = new Val[thisSize + otherSize];
+      for (int i = 0; i < thisSize; i++) {
+        newArray[i] = get(intOf(i));
+      }
+      for (int i = 0; i < otherSize; i++) {
+        newArray[thisSize + i] = otherLister.get(intOf(i));
+      }
+      return new ValListT(adapter, newArray);
+    }
+  }
+
+  static final class IntArrayListT extends PrimitiveArrayListT {
+    private final int[] array;
+
+    IntArrayListT(TypeAdapter adapter, int[] array) {
+      super(adapter, array.length);
+      this.array = array;
+    }
+
+    @Override
+    public Object value() {
+      return array;
+    }
+
+    @Override
+    public Val get(Val index) {
+      int i;
+      try {
+        i = checkedIndex(index, array.length);
+      } catch (InvalidIndexException e) {
+        return e.error;
+      }
+      return intOf(array[i]);
+    }
+  }
+
+  static final class LongArrayListT extends PrimitiveArrayListT {
+    private final long[] array;
+
+    LongArrayListT(TypeAdapter adapter, long[] array) {
+      super(adapter, array.length);
+      this.array = array;
+    }
+
+    @Override
+    public Object value() {
+      return array;
+    }
+
+    @Override
+    public Val get(Val index) {
+      int i;
+      try {
+        i = checkedIndex(index, array.length);
+      } catch (InvalidIndexException e) {
+        return e.error;
+      }
+      return intOf(array[i]);
+    }
+  }
+
+  static final class DoubleArrayListT extends PrimitiveArrayListT {
+    private final double[] array;
+
+    DoubleArrayListT(TypeAdapter adapter, double[] array) {
+      super(adapter, array.length);
+      this.array = array;
+    }
+
+    @Override
+    public Object value() {
+      return array;
+    }
+
+    @Override
+    public Val get(Val index) {
+      int i;
+      try {
+        i = checkedIndex(index, array.length);
+      } catch (InvalidIndexException e) {
+        return e.error;
+      }
+      return doubleOf(array[i]);
+    }
+  }
+
   /** NewJSONList returns a traits.Lister based on structpb.ListValue instance. */
   public static Val newJSONList(TypeAdapter adapter, ListValue l) {
-    List<Value> vals = l.getValuesList();
-    return newGenericArrayList(adapter, vals.toArray());
+    return newGenericList(adapter, l.getValuesList());
   }
 }

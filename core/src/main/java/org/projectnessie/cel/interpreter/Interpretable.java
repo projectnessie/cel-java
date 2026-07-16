@@ -37,6 +37,7 @@ import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.IterableT;
 import org.projectnessie.cel.common.types.IteratorT;
+import org.projectnessie.cel.common.types.MapT;
 import org.projectnessie.cel.common.types.Overloads;
 import org.projectnessie.cel.common.types.StringT;
 import org.projectnessie.cel.common.types.ref.FieldType;
@@ -877,7 +878,7 @@ public interface Interpretable {
     /** Eval implements the Interpretable interface method. */
     @Override
     public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
-      Map<Val, Val> entries = new HashMap<>();
+      Map<Val, Val> entries = new HashMap<>(keys.length * 4 / 3 + 1);
       // If any argument is unknown or error early terminate.
       for (int i = 0; i < keys.length; i++) {
         Interpretable key = keys[i];
@@ -897,7 +898,7 @@ public interface Interpretable {
           return newErr("Failed with repeated key");
         }
       }
-      return adapter.nativeToValue(entries);
+      return MapT.newWrappedMap(adapter, entries);
     }
 
     /** Cost implements the Coster interface method. */

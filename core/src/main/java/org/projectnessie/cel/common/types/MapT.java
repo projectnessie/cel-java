@@ -55,7 +55,23 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
     return new ValMapT(adapter, value);
   }
 
+  @SuppressWarnings("unchecked")
   public static Val newMaybeWrappedMap(TypeAdapter adapter, Map<?, ?> value) {
+    boolean alreadyWrapped = true;
+    for (Map.Entry<?, ?> entry : value.entrySet()) {
+      if (!(entry.getKey() instanceof Val) || !(entry.getValue() instanceof Val)) {
+        alreadyWrapped = false;
+        break;
+      }
+      Val key = (Val) entry.getKey();
+      if (key.type().typeEnum() == TypeEnum.Null) {
+        return newErr("unsupported key type");
+      }
+    }
+    if (alreadyWrapped) {
+      return newWrappedMap(adapter, (Map<Val, Val>) value);
+    }
+
     Map<Val, Val> newMap = new HashMap<>(value.size() * 4 / 3 + 1);
     for (Map.Entry<?, ?> entry : value.entrySet()) {
       Val k = adapter.nativeToValue(entry.getKey());

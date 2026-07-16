@@ -205,7 +205,8 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     if (field == null) {
       return null;
     }
-    return new FieldType(field.checkedType(), field::hasField, field::getField);
+    return new FieldType(
+        field.checkedType(), field::hasField, target -> field.getField(target, this));
   }
 
   @Override

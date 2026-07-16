@@ -74,7 +74,7 @@ public final class PbObjectT extends ObjectT {
     if (fd == null) {
       return noSuchField(protoFieldStr);
     }
-    return nativeToValue(fd.getField(value));
+    return nativeToValue(fd.getField(value, adapter));
   }
 
   @SuppressWarnings("unchecked")
