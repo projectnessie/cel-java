@@ -172,7 +172,7 @@ public class DoubleTest {
 
   @Test
   void doubleEqual() {
-    assertThat(doubleOf(0).equal(False)).matches(Err::isError);
+    assertThat(doubleOf(0).equal(False)).isSameAs(False);
     assertThat(doubleOf(0).equal(NullValue)).isSameAs(False);
     assertThat(doubleOf(0).equal(intOf(0))).isSameAs(True);
     assertThat(doubleOf(0).equal(intOf(1))).isSameAs(False);
@@ -180,7 +180,7 @@ public class DoubleTest {
     assertThat(doubleOf(0).equal(uintOf(1))).isSameAs(False);
     assertThat(doubleOf(0).equal(doubleOf(0))).isSameAs(True);
     assertThat(doubleOf(0).equal(doubleOf(1))).isSameAs(False);
-    assertThat(doubleOf(0).equal(stringOf("0"))).isSameAs(True);
+    assertThat(doubleOf(0).equal(stringOf("0"))).isSameAs(False);
     assertThat(doubleOf(0).equal(stringOf("1"))).isSameAs(False);
   }
 

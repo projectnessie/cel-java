@@ -107,14 +107,8 @@ class BoolTest {
   void boolEqual() {
     assertThat(True.equal(True)).extracting(Val::booleanValue).isEqualTo(Boolean.TRUE);
     assertThat(False.equal(True)).extracting(Val::booleanValue).isEqualTo(Boolean.FALSE);
-    assertThat(doubleOf(0.0d).equal(False))
-        .isInstanceOf(Err.class)
-        .extracting(Object::toString)
-        .isEqualTo("no such overload: double.equal(bool)");
-    assertThat(False.equal(doubleOf(0.0d)))
-        .isInstanceOf(Err.class)
-        .extracting(Object::toString)
-        .isEqualTo("no such overload: bool.equal(double)");
+    assertThat(doubleOf(0.0d).equal(False)).isSameAs(False);
+    assertThat(False.equal(doubleOf(0.0d))).isSameAs(False);
   }
 
   @Test

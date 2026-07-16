@@ -176,10 +176,7 @@ public class UintTest {
 
   @Test
   void uintEqual() {
-    assertThat(uintOf(0).equal(False))
-        .isInstanceOf(Err.class)
-        .extracting(Object::toString)
-        .isEqualTo("no such overload: uint.equal(bool)");
+    assertThat(uintOf(0).equal(False)).isSameAs(False);
     assertThat(uintOf(0).equal(NullValue)).isSameAs(False);
     assertThat(uintOf(0).equal(intOf(0))).isSameAs(True);
     assertThat(uintOf(0).equal(intOf(1))).isSameAs(False);
@@ -189,7 +186,7 @@ public class UintTest {
     assertThat(uintOf(0).equal(uintOf(1))).isSameAs(False);
     assertThat(uintOf(0).equal(doubleOf(0))).isSameAs(True);
     assertThat(uintOf(0).equal(doubleOf(1))).isSameAs(False);
-    assertThat(uintOf(0).equal(stringOf("0"))).isSameAs(True);
+    assertThat(uintOf(0).equal(stringOf("0"))).isSameAs(False);
     assertThat(uintOf(0).equal(stringOf("1"))).isSameAs(False);
   }
 

@@ -173,12 +173,16 @@ public final class StringT extends BaseVal implements Adder, Comparer, Matcher, 
     switch (other.type().typeEnum()) {
       case String:
         return boolOf(s.equals(((StringT) other).s));
+      case Null:
+      case Bool:
+      case Bytes:
       case Int:
       case Uint:
       case Double:
-      case Bool:
-        return boolOf(s.equals(((StringT) other.convertToType(StringType)).s));
-      case Null:
+      case List:
+      case Map:
+      case Object:
+      case Type:
         return False;
       default:
         return noSuchOverload(this, "equal", other);

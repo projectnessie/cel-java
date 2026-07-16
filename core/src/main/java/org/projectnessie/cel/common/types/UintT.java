@@ -223,16 +223,19 @@ public final class UintT extends BaseVal
       case Double:
         return other.equal(this);
       case Uint:
-      case String:
         Val converted = other.convertToType(type());
         if (converted.type().typeEnum() == TypeEnum.Err) {
           return converted;
         }
         return boolOf(i == converted.intValue());
       case Null:
+      case Bool:
       case Bytes:
       case List:
       case Map:
+      case Object:
+      case String:
+      case Type:
         return False;
       default:
         return noSuchOverload(this, "equal", other);

@@ -111,6 +111,15 @@ public final class BoolT extends BaseVal implements Comparer, Negater {
       case Bool:
         return Types.boolOf(b == ((BoolT) other).b);
       case Null:
+      case Bytes:
+      case Double:
+      case Int:
+      case List:
+      case Map:
+      case Object:
+      case String:
+      case Type:
+      case Uint:
         return False;
       default:
         return noSuchOverload(this, "equal", other);

@@ -248,6 +248,14 @@ class InterpreterTest {
       new TestCase(InterpreterTestCase.map_key_mixed_numbers_lossy_double_key)
           .expr("{1u: 1.0, 2: 2.0, 3u: 3.0}[3.1]")
           .err("no such key: double{3.1}"),
+      new TestCase(InterpreterTestCase.map_key_string_and_int_are_distinct)
+          .expr("{1: 'int', '1': 'string'}['1']")
+          .out(stringOf("string")),
+      new TestCase(InterpreterTestCase.eq_dyn_string_int).expr("dyn('1') == dyn(1)").out(False),
+      new TestCase(InterpreterTestCase.eq_dyn_int_string).expr("dyn(1) == dyn('1')").out(False),
+      new TestCase(InterpreterTestCase.eq_dyn_string_bool)
+          .expr("dyn('true') == dyn(true)")
+          .out(False),
       new TestCase(InterpreterTestCase.zero_based_double_error)
           .expr("[7, 8, 9][dyn(0.1)]")
           .err("invalid_argument"),

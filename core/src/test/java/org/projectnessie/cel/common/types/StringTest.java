@@ -156,6 +156,8 @@ public class StringTest {
     assertThat(stringOf("hello").equal(stringOf("hello"))).isSameAs(True);
     assertThat(stringOf("hello").equal(stringOf("hell"))).isSameAs(False);
     assertThat(stringOf("c").equal(intOf(99))).isSameAs(False);
+    assertThat(stringOf("99").equal(intOf(99))).isSameAs(False);
+    assertThat(stringOf("true").equal(True)).isSameAs(False);
   }
 
   @Test

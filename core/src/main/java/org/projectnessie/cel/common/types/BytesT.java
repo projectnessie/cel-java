@@ -167,6 +167,15 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
       case Bytes:
         return boolOf(Arrays.equals(b, ((BytesT) other).b));
       case Null:
+      case Bool:
+      case Double:
+      case Int:
+      case List:
+      case Map:
+      case Object:
+      case String:
+      case Type:
+      case Uint:
         return False;
       default:
         return noSuchOverload(this, "equal", other);

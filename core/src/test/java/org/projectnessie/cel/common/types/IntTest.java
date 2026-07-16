@@ -183,12 +183,8 @@ public class IntTest {
 
   @Test
   void intEqual() {
-    assertThat(intOf(0).equal(False))
-        .isInstanceOf(Err.class)
-        .extracting(Object::toString)
-        .isEqualTo("no such overload: int.equal(bool)");
+    assertThat(intOf(0).equal(False)).isSameAs(False);
     assertThat(intOf(0).equal(NullValue)).isSameAs(False);
-    assertThat(intOf(0).equal(stringOf("0"))).isSameAs(True);
     assertThat(intOf(0).equal(stringOf("1"))).isSameAs(False);
     assertThat(intOf(0).equal(intOf(0))).isSameAs(True);
     assertThat(intOf(0).equal(intOf(1))).isSameAs(False);
@@ -198,7 +194,7 @@ public class IntTest {
     assertThat(intOf(0xffffffffffffffffL).equal(uintOf(0xffffffffffffffffL))).isSameAs(False);
     assertThat(intOf(0).equal(doubleOf(0))).isSameAs(True);
     assertThat(intOf(0).equal(doubleOf(1))).isSameAs(False);
-    assertThat(intOf(0).equal(stringOf("0"))).isSameAs(True);
+    assertThat(intOf(0).equal(stringOf("0"))).isSameAs(False);
     assertThat(intOf(0).equal(stringOf("1"))).isSameAs(False);
   }
 

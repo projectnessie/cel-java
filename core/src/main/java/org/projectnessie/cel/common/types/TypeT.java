@@ -15,8 +15,8 @@
  */
 package org.projectnessie.cel.common.types;
 
+import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
-import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.Types.boolOf;
 
@@ -106,7 +106,7 @@ public class TypeT implements Type, Val {
   @Override
   public Val equal(Val other) {
     if (TypeType != other.type()) {
-      return noSuchOverload(this, "equal", other);
+      return False;
     }
     return boolOf(this.equals(other));
   }

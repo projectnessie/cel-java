@@ -104,6 +104,11 @@ public final class NullT extends BaseVal {
       case Double:
       case String:
       case Bytes:
+      case Bool:
+      case List:
+      case Map:
+      case Object:
+      case Type:
         return False;
       default:
         return noSuchOverload(this, "equal", other);

@@ -199,7 +199,6 @@ public final class DoubleT extends BaseVal
       case Uint:
       case Int:
       case Double:
-      case String:
         Val converted = other.convertToType(type());
         if (converted.type().typeEnum() == TypeEnum.Err) {
           return converted;
@@ -208,9 +207,13 @@ public final class DoubleT extends BaseVal
         // TODO: Handle NaNs properly.
         return boolOf(d == o);
       case Null:
+      case Bool:
       case Bytes:
       case List:
       case Map:
+      case Object:
+      case String:
+      case Type:
         return False;
       default:
         return noSuchOverload(this, "equal", other);
