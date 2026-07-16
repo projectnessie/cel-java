@@ -809,8 +809,8 @@ class InterpreterTest {
           .exhaustiveCost(costOf(35, 35)),
       new TestCase(InterpreterTestCase.macro_map)
           .expr("[1, 2, 3].map(x, x * 2) == [2, 4, 6]")
-          .cost(costOf(6, 14))
-          .exhaustiveCost(costOf(14, 14)),
+          .cost(costOf(7, 7))
+          .exhaustiveCost(costOf(7, 7)),
       new TestCase(InterpreterTestCase.matches)
           .expr(
               "input.matches('k.*') \n"

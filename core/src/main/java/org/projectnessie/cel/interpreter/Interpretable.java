@@ -28,8 +28,10 @@ import static org.projectnessie.cel.interpreter.Coster.Cost.OneOne;
 import static org.projectnessie.cel.interpreter.Coster.Cost.estimateCost;
 import static org.projectnessie.cel.interpreter.Coster.costOf;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -37,6 +39,7 @@ import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.IterableT;
 import org.projectnessie.cel.common.types.IteratorT;
+import org.projectnessie.cel.common.types.ListT;
 import org.projectnessie.cel.common.types.MapT;
 import org.projectnessie.cel.common.types.Overloads;
 import org.projectnessie.cel.common.types.StringT;
@@ -49,6 +52,7 @@ import org.projectnessie.cel.common.types.traits.Container;
 import org.projectnessie.cel.common.types.traits.FieldTester;
 import org.projectnessie.cel.common.types.traits.Negater;
 import org.projectnessie.cel.common.types.traits.Receiver;
+import org.projectnessie.cel.common.types.traits.Sizer;
 import org.projectnessie.cel.common.types.traits.Trait;
 import org.projectnessie.cel.interpreter.Activation.VarActivation;
 import org.projectnessie.cel.interpreter.AttributeFactory.Attribute;
@@ -1104,6 +1108,111 @@ public interface Interpretable {
           + step
           + ", result="
           + result
+          + '}';
+    }
+  }
+
+  final class EvalListFold extends AbstractEval implements Coster {
+    final String iterVar;
+    final Interpretable iterRange;
+    final Interpretable filter;
+    final Interpretable transform;
+    private final TypeAdapter adapter;
+
+    EvalListFold(
+        long id,
+        String iterVar,
+        Interpretable iterRange,
+        Interpretable filter,
+        Interpretable transform,
+        TypeAdapter adapter) {
+      super(id);
+      this.iterVar = iterVar;
+      this.iterRange = iterRange;
+      this.filter = filter;
+      this.transform = transform;
+      this.adapter = adapter;
+    }
+
+    @Override
+    public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
+      Val foldRange = iterRange.eval(ctx);
+      if (!foldRange.type().hasTrait(Trait.IterableType)) {
+        return valOrErr(
+            foldRange, "got '%s', expected iterable type", foldRange.getClass().getName());
+      }
+
+      VarActivation iterCtx = new VarActivation();
+      iterCtx.parent = ctx;
+      iterCtx.name = iterVar;
+      List<Val> values = new ArrayList<>(listCapacity(foldRange));
+      IteratorT it = ((IterableT) foldRange).iterator();
+      while (it.hasNext() == True) {
+        iterCtx.val = it.next();
+
+        if (filter != null) {
+          Val include = filter.eval(iterCtx);
+          if (include == False) {
+            continue;
+          }
+          if (include != True) {
+            return noSuchOverload(null, Operator.Conditional.id, include);
+          }
+        }
+
+        Val value = transform.eval(iterCtx);
+        if (isUnknownOrError(value)) {
+          return value;
+        }
+        values.add(value);
+      }
+      return ListT.newValArrayList(adapter, values.toArray(new Val[0]));
+    }
+
+    private int listCapacity(Val foldRange) {
+      if (foldRange.type().hasTrait(Trait.SizerType)) {
+        long size = ((Sizer) foldRange).size().intValue();
+        if (size > 0 && size <= Integer.MAX_VALUE) {
+          return (int) size;
+        }
+      }
+      return 0;
+    }
+
+    @Override
+    public Cost cost() {
+      Cost range = estimateCost(iterRange);
+      Cost result = estimateCost(transform);
+      if (filter != null) {
+        result = result.add(estimateCost(filter));
+      }
+      Val foldRange = iterRange.eval(emptyActivation());
+      if (!foldRange.type().hasTrait(Trait.IterableType)) {
+        return Cost.Unknown;
+      }
+      long rangeCnt = 0L;
+      IteratorT it = ((IterableT) foldRange).iterator();
+      while (it.hasNext() == True) {
+        it.next();
+        rangeCnt++;
+      }
+      return range.add(result.multiply(rangeCnt));
+    }
+
+    @Override
+    public String toString() {
+      return "EvalListFold{"
+          + "id="
+          + id
+          + ", iterVar='"
+          + iterVar
+          + '\''
+          + ", iterRange="
+          + iterRange
+          + ", filter="
+          + filter
+          + ", transform="
+          + transform
           + '}';
     }
   }
