@@ -126,6 +126,7 @@ public interface InterpretablePlanner {
     private final Container container;
     private final Map<Long, Reference> refMap;
     private final Map<Long, Type> typeMap;
+    private final Map<String, FieldType> fieldTypes = new HashMap<>();
     private final InterpretableDecorator[] decorators;
 
     Planner(
@@ -249,7 +250,7 @@ public interface InterpretablePlanner {
       FieldType fieldType = null;
       Type opType = typeMap.get(sel.getOperand().getId());
       if (opType != null && !opType.getMessageType().isEmpty()) {
-        FieldType ft = provider.findFieldType(opType.getMessageType(), sel.getField());
+        FieldType ft = findFieldType(opType.getMessageType(), sel.getField());
         if (ft != null && ft.isSet != null && ft.getFrom != null) {
           fieldType = ft;
         }
@@ -273,7 +274,11 @@ public interface InterpretablePlanner {
         return new EvalTestOnly(expr.getId(), op, stringOf(sel.getField()), fieldType);
       }
       // Build a qualifier.
-      Qualifier qual = attrFactory.newQualifier(opType, expr.getId(), sel.getField());
+      Qualifier qual =
+          fieldType != null
+              ? new AttributeFactory.FieldQualifier(
+                  expr.getId(), sel.getField(), fieldType, adapter)
+              : attrFactory.newQualifier(opType, expr.getId(), sel.getField());
       if (qual == null) {
         return null;
       }
@@ -290,6 +295,19 @@ public interface InterpretablePlanner {
       }
       relAttr.addQualifier(qual);
       return relAttr;
+    }
+
+    private FieldType findFieldType(String messageType, String fieldName) {
+      String key = messageType + '\n' + fieldName;
+      FieldType ft = fieldTypes.get(key);
+      if (ft != null) {
+        return ft;
+      }
+      ft = provider.findFieldType(messageType, fieldName);
+      if (ft != null) {
+        fieldTypes.put(key, ft);
+      }
+      return ft;
     }
 
     /**

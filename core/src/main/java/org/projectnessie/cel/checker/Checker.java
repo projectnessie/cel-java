@@ -69,6 +69,7 @@ public final class Checker {
   private final SourceInfo sourceInfo;
   private final Map<Long, Type> types = new HashMap<>();
   private final Map<Long, Reference> references = new HashMap<>();
+  private final Map<String, FieldType> fieldTypes = new HashMap<>();
 
   private Checker(
       CheckerEnv env,
@@ -643,13 +644,26 @@ public final class Checker {
       return null;
     }
 
-    FieldType ft = env.provider.findFieldType(messageType, fieldName);
+    FieldType ft = findFieldType(messageType, fieldName);
     if (ft != null) {
       return ft;
     }
 
     errors.undefinedField(l, fieldName);
     return null;
+  }
+
+  private FieldType findFieldType(String messageType, String fieldName) {
+    String key = messageType + '\n' + fieldName;
+    FieldType ft = fieldTypes.get(key);
+    if (ft != null) {
+      return ft;
+    }
+    ft = env.provider.findFieldType(messageType, fieldName);
+    if (ft != null) {
+      fieldTypes.put(key, ft);
+    }
+    return ft;
   }
 
   void setType(Expr.Builder e, Type t) {
