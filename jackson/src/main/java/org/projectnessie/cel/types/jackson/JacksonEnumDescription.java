@@ -16,8 +16,9 @@
 package org.projectnessie.cel.types.jackson;
 
 import com.fasterxml.jackson.databind.JavaType;
-import com.fasterxml.jackson.databind.ser.std.EnumSerializer;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import org.projectnessie.cel.common.types.pb.Checked;
 
@@ -27,9 +28,12 @@ final class JacksonEnumDescription {
   private final com.google.api.expr.v1alpha1.Type pbType;
   private final List<Enum<?>> enumValues;
 
-  JacksonEnumDescription(JavaType javaType, EnumSerializer ser) {
+  JacksonEnumDescription(JavaType javaType) {
     this.name = javaType.getRawClass().getName().replace('$', '.');
-    this.enumValues = ser.getEnumValues().enums();
+    this.enumValues =
+        Arrays.stream(javaType.getRawClass().getEnumConstants())
+            .map(enumValue -> (Enum<?>) enumValue)
+            .collect(Collectors.toList());
     this.pbType = Checked.checkedInt;
   }
 

@@ -52,6 +52,7 @@ import org.projectnessie.cel.common.types.pb.Checked;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.types.jackson.types.AnEnum;
 import org.projectnessie.cel.types.jackson.types.CollectionsObject;
+import org.projectnessie.cel.types.jackson.types.CustomSerializedEnum;
 import org.projectnessie.cel.types.jackson.types.EnumWithConstantBody;
 import org.projectnessie.cel.types.jackson.types.InnerType;
 
@@ -127,6 +128,17 @@ class Jackson2TypeDescriptionTest {
         .isEqualTo(intOf(EnumWithConstantBody.SPECIAL.ordinal()));
     assertThat(reg.nativeToValue(EnumWithConstantBody.SPECIAL))
         .isEqualTo(intOf(EnumWithConstantBody.SPECIAL.ordinal()));
+  }
+
+  @Test
+  void customSerializedEnumRegistrationUsesEnumConstants() {
+    JacksonRegistry reg = (JacksonRegistry) newRegistry();
+    reg.enumDescription(CustomSerializedEnum.class);
+
+    assertThat(reg.findIdent(CustomSerializedEnum.class.getName() + ".TWO"))
+        .isEqualTo(intOf(CustomSerializedEnum.TWO.ordinal()));
+    assertThat(reg.nativeToValue(CustomSerializedEnum.TWO))
+        .isEqualTo(intOf(CustomSerializedEnum.TWO.ordinal()));
   }
 
   @Test

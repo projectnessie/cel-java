@@ -22,7 +22,6 @@ import com.fasterxml.jackson.databind.JsonMappingException;
 import com.fasterxml.jackson.databind.JsonSerializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializerProvider;
-import com.fasterxml.jackson.databind.ser.std.EnumSerializer;
 import com.fasterxml.jackson.databind.type.TypeFactory;
 import java.util.HashMap;
 import java.util.Map;
@@ -162,19 +161,14 @@ public final class JacksonRegistry implements TypeRegistry {
   }
 
   private JacksonEnumDescription computeEnumDescription(Class<?> clazz) {
-    try {
-      JsonSerializer<?> ser = serializationProvider.findValueSerializer(clazz);
-      JavaType javaType = typeFactory.constructType(clazz);
+    JavaType javaType = typeFactory.constructType(clazz);
 
-      JacksonEnumDescription enumDesc = new JacksonEnumDescription(javaType, (EnumSerializer) ser);
-      enumMap.put(clazz, enumDesc);
+    JacksonEnumDescription enumDesc = new JacksonEnumDescription(javaType);
+    enumMap.put(clazz, enumDesc);
 
-      enumDesc.buildValues().forEach(v -> enumValues.put(v.fullyQualifiedName(), v));
+    enumDesc.buildValues().forEach(v -> enumValues.put(v.fullyQualifiedName(), v));
 
-      return enumDesc;
-    } catch (JsonMappingException e) {
-      throw new RuntimeException(e);
-    }
+    return enumDesc;
   }
 
   JacksonTypeDescription typeDescription(Class<?> clazz) {
