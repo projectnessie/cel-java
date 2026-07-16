@@ -164,6 +164,9 @@ public class UintTest {
   @Test
   void uintDivide() {
     assertThat(uintOf(3).divide(uintOf(2)).equal(uintOf(1))).isSameAs(True);
+    assertThat(uintOf(-1L).divide(uintOf(2)).equal(uintOf(Long.MAX_VALUE))).isSameAs(True);
+    assertThat(uintOf(-1L).divide(uintOf(Long.MIN_VALUE)).equal(uintOf(1))).isSameAs(True);
+    assertThat(uintOf(Long.MIN_VALUE).divide(uintOf(2)).equal(uintOf(1L << 62))).isSameAs(True);
     assertThat(UintZero.divide(UintZero))
         .isInstanceOf(Err.class)
         .extracting(Object::toString)
@@ -196,6 +199,10 @@ public class UintTest {
   @Test
   void uintModulo() {
     assertThat(uintOf(21).modulo(uintOf(2)).equal(uintOf(1))).isSameAs(True);
+    assertThat(uintOf(-1L).modulo(uintOf(2)).equal(uintOf(1))).isSameAs(True);
+    assertThat(uintOf(-1L).modulo(uintOf(Long.MIN_VALUE)).equal(uintOf(Long.MAX_VALUE)))
+        .isSameAs(True);
+    assertThat(uintOf(Long.MIN_VALUE).modulo(uintOf(3)).equal(uintOf(2))).isSameAs(True);
     assertThat(uintOf(21).modulo(UintZero))
         .isInstanceOf(Err.class)
         .extracting(Object::toString)

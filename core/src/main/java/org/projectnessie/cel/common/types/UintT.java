@@ -249,7 +249,7 @@ public final class UintT extends BaseVal
     if (otherInt == 0L) {
       return divideByZero();
     }
-    return uintOf(i / otherInt);
+    return uintOf(Long.divideUnsigned(i, otherInt));
   }
 
   /** Modulo implements traits.Modder.Modulo. */
@@ -262,7 +262,7 @@ public final class UintT extends BaseVal
     if (otherInt == 0L) {
       return modulusByZero();
     }
-    return uintOf(i % otherInt);
+    return uintOf(Long.remainderUnsigned(i, otherInt));
   }
 
   /** Multiply implements traits.Multiplier.Multiply. */
