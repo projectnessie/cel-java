@@ -20,10 +20,11 @@ import com.google.protobuf.Duration;
 import com.google.protobuf.Timestamp;
 import java.time.Instant;
 import java.time.ZonedDateTime;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.TypeT;
@@ -103,15 +104,17 @@ final class JacksonTypeDescription implements TypeDescription {
         || Instant.class.isAssignableFrom(rawClass)
         || ZonedDateTime.class.isAssignableFrom(rawClass)) {
       return Checked.checkedTimestamp;
+    } else if (Optional.class.isAssignableFrom(rawClass)) {
+      return findTypeForJacksonType(elementType(type), typeQuery);
     } else if (Map.class.isAssignableFrom(rawClass)) {
       com.google.api.expr.v1alpha1.Type keyType =
           findTypeForJacksonType(type.getKeyType(), typeQuery);
       com.google.api.expr.v1alpha1.Type valueType =
-          findTypeForJacksonType(type.getContentType(), typeQuery);
+          findTypeForJacksonType(elementType(type), typeQuery);
       return Decls.newMapType(keyType, valueType);
-    } else if (List.class.isAssignableFrom(rawClass)) {
+    } else if (Collection.class.isAssignableFrom(rawClass)) {
       com.google.api.expr.v1alpha1.Type valueType =
-          findTypeForJacksonType(type.getContentType(), typeQuery);
+          findTypeForJacksonType(elementType(type), typeQuery);
       return Decls.newListType(valueType);
     } else if (type.isEnumType()) {
       return typeQuery.getType(type);
@@ -122,6 +125,18 @@ final class JacksonTypeDescription implements TypeDescription {
       }
       return t;
     }
+  }
+
+  private JavaType elementType(JavaType type) {
+    JavaType elementType = type.getContentType();
+    if (elementType == null && type.containedTypeCount() > 0) {
+      elementType = type.containedType(0);
+    }
+    if (elementType == null) {
+      throw new UnsupportedOperationException(
+          String.format("Unsupported Java Type '%s' without element type", type));
+    }
+    return elementType;
   }
 
   boolean hasProperty(String property) {

@@ -21,8 +21,11 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.Duration;
 import com.google.protobuf.Timestamp;
 import java.time.ZonedDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import org.projectnessie.cel.common.ULong;
 
 public class CollectionsObject {
@@ -50,14 +53,19 @@ public class CollectionsObject {
   public List<ByteString> bytesList;
   public List<Float> floatList;
   public List<Double> doubleList;
+  public Collection<String> stringCollection;
+  public Set<String> stringSet;
 
   public Map<String, InnerType> stringInnerMap;
   public List<InnerType> innerTypes;
+  public Optional<InnerType> optionalInnerType;
 
   public AnEnum anEnum;
   public List<AnEnum> anEnumList;
   public Map<AnEnum, String> anEnumStringMap;
   public Map<String, AnEnum> stringAnEnumMap;
+  public Optional<String> optionalString;
+  public Optional<String> emptyOptionalString;
 
   public static final List<String> ALL_PROPERTIES =
       asList(
@@ -84,10 +92,15 @@ public class CollectionsObject {
           "bytesList",
           "floatList",
           "doubleList",
+          "stringCollection",
+          "stringSet",
           "stringInnerMap",
           "innerTypes",
+          "optionalInnerType",
           "anEnum",
           "anEnumList",
           "anEnumStringMap",
-          "stringAnEnumMap");
+          "stringAnEnumMap",
+          "optionalString",
+          "emptyOptionalString");
 }

@@ -45,10 +45,11 @@ import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.Arrays;
 import java.util.Calendar;
+import java.util.Collection;
 import java.util.Date;
 import java.util.IdentityHashMap;
-import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.BiFunction;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.DoubleT;
@@ -135,8 +136,12 @@ public final class TypeAdapterSupport {
     if (value instanceof Object[]) {
       return newGenericArrayList(a, (Object[]) value);
     }
-    if (value instanceof List) {
-      return newGenericArrayList(a, ((List<?>) value).toArray());
+    if (value instanceof Collection) {
+      return newGenericArrayList(a, ((Collection<?>) value).toArray());
+    }
+    if (value instanceof Optional) {
+      Optional<?> optional = (Optional<?>) value;
+      return optional.map(a::nativeToValue).orElse(NullT.NullValue);
     }
     if (value instanceof Map) {
       return newMaybeWrappedMap(a, (Map<?, ?>) value);

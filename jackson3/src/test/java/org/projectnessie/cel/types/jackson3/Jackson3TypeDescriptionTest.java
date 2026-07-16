@@ -36,8 +36,10 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
-import java.util.List;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.Err;
@@ -206,6 +208,27 @@ class Jackson3TypeDescriptionTest {
     checkListType(reg, "bytesList", ByteString.class, Checked.checkedBytes);
     checkListType(reg, "floatList", Float.class, Checked.checkedDouble);
     checkListType(reg, "doubleList", Double.class, Checked.checkedDouble);
+    checkListType(reg, "stringCollection", String.class, Checked.checkedString);
+    checkListType(reg, "stringSet", String.class, Checked.checkedString);
+
+    // verify optional fields use their contained type
+
+    checkFieldType(reg, "optionalString", Checked.checkedString);
+    checkFieldType(reg, "emptyOptionalString", Checked.checkedString);
+    checkFieldType(
+        reg,
+        "optionalInnerType",
+        com.google.api.expr.v1alpha1.Type.newBuilder()
+            .setMessageType(InnerType.class.getName())
+            .build());
+  }
+
+  private void checkFieldType(
+      Jackson3Registry reg, String prop, com.google.api.expr.v1alpha1.Type type) {
+    JacksonFieldType ft =
+        (JacksonFieldType) reg.findFieldType(CollectionsObject.class.getName(), prop);
+    assertThat(ft).isNotNull();
+    assertThat(ft.type).isEqualTo(type);
   }
 
   private void checkListType(
@@ -350,6 +373,8 @@ class Jackson3TypeDescriptionTest {
             ByteString.copyFrom(new byte[] {(byte) 3}));
     collectionsObject.floatList = asList(1f, 2f, 3f);
     collectionsObject.doubleList = asList(1d, 2d, 3d);
+    collectionsObject.stringCollection = asList("collection-a", "collection-b");
+    collectionsObject.stringSet = new LinkedHashSet<>(asList("set-a", "set-b"));
 
     // populate inner/nested type list/map
 
@@ -362,6 +387,7 @@ class Jackson3TypeDescriptionTest {
     inner2.intProp = 3;
     inner2.wrappedIntProp = 4;
     collectionsObject.innerTypes = asList(inner1, inner2);
+    collectionsObject.optionalInnerType = Optional.of(inner2);
 
     // populate enum-related fields
 
@@ -369,6 +395,8 @@ class Jackson3TypeDescriptionTest {
     collectionsObject.anEnumList = asList(AnEnum.ENUM_VALUE_2, AnEnum.ENUM_VALUE_3);
     collectionsObject.anEnumStringMap = singletonMap(AnEnum.ENUM_VALUE_2, "a");
     collectionsObject.stringAnEnumMap = singletonMap("a", AnEnum.ENUM_VALUE_2);
+    collectionsObject.optionalString = Optional.of("optional-a");
+    collectionsObject.emptyOptionalString = Optional.empty();
 
     // prepare registry
 
@@ -389,7 +417,7 @@ class Jackson3TypeDescriptionTest {
       Object fieldObj = CollectionsObject.class.getDeclaredField(field).get(collectionsObject);
       if (fieldObj instanceof Map) {
         assertThat(fieldVal).isInstanceOf(MapT.class);
-      } else if (fieldObj instanceof List) {
+      } else if (fieldObj instanceof Collection) {
         assertThat(fieldVal).isInstanceOf(ListT.class);
       }
 
@@ -422,6 +450,11 @@ class Jackson3TypeDescriptionTest {
             l -> l.get(intOf(2)))
         .containsExactly(intOf(3), False, True, True, True, uintOf(1), uintOf(2), uintOf(3));
 
+    listVal = (ListT) obj.get(stringOf("stringSet"));
+    assertThat(listVal)
+        .extracting(ListT::size, l -> l.get(intOf(0)), l -> l.get(intOf(1)))
+        .containsExactly(intOf(2), stringOf("set-a"), stringOf("set-b"));
+
     mapVal = (MapT) obj.get(stringOf("stringInnerMap"));
     assertThat(mapVal)
         .extracting(MapT::size, m -> m.contains(stringOf("42")), m -> m.contains(stringOf("a")))
@@ -438,6 +471,11 @@ class Jackson3TypeDescriptionTest {
         .extracting(o -> o.get(stringOf("intProp")), o -> o.get(stringOf("wrappedIntProp")))
         .containsExactly(intOf(1), intOf(2));
     i = (ObjectT) listVal.get(intOf(1));
+    assertThat(i)
+        .extracting(o -> o.get(stringOf("intProp")), o -> o.get(stringOf("wrappedIntProp")))
+        .containsExactly(intOf(3), intOf(4));
+
+    i = (ObjectT) obj.get(stringOf("optionalInnerType"));
     assertThat(i)
         .extracting(o -> o.get(stringOf("intProp")), o -> o.get(stringOf("wrappedIntProp")))
         .containsExactly(intOf(3), intOf(4));
@@ -459,5 +497,10 @@ class Jackson3TypeDescriptionTest {
     assertThat(mapVal)
         .extracting(l -> l.get(stringOf("a")))
         .isEqualTo(intOf(AnEnum.ENUM_VALUE_2.ordinal()));
+
+    assertThat(obj.isSet(stringOf("optionalString"))).isSameAs(True);
+    assertThat(obj.get(stringOf("optionalString"))).isEqualTo(stringOf("optional-a"));
+    assertThat(obj.isSet(stringOf("emptyOptionalString"))).isSameAs(True);
+    assertThat(obj.get(stringOf("emptyOptionalString"))).isSameAs(NullT.NullValue);
   }
 }
