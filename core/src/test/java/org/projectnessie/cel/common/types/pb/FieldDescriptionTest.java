@@ -33,6 +33,7 @@ import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
 import java.time.Instant;
 import java.util.Arrays;
+import java.util.Collections;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -143,6 +144,28 @@ public class FieldDescriptionTest {
     assertThat(f).isNotNull();
     Object got = f.getFrom(pbdb, msg);
     assertThat(got).isEqualTo(tc.want);
+  }
+
+  @Test
+  void getFromUnsignedMapEntries() {
+    Db pbdb = newDb();
+    TestAllTypes msg =
+        TestAllTypes.newBuilder()
+            .putMapStringUint64("large", -1L)
+            .putMapUint64String(-1L, "large")
+            .putMapUint64Uint64(-1L, Long.MIN_VALUE)
+            .build();
+    String msgName = msg.getDescriptorForType().getFullName();
+    pbdb.registerMessage(msg);
+    PbTypeDescription td = pbdb.describeType(msgName);
+    assertThat(td).isNotNull();
+
+    assertThat(td.fieldByName("map_string_uint64").getFrom(pbdb, msg))
+        .isEqualTo(Collections.singletonMap("large", ULong.valueOf(-1L)));
+    assertThat(td.fieldByName("map_uint64_string").getFrom(pbdb, msg))
+        .isEqualTo(Collections.singletonMap(ULong.valueOf(-1L), "large"));
+    assertThat(td.fieldByName("map_uint64_uint64").getFrom(pbdb, msg))
+        .isEqualTo(Collections.singletonMap(ULong.valueOf(-1L), ULong.valueOf(Long.MIN_VALUE)));
   }
 
   static class TestCase {

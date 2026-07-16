@@ -271,6 +271,9 @@ public final class FieldDescription extends Description {
     if (fieldVal instanceof Message) {
       return maybeUnwrapDynamic(db, (Message) fieldVal);
     }
+    if (fd.isMapField() && fieldVal instanceof Map) {
+      return fieldVal;
+    }
     throw new UnsupportedOperationException("IMPLEMENT ME");
     // TODO implement this
     //    if (field)
@@ -468,18 +471,22 @@ public final class FieldDescription extends Description {
       if (v instanceof List) {
         List<?> lst = (List<?>) v;
         Map<Object, Object> map = new HashMap<>(lst.size() * 4 / 3 + 1);
+        FieldDescriptor keyDesc = desc.getMessageType().findFieldByNumber(1);
+        FieldDescriptor valueDesc = desc.getMessageType().findFieldByNumber(2);
         for (Object e : lst) {
           Object key;
           Object value;
           if (e instanceof MapEntry) {
-            key = ((MapEntry<?, ?>) e).getKey();
-            value = ((MapEntry<?, ?>) e).getValue();
+            key = normalizeUnsignedValue(keyDesc, ((MapEntry<?, ?>) e).getKey());
+            value = normalizeUnsignedValue(valueDesc, ((MapEntry<?, ?>) e).getValue());
           } else if (e instanceof DynamicMessage) {
             DynamicMessage dynMsg = (DynamicMessage) e;
             List<FieldDescriptor> fields = dynMsg.getDescriptorForType().getFields();
             if (fields.size() == 2) {
-              key = dynMsg.getField(fields.get(0));
-              value = dynMsg.getField(fields.get(1));
+              FieldDescriptor dynKeyDesc = fields.get(0);
+              FieldDescriptor dynValueDesc = fields.get(1);
+              key = normalizeUnsignedValue(dynKeyDesc, dynMsg.getField(dynKeyDesc));
+              value = normalizeUnsignedValue(dynValueDesc, dynMsg.getField(dynValueDesc));
             } else {
               throw new IllegalArgumentException(
                   String.format(
@@ -512,6 +519,18 @@ public final class FieldDescription extends Description {
       }
     }
     return v;
+  }
+
+  private static Object normalizeUnsignedValue(FieldDescriptor desc, Object value) {
+    FieldDescriptor.Type type = desc.getType();
+    if (value instanceof Number
+        && (type == FieldDescriptor.Type.UINT32
+            || type == FieldDescriptor.Type.UINT64
+            || type == FieldDescriptor.Type.FIXED32
+            || type == FieldDescriptor.Type.FIXED64)) {
+      return ULong.valueOf(((Number) value).longValue());
+    }
+    return value;
   }
 
   private static boolean isWellKnownType(FieldDescriptor desc) {
