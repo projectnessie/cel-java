@@ -67,6 +67,9 @@ public final class Script {
               "script returned unknown %s, but expected result type is %s",
               result, resultType.getName()));
     }
+    if (resultType == Val.class) {
+      return (T) result;
+    }
 
     return result.convertToNative(resultType);
   }

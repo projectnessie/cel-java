@@ -33,7 +33,10 @@ import org.projectnessie.cel.Library;
 import org.projectnessie.cel.ProgramOption;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.IntT;
+import org.projectnessie.cel.common.types.ListT;
+import org.projectnessie.cel.common.types.MapT;
 import org.projectnessie.cel.common.types.StringT;
+import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.interpreter.functions.Overload;
 import org.projectnessie.cel.toolstests.Dummy;
 
@@ -91,6 +94,33 @@ class ScriptHostTest {
             });
 
     assertThat(result).isEqualTo("hello world");
+  }
+
+  @Test
+  void executeValReturnsCelNativeResult() throws Exception {
+    ScriptHost scriptHost = ScriptHost.newBuilder().build();
+
+    Script listScript = scriptHost.buildScript("[1, 2, 3]").build();
+    Val list = listScript.execute(Val.class, Collections.emptyMap());
+    assertThat(list).isInstanceOf(ListT.class);
+    assertThat((Object[]) list.value()).containsExactly(1L, 2L, 3L);
+
+    Script mapScript = scriptHost.buildScript("{\"a\": 1, \"b\": 2}").build();
+    Val map = mapScript.execute(Val.class, Collections.emptyMap());
+    assertThat(map).isInstanceOf(MapT.class);
+    Map<String, Long> expectedMap = new HashMap<>();
+    expectedMap.put("a", 1L);
+    expectedMap.put("b", 2L);
+    assertThat(map.value()).isEqualTo(expectedMap);
+  }
+
+  @Test
+  void executeObjectStillConvertsToNativeResult() throws Exception {
+    Script script = ScriptHost.newBuilder().build().buildScript("[1, 2, 3]").build();
+
+    Object result = script.execute(Object.class, Collections.emptyMap());
+
+    assertThat(result).isEqualTo(Arrays.asList(1L, 2L, 3L));
   }
 
   @Test
