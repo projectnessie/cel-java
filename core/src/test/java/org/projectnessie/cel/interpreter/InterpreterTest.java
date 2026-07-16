@@ -103,10 +103,15 @@ import org.projectnessie.cel.common.types.StringT;
 import org.projectnessie.cel.common.types.TimestampT;
 import org.projectnessie.cel.common.types.UnknownT;
 import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
+import org.projectnessie.cel.common.types.ref.BaseVal;
+import org.projectnessie.cel.common.types.ref.Type;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Adder;
 import org.projectnessie.cel.common.types.traits.Negater;
+import org.projectnessie.cel.common.types.traits.Receiver;
+import org.projectnessie.cel.common.types.traits.Trait;
 import org.projectnessie.cel.interpreter.AttributeFactory.ConstantQualifier;
 import org.projectnessie.cel.interpreter.AttributeFactory.FieldQualifier;
 import org.projectnessie.cel.interpreter.AttributeFactory.NamespacedAttribute;
@@ -121,6 +126,101 @@ import org.projectnessie.cel.parser.Parser;
 import org.projectnessie.cel.parser.Parser.ParseResult;
 
 class InterpreterTest {
+
+  private static final Type RECEIVER_TEST_TYPE =
+      new Type() {
+        @Override
+        public boolean hasTrait(Trait trait) {
+          return trait == Trait.ReceiverType;
+        }
+
+        @Override
+        public String typeName() {
+          return "receiver_test";
+        }
+
+        @Override
+        public TypeEnum typeEnum() {
+          return TypeEnum.Object;
+        }
+
+        @Override
+        public <T> T convertToNative(Class<T> typeDesc) {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public Val convertToType(Type typeValue) {
+          return this;
+        }
+
+        @Override
+        public Val equal(Val other) {
+          return boolOf(other == this);
+        }
+
+        @Override
+        public Type type() {
+          return this;
+        }
+
+        @Override
+        public Object value() {
+          return typeName();
+        }
+
+        @Override
+        public boolean booleanValue() {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public long intValue() {
+          throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public double doubleValue() {
+          throw new UnsupportedOperationException();
+        }
+      };
+
+  private static final class ReceiverTestVal extends BaseVal implements Receiver {
+
+    @Override
+    public <T> T convertToNative(Class<T> typeDesc) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Val convertToType(Type typeValue) {
+      return this;
+    }
+
+    @Override
+    public Val equal(Val other) {
+      return boolOf(other == this);
+    }
+
+    @Override
+    public Type type() {
+      return RECEIVER_TEST_TYPE;
+    }
+
+    @Override
+    public Object value() {
+      return "receiver";
+    }
+
+    @Override
+    public Val receive(String function, String overload, Val... args) {
+      StringBuilder result = new StringBuilder(function).append(':').append(overload);
+      for (Val arg : args) {
+        result.append(':').append(arg.intValue());
+      }
+      return stringOf(result.toString());
+    }
+  }
 
   private static Val base64Encode(Val val) {
     if (!(val instanceof StringT)) {
@@ -1625,6 +1725,60 @@ class InterpreterTest {
     assertThat(state.ids()).containsExactlyInAnyOrder(operandId, selectId);
     assertThat(state.value(operandId)).isSameAs(True);
     assertThat(state.value(selectId)).isSameAs(True);
+  }
+
+  @Test
+  void uncheckedReceiverVarargsReceiveAllArguments() {
+    Source src = newTextSource("target.collect(1, 2)");
+    ParseResult parsed = Parser.parseAllMacros(src);
+    assertThat(parsed.hasErrors()).withFailMessage(parsed.getErrors()::toDisplayString).isFalse();
+
+    TypeRegistry reg = newRegistry();
+    AttributeFactory attrs = newAttributeFactory(Container.defaultContainer, reg, reg);
+    Interpreter interp = newStandardInterpreter(Container.defaultContainer, reg, reg, attrs);
+    Interpretable i = interp.newUncheckedInterpretable(parsed.getExpr());
+
+    Val result = i.eval(newActivation(mapOf("target", new ReceiverTestVal())));
+    assertThat(result).isEqualTo(stringOf("collect::1:2"));
+  }
+
+  @Test
+  void registeredTraitMismatchReceiverVarargsReceiveAllArguments() {
+    Program program =
+        program(
+            new TestCase(InterpreterTestCase.call_varargs)
+                .expr("target.collect(1, 2)")
+                .unchecked()
+                .funcs(Overload.function("collect", AdderType, args -> stringOf("wrong path")))
+                .in("target", new ReceiverTestVal()));
+
+    Val result = program.interpretable.eval(program.activation);
+
+    assertThat(result).isEqualTo(stringOf("collect::1:2"));
+  }
+
+  @Test
+  void receiverVarargsStopAfterError() {
+    AtomicInteger calls = new AtomicInteger();
+    Program program =
+        program(
+            new TestCase(InterpreterTestCase.call_varargs)
+                .expr("target.collect(1, fail(), tap(3), 4)")
+                .unchecked()
+                .funcs(
+                    Overload.function("fail", args -> Err.newErr("first")),
+                    Overload.unary(
+                        "tap",
+                        value -> {
+                          calls.incrementAndGet();
+                          return value;
+                        }))
+                .in("target", new ReceiverTestVal()));
+
+    Val result = program.interpretable.eval(program.activation);
+
+    assertThat(result).isInstanceOf(Err.class).hasToString("first");
+    assertThat(calls.get()).isZero();
   }
 
   @Test

@@ -62,6 +62,7 @@ import org.projectnessie.cel.interpreter.Interpretable.EvalMap;
 import org.projectnessie.cel.interpreter.Interpretable.EvalNe;
 import org.projectnessie.cel.interpreter.Interpretable.EvalObj;
 import org.projectnessie.cel.interpreter.Interpretable.EvalOr;
+import org.projectnessie.cel.interpreter.Interpretable.EvalReceiverVarArgs;
 import org.projectnessie.cel.interpreter.Interpretable.EvalTestOnly;
 import org.projectnessie.cel.interpreter.Interpretable.EvalUnary;
 import org.projectnessie.cel.interpreter.Interpretable.EvalVarArgs;
@@ -455,15 +456,16 @@ public interface InterpretablePlanner {
     /** planCallVarArgs generates a variable argument callable Interpretable. */
     static Interpretable planCallVarArgs(
         Expr expr, String function, String overload, Overload impl, Interpretable... args) {
+      if (impl == null) {
+        return new EvalReceiverVarArgs(expr.getId(), function, overload, args);
+      }
       FunctionOp fn = null;
       Trait trait = null;
-      if (impl != null) {
-        if (impl.function == null) {
-          throw new IllegalStateException(String.format("no such overload: %s(...)", function));
-        }
-        fn = impl.function;
-        trait = impl.operandTrait;
+      if (impl.function == null) {
+        throw new IllegalStateException(String.format("no such overload: %s(...)", function));
       }
+      fn = impl.function;
+      trait = impl.operandTrait;
       return new EvalVarArgs(expr.getId(), function, overload, args, trait, fn);
     }
 

@@ -822,8 +822,7 @@ public interface Interpretable {
       // Otherwise, if the argument is a ReceiverType attempt to invoke the receiver method on the
       // operand (arg0).
       if (arg0.type().hasTrait(Trait.ReceiverType)) {
-        return ((Receiver) arg0)
-            .receive(function, overload, Arrays.copyOfRange(argVals, 1, argVals.length - 1));
+        return receiveVarArgs((Receiver) arg0, function, overload, argVals);
       }
       return noSuchOverload(arg0, function, overload, argVals);
     }
@@ -1315,6 +1314,145 @@ public interface Interpretable {
           + ", valueSet="
           + valueSet
           + '}';
+    }
+  }
+
+  final class EvalReceiverVarArgs extends AbstractEval implements Coster, InterpretableCall {
+    private final String function;
+    private final String overload;
+    private final Interpretable[] args;
+
+    public EvalReceiverVarArgs(long id, String function, String overload, Interpretable[] args) {
+      super(id);
+      this.function = Objects.requireNonNull(function);
+      this.overload = Objects.requireNonNull(overload);
+      this.args = Objects.requireNonNull(args);
+    }
+
+    /** Eval implements the Interpretable interface method. */
+    @Override
+    public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
+      Val arg0 = args[0].eval(ctx);
+      if (isUnknownOrError(arg0)) {
+        return arg0;
+      }
+
+      switch (args.length) {
+        case 3:
+          return evalReceiverTail2(ctx, arg0);
+        case 4:
+          return evalReceiverTail3(ctx, arg0);
+        default:
+          return evalReceiverTail(ctx, arg0);
+      }
+    }
+
+    private Val evalReceiverTail2(org.projectnessie.cel.interpreter.Activation ctx, Val arg0) {
+      Val arg1 = args[1].eval(ctx);
+      if (isUnknownOrError(arg1)) {
+        return arg1;
+      }
+      Val arg2 = args[2].eval(ctx);
+      if (isUnknownOrError(arg2)) {
+        return arg2;
+      }
+      return receiveOrNoSuchOverload(arg0, arg1, arg2);
+    }
+
+    private Val evalReceiverTail3(org.projectnessie.cel.interpreter.Activation ctx, Val arg0) {
+      Val arg1 = args[1].eval(ctx);
+      if (isUnknownOrError(arg1)) {
+        return arg1;
+      }
+      Val arg2 = args[2].eval(ctx);
+      if (isUnknownOrError(arg2)) {
+        return arg2;
+      }
+      Val arg3 = args[3].eval(ctx);
+      if (isUnknownOrError(arg3)) {
+        return arg3;
+      }
+      return receiveOrNoSuchOverload(arg0, arg1, arg2, arg3);
+    }
+
+    private Val evalReceiverTail(org.projectnessie.cel.interpreter.Activation ctx, Val arg0) {
+      Val[] tailArgs = new Val[args.length - 1];
+      for (int i = 1; i < args.length; i++) {
+        Val argVal = args[i].eval(ctx);
+        if (isUnknownOrError(argVal)) {
+          return argVal;
+        }
+        tailArgs[i - 1] = argVal;
+      }
+      return receiveOrNoSuchOverload(arg0, tailArgs);
+    }
+
+    private Val receiveOrNoSuchOverload(Val arg0, Val... tailArgs) {
+      for (Val argVal : tailArgs) {
+        if (isUnknownOrError(argVal)) {
+          return argVal;
+        }
+      }
+      if (arg0.type().hasTrait(Trait.ReceiverType)) {
+        return ((Receiver) arg0).receive(function, overload, tailArgs);
+      }
+      return noSuchOverload(arg0, function, overload, tailArgs);
+    }
+
+    /** Cost implements the Coster interface method. */
+    @Override
+    public Cost cost() {
+      Cost c = sumOfCost(args);
+      return c.add(OneOne); // add cost for function
+    }
+
+    /** Function implements the InterpretableCall interface method. */
+    @Override
+    public String function() {
+      return function;
+    }
+
+    /** OverloadID implements the InterpretableCall interface method. */
+    @Override
+    public String overloadID() {
+      return overload;
+    }
+
+    /** Args returns the argument to the unary function. */
+    @Override
+    public Interpretable[] args() {
+      return args;
+    }
+
+    @Override
+    public String toString() {
+      return "EvalReceiverVarArgs{"
+          + "id="
+          + id
+          + ", function='"
+          + function
+          + '\''
+          + ", overload='"
+          + overload
+          + '\''
+          + ", args="
+          + Arrays.toString(args)
+          + '}';
+    }
+  }
+
+  static Val receiveVarArgs(Receiver receiver, String function, String overload, Val[] argVals) {
+    switch (argVals.length) {
+      case 1:
+        return receiver.receive(function, overload);
+      case 2:
+        return receiver.receive(function, overload, argVals[1]);
+      case 3:
+        return receiver.receive(function, overload, argVals[1], argVals[2]);
+      case 4:
+        return receiver.receive(function, overload, argVals[1], argVals[2], argVals[3]);
+      default:
+        return receiver.receive(function, overload, Arrays.copyOfRange(argVals, 1, argVals.length));
     }
   }
 
