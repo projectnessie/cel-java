@@ -60,6 +60,16 @@ public class ContainerTest {
   }
 
   @Test
+  void ResolveCandidateNames_ReturnsDefensiveArrayCopy() {
+    Container c = newContainer(name("a.b.c.M.N"));
+    String[] names = c.resolveCandidateNames("R.s");
+    names[0] = "mutated";
+
+    assertThat(c.resolveCandidateNames("R.s"))
+        .containsExactly("a.b.c.M.N.R.s", "a.b.c.M.R.s", "a.b.c.R.s", "a.b.R.s", "a.R.s", "R.s");
+  }
+
+  @Test
   void Abbrevs() {
     Container abbr = defaultContainer.extend(abbrevs("my.alias.R"));
     String[] names = abbr.resolveCandidateNames("R");

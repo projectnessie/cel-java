@@ -22,6 +22,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Container holds a reference to an optional qualified container name and set of aliases.
@@ -37,6 +38,7 @@ public final class Container {
 
   private final String name;
   private final Map<String, String> aliases;
+  private final Map<String, String[]> candidateNameCache = new ConcurrentHashMap<>();
 
   /** NewContainer creates a new Container with the fully-qualified name. */
   public static Container newContainer(ContainerOption... opts) {
@@ -108,6 +110,10 @@ public final class Container {
    * precedence over containerized names.
    */
   public String[] resolveCandidateNames(String name) {
+    return candidateNameCache.computeIfAbsent(name, this::computeCandidateNames).clone();
+  }
+
+  private String[] computeCandidateNames(String name) {
     if (name.startsWith(".")) {
       String qn = name.substring(1);
       String alias = findAlias(qn);
