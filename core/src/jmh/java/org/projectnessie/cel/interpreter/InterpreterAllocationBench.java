@@ -142,7 +142,13 @@ public class InterpreterAllocationBench {
 
   @State(Scope.Benchmark)
   public static class ProtoInputState {
-    @Param({"mapLookup", "repeatedUintExistsEarly", "repeatedUintExistsLate"})
+    @Param({
+      "mapLookup",
+      "mapLookupMiss",
+      "mapLookupRepeated",
+      "repeatedUintExistsEarly",
+      "repeatedUintExistsLate"
+    })
     public String kind;
 
     @Param({"10", "1000"})
@@ -158,6 +164,24 @@ public class InterpreterAllocationBench {
           program =
               protoProgram(
                   "msg.map_string_uint64[key] == target",
+                  Decls.newVar("key", Decls.String),
+                  Decls.newVar("target", Decls.Uint));
+          vars =
+              mapOf(
+                  "msg", protoMessage(size), "key", "key-" + (size - 1), "target", (long) size - 1);
+          return;
+        case "mapLookupMiss":
+          program =
+              protoProgram(
+                  "msg.map_string_uint64[key] == target",
+                  Decls.newVar("key", Decls.String),
+                  Decls.newVar("target", Decls.Uint));
+          vars = mapOf("msg", protoMessage(size), "key", "missing", "target", 0L);
+          return;
+        case "mapLookupRepeated":
+          program =
+              protoProgram(
+                  "msg.map_string_uint64[key] == target && msg.map_string_uint64[key] == target",
                   Decls.newVar("key", Decls.String),
                   Decls.newVar("target", Decls.Uint));
           vars =

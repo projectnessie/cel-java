@@ -18,6 +18,7 @@ plugins {
   `java-library`
   `maven-publish`
   signing
+  alias(libs.plugins.jmh)
   id("cel-conventions")
 }
 
@@ -43,4 +44,13 @@ dependencies {
   testImplementation(libs.bundles.junit.testing)
   testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
   testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
+  jmhImplementation(libs.jmh.core)
+  jmhAnnotationProcessor(libs.jmh.generator.annprocess)
 }
+
+jmh { jmhVersion.set(libs.versions.jmh.get()) }
+
+tasks.named("check") { dependsOn(tasks.named("jmh")) }
+
+tasks.named("assemble") { dependsOn(tasks.named("jmhJar")) }
