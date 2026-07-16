@@ -567,6 +567,8 @@ public final class FieldDescription extends Description {
     private final List<?> entries;
     private final FieldDescriptor keyDesc;
     private final FieldDescriptor valueDesc;
+    private volatile Map<Val, Val> indexedEntries;
+    private volatile boolean scanned;
 
     private ProtoMapT(TypeAdapter adapter, FieldDescriptor field, List<?> entries) {
       this.adapter = adapter;
@@ -624,6 +626,18 @@ public final class FieldDescription extends Description {
 
     @Override
     public Val find(Val key) {
+      Map<Val, Val> index = indexedEntries;
+      if (index != null) {
+        return index.get(key);
+      }
+      if (!scanned || entries.size() <= 1) {
+        scanned = true;
+        return scan(key);
+      }
+      return indexedEntries().get(key);
+    }
+
+    private Val scan(Val key) {
       for (Object entry : entries) {
         Val candidate = adapter.nativeToValue(mapEntryKey(entry));
         if (candidate.equal(key) == True) {
@@ -631,6 +645,26 @@ public final class FieldDescription extends Description {
         }
       }
       return null;
+    }
+
+    private Map<Val, Val> indexedEntries() {
+      Map<Val, Val> index = indexedEntries;
+      if (index != null) {
+        return index;
+      }
+      synchronized (this) {
+        index = indexedEntries;
+        if (index == null) {
+          index = new HashMap<>(entries.size() * 4 / 3 + 1);
+          for (Object entry : entries) {
+            Val key = adapter.nativeToValue(mapEntryKey(entry));
+            Val value = adapter.nativeToValue(mapEntryValue(entry));
+            index.putIfAbsent(key, value);
+          }
+          indexedEntries = index;
+        }
+        return index;
+      }
     }
 
     private Map<Object, Object> toJavaMap() {

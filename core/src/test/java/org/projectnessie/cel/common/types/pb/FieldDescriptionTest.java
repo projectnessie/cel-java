@@ -16,6 +16,10 @@
 package org.projectnessie.cel.common.types.pb;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.projectnessie.cel.common.types.BoolT.False;
+import static org.projectnessie.cel.common.types.BoolT.True;
+import static org.projectnessie.cel.common.types.StringT.stringOf;
+import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.pb.Db.newDb;
 
 import com.google.api.expr.test.v1.proto3.TestAllTypesProto.NestedTestAllTypes;
@@ -40,6 +44,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.TimestampT;
+import org.projectnessie.cel.common.types.traits.Mapper;
 
 public class FieldDescriptionTest {
 
@@ -176,6 +181,32 @@ public class FieldDescriptionTest {
         .isEqualTo(Collections.singletonMap(ULong.valueOf(-1L), "large"));
     assertThat(td.fieldByName("map_uint64_uint64").getFrom(pbdb, dynMsg))
         .isEqualTo(Collections.singletonMap(ULong.valueOf(-1L), ULong.valueOf(Long.MIN_VALUE)));
+  }
+
+  @Test
+  void getFieldProtoMapSupportsRepeatedLookup() {
+    Db pbdb = newDb();
+    ProtoTypeRegistry registry = ProtoTypeRegistry.newRegistry(TestAllTypes.getDefaultInstance());
+    TestAllTypes msg =
+        TestAllTypes.newBuilder()
+            .putMapUint64String(1L, "one")
+            .putMapUint64String(2L, "two")
+            .putMapUint64String(-1L, "large")
+            .build();
+    pbdb.registerMessage(msg);
+    PbTypeDescription td = pbdb.describeType(msg.getDescriptorForType().getFullName());
+    assertThat(td).isNotNull();
+
+    FieldDescription field = td.fieldByName("map_uint64_string");
+    assertThat(field).isNotNull();
+
+    Mapper map = (Mapper) field.getField(msg, registry);
+    assertThat(map.find(uintOf(2)).equal(stringOf("two"))).isSameAs(True);
+    assertThat(map.find(uintOf(-1L)).equal(stringOf("large"))).isSameAs(True);
+    assertThat(map.find(uintOf(1)).equal(stringOf("one"))).isSameAs(True);
+    assertThat(map.find(uintOf(42))).isNull();
+    assertThat(map.contains(uintOf(2))).isSameAs(True);
+    assertThat(map.contains(uintOf(42))).isSameAs(False);
   }
 
   static class TestCase {
