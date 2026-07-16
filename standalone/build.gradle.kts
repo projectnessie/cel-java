@@ -24,14 +24,31 @@ plugins {
   id("cel-conventions")
 }
 
+val standaloneShadow =
+  configurations.create("standaloneShadow") {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+    isTransitive = false
+  }
+
 dependencies {
   api(project(":cel-tools"))
   api(project(":cel-jackson"))
   api(project(":cel-jackson3"))
   api(project(":cel-generated-antlr"))
 
+  compileOnly(project(":cel-generated-pb"))
   compileOnly(libs.protobuf.java)
   compileOnly(libs.agrona)
+
+  standaloneShadow(project(":cel-core"))
+  standaloneShadow(project(":cel-tools"))
+  standaloneShadow(project(":cel-jackson"))
+  standaloneShadow(project(":cel-jackson3"))
+  standaloneShadow(project(":cel-generated-antlr"))
+  standaloneShadow(project(":cel-generated-pb"))
+  standaloneShadow(libs.protobuf.java)
+  standaloneShadow(libs.agrona)
 }
 
 val shadowJar = tasks.named<ShadowJar>("shadowJar")
@@ -44,18 +61,7 @@ shadowJar.configure {
     attributes["Specification-Title"] = "Common-Expression-Language - dependency-free CEL"
     attributes["Specification-Version"] = libs.protobuf.java.get().version
   }
-  configurations = listOf(project.configurations.getByName("runtimeClasspath"))
-  dependencies {
-    include(project(":cel-tools"))
-    include(project(":cel-core"))
-    include(project(":cel-jackson"))
-    include(project(":cel-jackson3"))
-    include(project(":cel-generated-pb"))
-    include(project(":cel-generated-antlr"))
-
-    include(dependency(libs.protobuf.java.get()))
-    include(dependency(libs.agrona.get()))
-  }
+  configurations = listOf(standaloneShadow)
 }
 
 tasks.named("compileJava").configure { finalizedBy(shadowJar) }

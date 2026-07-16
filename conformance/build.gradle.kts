@@ -67,6 +67,7 @@ configurations.all { exclude(group = "org.projectnessie.cel", module = "cel-gene
 
 dependencies {
   implementation(project(":cel-core"))
+  implementation(project(":cel-generated-pb3"))
   implementation(testFixtures(project(":cel-core")))
   implementation(testFixtures(project(":cel-generated-pb3")))
 

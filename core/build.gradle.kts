@@ -28,10 +28,11 @@ configurations.named("jmhImplementation") { extendsFrom(configurations.testFixtu
 
 dependencies {
   implementation(project(":cel-generated-antlr"))
-  api(project(":cel-generated-pb"))
+  compileOnly(project(":cel-generated-pb"))
 
   implementation(libs.agrona)
 
+  testImplementation(project(":cel-generated-pb"))
   testFixturesApi(platform(libs.junit.bom))
   testFixturesApi(libs.bundles.junit.testing)
   testFixturesApi(libs.protobuf.java)

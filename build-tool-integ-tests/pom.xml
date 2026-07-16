@@ -27,6 +27,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>8</maven.compiler.release>
     <cel.version>0.6.2</cel.version>
+    <cel.generated.pb.artifact>cel-generated-pb</cel.generated.pb.artifact>
   </properties>
 
   <dependencyManagement>
@@ -42,6 +43,10 @@
   </dependencyManagement>
 
   <dependencies>
+    <dependency>
+      <groupId>org.projectnessie.cel</groupId>
+      <artifactId>${cel.generated.pb.artifact}</artifactId>
+    </dependency>
     <dependency>
       <groupId>org.projectnessie.cel</groupId>
       <artifactId>cel-tools</artifactId>

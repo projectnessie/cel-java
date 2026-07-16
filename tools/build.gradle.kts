@@ -28,7 +28,9 @@ apply<ProtobufPlugin>()
 
 dependencies {
   api(project(":cel-core"))
+  compileOnly(project(":cel-generated-pb"))
 
+  testImplementation(project(":cel-generated-pb"))
   testImplementation(platform(libs.junit.bom))
   testImplementation(libs.bundles.junit.testing)
   testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")

@@ -25,6 +25,7 @@ description = "CEL Jackson 2 support"
 
 dependencies {
   api(project(":cel-core"))
+  compileOnly(project(":cel-generated-pb"))
 
   implementation(platform(libs.jackson2.bom))
   implementation("com.fasterxml.jackson.core:jackson-databind")
@@ -33,6 +34,7 @@ dependencies {
   implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml")
 
   testImplementation(project(":cel-tools"))
+  testImplementation(project(":cel-generated-pb"))
   testAnnotationProcessor(libs.immutables.value.processor)
   testCompileOnly(libs.immutables.value.annotations)
   testImplementation(libs.findbugs.jsr305)

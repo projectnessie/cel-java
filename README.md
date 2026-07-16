@@ -29,7 +29,8 @@ The CEL specification can be found [here](https://github.com/google/cel-spec).
 
 ## Getting started
 
-The easiest way to get started is to add the CEL-Java BOM and `cel-tools` to your project.
+The easiest way to get started is to add the CEL-Java BOM, `cel-tools`, and one generated protobuf
+artifact to your project.
 
 Maven:
 
@@ -49,6 +50,10 @@ Maven:
 <dependencies>
   <dependency>
     <groupId>org.projectnessie.cel</groupId>
+    <artifactId>cel-generated-pb</artifactId>
+  </dependency>
+  <dependency>
+    <groupId>org.projectnessie.cel</groupId>
     <artifactId>cel-tools</artifactId>
   </dependency>
 </dependencies>
@@ -59,11 +64,21 @@ Gradle:
 ```groovy
 dependencies {
   implementation(enforcedPlatform("org.projectnessie.cel:cel-bom:0.6.2"))
+  implementation("org.projectnessie.cel:cel-generated-pb")
   implementation("org.projectnessie.cel:cel-tools")
 }
 ```
 
 The `cel-bom` artifact is available for CEL-Java version 0.3.0 and newer.
+
+Starting with CEL-Java 0.7.0, `cel-core`, `cel-tools`, and the Jackson integration artifacts no
+longer choose a generated protobuf runtime transitively. Add exactly one of these artifacts:
+
+- `org.projectnessie.cel:cel-generated-pb`
+- `org.projectnessie.cel:cel-generated-pb3`
+
+Do not put both generated protobuf artifacts on the same classpath; they provide the same generated
+CEL protobuf classes for different protobuf runtime choices.
 
 ## Usage
 
@@ -102,7 +117,8 @@ public class MyClass {
 
 ### Protobuf objects
 
-Protobuf objects and schemas are supported out of the box via `com.google.protobuf:protobuf-java`.
+Protobuf objects and schemas are supported through the generated protobuf artifact selected in your
+dependencies, either `cel-generated-pb` or `cel-generated-pb3`.
 
 ```protobuf
 syntax = "proto3";
@@ -182,6 +198,7 @@ To use Jackson 3, add `cel-jackson3` in addition to `cel-tools` or `cel-core`:
 ```groovy
 dependencies {
   implementation(enforcedPlatform("org.projectnessie.cel:cel-bom:0.6.2"))
+  implementation("org.projectnessie.cel:cel-generated-pb")
   implementation("org.projectnessie.cel:cel-tools")
   implementation("org.projectnessie.cel:cel-jackson3")
 }
@@ -283,22 +300,24 @@ currently expose a no-standard-library construction option.
 
 | Need | Use |
 | --- | --- |
-| Normal embedding with `ScriptHost` | `cel-tools` |
+| Normal embedding with `ScriptHost` | `cel-tools` plus exactly one of `cel-generated-pb` or `cel-generated-pb3` |
 | Dependency isolation / relocated protobuf dependencies | `cel-standalone` |
-| Jackson 3 object access | `cel-tools` or `cel-core` plus `cel-jackson3` |
-| Jackson 2 object access | `cel-tools` or `cel-core` plus `cel-jackson` |
+| Jackson 3 object access | `cel-tools` or `cel-core` plus `cel-jackson3` and one generated protobuf artifact |
+| Jackson 2 object access | `cel-tools` or `cel-core` plus `cel-jackson` and one generated protobuf artifact |
 
 Use either `cel-tools` or `cel-standalone`, never both.
 
 ### Dependency-free artifact
 
-The `org.projectnessie.cel:cel-standalone` artifact contains everything from CEL-Java and has no
-dependencies. It comes with relocated protobuf dependencies.
+The `org.projectnessie.cel:cel-standalone` artifact contains CEL-Java's core runtime and relocated
+protobuf dependencies in one dependency-isolated artifact.
 
 Using `cel-standalone` is especially useful when your project requires different versions of
 `protobuf-java`.
 
-If you need CEL-Java's Jackson functionality, include the Jackson dependencies in your project.
+Jackson runtimes are intentionally not relocated into `cel-standalone`. If you need CEL-Java's
+Jackson functionality, choose the Jackson version you want and include those Jackson dependencies in
+your project.
 
 ## Implementation notes
 

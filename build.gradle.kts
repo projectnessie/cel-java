@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+import org.gradle.api.tasks.TaskProvider
 import org.jetbrains.gradle.ext.settings
 import org.jetbrains.gradle.ext.taskTriggers
 
@@ -27,25 +28,57 @@ mapOf("versionJacoco" to libs.versions.jacoco.get(), "versionJandex" to libs.ver
 
 tasks.named<Wrapper>("wrapper") { distributionType = Wrapper.DistributionType.ALL }
 
-val buildToolIntegrationGradle =
-  tasks.register<Exec>("buildToolIntegrationGradle") {
+fun registerBuildToolIntegrationGradleTask(
+  taskName: String,
+  generatedProtobufArtifact: String,
+): TaskProvider<Exec> =
+  tasks.register<Exec>(taskName) {
     group = "Verification"
     description =
       "Checks whether bom works fine with Gradle, requires preceding publishToMavenLocal in a separate Gradle invocation"
 
     workingDir = file("build-tool-integ-tests")
-    commandLine("./gradlew", "jar", "-Dcel.version=${project.version}")
+    commandLine(
+      "./gradlew",
+      "jar",
+      "-Dcel.version=${project.version}",
+      "-Dcel.generated.pb.artifact=$generatedProtobufArtifact",
+    )
   }
 
-val buildToolIntegrationMaven =
-  tasks.register<Exec>("buildToolIntegrationMaven") {
+fun registerBuildToolIntegrationMavenTask(
+  taskName: String,
+  generatedProtobufArtifact: String,
+): TaskProvider<Exec> =
+  tasks.register<Exec>(taskName) {
     group = "Verification"
     description =
       "Checks whether bom works fine with Maven, requires preceding publishToMavenLocal in a separate Gradle invocation"
 
     workingDir = file("build-tool-integ-tests")
-    commandLine("./mvnw", "clean", "package", "-Dcel.version=${project.version}")
+    commandLine(
+      "./mvnw",
+      "clean",
+      "package",
+      "-Dcel.version=${project.version}",
+      "-Dcel.generated.pb.artifact=$generatedProtobufArtifact",
+    )
   }
+
+val buildToolIntegrationGradle =
+  registerBuildToolIntegrationGradleTask("buildToolIntegrationGradle", "cel-generated-pb")
+val buildToolIntegrationGradlePb3 =
+  registerBuildToolIntegrationGradleTask("buildToolIntegrationGradlePb3", "cel-generated-pb3")
+val buildToolIntegrationMaven =
+  registerBuildToolIntegrationMavenTask("buildToolIntegrationMaven", "cel-generated-pb")
+val buildToolIntegrationMavenPb3 =
+  registerBuildToolIntegrationMavenTask("buildToolIntegrationMavenPb3", "cel-generated-pb3")
+
+buildToolIntegrationGradlePb3.configure { mustRunAfter(buildToolIntegrationGradle) }
+
+buildToolIntegrationMaven.configure { mustRunAfter(buildToolIntegrationGradlePb3) }
+
+buildToolIntegrationMavenPb3.configure { mustRunAfter(buildToolIntegrationMaven) }
 
 val buildToolIntegrations =
   tasks.register("buildToolIntegrations") {
@@ -54,7 +87,9 @@ val buildToolIntegrations =
       "Checks whether bom works fine with build tools, requires preceding publishToMavenLocal in a separate Gradle invocation"
 
     dependsOn(buildToolIntegrationGradle)
+    dependsOn(buildToolIntegrationGradlePb3)
     dependsOn(buildToolIntegrationMaven)
+    dependsOn(buildToolIntegrationMavenPb3)
   }
 
 publishingHelper {

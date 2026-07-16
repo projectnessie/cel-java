@@ -28,6 +28,7 @@ repositories {
 
 dependencies {
     implementation(enforcedPlatform("org.projectnessie.cel:cel-bom:${System.getProperty("cel.version")}"))
+    implementation("org.projectnessie.cel:${System.getProperty("cel.generated.pb.artifact", "cel-generated-pb")}")
     implementation("org.projectnessie.cel:cel-tools")
     implementation("org.projectnessie.cel:cel-jackson")
 }
