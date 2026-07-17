@@ -132,8 +132,6 @@ class SimpleConformanceTest {
 
   private static final Set<String> SKIP_TESTS =
       SkipList.parse(
-          // The test expects -0.0d, but in Java -0.0d == 0.0d, so -0.0d is evaluated as not set.
-          "dynamic/float/field_assign_proto3_round_to_zero",
           // Malicious too-deep protobuf structure.
           "parse/nest/message_literal",
           // New CEL-Spec v0.25.2 expectations that need follow-up parser/runtime changes.
