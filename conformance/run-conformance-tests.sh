@@ -28,6 +28,14 @@ cd submodules/cel-spec || exit 1
 # Bazel version 6.4.0 works, 7.0.2 does not work with the conformance tests
 export USE_BAZEL_VERSION="6.5.0"
 
+if [[ -z "${CC:-}" ]] && command -v gcc >/dev/null 2>&1; then
+  export CC="$(command -v gcc)"
+fi
+if [[ -z "${CXX:-}" ]] && command -v g++ >/dev/null 2>&1; then
+  export CXX="$(command -v g++)"
+fi
+
+bazel sync --configure || exit 1
 bazel build ... || exit 1
 
 cel_java_skips=(
