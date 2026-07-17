@@ -143,11 +143,6 @@ class SimpleConformanceTest {
           // checker limitations around optionals and legacy nullable generic candidates.
           "type_deductions/flexible_type_parameter_assignment/optional_none,optional_none_2,optional_dyn_promotion,optional_dyn_promotion_2,optional_in_ternary",
           "type_deductions/legacy_nullable_types/null_assignable_to_abstract_parameter_candidate",
-          // StringsLib does not implement the CEL string quote/format/reverse extensions.
-          "string_ext/quote",
-          "string_ext/format",
-          "string_ext/format_errors",
-          "string_ext/reverse",
           "enums/strong_proto2",
           "enums/strong_proto3");
 

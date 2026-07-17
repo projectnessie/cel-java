@@ -48,6 +48,12 @@ class UnescapeTest {
   }
 
   @Test
+  void unescapeNonBmpUnicodeInEscapedString() {
+    String text = utf8(unescape("\"\\\"printable unicode😀\\\"\"", false));
+    assertThat(text).isEqualTo("\"printable unicode😀\"");
+  }
+
+  @Test
   void unescapeEscapedEscape() {
     String text = utf8(unescape("\"\\\\\"", false));
     assertThat(text).isEqualTo("\\");

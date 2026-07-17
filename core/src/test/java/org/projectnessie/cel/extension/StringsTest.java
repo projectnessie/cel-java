@@ -111,6 +111,12 @@ public class StringsTest {
         new TestData("[].join('-') == ''"),
         new TestData("['x'].join() == 'x'"),
         new TestData("['x'].join('-') == 'x'"),
+        new TestData("strings.quote(\"first\\nsecond\") == \"\\\"first\\\\nsecond\\\"\""),
+        new TestData("strings.quote(\"printable unicode😀\") == \"\\\"printable unicode😀\\\"\""),
+        new TestData("'Ta©oCαt'.reverse() == 'tαCo©aT'"),
+        new TestData("\"%d %s %.0f\".format([1, \"two\", 2.5]) == \"1 two 2\""),
+        new TestData("\"%x\".format([\"Hello world!\"]) == \"48656c6c6f20776f726c6421\""),
+        new TestData("\"%s\".format([[\"abc\", 3.14, null]]) == \"[abc, 3.14, null]\""),
 
         // Error test cases based on checked expression usage.
         new TestData("'tacocat'.indexOf('a', 30) == -1", "String index out of range: 30"),
@@ -175,7 +181,10 @@ public class StringsTest {
         new TestData("'hello'.substring(1, 2, 3) == \"\"", "no matching overload", true),
         new TestData("30.substring(true, 3) == \"\"", "no matching overload", true),
         new TestData("\"tacocat\".substring(true, 3) == \"\"", "no matching overload", true),
-        new TestData("\"tacocat\".substring(0, false) == \"\"", "no matching overload", true));
+        new TestData("\"tacocat\".substring(0, false) == \"\"", "no matching overload", true),
+        new TestData(
+            "\"%a\".format([1])",
+            "could not parse formatting clause: unrecognized formatting clause \"a\""));
   }
 
   @Test
