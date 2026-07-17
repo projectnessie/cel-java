@@ -34,7 +34,6 @@ import static org.projectnessie.cel.common.types.TimestampT.timestampOf;
 import static org.projectnessie.cel.common.types.TypeT.TypeType;
 
 import com.google.protobuf.Any;
-import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
 import java.time.DateTimeException;
@@ -107,7 +106,12 @@ public class TimestampTest {
 
     // JSON
     Object val = ts.convertToNative(Value.class);
-    Object want = StringValue.of("1970-01-01T02:05:06Z");
+    Object want = Value.newBuilder().setStringValue("1970-01-01T02:05:06Z").build();
+    assertThat(val).isEqualTo(want);
+
+    ts = timestampOf(Instant.ofEpochSecond(253402300799L, 999999999).atZone(ZoneIdZ));
+    val = ts.convertToNative(Value.class);
+    want = Value.newBuilder().setStringValue("9999-12-31T23:59:59.999999999Z").build();
     assertThat(val).isEqualTo(want);
   }
 

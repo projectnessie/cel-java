@@ -54,6 +54,7 @@ import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.DoubleValue;
 import com.google.protobuf.Duration;
 import com.google.protobuf.Empty;
+import com.google.protobuf.FieldMask;
 import com.google.protobuf.FloatValue;
 import com.google.protobuf.Int32Value;
 import com.google.protobuf.Int64Value;
@@ -134,6 +135,7 @@ public final class ProtoTypeRegistry implements TypeRegistry {
             Arrays.asList(
                 DoubleValue.getDescriptor().getFile(),
                 Empty.getDescriptor().getFile(),
+                FieldMask.getDescriptor().getFile(),
                 Timestamp.getDescriptor().getFile(),
                 UInt64Value.getDescriptor().getFile(),
                 Any.getDescriptor().getFile(),
@@ -357,6 +359,8 @@ public final class ProtoTypeRegistry implements TypeRegistry {
         return DoubleValue.class;
       case "google.protobuf.Duration":
         return Duration.class;
+      case "google.protobuf.FieldMask":
+        return FieldMask.class;
       case "google.protobuf.FloatValue":
         return FloatValue.class;
       case "google.protobuf.Int32Value":

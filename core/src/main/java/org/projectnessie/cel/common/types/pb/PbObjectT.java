@@ -22,7 +22,11 @@ import static org.projectnessie.cel.common.types.Types.boolOf;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.Empty;
+import com.google.protobuf.FieldMask;
 import com.google.protobuf.Message;
+import com.google.protobuf.Struct;
+import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
 import org.projectnessie.cel.common.types.ObjectT;
 import org.projectnessie.cel.common.types.StringT;
@@ -102,20 +106,15 @@ public final class PbObjectT extends ObjectT {
     }
     if (typeDesc == Value.class) {
       // jsonValueType
-      throw new UnsupportedOperationException("IMPLEMENT proto-to-json");
-      // TODO proto-to-json
-      //		// Marshal the proto to JSON first, and then rehydrate as protobuf.Value as there is no
-      //		// support for direct conversion from proto.Message to protobuf.Value.
-      //		bytes, err := protojson.Marshal(pb)
-      //		if err != nil {
-      //			return nil, err
-      //		}
-      //		json := &structpb.Value{}
-      //		err = protojson.Unmarshal(bytes, json)
-      //		if err != nil {
-      //			return nil, err
-      //		}
-      //		return json, nil
+      if (value instanceof Empty) {
+        return (T) Value.newBuilder().setStructValue(Struct.getDefaultInstance()).build();
+      }
+      if (value instanceof FieldMask) {
+        return (T) Value.newBuilder().setStringValue(fieldMaskJsonValue((FieldMask) value)).build();
+      }
+      if (value instanceof Timestamp) {
+        return adapter.nativeToValue(value).convertToNative(typeDesc);
+      }
     }
     if (typeDesc.isAssignableFrom(this.typeDesc.reflectType()) || typeDesc == Object.class) {
       if (value instanceof Any || value instanceof DynamicMessage) {
@@ -139,6 +138,34 @@ public final class PbObjectT extends ObjectT {
 
   private Message message() {
     return (Message) value;
+  }
+
+  private static String fieldMaskJsonValue(FieldMask fieldMask) {
+    StringBuilder value = new StringBuilder();
+    for (String path : fieldMask.getPathsList()) {
+      if (value.length() > 0) {
+        value.append(',');
+      }
+      value.append(fieldMaskPathJsonValue(path));
+    }
+    return value.toString();
+  }
+
+  private static String fieldMaskPathJsonValue(String path) {
+    StringBuilder value = new StringBuilder(path.length());
+    boolean upperNext = false;
+    for (int i = 0; i < path.length(); i++) {
+      char c = path.charAt(i);
+      if (c == '_') {
+        upperNext = true;
+      } else if (upperNext) {
+        value.append(Character.toUpperCase(c));
+        upperNext = false;
+      } else {
+        value.append(c);
+      }
+    }
+    return value.toString();
   }
 
   private PbTypeDescription typeDesc() {

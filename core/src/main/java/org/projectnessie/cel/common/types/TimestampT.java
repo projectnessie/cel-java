@@ -31,7 +31,6 @@ import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.Types.boolOf;
 
 import com.google.protobuf.Any;
-import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
 import java.time.DateTimeException;
@@ -249,7 +248,8 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
     }
     if (typeDesc == Value.class) {
       // CEL follows the proto3 to JSON conversion which formats as an RFC 3339 encoded JSON string.
-      return (T) StringValue.of(jsonFormatter.format(t));
+      DateTimeFormatter df = (t.getNano() > 0L) ? rfc3339nanoFormatter : rfc3339formatter;
+      return (T) Value.newBuilder().setStringValue(df.format(t)).build();
     }
 
     throw new RuntimeException(
@@ -282,22 +282,6 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
     }
     return newTypeConversionError(TimestampType, typeValue);
   }
-
-  private static final DateTimeFormatter jsonFormatter =
-      new DateTimeFormatterBuilder()
-          .appendValue(ChronoField.YEAR, 4, 5, SignStyle.EXCEEDS_PAD)
-          .appendLiteral('-')
-          .appendValue(ChronoField.MONTH_OF_YEAR, 2)
-          .appendLiteral('-')
-          .appendValue(ChronoField.DAY_OF_MONTH, 2)
-          .appendLiteral('T')
-          .appendValue(ChronoField.HOUR_OF_DAY, 2)
-          .appendLiteral(':')
-          .appendValue(ChronoField.MINUTE_OF_HOUR, 2)
-          .appendLiteral(':')
-          .appendValue(ChronoField.SECOND_OF_MINUTE, 2)
-          .appendLiteral('Z')
-          .toFormatter();
 
   /** Only used for format a string, never for parsing. */
   private static final DateTimeFormatter rfc3339formatter =

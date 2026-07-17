@@ -24,6 +24,7 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.Duration;
 import com.google.protobuf.Empty;
+import com.google.protobuf.FieldMask;
 import com.google.protobuf.Message;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
@@ -62,6 +63,7 @@ public final class Db {
     defaultDb.registerMessage(Any.getDefaultInstance());
     defaultDb.registerMessage(Duration.getDefaultInstance());
     defaultDb.registerMessage(Empty.getDefaultInstance());
+    defaultDb.registerMessage(FieldMask.getDefaultInstance());
     defaultDb.registerMessage(Timestamp.getDefaultInstance());
     defaultDb.registerMessage(Value.getDefaultInstance());
     defaultDb.registerMessage(BoolValue.getDefaultInstance());
