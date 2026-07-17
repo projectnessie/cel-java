@@ -141,8 +141,41 @@ class SimpleConformanceTest {
           "parse/nest/message_literal",
           // Strong enum semantics require typed enum values rather than treating enum literals as
           // ints.
-          "enums/strong_proto2",
-          "enums/strong_proto3");
+          "enums/strong_proto2/literal_global",
+          "enums/strong_proto2/literal_nested",
+          "enums/strong_proto2/literal_zero",
+          "enums/strong_proto2/type_global",
+          "enums/strong_proto2/type_nested",
+          "enums/strong_proto2/select_default",
+          "enums/strong_proto2/field_type",
+          "enums/strong_proto2/assign_standalone_int",
+          "enums/strong_proto2/convert_int_inrange",
+          "enums/strong_proto2/convert_int_big",
+          "enums/strong_proto2/convert_int_neg",
+          "enums/strong_proto2/convert_int_too_big",
+          "enums/strong_proto2/convert_int_too_neg",
+          "enums/strong_proto2/convert_string",
+          "enums/strong_proto2/convert_string_bad",
+          "enums/strong_proto3/literal_global",
+          "enums/strong_proto3/literal_nested",
+          "enums/strong_proto3/literal_zero",
+          "enums/strong_proto3/type_global",
+          "enums/strong_proto3/type_nested",
+          "enums/strong_proto3/select_default",
+          "enums/strong_proto3/select",
+          "enums/strong_proto3/select_big",
+          "enums/strong_proto3/select_neg",
+          "enums/strong_proto3/field_type",
+          "enums/strong_proto3/assign_standalone_int",
+          "enums/strong_proto3/assign_standalone_int_big",
+          "enums/strong_proto3/assign_standalone_int_neg",
+          "enums/strong_proto3/convert_int_inrange",
+          "enums/strong_proto3/convert_int_big",
+          "enums/strong_proto3/convert_int_neg",
+          "enums/strong_proto3/convert_int_too_big",
+          "enums/strong_proto3/convert_int_too_neg",
+          "enums/strong_proto3/convert_string",
+          "enums/strong_proto3/convert_string_bad");
 
   private static final Set<String> matchedSkips = new LinkedHashSet<>();
   private static final AtomicInteger total = new AtomicInteger();
@@ -568,6 +601,8 @@ class SimpleConformanceTest {
           return type;
         }
         return newObjectTypeValue(typeName);
+      case ENUM_VALUE:
+        return intOf(v.getEnumValue().getValue());
       default:
         throw new IllegalArgumentException("unknown value " + v.getKindCase());
     }
