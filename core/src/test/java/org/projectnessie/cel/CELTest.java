@@ -172,6 +172,31 @@ public class CELTest {
   }
 
   @Test
+  void blockMacrosIntroduceSequentialLocalVariables() {
+    Env env = newEnv(macros(Macro.TestOnlyBlockMacros));
+
+    AstIssuesTuple astIss =
+        env.compile("cel.block([1, cel.index(0) + 1, cel.index(1) + 1], cel.index(2))");
+
+    assertThat(astIss.hasIssues()).isFalse();
+    assertThat(env.program(astIss.getAst()).eval(emptyMap()).getVal().equal(IntT.intOf(3)))
+        .isSameAs(True);
+  }
+
+  @Test
+  void blockMacrosCanNameComprehensionVariables() {
+    Env env = newEnv(macros(Macro.TestOnlyBlockMacros));
+
+    AstIssuesTuple astIss =
+        env.compile(
+            "[1, 2].map(cel.iterVar(0, 0), "
+                + "[cel.iterVar(0, 0) + cel.iterVar(0, 0)])[1][0] == 4");
+
+    assertThat(astIss.hasIssues()).isFalse();
+    assertThat(env.program(astIss.getAst()).eval(emptyMap()).getVal()).isSameAs(True);
+  }
+
+  @Test
   void AstToString() {
     Env stdEnv = newEnv();
     String in = "a + b - (c ? (-d + 4) : e)";

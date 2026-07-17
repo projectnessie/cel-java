@@ -19,6 +19,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 
 import com.google.api.expr.v1alpha1.Expr;
+import com.google.api.expr.v1alpha1.Expr.CreateList;
 import com.google.api.expr.v1alpha1.Expr.ExprKindCase;
 import com.google.api.expr.v1alpha1.Expr.Select;
 import java.util.List;
@@ -70,6 +71,14 @@ public final class Macro {
 
           /* The macro "cel.bind(var, value, result)" binds a local variable for use in result. */
           newReceiverMacro("bind", 3, Macro::makeBind));
+
+  /** TestOnlyBlockMacros includes the test-only macros used by CEL-Spec block conformance tests. */
+  public static final List<Macro> TestOnlyBlockMacros =
+      asList(
+          newReceiverMacro("block", 2, Macro::makeBlock),
+          newReceiverMacro("index", 1, Macro::makeIndex),
+          newReceiverMacro("iterVar", 2, Macro::makeIterVar),
+          newReceiverMacro("accuVar", 2, Macro::makeAccuVar));
 
   /** NoMacros list. */
   public static List<Macro> MoMacros = emptyList();
@@ -266,6 +275,89 @@ public final class Macro {
         eh.literalBool(true),
         args.get(2),
         accuExpr);
+  }
+
+  static Expr makeBlock(ExprHelper eh, Expr target, List<Expr> args) {
+    validateCelReceiver(eh, target, "cel.block()");
+
+    Expr bindings = args.get(0);
+    if (bindings.getExprKindCase() != ExprKindCase.LIST_EXPR) {
+      Location location = eh.offsetLocation(bindings.getId());
+      throw new ErrorWithLocation(location, "cel.block() first argument must be a list literal");
+    }
+
+    CreateList list = bindings.getListExpr();
+    Expr result = args.get(1);
+    for (int i = list.getElementsCount() - 1; i >= 0; i--) {
+      result = makeLocalBinding(eh, indexName(i), list.getElements(i), result);
+    }
+    return result;
+  }
+
+  static Expr makeIndex(ExprHelper eh, Expr target, List<Expr> args) {
+    validateCelReceiver(eh, target, "cel.index()");
+    return eh.ident(indexName(extractIntegerArgument(eh, args.get(0), "cel.index()")));
+  }
+
+  static Expr makeIterVar(ExprHelper eh, Expr target, List<Expr> args) {
+    validateCelReceiver(eh, target, "cel.iterVar()");
+    return eh.ident(
+        String.format(
+            "@it:%d:%d",
+            extractIntegerArgument(eh, args.get(0), "cel.iterVar()"),
+            extractIntegerArgument(eh, args.get(1), "cel.iterVar()")));
+  }
+
+  static Expr makeAccuVar(ExprHelper eh, Expr target, List<Expr> args) {
+    validateCelReceiver(eh, target, "cel.accuVar()");
+    return eh.ident(
+        String.format(
+            "@ac:%d:%d",
+            extractIntegerArgument(eh, args.get(0), "cel.accuVar()"),
+            extractIntegerArgument(eh, args.get(1), "cel.accuVar()")));
+  }
+
+  private static Expr makeLocalBinding(ExprHelper eh, String variable, Expr value, Expr result) {
+    Expr accuExpr = eh.ident(AccumulatorName);
+    Expr dynNull = eh.globalCall(Overloads.TypeConvertDyn, eh.literalNull());
+    return eh.fold(
+        variable,
+        eh.newList(value),
+        AccumulatorName,
+        dynNull,
+        eh.literalBool(true),
+        result,
+        accuExpr);
+  }
+
+  private static void validateCelReceiver(ExprHelper eh, Expr target, String macroName) {
+    if (target != null
+        && target.getExprKindCase() == ExprKindCase.IDENT_EXPR
+        && "cel".equals(target.getIdentExpr().getName())) {
+      return;
+    }
+
+    Location location = target != null ? eh.offsetLocation(target.getId()) : null;
+    throw new ErrorWithLocation(
+        location, macroName + " must be called with receiver identifier cel");
+  }
+
+  private static int extractIntegerArgument(ExprHelper eh, Expr expr, String macroName) {
+    if (expr.getExprKindCase() != ExprKindCase.CONST_EXPR || !expr.getConstExpr().hasInt64Value()) {
+      Location location = eh.offsetLocation(expr.getId());
+      throw new ErrorWithLocation(location, macroName + " argument must be an integer literal");
+    }
+
+    long value = expr.getConstExpr().getInt64Value();
+    if (value < 0 || value > Integer.MAX_VALUE) {
+      Location location = eh.offsetLocation(expr.getId());
+      throw new ErrorWithLocation(location, macroName + " argument out of range");
+    }
+    return (int) value;
+  }
+
+  private static String indexName(int index) {
+    return "@index" + index;
   }
 
   static String extractIdent(Expr e) {

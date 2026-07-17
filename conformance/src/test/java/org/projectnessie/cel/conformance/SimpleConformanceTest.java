@@ -29,6 +29,7 @@ import static org.projectnessie.cel.Env.newEnv;
 import static org.projectnessie.cel.EnvOption.clearMacros;
 import static org.projectnessie.cel.EnvOption.container;
 import static org.projectnessie.cel.EnvOption.declarations;
+import static org.projectnessie.cel.EnvOption.macros;
 import static org.projectnessie.cel.EnvOption.types;
 import static org.projectnessie.cel.Library.StdLib;
 import static org.projectnessie.cel.common.types.BoolT.True;
@@ -105,6 +106,7 @@ import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Lister;
 import org.projectnessie.cel.common.types.traits.Mapper;
+import org.projectnessie.cel.parser.Macro;
 
 class SimpleConformanceTest {
 
@@ -116,6 +118,7 @@ class SimpleConformanceTest {
       List.of(
           "basic.textproto",
           "bindings_ext.textproto",
+          "block_ext.textproto",
           "comparisons.textproto",
           "conversions.textproto",
           "dynamic.textproto",
@@ -180,7 +183,12 @@ class SimpleConformanceTest {
           "enums/strong_proto3/convert_int_too_big",
           "enums/strong_proto3/convert_int_too_neg",
           "enums/strong_proto3/convert_string",
-          "enums/strong_proto3/convert_string_bad");
+          "enums/strong_proto3/convert_string_bad",
+          // Optional list/map/message syntax and runtime support is not implemented yet.
+          "block_ext/basic/optional_list",
+          "block_ext/basic/optional_map",
+          "block_ext/basic/optional_map_chained",
+          "block_ext/basic/optional_message");
 
   private static final Set<String> matchedSkips = new LinkedHashSet<>();
   private static final AtomicInteger total = new AtomicInteger();
@@ -338,6 +346,9 @@ class SimpleConformanceTest {
       if (test.getDisableMacros()) {
         parseOptions.add(clearMacros());
       }
+      if (usesTestOnlyBlockMacros(test.getExpr())) {
+        parseOptions.add(macros(Macro.TestOnlyBlockMacros));
+      }
 
       Env env = newEnv(parseOptions.toArray(new EnvOption[0]));
       AstIssuesTuple astIss = env.parse(sourceText);
@@ -449,6 +460,13 @@ class SimpleConformanceTest {
           || expression.contains("ip.isCanonical(")
           || expression.contains("net.IP")
           || expression.contains("net.CIDR");
+    }
+
+    private static boolean usesTestOnlyBlockMacros(String expression) {
+      return expression.contains("cel.block(")
+          || expression.contains("cel.index(")
+          || expression.contains("cel.iterVar(")
+          || expression.contains("cel.accuVar(");
     }
   }
 
