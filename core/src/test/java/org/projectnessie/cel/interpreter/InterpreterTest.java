@@ -398,8 +398,12 @@ class InterpreterTest {
               "TestAllTypes{single_double: double('NaN')} == TestAllTypes{single_double: double('NaN')}")
           .container("cel.expr.conformance.proto3")
           .types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance())
-          // The outcome in the generated Java proto code is different than in the conformance-test,
-          // it is NOT: "For proto equality, fields with NaN value are treated as not equal."
+          .out(False),
+      new TestCase(InterpreterTestCase.ne_proto_nan_not_equal)
+          .expr(
+              "TestAllTypes{single_double: double('NaN')} != TestAllTypes{single_double: double('NaN')}")
+          .container("cel.expr.conformance.proto3")
+          .types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance())
           .out(True),
       new TestCase(InterpreterTestCase.eq_bool_not_null)
           .expr("google.protobuf.BoolValue{} != null")

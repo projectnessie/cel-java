@@ -105,6 +105,7 @@ public enum InterpreterTestCase {
   not_eq_list_one_element,
   not_eq_list_one_element2,
   not_eq_list_mixed_type_numbers,
+  ne_proto_nan_not_equal,
   not_int32_eq_uint,
   not_uint32_eq_double,
   not_lt_dyn_big_uint_int,

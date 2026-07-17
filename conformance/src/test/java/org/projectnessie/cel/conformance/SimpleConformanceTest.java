@@ -141,9 +141,6 @@ class SimpleConformanceTest {
           "dynamic/float/field_assign_proto3_round_to_zero",
           // Malicious too-deep protobuf structure.
           "parse/nest/message_literal",
-          // Proto equality specialties do not seem to be in effect for Java.
-          "comparisons/eq_wrapper/eq_proto_nan_equal",
-          "comparisons/ne_literal/ne_proto_nan_not_equal",
           // TODO Actual known issue: protobuf Any returned by this test is wrapped twice.
           "dynamic/any/var",
           // New CEL-Spec v0.25.2 expectations that need follow-up parser/runtime changes.

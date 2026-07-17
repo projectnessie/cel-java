@@ -21,6 +21,8 @@ import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.Types.boolOf;
 
 import com.google.protobuf.Any;
+import com.google.protobuf.Descriptors.FieldDescriptor;
+import com.google.protobuf.Descriptors.FieldDescriptor.JavaType;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Empty;
 import com.google.protobuf.FieldMask;
@@ -81,6 +83,22 @@ public final class PbObjectT extends ObjectT {
     return nativeToValue(fd.getField(value, adapter));
   }
 
+  @Override
+  public Val equal(Val other) {
+    if (!(other instanceof PbObjectT)) {
+      return super.equal(other);
+    }
+
+    PbObjectT otherObject = (PbObjectT) other;
+    if (!typeDesc().name().equals(otherObject.typeDesc().name())) {
+      return boolOf(false);
+    }
+    if (containsNaN(message()) || containsNaN(otherObject.message())) {
+      return boolOf(false);
+    }
+    return boolOf(message().equals(otherObject.message()));
+  }
+
   @SuppressWarnings("unchecked")
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
@@ -138,6 +156,33 @@ public final class PbObjectT extends ObjectT {
 
   private Message message() {
     return (Message) value;
+  }
+
+  private static boolean containsNaN(Message message) {
+    for (FieldDescriptor field : message.getAllFields().keySet()) {
+      Object fieldValue = message.getField(field);
+      if (field.isRepeated()) {
+        for (Object element : (Iterable<?>) fieldValue) {
+          if (containsNaN(field, element)) {
+            return true;
+          }
+        }
+      } else if (containsNaN(field, fieldValue)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean containsNaN(FieldDescriptor field, Object value) {
+    JavaType javaType = field.getJavaType();
+    if (javaType == JavaType.DOUBLE) {
+      return Double.isNaN((Double) value);
+    }
+    if (javaType == JavaType.FLOAT) {
+      return Float.isNaN((Float) value);
+    }
+    return javaType == JavaType.MESSAGE && containsNaN((Message) value);
   }
 
   private static String fieldMaskJsonValue(FieldMask fieldMask) {
