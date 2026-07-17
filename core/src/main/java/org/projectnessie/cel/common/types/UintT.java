@@ -120,6 +120,9 @@ public final class UintT extends BaseVal
       return (T) UInt64Value.of(i);
     }
     if (typeDesc == UInt32Value.class) {
+      if (Long.compareUnsigned(i, 0xffffffffL) > 0) {
+        Err.throwErrorAsIllegalStateException(rangeError(Long.toUnsignedString(i), "uint32"));
+      }
       return (T) UInt32Value.of((int) i);
     }
     if (typeDesc == Val.class || typeDesc == UintT.class) {

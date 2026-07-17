@@ -157,8 +157,6 @@ class SimpleConformanceTest {
           "type_deductions/wrappers/wrapper_promotion",
           "type_deductions/type_parameters/multiple_parameters_generality,multiple_parameters_generality_2",
           "type_deductions/legacy_nullable_types/null_assignable_to_message_parameter_candidate,null_assignable_to_duration_parameter_candidate,null_assignable_to_timestamp_parameter_candidate,null_assignable_to_abstract_parameter_candidate",
-          "dynamic/int32/field_assign_proto2_range,field_assign_proto3_range",
-          "dynamic/uint32/field_assign_proto2_range,field_assign_proto3_range",
           "enums/strong_proto2",
           "enums/strong_proto3",
           "fields/qualified_identifier_resolution/map_key_float",

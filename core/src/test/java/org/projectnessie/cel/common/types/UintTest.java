@@ -143,6 +143,17 @@ public class UintTest {
   }
 
   @Test
+  void uintConvertToNative_UInt32WrapperRangeError() {
+    assertThatThrownBy(() -> uintOf(0x100000000L).convertToNative(UInt32Value.class))
+        .isInstanceOf(RuntimeException.class)
+        .hasMessageContaining("range error");
+
+    assertThatThrownBy(() -> uintOf(-1L).convertToNative(UInt32Value.class))
+        .isInstanceOf(RuntimeException.class)
+        .hasMessageContaining("range error");
+  }
+
+  @Test
   void uintConvertToType() {
     // 18446744073709551612L
     // --> 0xFFFFFFFFFFFFFFFCL
