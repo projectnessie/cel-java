@@ -117,10 +117,7 @@ public final class Options {
 
     public Options build() {
       return new Options(
-          maxRecursionDepth,
-          errorRecoveryLimit,
-          expressionSizeCodePointLimit,
-          new HashMap<>(macros));
+          maxRecursionDepth, errorRecoveryLimit, expressionSizeCodePointLimit, Map.copyOf(macros));
     }
   }
 }

@@ -33,7 +33,6 @@ import com.google.protobuf.Any;
 import com.google.protobuf.StringValue;
 import com.google.protobuf.Value;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiFunction;
@@ -62,14 +61,14 @@ public final class StringT extends BaseVal implements Adder, Comparer, Matcher, 
           Trait.ReceiverType,
           Trait.SizerType);
 
-  private static final Map<String, BiFunction<String, Val, Val>> stringOneArgOverloads;
-
-  static {
-    stringOneArgOverloads = new HashMap<>();
-    stringOneArgOverloads.put(Overloads.Contains, StringT::stringContains);
-    stringOneArgOverloads.put(Overloads.EndsWith, StringT::stringEndsWith);
-    stringOneArgOverloads.put(Overloads.StartsWith, StringT::stringStartsWith);
-  }
+  private static final Map<String, BiFunction<String, Val, Val>> stringOneArgOverloads =
+      Map.of(
+          Overloads.Contains,
+          StringT::stringContains,
+          Overloads.EndsWith,
+          StringT::stringEndsWith,
+          Overloads.StartsWith,
+          StringT::stringStartsWith);
 
   public static StringT stringOf(String s) {
     return new StringT(s);

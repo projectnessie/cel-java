@@ -460,7 +460,7 @@ Build requirements:
 
 Runtime requirements:
 
-- Java 8 or newer
+- Java 17 or newer
 
 `./gradlew publishToMavenLocal` deploys the current development version to the local Maven
 repository, in case you want to use CEL-Java snapshot artifacts from another project.

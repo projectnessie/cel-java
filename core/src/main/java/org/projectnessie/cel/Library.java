@@ -15,8 +15,6 @@
  */
 package org.projectnessie.cel;
 
-import static java.util.Arrays.asList;
-import static java.util.Collections.singletonList;
 import static org.projectnessie.cel.EnvOption.declarations;
 import static org.projectnessie.cel.EnvOption.macros;
 import static org.projectnessie.cel.ProgramOption.functions;
@@ -79,13 +77,13 @@ public interface Library {
     /** EnvOptions returns options for the standard CEL function declarations and macros. */
     @Override
     public List<EnvOption> getCompileOptions() {
-      return asList(declarations(StandardDeclarations), macros(AllMacros));
+      return List.of(declarations(StandardDeclarations), macros(AllMacros));
     }
 
     /** ProgramOptions returns function implementations for the standard CEL functions. */
     @Override
     public List<ProgramOption> getProgramOptions() {
-      return singletonList(functions(standardOverloads()));
+      return List.of(functions(standardOverloads()));
     }
   }
 }

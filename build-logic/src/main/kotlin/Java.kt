@@ -46,7 +46,7 @@ fun Project.nessieConfigureJava() {
 
   tasks.withType<JavaCompile>().configureEach {
     options.encoding = "UTF-8"
-    options.release.set(8)
+    options.release.set(17)
   }
 
   tasks.withType<Javadoc>().configureEach {
@@ -59,8 +59,8 @@ fun Project.nessieConfigureJava() {
     configure<JavaPluginExtension> {
       withJavadocJar()
       withSourcesJar()
-      sourceCompatibility = JavaVersion.VERSION_1_8
-      targetCompatibility = JavaVersion.VERSION_1_8
+      sourceCompatibility = JavaVersion.VERSION_17
+      targetCompatibility = JavaVersion.VERSION_17
       modularity.inferModulePath.set(true)
     }
   }

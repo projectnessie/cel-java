@@ -31,7 +31,6 @@ import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeParseException;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
@@ -101,15 +100,16 @@ public final class DurationT extends BaseVal
     return new DurationT(d);
   }
 
-  private static final Map<String, Function<Duration, Val>> durationZeroArgOverloads;
-
-  static {
-    durationZeroArgOverloads = new HashMap<>();
-    durationZeroArgOverloads.put(Overloads.TimeGetHours, DurationT::timeGetHours);
-    durationZeroArgOverloads.put(Overloads.TimeGetMinutes, DurationT::timeGetMinutes);
-    durationZeroArgOverloads.put(Overloads.TimeGetSeconds, DurationT::timeGetSeconds);
-    durationZeroArgOverloads.put(Overloads.TimeGetMilliseconds, DurationT::timeGetMilliseconds);
-  }
+  private static final Map<String, Function<Duration, Val>> durationZeroArgOverloads =
+      Map.of(
+          Overloads.TimeGetHours,
+          DurationT::timeGetHours,
+          Overloads.TimeGetMinutes,
+          DurationT::timeGetMinutes,
+          Overloads.TimeGetSeconds,
+          DurationT::timeGetSeconds,
+          Overloads.TimeGetMilliseconds,
+          DurationT::timeGetMilliseconds);
 
   private final Duration d;
 

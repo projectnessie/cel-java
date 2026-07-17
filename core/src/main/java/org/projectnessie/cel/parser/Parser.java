@@ -29,7 +29,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import org.projectnessie.cel.common.ErrorWithLocation;
@@ -90,30 +89,28 @@ import org.projectnessie.cel.shaded.org.antlr.v4.runtime.tree.TerminalNode;
 public final class Parser {
 
   private static final Set<String> reservedIds =
-      Collections.unmodifiableSet(
-          new HashSet<>(
-              Arrays.asList(
-                  "as",
-                  "break",
-                  "const",
-                  "continue",
-                  "else",
-                  "false",
-                  "for",
-                  "function",
-                  "if",
-                  "import",
-                  "in",
-                  "let",
-                  "loop",
-                  "package",
-                  "namespace",
-                  "null",
-                  "return",
-                  "true",
-                  "var",
-                  "void",
-                  "while")));
+      Set.of(
+          "as",
+          "break",
+          "const",
+          "continue",
+          "else",
+          "false",
+          "for",
+          "function",
+          "if",
+          "import",
+          "in",
+          "let",
+          "loop",
+          "package",
+          "namespace",
+          "null",
+          "return",
+          "true",
+          "var",
+          "void",
+          "while");
 
   private final Options options;
 

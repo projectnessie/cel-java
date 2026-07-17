@@ -247,33 +247,32 @@ public class StringsLib implements Library {
   // whitespace characters definition from
   // https://en.wikipedia.org/wiki/Whitespace_character#Unicode
   private static final Set<Character> UNICODE_WHITE_SPACES =
-      new HashSet<>(
-          Arrays.asList(
-              (char) 0x0009,
-              (char) 0x000A,
-              (char) 0x000B,
-              (char) 0x000C,
-              (char) 0x000D,
-              (char) 0x0020,
-              (char) 0x0085,
-              (char) 0x00A0,
-              (char) 0x1680,
-              (char) 0x2000,
-              (char) 0x2001,
-              (char) 0x2002,
-              (char) 0x2003,
-              (char) 0x2004,
-              (char) 0x2005,
-              (char) 0x2006,
-              (char) 0x2007,
-              (char) 0x2008,
-              (char) 0x2009,
-              (char) 0x200A,
-              (char) 0x2028,
-              (char) 0x2029,
-              (char) 0x202F,
-              (char) 0x205F,
-              (char) 0x3000));
+      Set.of(
+          (char) 0x0009,
+          (char) 0x000A,
+          (char) 0x000B,
+          (char) 0x000C,
+          (char) 0x000D,
+          (char) 0x0020,
+          (char) 0x0085,
+          (char) 0x00A0,
+          (char) 0x1680,
+          (char) 0x2000,
+          (char) 0x2001,
+          (char) 0x2002,
+          (char) 0x2003,
+          (char) 0x2004,
+          (char) 0x2005,
+          (char) 0x2006,
+          (char) 0x2007,
+          (char) 0x2008,
+          (char) 0x2009,
+          (char) 0x200A,
+          (char) 0x2028,
+          (char) 0x2029,
+          (char) 0x202F,
+          (char) 0x205F,
+          (char) 0x3000);
 
   public static EnvOption strings() {
     return Library.Lib(new StringsLib());
@@ -281,7 +280,6 @@ public class StringsLib implements Library {
 
   @Override
   public List<EnvOption> getCompileOptions() {
-    List<EnvOption> list = new ArrayList<>();
     EnvOption option =
         EnvOption.declarations(
             Decls.newFunction(
@@ -352,13 +350,11 @@ public class StringsLib implements Library {
                 UPPER_ASCII,
                 Decls.newInstanceOverload(
                     "string_upper_ascii", Arrays.asList(Decls.String), Decls.String)));
-    list.add(option);
-    return list;
+    return List.of(option);
   }
 
   @Override
   public List<ProgramOption> getProgramOptions() {
-    List<ProgramOption> list = new ArrayList<>();
     ProgramOption functions =
         ProgramOption.functions(
             Overload.binary(CHAR_AT, Guards.callInStrIntOutStr(StringsLib::charAt)),
@@ -409,8 +405,7 @@ public class StringsLib implements Library {
                 Guards.callInStrIntIntOutStr(StringsLib::substrRange)),
             Overload.unary(TRIM_SPACE, Guards.callInStrOutStr(StringsLib::trimSpace)),
             Overload.unary(UPPER_ASCII, Guards.callInStrOutStr(StringsLib::upperASCII)));
-    list.add(functions);
-    return list;
+    return List.of(functions);
   }
 
   static String charAt(String str, int index) {

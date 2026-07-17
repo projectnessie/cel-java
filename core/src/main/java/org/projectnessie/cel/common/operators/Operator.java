@@ -15,6 +15,10 @@
  */
 package org.projectnessie.cel.common.operators;
 
+import static java.util.Map.copyOf;
+import static java.util.Map.entry;
+import static java.util.Map.ofEntries;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -71,30 +75,26 @@ public enum Operator {
   }
 
   static {
-    {
-      Map<String, Operator> m = new HashMap<>();
-      m.put("+", Add);
-      m.put("/", Divide);
-      m.put("==", Equals);
-      m.put(">", Greater);
-      m.put(">=", GreaterEquals);
-      m.put("in", In);
-      m.put("<", Less);
-      m.put("<=", LessEquals);
-      m.put("%", Modulo);
-      m.put("*", Multiply);
-      m.put("!=", NotEquals);
-      m.put("-", Subtract);
-      operators = m;
-    }
+    operators =
+        ofEntries(
+            entry("+", Add),
+            entry("/", Divide),
+            entry("==", Equals),
+            entry(">", Greater),
+            entry(">=", GreaterEquals),
+            entry("in", In),
+            entry("<", Less),
+            entry("<=", LessEquals),
+            entry("%", Modulo),
+            entry("*", Multiply),
+            entry("!=", NotEquals),
+            entry("-", Subtract));
 
-    {
-      Map<String, Operator> m = new HashMap<>();
-      for (Operator op : Operator.values()) {
-        m.put(op.id, op);
-      }
-      operatorsById = m;
+    Map<String, Operator> byId = new HashMap<>();
+    for (Operator op : Operator.values()) {
+      byId.put(op.id, op);
     }
+    operatorsById = copyOf(byId);
   }
 
   public static Operator byId(String id) {

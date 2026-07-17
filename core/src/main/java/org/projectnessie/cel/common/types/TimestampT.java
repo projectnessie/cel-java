@@ -51,7 +51,6 @@ import java.time.temporal.ChronoField;
 import java.time.zone.ZoneRulesException;
 import java.util.Calendar;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TimeZone;
@@ -122,42 +121,51 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
     return new TimestampT(t);
   }
 
-  private static final Map<String, Function<ZonedDateTime, Val>> timestampZeroArgOverloads;
-  private static final Map<String, BiFunction<ZonedDateTime, Val, Val>> timestampOneArgOverloads;
+  private static final Map<String, Function<ZonedDateTime, Val>> timestampZeroArgOverloads =
+      Map.of(
+          Overloads.TimeGetFullYear,
+          TimestampT::timestampGetFullYear,
+          Overloads.TimeGetMonth,
+          TimestampT::timestampGetMonth,
+          Overloads.TimeGetDayOfYear,
+          TimestampT::timestampGetDayOfYear,
+          Overloads.TimeGetDate,
+          TimestampT::timestampGetDayOfMonthOneBased,
+          Overloads.TimeGetDayOfMonth,
+          TimestampT::timestampGetDayOfMonthZeroBased,
+          Overloads.TimeGetDayOfWeek,
+          TimestampT::timestampGetDayOfWeek,
+          Overloads.TimeGetHours,
+          TimestampT::timestampGetHours,
+          Overloads.TimeGetMinutes,
+          TimestampT::timestampGetMinutes,
+          Overloads.TimeGetSeconds,
+          TimestampT::timestampGetSeconds,
+          Overloads.TimeGetMilliseconds,
+          TimestampT::timestampGetMilliseconds);
 
-  static {
-    timestampZeroArgOverloads = new HashMap<>();
-    timestampZeroArgOverloads.put(Overloads.TimeGetFullYear, TimestampT::timestampGetFullYear);
-    timestampZeroArgOverloads.put(Overloads.TimeGetMonth, TimestampT::timestampGetMonth);
-    timestampZeroArgOverloads.put(Overloads.TimeGetDayOfYear, TimestampT::timestampGetDayOfYear);
-    timestampZeroArgOverloads.put(
-        Overloads.TimeGetDate, TimestampT::timestampGetDayOfMonthOneBased);
-    timestampZeroArgOverloads.put(
-        Overloads.TimeGetDayOfMonth, TimestampT::timestampGetDayOfMonthZeroBased);
-    timestampZeroArgOverloads.put(Overloads.TimeGetDayOfWeek, TimestampT::timestampGetDayOfWeek);
-    timestampZeroArgOverloads.put(Overloads.TimeGetHours, TimestampT::timestampGetHours);
-    timestampZeroArgOverloads.put(Overloads.TimeGetMinutes, TimestampT::timestampGetMinutes);
-    timestampZeroArgOverloads.put(Overloads.TimeGetSeconds, TimestampT::timestampGetSeconds);
-    timestampZeroArgOverloads.put(
-        Overloads.TimeGetMilliseconds, TimestampT::timestampGetMilliseconds);
-
-    timestampOneArgOverloads = new HashMap<>();
-    timestampOneArgOverloads.put(Overloads.TimeGetFullYear, TimestampT::timestampGetFullYearWithTz);
-    timestampOneArgOverloads.put(Overloads.TimeGetMonth, TimestampT::timestampGetMonthWithTz);
-    timestampOneArgOverloads.put(
-        Overloads.TimeGetDayOfYear, TimestampT::timestampGetDayOfYearWithTz);
-    timestampOneArgOverloads.put(
-        Overloads.TimeGetDate, TimestampT::timestampGetDayOfMonthOneBasedWithTz);
-    timestampOneArgOverloads.put(
-        Overloads.TimeGetDayOfMonth, TimestampT::timestampGetDayOfMonthZeroBasedWithTz);
-    timestampOneArgOverloads.put(
-        Overloads.TimeGetDayOfWeek, TimestampT::timestampGetDayOfWeekWithTz);
-    timestampOneArgOverloads.put(Overloads.TimeGetHours, TimestampT::timestampGetHoursWithTz);
-    timestampOneArgOverloads.put(Overloads.TimeGetMinutes, TimestampT::timestampGetMinutesWithTz);
-    timestampOneArgOverloads.put(Overloads.TimeGetSeconds, TimestampT::timestampGetSecondsWithTz);
-    timestampOneArgOverloads.put(
-        Overloads.TimeGetMilliseconds, TimestampT::timestampGetMillisecondsWithTz);
-  }
+  private static final Map<String, BiFunction<ZonedDateTime, Val, Val>> timestampOneArgOverloads =
+      Map.of(
+          Overloads.TimeGetFullYear,
+          TimestampT::timestampGetFullYearWithTz,
+          Overloads.TimeGetMonth,
+          TimestampT::timestampGetMonthWithTz,
+          Overloads.TimeGetDayOfYear,
+          TimestampT::timestampGetDayOfYearWithTz,
+          Overloads.TimeGetDate,
+          TimestampT::timestampGetDayOfMonthOneBasedWithTz,
+          Overloads.TimeGetDayOfMonth,
+          TimestampT::timestampGetDayOfMonthZeroBasedWithTz,
+          Overloads.TimeGetDayOfWeek,
+          TimestampT::timestampGetDayOfWeekWithTz,
+          Overloads.TimeGetHours,
+          TimestampT::timestampGetHoursWithTz,
+          Overloads.TimeGetMinutes,
+          TimestampT::timestampGetMinutesWithTz,
+          Overloads.TimeGetSeconds,
+          TimestampT::timestampGetSecondsWithTz,
+          Overloads.TimeGetMilliseconds,
+          TimestampT::timestampGetMillisecondsWithTz);
 
   private final ZonedDateTime t;
 
