@@ -157,12 +157,27 @@ final class Helper {
       Expr condition,
       Expr step,
       Expr result) {
+    return newComprehension(
+        ctx, iterVar, "", iterRange, accuVar, accuInit, condition, step, result);
+  }
+
+  Expr newComprehension(
+      Object ctx,
+      String iterVar,
+      String iterVar2,
+      Expr iterRange,
+      String accuVar,
+      Expr accuInit,
+      Expr condition,
+      Expr step,
+      Expr result) {
     return newExprBuilder(ctx)
         .setComprehensionExpr(
             Comprehension.newBuilder()
                 .setAccuVar(accuVar)
                 .setAccuInit(accuInit)
                 .setIterVar(iterVar)
+                .setIterVar2(iterVar2)
                 .setIterRange(iterRange)
                 .setLoopCondition(condition)
                 .setLoopStep(step)

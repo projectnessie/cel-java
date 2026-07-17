@@ -130,6 +130,7 @@ class SimpleConformanceTest {
           "lists.textproto",
           "logic.textproto",
           "macros.textproto",
+          "macros2.textproto",
           "math_ext.textproto",
           "namespace.textproto",
           "network_ext.textproto",

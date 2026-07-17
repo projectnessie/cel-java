@@ -59,6 +59,7 @@ import org.projectnessie.cel.interpreter.Interpretable.EvalIdent;
 import org.projectnessie.cel.interpreter.Interpretable.EvalList;
 import org.projectnessie.cel.interpreter.Interpretable.EvalListFold;
 import org.projectnessie.cel.interpreter.Interpretable.EvalMap;
+import org.projectnessie.cel.interpreter.Interpretable.EvalMapFold;
 import org.projectnessie.cel.interpreter.Interpretable.EvalNe;
 import org.projectnessie.cel.interpreter.Interpretable.EvalObj;
 import org.projectnessie.cel.interpreter.Interpretable.EvalOr;
@@ -621,6 +622,33 @@ public interface InterpretablePlanner {
     /** planComprehension generates an Interpretable fold operation. */
     Interpretable planComprehension(Expr expr) {
       Comprehension fold = expr.getComprehensionExpr();
+      MacroMapFold macroMapFold = macroMapFold(fold);
+      if (macroMapFold != null) {
+        Interpretable iterRange = plan(fold.getIterRange());
+        if (iterRange == null) {
+          return null;
+        }
+        Interpretable filter = null;
+        if (macroMapFold.filter != null) {
+          filter = plan(macroMapFold.filter);
+          if (filter == null) {
+            return null;
+          }
+        }
+        Interpretable transform = plan(macroMapFold.transform);
+        if (transform == null) {
+          return null;
+        }
+        return new EvalMapFold(
+            expr.getId(),
+            fold.getIterVar(),
+            fold.getIterVar2(),
+            iterRange,
+            filter,
+            transform,
+            adapter);
+      }
+
       MacroListFold macroListFold = macroListFold(fold);
       if (macroListFold != null) {
         Interpretable iterRange = plan(fold.getIterRange());
@@ -639,7 +667,13 @@ public interface InterpretablePlanner {
           return null;
         }
         return new EvalListFold(
-            expr.getId(), fold.getIterVar(), iterRange, filter, transform, adapter);
+            expr.getId(),
+            fold.getIterVar(),
+            fold.getIterVar2(),
+            iterRange,
+            filter,
+            transform,
+            adapter);
       }
 
       Interpretable accu = plan(fold.getAccuInit());
@@ -663,7 +697,42 @@ public interface InterpretablePlanner {
         return null;
       }
       return new EvalFold(
-          expr.getId(), fold.getAccuVar(), accu, fold.getIterVar(), iterRange, cond, step, result);
+          expr.getId(),
+          fold.getAccuVar(),
+          accu,
+          fold.getIterVar(),
+          fold.getIterVar2(),
+          iterRange,
+          cond,
+          step,
+          result);
+    }
+
+    private static MacroMapFold macroMapFold(Comprehension fold) {
+      if (!isEmptyMap(fold.getAccuInit())
+          || !isBoolConst(fold.getLoopCondition(), true)
+          || !isIdent(fold.getResult(), fold.getAccuVar())) {
+        return null;
+      }
+
+      Expr step = fold.getLoopStep();
+      Expr filter = null;
+      if (isCall(step, Operator.Conditional.id, 3)) {
+        Call conditional = step.getCallExpr();
+        if (!isIdent(conditional.getArgs(2), fold.getAccuVar())) {
+          return null;
+        }
+        filter = conditional.getArgs(0);
+        step = conditional.getArgs(1);
+      }
+
+      Expr transform = mapEntryValue(fold.getIterVar(), step);
+      if (transform == null
+          || referencesIdent(transform, fold.getAccuVar())
+          || (filter != null && referencesIdent(filter, fold.getAccuVar()))) {
+        return null;
+      }
+      return new MacroMapFold(filter, transform);
     }
 
     private static MacroListFold macroListFold(Comprehension fold) {
@@ -726,6 +795,25 @@ public interface InterpretablePlanner {
           && expr.getListExpr().getElementsCount() == 0;
     }
 
+    private static boolean isEmptyMap(Expr expr) {
+      return expr.getExprKindCase() == Expr.ExprKindCase.STRUCT_EXPR
+          && expr.getStructExpr().getMessageName().isEmpty()
+          && expr.getStructExpr().getEntriesCount() == 0;
+    }
+
+    private static Expr mapEntryValue(String keyVar, Expr step) {
+      if (step.getExprKindCase() != Expr.ExprKindCase.STRUCT_EXPR
+          || !step.getStructExpr().getMessageName().isEmpty()
+          || step.getStructExpr().getEntriesCount() != 1) {
+        return null;
+      }
+      Entry entry = step.getStructExpr().getEntries(0);
+      if (!isIdent(entry.getMapKey(), keyVar)) {
+        return null;
+      }
+      return entry.getValue();
+    }
+
     private static boolean isBoolConst(Expr expr, boolean value) {
       return expr.getExprKindCase() == Expr.ExprKindCase.CONST_EXPR
           && expr.getConstExpr().getConstantKindCase() == Constant.ConstantKindCase.BOOL_VALUE
@@ -768,9 +856,11 @@ public interface InterpretablePlanner {
           return referencesIdent(comprehension.getIterRange(), name)
               || referencesIdent(comprehension.getAccuInit(), name)
               || (!comprehension.getIterVar().equals(name)
+                  && !comprehension.getIterVar2().equals(name)
                   && !comprehension.getAccuVar().equals(name)
                   && referencesIdent(comprehension.getLoopCondition(), name))
               || (!comprehension.getIterVar().equals(name)
+                  && !comprehension.getIterVar2().equals(name)
                   && !comprehension.getAccuVar().equals(name)
                   && referencesIdent(comprehension.getLoopStep(), name))
               || (!comprehension.getAccuVar().equals(name)
@@ -785,6 +875,16 @@ public interface InterpretablePlanner {
       final Expr transform;
 
       private MacroListFold(Expr filter, Expr transform) {
+        this.filter = filter;
+        this.transform = transform;
+      }
+    }
+
+    private static final class MacroMapFold {
+      final Expr filter;
+      final Expr transform;
+
+      private MacroMapFold(Expr filter, Expr transform) {
         this.filter = filter;
         this.transform = transform;
       }

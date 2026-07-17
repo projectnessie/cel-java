@@ -127,6 +127,20 @@ public final class ExprHelperImpl implements ExprHelper {
         nextMacroID(), iterVar, iterRange, accuVar, accuInit, condition, step, result);
   }
 
+  @Override
+  public Expr fold(
+      String iterVar,
+      String iterVar2,
+      Expr iterRange,
+      String accuVar,
+      Expr accuInit,
+      Expr condition,
+      Expr step,
+      Expr result) {
+    return parserHelper.newComprehension(
+        nextMacroID(), iterVar, iterVar2, iterRange, accuVar, accuInit, condition, step, result);
+  }
+
   // Ident implements the ExprHelper interface method.
   @Override
   public Expr ident(String name) {

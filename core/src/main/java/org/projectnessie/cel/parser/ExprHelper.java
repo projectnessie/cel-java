@@ -103,6 +103,17 @@ public interface ExprHelper {
       Expr step,
       Expr result);
 
+  /** Fold creates a fold comprehension instruction with two iteration variables. */
+  Expr fold(
+      String iterVar,
+      String iterVar2,
+      Expr iterRange,
+      String accuVar,
+      Expr accuInit,
+      Expr condition,
+      Expr step,
+      Expr result);
+
   /** Ident creates an identifier Expr value. */
   Expr ident(String name);
 

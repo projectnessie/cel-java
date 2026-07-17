@@ -197,6 +197,33 @@ public class CELTest {
   }
 
   @Test
+  void twoVariableComprehensionsBindListIndexAndValue() {
+    Env env = newEnv();
+
+    AstIssuesTuple astIss = env.compile("[2, 4, 6].transformList(i, v, i + v)[2] == 8");
+
+    assertThat(astIss.hasIssues()).isFalse();
+    assertThat(env.program(astIss.getAst()).eval(emptyMap()).getVal()).isSameAs(True);
+    assertThat(
+            env.program(astIss.getAst(), evalOptions(OptExhaustiveEval)).eval(emptyMap()).getVal())
+        .isSameAs(True);
+  }
+
+  @Test
+  void twoVariableComprehensionsBindMapKeyAndValue() {
+    Env env = newEnv();
+
+    AstIssuesTuple astIss =
+        env.compile("{'foo': 'bar'}.transformMap(k, v, k + v)['foo'] == 'foobar'");
+
+    assertThat(astIss.hasIssues()).isFalse();
+    assertThat(env.program(astIss.getAst()).eval(emptyMap()).getVal()).isSameAs(True);
+    assertThat(
+            env.program(astIss.getAst(), evalOptions(OptExhaustiveEval)).eval(emptyMap()).getVal())
+        .isSameAs(True);
+  }
+
+  @Test
   void AstToString() {
     Env stdEnv = newEnv();
     String in = "a + b - (c ? (-d + 4) : e)";

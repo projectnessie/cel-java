@@ -36,11 +36,13 @@ import org.projectnessie.cel.interpreter.Interpretable.EvalExhaustiveAnd;
 import org.projectnessie.cel.interpreter.Interpretable.EvalExhaustiveConditional;
 import org.projectnessie.cel.interpreter.Interpretable.EvalExhaustiveFold;
 import org.projectnessie.cel.interpreter.Interpretable.EvalExhaustiveListFold;
+import org.projectnessie.cel.interpreter.Interpretable.EvalExhaustiveMapFold;
 import org.projectnessie.cel.interpreter.Interpretable.EvalExhaustiveOr;
 import org.projectnessie.cel.interpreter.Interpretable.EvalFold;
 import org.projectnessie.cel.interpreter.Interpretable.EvalList;
 import org.projectnessie.cel.interpreter.Interpretable.EvalListFold;
 import org.projectnessie.cel.interpreter.Interpretable.EvalMap;
+import org.projectnessie.cel.interpreter.Interpretable.EvalMapFold;
 import org.projectnessie.cel.interpreter.Interpretable.EvalOr;
 import org.projectnessie.cel.interpreter.Interpretable.EvalSetMembership;
 import org.projectnessie.cel.interpreter.Interpretable.EvalWatch;
@@ -105,12 +107,16 @@ public interface InterpretableDecorator {
             expr.accuVar,
             expr.iterRange,
             expr.iterVar,
+            expr.iterVar2,
             expr.cond,
             expr.step,
             expr.result);
       }
       if (i instanceof EvalListFold) {
         return new EvalExhaustiveListFold((EvalListFold) i);
+      }
+      if (i instanceof EvalMapFold) {
+        return new EvalExhaustiveMapFold((EvalMapFold) i);
       }
       if (i instanceof InterpretableAttribute) {
         InterpretableAttribute expr = (InterpretableAttribute) i;

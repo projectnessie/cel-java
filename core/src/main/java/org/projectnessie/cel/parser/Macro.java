@@ -20,6 +20,7 @@ import static java.util.Collections.emptyList;
 
 import com.google.api.expr.v1alpha1.Expr;
 import com.google.api.expr.v1alpha1.Expr.CreateList;
+import com.google.api.expr.v1alpha1.Expr.CreateStruct.Entry;
 import com.google.api.expr.v1alpha1.Expr.ExprKindCase;
 import com.google.api.expr.v1alpha1.Expr.Select;
 import java.util.List;
@@ -45,16 +46,20 @@ public final class Macro {
            * predicate holds.
            */
           newReceiverMacro(Operator.All.id, 2, Macro::makeAll),
+          newReceiverMacro(Operator.All.id, 3, Macro::makeAll2),
 
           /* The macro "range.exists(var, predicate)", which is true if for at least one element in
            * range the predicate holds.
            */
           newReceiverMacro(Operator.Exists.id, 2, Macro::makeExists),
+          newReceiverMacro(Operator.Exists.id, 3, Macro::makeExists2),
 
           /* The macro "range.exists_one(var, predicate)", which is true if for exactly one element
            * in range the predicate holds.
            */
           newReceiverMacro(Operator.ExistsOne.id, 2, Macro::makeExistsOne),
+          newReceiverMacro(Operator.ExistsOne.id, 3, Macro::makeExistsOne2),
+          newReceiverMacro("existsOne", 3, Macro::makeExistsOne2),
 
           /* The macro "range.map(var, function)", applies the function to the vars in the range. */
           newReceiverMacro(Operator.Map.id, 2, Macro::makeMap),
@@ -68,6 +73,14 @@ public final class Macro {
            * predicate is false.
            */
           newReceiverMacro(Operator.Filter.id, 2, Macro::makeFilter),
+
+          /* The macro "range.transformList(index, value, function)" transforms entries to a list. */
+          newReceiverMacro("transformList", 3, Macro::makeTransformList),
+          newReceiverMacro("transformList", 4, Macro::makeTransformList),
+
+          /* The macro "range.transformMap(key, value, function)" transforms map values. */
+          newReceiverMacro("transformMap", 3, Macro::makeTransformMap),
+          newReceiverMacro("transformMap", 4, Macro::makeTransformMap),
 
           /* The macro "cel.bind(var, value, result)" binds a local variable for use in result. */
           newReceiverMacro("bind", 3, Macro::makeBind));
@@ -151,12 +164,24 @@ public final class Macro {
     return makeQuantifier(QuantifierKind.quantifierAll, eh, target, args);
   }
 
+  static Expr makeAll2(ExprHelper eh, Expr target, List<Expr> args) {
+    return makeQuantifier2(QuantifierKind.quantifierAll, eh, target, args);
+  }
+
   static Expr makeExists(ExprHelper eh, Expr target, List<Expr> args) {
     return makeQuantifier(QuantifierKind.quantifierExists, eh, target, args);
   }
 
+  static Expr makeExists2(ExprHelper eh, Expr target, List<Expr> args) {
+    return makeQuantifier2(QuantifierKind.quantifierExists, eh, target, args);
+  }
+
   static Expr makeExistsOne(ExprHelper eh, Expr target, List<Expr> args) {
     return makeQuantifier(QuantifierKind.quantifierExistsOne, eh, target, args);
+  }
+
+  static Expr makeExistsOne2(ExprHelper eh, Expr target, List<Expr> args) {
+    return makeQuantifier2(QuantifierKind.quantifierExistsOne, eh, target, args);
   }
 
   static Expr makeQuantifier(QuantifierKind kind, ExprHelper eh, Expr target, List<Expr> args) {
@@ -207,6 +232,59 @@ public final class Macro {
     return eh.fold(v, target, AccumulatorName, init, condition, step, result);
   }
 
+  static Expr makeQuantifier2(QuantifierKind kind, ExprHelper eh, Expr target, List<Expr> args) {
+    String v = extractIdent(args.get(0));
+    if (v == null) {
+      Location location = eh.offsetLocation(args.get(0).getId());
+      throw new ErrorWithLocation(location, "argument must be a simple name");
+    }
+    String v2 = extractIdent(args.get(1));
+    if (v2 == null) {
+      Location location = eh.offsetLocation(args.get(1).getId());
+      throw new ErrorWithLocation(location, "argument must be a simple name");
+    }
+
+    Supplier<Expr> accuIdent = () -> eh.ident(AccumulatorName);
+
+    Expr init;
+    Expr condition;
+    Expr step;
+    Expr result;
+    switch (kind) {
+      case quantifierAll:
+        init = eh.literalBool(true);
+        condition = eh.globalCall(Operator.NotStrictlyFalse.id, accuIdent.get());
+        step = eh.globalCall(Operator.LogicalAnd.id, accuIdent.get(), args.get(2));
+        result = accuIdent.get();
+        break;
+      case quantifierExists:
+        init = eh.literalBool(false);
+        condition =
+            eh.globalCall(
+                Operator.NotStrictlyFalse.id,
+                eh.globalCall(Operator.LogicalNot.id, accuIdent.get()));
+        step = eh.globalCall(Operator.LogicalOr.id, accuIdent.get(), args.get(2));
+        result = accuIdent.get();
+        break;
+      case quantifierExistsOne:
+        Expr zeroExpr = eh.literalInt(0);
+        Expr oneExpr = eh.literalInt(1);
+        init = zeroExpr;
+        condition = eh.literalBool(true);
+        step =
+            eh.globalCall(
+                Operator.Conditional.id,
+                args.get(2),
+                eh.globalCall(Operator.Add.id, accuIdent.get(), oneExpr),
+                accuIdent.get());
+        result = eh.globalCall(Operator.Equals.id, accuIdent.get(), oneExpr);
+        break;
+      default:
+        throw new ErrorWithLocation(null, String.format("unrecognized quantifier '%s'", kind));
+    }
+    return eh.fold(v, v2, target, AccumulatorName, init, condition, step, result);
+  }
+
   static Expr makeMap(ExprHelper eh, Expr target, List<Expr> args) {
     String v = extractIdent(args.get(0));
     if (v == null) {
@@ -248,6 +326,75 @@ public final class Macro {
     Expr step = eh.globalCall(Operator.Add.id, accuExpr, eh.newList(args.get(0)));
     step = eh.globalCall(Operator.Conditional.id, filter, step, accuExpr);
     return eh.fold(v, target, AccumulatorName, init, condition, step, accuExpr);
+  }
+
+  static Expr makeTransformList(ExprHelper eh, Expr target, List<Expr> args) {
+    String v = extractIdent(args.get(0));
+    if (v == null) {
+      Location location = eh.offsetLocation(args.get(0).getId());
+      throw new ErrorWithLocation(location, "argument must be a simple name");
+    }
+    String v2 = extractIdent(args.get(1));
+    if (v2 == null) {
+      Location location = eh.offsetLocation(args.get(1).getId());
+      throw new ErrorWithLocation(location, "argument must be a simple name");
+    }
+
+    Expr fn;
+    Expr filter;
+
+    if (args.size() == 4) {
+      filter = args.get(2);
+      fn = args.get(3);
+    } else {
+      filter = null;
+      fn = args.get(2);
+    }
+
+    Expr accuExpr = eh.ident(AccumulatorName);
+    Expr init = eh.newList();
+    Expr condition = eh.literalBool(true);
+    Expr step = eh.globalCall(Operator.Add.id, accuExpr, eh.newList(fn));
+
+    if (filter != null) {
+      step = eh.globalCall(Operator.Conditional.id, filter, step, accuExpr);
+    }
+    return eh.fold(v, v2, target, AccumulatorName, init, condition, step, accuExpr);
+  }
+
+  static Expr makeTransformMap(ExprHelper eh, Expr target, List<Expr> args) {
+    String v = extractIdent(args.get(0));
+    if (v == null) {
+      Location location = eh.offsetLocation(args.get(0).getId());
+      throw new ErrorWithLocation(location, "argument must be a simple name");
+    }
+    String v2 = extractIdent(args.get(1));
+    if (v2 == null) {
+      Location location = eh.offsetLocation(args.get(1).getId());
+      throw new ErrorWithLocation(location, "argument must be a simple name");
+    }
+
+    Expr fn;
+    Expr filter;
+
+    if (args.size() == 4) {
+      filter = args.get(2);
+      fn = args.get(3);
+    } else {
+      filter = null;
+      fn = args.get(2);
+    }
+
+    Expr accuExpr = eh.ident(AccumulatorName);
+    Expr init = eh.newMap(emptyList());
+    Expr condition = eh.literalBool(true);
+    Entry transformedEntry = eh.newMapEntry(eh.ident(v), fn);
+    Expr step = eh.newMap(asList(transformedEntry));
+
+    if (filter != null) {
+      step = eh.globalCall(Operator.Conditional.id, filter, step, accuExpr);
+    }
+    return eh.fold(v, v2, target, AccumulatorName, init, condition, step, accuExpr);
   }
 
   static Expr makeBind(ExprHelper eh, Expr target, List<Expr> args) {

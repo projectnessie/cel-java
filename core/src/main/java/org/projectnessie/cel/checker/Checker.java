@@ -566,14 +566,23 @@ public final class Checker {
     Type accuType = getType(comp.getAccuInitBuilder());
     Type rangeType = getType(comp.getIterRangeBuilder());
     Type varType;
+    Type var2Type = null;
 
     switch (kindOf(rangeType)) {
       case kindList:
-        varType = rangeType.getListType().getElemType();
+        if (comp.getIterVar2().isEmpty()) {
+          varType = rangeType.getListType().getElemType();
+        } else {
+          varType = Decls.Int;
+          var2Type = rangeType.getListType().getElemType();
+        }
         break;
       case kindMap:
         // Ranges over the keys.
         varType = rangeType.getMapType().getKeyType();
+        if (!comp.getIterVar2().isEmpty()) {
+          var2Type = rangeType.getMapType().getValueType();
+        }
         break;
       case kindDyn:
       case kindError:
@@ -584,10 +593,16 @@ public final class Checker {
         isAssignable(Decls.Dyn, rangeType);
         // Set the range iteration variable to type DYN as well.
         varType = Decls.Dyn;
+        if (!comp.getIterVar2().isEmpty()) {
+          var2Type = Decls.Dyn;
+        }
         break;
       default:
         errors.notAComprehensionRange(location(comp.getIterRangeBuilder()), rangeType);
         varType = Decls.Error;
+        if (!comp.getIterVar2().isEmpty()) {
+          var2Type = Decls.Error;
+        }
         break;
     }
 
@@ -598,6 +613,9 @@ public final class Checker {
     // Create a block scope for the loop.
     env = env.enterScope();
     env.add(Decls.newVar(comp.getIterVar(), varType));
+    if (!comp.getIterVar2().isEmpty()) {
+      env.add(Decls.newVar(comp.getIterVar2(), var2Type));
+    }
     // Check the variable references in the condition and step.
     check(comp.getLoopConditionBuilder());
     assertType(comp.getLoopConditionBuilder(), Decls.Bool);
