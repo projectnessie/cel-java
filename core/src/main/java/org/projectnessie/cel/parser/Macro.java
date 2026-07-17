@@ -26,6 +26,7 @@ import java.util.function.Supplier;
 import org.projectnessie.cel.common.ErrorWithLocation;
 import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.operators.Operator;
+import org.projectnessie.cel.common.types.Overloads;
 
 public final class Macro {
   /** AccumulatorName is the traditional variable name assigned to the fold accumulator variable. */
@@ -65,7 +66,10 @@ public final class Macro {
           /* The macro "range.filter(var, predicate)", filters out the variables for which the
            * predicate is false.
            */
-          newReceiverMacro(Operator.Filter.id, 2, Macro::makeFilter));
+          newReceiverMacro(Operator.Filter.id, 2, Macro::makeFilter),
+
+          /* The macro "cel.bind(var, value, result)" binds a local variable for use in result. */
+          newReceiverMacro("bind", 3, Macro::makeBind));
 
   /** NoMacros list. */
   public static List<Macro> MoMacros = emptyList();
@@ -235,6 +239,33 @@ public final class Macro {
     Expr step = eh.globalCall(Operator.Add.id, accuExpr, eh.newList(args.get(0)));
     step = eh.globalCall(Operator.Conditional.id, filter, step, accuExpr);
     return eh.fold(v, target, AccumulatorName, init, condition, step, accuExpr);
+  }
+
+  static Expr makeBind(ExprHelper eh, Expr target, List<Expr> args) {
+    if (target == null
+        || target.getExprKindCase() != ExprKindCase.IDENT_EXPR
+        || !"cel".equals(target.getIdentExpr().getName())) {
+      Location location = target != null ? eh.offsetLocation(target.getId()) : null;
+      throw new ErrorWithLocation(
+          location, "cel.bind() must be called with receiver identifier cel");
+    }
+
+    String v = extractIdent(args.get(0));
+    if (v == null) {
+      Location location = eh.offsetLocation(args.get(0).getId());
+      throw new ErrorWithLocation(location, "argument must be a simple name");
+    }
+
+    Expr accuExpr = eh.ident(AccumulatorName);
+    Expr dynNull = eh.globalCall(Overloads.TypeConvertDyn, eh.literalNull());
+    return eh.fold(
+        v,
+        eh.newList(args.get(1)),
+        AccumulatorName,
+        dynNull,
+        eh.literalBool(true),
+        args.get(2),
+        accuExpr);
   }
 
   static String extractIdent(Expr e) {

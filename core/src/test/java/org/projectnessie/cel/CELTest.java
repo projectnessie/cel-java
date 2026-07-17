@@ -152,6 +152,26 @@ public class CELTest {
   }
 
   @Test
+  void bindMacroIntroducesLocalVariable() {
+    Env env =
+        newEnv(container("com.example"), declarations(Decls.newVar("com.example.x", Decls.Int)));
+
+    AstIssuesTuple astIss = env.compile("cel.bind(x, 1, x + 1)");
+    assertThat(astIss.hasIssues()).isFalse();
+    assertThat(
+            env.program(astIss.getAst())
+                .eval(mapOf("com.example.x", 42L))
+                .getVal()
+                .equal(IntT.intOf(2)))
+        .isSameAs(True);
+
+    astIss = env.compile("cel.bind(x, {'y': 0}, x.y == 0)");
+    assertThat(astIss.hasIssues()).isFalse();
+    assertThat(env.program(astIss.getAst()).eval(mapOf("com.example.x.y", 42L)).getVal())
+        .isSameAs(True);
+  }
+
+  @Test
   void AstToString() {
     Env stdEnv = newEnv();
     String in = "a + b - (c ? (-d + 4) : e)";

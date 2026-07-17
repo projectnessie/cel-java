@@ -27,6 +27,7 @@ import com.google.api.expr.v1alpha1.Expr.Ident;
 import com.google.api.expr.v1alpha1.Expr.Select;
 import com.google.api.expr.v1alpha1.SourceInfo;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.NullValue;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -75,6 +76,10 @@ final class Helper {
 
   Expr newLiteralInt(Object ctx, long value) {
     return newLiteral(ctx, Constant.newBuilder().setInt64Value(value));
+  }
+
+  Expr newLiteralNull(Object ctx) {
+    return newLiteral(ctx, Constant.newBuilder().setNullValue(NullValue.NULL_VALUE));
   }
 
   Expr newLiteralUint(Object ctx, long value) {

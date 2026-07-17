@@ -113,6 +113,7 @@ class SimpleConformanceTest {
   private static final List<String> TEST_FILES =
       List.of(
           "basic.textproto",
+          "bindings_ext.textproto",
           "comparisons.textproto",
           "conversions.textproto",
           "dynamic.textproto",

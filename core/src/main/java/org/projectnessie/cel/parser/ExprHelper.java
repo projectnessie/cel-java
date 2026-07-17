@@ -40,6 +40,9 @@ public interface ExprHelper {
   /** LiteralInt creates an Expr value for an int literal. */
   Expr literalInt(long value);
 
+  /** LiteralNull creates an Expr value for a null literal. */
+  Expr literalNull();
+
   /** LiteralString creates am Expr value for a string literal. */
   Expr literalString(String value);
 
