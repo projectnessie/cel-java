@@ -141,8 +141,6 @@ class SimpleConformanceTest {
           "dynamic/float/field_assign_proto3_round_to_zero",
           // Malicious too-deep protobuf structure.
           "parse/nest/message_literal",
-          // TODO Actual known issue: protobuf Any returned by this test is wrapped twice.
-          "dynamic/any/var",
           // New CEL-Spec v0.25.2 expectations that need follow-up parser/runtime changes.
           "namespace/namespace_shadowing/comprehension_shadowing,comprehension_shadowing_disambiguation,comprehension_shadowing_parse_only,comprehension_shadowing_selector,comprehension_shadowing_selector_parse_only,comprehension_shadowing_namespaced_selector,comprehension_shadowing_namespaced_selector_parse_only,comprehension_shadowing_nesting",
           "proto2/extensions_has/package_scoped_int32,package_scoped_nested_ext,package_scoped_test_all_types_ext,package_scoped_test_all_types_nested_enum_ext,package_scoped_repeated_test_all_types,message_scoped_int64,message_scoped_nested_ext,message_scoped_nested_enum_ext,message_scoped_repeated_test_all_types",
@@ -613,7 +611,9 @@ class SimpleConformanceTest {
       case Object:
         Message pb = (Message) res.value();
         Value.Builder value = Value.newBuilder();
-        if (pb instanceof ListValue) {
+        if (pb instanceof Any) {
+          value.setObjectValue(unwrapNestedAny((Any) pb));
+        } else if (pb instanceof ListValue) {
           value.setListValue((ListValue) pb);
         } else if (pb instanceof MapValue) {
           value.setMapValue((MapValue) pb);
@@ -624,6 +624,22 @@ class SimpleConformanceTest {
       default:
         throw new IllegalStateException(String.format("Unknown %s", res.type().typeEnum()));
     }
+  }
+
+  private static Any unwrapNestedAny(Any any) {
+    Any current = any;
+    while (current.is(Any.class)) {
+      try {
+        Any next = current.unpack(Any.class);
+        if (next.equals(current)) {
+          return current;
+        }
+        current = next;
+      } catch (InvalidProtocolBufferException e) {
+        return current;
+      }
+    }
+    return current;
   }
 
   private static <T extends Message> T convert(Message message, Class<T> targetType)
