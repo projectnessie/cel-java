@@ -1,57 +1,40 @@
-# Running CEL-spec conformance tests against CEL-Java
+# Running CEL-Spec conformance tests against CEL-Java
 
-If your environment is already setup, just run the shell script
-```shell
-./run-conformance-tests.sh
-```
+The CEL-Java conformance suite is a JUnit test suite that reads upstream CEL-Spec
+simple testdata from the `submodules/cel-spec` Git submodule.
 
-## Requirements & Setup
-
-The CEL-spec conformance test suite is written in Go and uses the bazel build tool.
-
-Required tools:
-* [Bazel build tool](https://bazel.build/) (see [bazelisk](https://github.com/bazelbuild/bazelisk?tab=readme-ov-file#installation))
-  
-    See [Bazel web site](https://bazel.build/install) for installation instructions.
-    Do **not** use the `bazel-bootstrap` package on Ubuntu, because it comes with
-    pre-compiled classes that are built with Java 17 or newer, preventing it from
-    running bazel using older Java versions.
-* gcc
-    
-    On Ubuntu run `apt-get install gcc`
-
-Other required dependencies like "Go" will be managed by bazel.
-
-## FAQ
-
-### Bazel build hangs
-
-If the bazel build does not start, i.e. it gets stuck with messages like
-```
-Starting local Bazel server and connecting to it...
-... still trying to connect to local Bazel server after 10 seconds ...
-... still trying to connect to local Bazel server after 20 seconds ...
-... still trying to connect to local Bazel server after 30 seconds ...
-```
-then kill all bazel processes make sure that Java 11 is the current one. It seems, that the
-above *may* happen when with Java 8.
-
-### Bazel build fails from `./run-conformance-tests.sh`
-
-If the bazel build fails with an error like this (note the `Failed to create temporary file`),
-run the bazel build once from the console:
+Run it with:
 
 ```shell
-cd submodules/cel-spec
-
-bazel build ...
+./gradlew :cel-conformance:test
 ```
 
-If the build still fails, try the following options:
+The suite does not require Bazel, Go, a separate conformance server, or the old
+upstream `simple_test` binary.
 
-```shell
-bazel build ... --sandbox_writable_path="${HOME}/.ccache" --strategy=CppCompile=standalone
+## Test selection
+
+The curated conformance file list and skip list live in:
+
+```text
+conformance/src/test/java/org/projectnessie/cel/conformance/SimpleConformanceTest.java
 ```
 
-After the build succeeds once from that directory, you can use the `./run-conformance-tests.sh`
-script.
+Each skip uses the upstream conformance path:
+
+```text
+file/section/test
+```
+
+or a whole-section path:
+
+```text
+file/section
+```
+
+Unmatched skips fail the test suite, so stale skips are visible when upstream
+testdata changes.
+
+Optional CEL-Spec files such as extension libraries, optionals, and type
+deduction are intentionally not enabled by default. Add those separately with
+explicit skip reasoning.

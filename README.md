@@ -433,17 +433,17 @@ The CEL-Go implementation does not pass these CEL-spec conformance tests:
 
 ```text
 --- FAIL: TestSimpleFile/conversions/int/double_truncate (0.01s)
-    simple_test.go:219: double_truncate: Eval got [int64_value:2], want [int64_value:1]
+    double_truncate: Eval got [int64_value:2], want [int64_value:1]
 --- FAIL: TestSimpleFile/conversions/int/double_truncate_neg (0.01s)
-    simple_test.go:219: double_truncate_neg: Eval got [int64_value:-8], want [int64_value:-7]
+    double_truncate_neg: Eval got [int64_value:-8], want [int64_value:-7]
 --- FAIL: TestSimpleFile/conversions/int/double_half_pos (0.01s)
-    simple_test.go:219: double_half_pos: Eval got [int64_value:12], want [int64_value:11]
+    double_half_pos: Eval got [int64_value:12], want [int64_value:11]
 --- FAIL: TestSimpleFile/conversions/int/double_half_neg (0.01s)
-    simple_test.go:219: double_half_neg: Eval got [int64_value:-4], want [int64_value:-3]
+    double_half_neg: Eval got [int64_value:-4], want [int64_value:-3]
 --- FAIL: TestSimpleFile/conversions/uint/double_truncate (0.01s)
-    simple_test.go:219: double_truncate: Eval got [uint64_value:2], want [uint64_value:1]
+    double_truncate: Eval got [uint64_value:2], want [uint64_value:1]
 --- FAIL: TestSimpleFile/conversions/uint/double_half (0.01s)
-    simple_test.go:219: double_half: Eval got [uint64_value:26], want [uint64_value:25]
+    double_half: Eval got [uint64_value:26], want [uint64_value:25]
 ```
 
 ## Building and testing CEL-Java
@@ -470,6 +470,11 @@ repository, in case you want to use CEL-Java snapshot artifacts from another pro
 The project uses Google Java style and the Spotless plugin. Run `./gradlew spotlessApply` to fix
 formatting issues.
 
-To run the CEL-spec conformance tests, Go, Bazel, and their toolchains are required. From the
-CEL-Java repo, run `conformance/run-conformance-tests.sh`. That script performs the necessary Gradle
-and Bazel builds.
+To run the CEL-Spec conformance tests, use the JUnit-based conformance suite:
+
+```shell
+./gradlew :cel-conformance:test
+```
+
+The conformance suite reads upstream CEL-Spec textproto testdata from the `submodules/cel-spec`
+submodule. It does not require Bazel, Go, or a separate conformance server.
