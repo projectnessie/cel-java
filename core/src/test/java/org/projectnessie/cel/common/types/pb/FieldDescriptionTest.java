@@ -25,6 +25,7 @@ import com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.NestedM
 import com.google.api.expr.v1alpha1.Type;
 import com.google.protobuf.BoolValue;
 import com.google.protobuf.Duration;
+import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Int32Value;
 import com.google.protobuf.Message;
 import com.google.protobuf.NullValue;
@@ -165,6 +166,15 @@ public class FieldDescriptionTest {
     assertThat(td.fieldByName("map_uint64_string").getFrom(pbdb, msg))
         .isEqualTo(Collections.singletonMap(ULong.valueOf(-1L), "large"));
     assertThat(td.fieldByName("map_uint64_uint64").getFrom(pbdb, msg))
+        .isEqualTo(Collections.singletonMap(ULong.valueOf(-1L), ULong.valueOf(Long.MIN_VALUE)));
+
+    DynamicMessage dynMsg =
+        DynamicMessage.newBuilder(msg.getDescriptorForType()).mergeFrom(msg).build();
+    assertThat(td.fieldByName("map_string_uint64").getFrom(pbdb, dynMsg))
+        .isEqualTo(Collections.singletonMap("large", ULong.valueOf(-1L)));
+    assertThat(td.fieldByName("map_uint64_string").getFrom(pbdb, dynMsg))
+        .isEqualTo(Collections.singletonMap(ULong.valueOf(-1L), "large"));
+    assertThat(td.fieldByName("map_uint64_uint64").getFrom(pbdb, dynMsg))
         .isEqualTo(Collections.singletonMap(ULong.valueOf(-1L), ULong.valueOf(Long.MIN_VALUE)));
   }
 
