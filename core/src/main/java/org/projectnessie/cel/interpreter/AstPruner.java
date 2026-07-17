@@ -124,8 +124,7 @@ public final class AstPruner {
     }
 
     // Attempt to build a list literal.
-    if (v instanceof Lister) {
-      Lister list = (Lister) v;
+    if (v instanceof Lister list) {
       int sz = (int) list.size().intValue();
       List<Expr> elemExprs = new ArrayList<>(sz);
       for (int i = 0; i < sz; i++) {
@@ -146,8 +145,7 @@ public final class AstPruner {
     }
 
     // Create a map literal if possible.
-    if (v instanceof Mapper) {
-      Mapper mp = (Mapper) v;
+    if (v instanceof Mapper mp) {
       IteratorT it = mp.iterator();
       List<Entry> entries = new ArrayList<>((int) mp.size().intValue());
       while (it.hasNext() == True) {

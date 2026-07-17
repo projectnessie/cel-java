@@ -135,34 +135,18 @@ public final class FieldDescription extends Description {
   }
 
   private static Class<?> reflectTypeOfField(FieldDescriptor fieldDesc) {
-    switch (fieldDesc.getType()) {
-      case DOUBLE:
-        return Double.class;
-      case FLOAT:
-        return Float.class;
-      case STRING:
-        return String.class;
-      case BOOL:
-        return Boolean.class;
-      case BYTES:
-        return ByteString.class;
-      case INT32:
-      case SFIXED32:
-      case SINT32:
-        return Integer.class;
-      case INT64:
-      case SFIXED64:
-      case SINT64:
-        return Long.class;
-      case UINT32:
-      case UINT64:
-      case FIXED32:
-      case FIXED64:
-        return ULong.class;
-      case ENUM:
-        return Enum.class;
-    }
-    return reflectTypeOf(fieldDesc.getDefaultValue());
+    return switch (fieldDesc.getType()) {
+      case DOUBLE -> Double.class;
+      case FLOAT -> Float.class;
+      case STRING -> String.class;
+      case BOOL -> Boolean.class;
+      case BYTES -> ByteString.class;
+      case INT32, SFIXED32, SINT32 -> Integer.class;
+      case INT64, SFIXED64, SINT64 -> Long.class;
+      case UINT32, UINT64, FIXED32, FIXED64 -> ULong.class;
+      case ENUM -> Enum.class;
+      default -> reflectTypeOf(fieldDesc.getDefaultValue());
+    };
   }
 
   private FieldDescription(
@@ -209,8 +193,7 @@ public final class FieldDescription extends Description {
    * on more than just protobuf field accesses; however, the target here must be a protobuf.Message.
    */
   public boolean isSet(Object target) {
-    if (target instanceof Message) {
-      Message v = (Message) target;
+    if (target instanceof Message v) {
       FieldDescriptor fd = fieldDescriptorFor(v);
       return fd != null && FieldDescription.hasValueForField(fd, v);
     }
@@ -227,12 +210,11 @@ public final class FieldDescription extends Description {
    * protobuf.Message.
    */
   public Object getFrom(Db db, Object target) {
-    if (!(target instanceof Message)) {
+    if (!(target instanceof Message v)) {
       throw new IllegalArgumentException(
           String.format(
               "unsupported field selection target: (%s)%s", target.getClass().getName(), target));
     }
-    Message v = (Message) target;
     // pbRef = v.protoReflect();
     FieldDescriptor fd = fieldDescriptorFor(v);
     Object fieldVal = getValueFromField(fd, v);
@@ -332,26 +314,16 @@ public final class FieldDescription extends Description {
     if (r && desc.isMapField()) {
       return Map.class;
     }
-    switch (desc.getJavaType()) {
-      case ENUM:
-      case MESSAGE:
-        return reflectType;
-      case BOOLEAN:
-        return r ? Boolean[].class : Boolean.class;
-      case BYTE_STRING:
-        return r ? ByteString[].class : ByteString.class;
-      case DOUBLE:
-        return r ? Double[].class : Double.class;
-      case FLOAT:
-        return r ? Float[].class : Float.class;
-      case INT:
-        return r ? Integer[].class : Integer.class;
-      case LONG:
-        return r ? Long[].class : Long.class;
-      case STRING:
-        return r ? String[].class : String.class;
-    }
-    return reflectType;
+    return switch (desc.getJavaType()) {
+      case ENUM, MESSAGE -> reflectType;
+      case BOOLEAN -> r ? Boolean[].class : Boolean.class;
+      case BYTE_STRING -> r ? ByteString[].class : ByteString.class;
+      case DOUBLE -> r ? Double[].class : Double.class;
+      case FLOAT -> r ? Float[].class : Float.class;
+      case INT -> r ? Integer[].class : Integer.class;
+      case LONG -> r ? Long[].class : Long.class;
+      case STRING -> r ? String[].class : String.class;
+    };
   }
 
   /**
@@ -427,10 +399,9 @@ public final class FieldDescription extends Description {
   }
 
   public boolean hasField(Object target) {
-    if (!(target instanceof Message)) {
+    if (!(target instanceof Message message)) {
       return false;
     }
-    Message message = (Message) target;
     FieldDescriptor fd = fieldDescriptorFor(message);
     return fd != null && hasValueForField(fd, message);
   }
@@ -474,8 +445,7 @@ public final class FieldDescription extends Description {
       //  is very inefficient.
       //  There is no way to do a "message.getMapField(desc, key)" (aka a "reflective counterpart"
       //  for the generated map accessor methods like 'getXXXTypeOrThrow()'), too.
-      if (v instanceof List) {
-        List<?> lst = (List<?>) v;
+      if (v instanceof List<?> lst) {
         Map<Object, Object> map = new HashMap<>(lst.size() * 4 / 3 + 1);
         FieldDescriptor keyDesc = desc.getMessageType().findFieldByNumber(1);
         FieldDescriptor valueDesc = desc.getMessageType().findFieldByNumber(2);
@@ -485,8 +455,7 @@ public final class FieldDescription extends Description {
           if (e instanceof MapEntry) {
             key = normalizeUnsignedValue(keyDesc, ((MapEntry<?, ?>) e).getKey());
             value = normalizeUnsignedValue(valueDesc, ((MapEntry<?, ?>) e).getValue());
-          } else if (e instanceof DynamicMessage) {
-            DynamicMessage dynMsg = (DynamicMessage) e;
+          } else if (e instanceof DynamicMessage dynMsg) {
             List<FieldDescriptor> fields = dynMsg.getDescriptorForType().getFields();
             if (fields.size() == 2) {
               FieldDescriptor dynKeyDesc = fields.get(0);
@@ -700,12 +669,10 @@ public final class FieldDescription extends Description {
     }
 
     private Object rawMapEntryValue(Object entry, int fieldNumber) {
-      if (entry instanceof MapEntry) {
-        MapEntry<?, ?> mapEntry = (MapEntry<?, ?>) entry;
+      if (entry instanceof MapEntry<?, ?> mapEntry) {
         return fieldNumber == 1 ? mapEntry.getKey() : mapEntry.getValue();
       }
-      if (entry instanceof DynamicMessage) {
-        DynamicMessage dynMsg = (DynamicMessage) entry;
+      if (entry instanceof DynamicMessage dynMsg) {
         List<FieldDescriptor> fields = dynMsg.getDescriptorForType().getFields();
         if (fields.size() == 2) {
           return dynMsg.getField(fields.get(fieldNumber - 1));

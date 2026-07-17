@@ -91,16 +91,13 @@ public interface InterpretableDecorator {
    */
   static InterpretableDecorator decDisableShortcircuits() {
     return i -> {
-      if (i instanceof EvalOr) {
-        EvalOr expr = (EvalOr) i;
+      if (i instanceof EvalOr expr) {
         return new EvalExhaustiveOr(expr.id, expr.lhs, expr.rhs);
       }
-      if (i instanceof EvalAnd) {
-        EvalAnd expr = (EvalAnd) i;
+      if (i instanceof EvalAnd expr) {
         return new EvalExhaustiveAnd(expr.id, expr.lhs, expr.rhs);
       }
-      if (i instanceof EvalFold) {
-        EvalFold expr = (EvalFold) i;
+      if (i instanceof EvalFold expr) {
         return new EvalExhaustiveFold(
             expr.id,
             expr.accu,
@@ -112,14 +109,13 @@ public interface InterpretableDecorator {
             expr.step,
             expr.result);
       }
-      if (i instanceof EvalListFold) {
-        return new EvalExhaustiveListFold((EvalListFold) i);
+      if (i instanceof EvalListFold fold) {
+        return new EvalExhaustiveListFold(fold);
       }
-      if (i instanceof EvalMapFold) {
-        return new EvalExhaustiveMapFold((EvalMapFold) i);
+      if (i instanceof EvalMapFold fold) {
+        return new EvalExhaustiveMapFold(fold);
       }
-      if (i instanceof InterpretableAttribute) {
-        InterpretableAttribute expr = (InterpretableAttribute) i;
+      if (i instanceof InterpretableAttribute expr) {
         if (expr.attr() instanceof ConditionalAttribute) {
           return new EvalExhaustiveConditional(
               i.id(), expr.adapter(), (ConditionalAttribute) expr.attr());
@@ -146,8 +142,7 @@ public interface InterpretableDecorator {
       if (i instanceof EvalMap) {
         return maybeBuildMapLiteral(i, (EvalMap) i);
       }
-      if (i instanceof InterpretableCall) {
-        InterpretableCall inst = (InterpretableCall) i;
+      if (i instanceof InterpretableCall inst) {
         if (inst.overloadID().equals(Overloads.InList)) {
           return maybeOptimizeSetMembership(i, inst);
         }
@@ -206,10 +201,9 @@ public interface InterpretableDecorator {
     Interpretable[] args = inlist.args();
     Interpretable lhs = args[0];
     Interpretable rhs = args[1];
-    if (!(rhs instanceof InterpretableConst)) {
+    if (!(rhs instanceof InterpretableConst l)) {
       return i;
     }
-    InterpretableConst l = (InterpretableConst) rhs;
     // When the incoming binary call is flagged with as the InList overload, the value will
     // always be convertible to a `traits.Lister` type.
     Lister list = (Lister) l.value();

@@ -15,7 +15,6 @@
  */
 package org.projectnessie.cel.parser;
 
-import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 
 import com.google.api.expr.v1alpha1.Expr;
@@ -36,7 +35,7 @@ public final class Macro {
 
   /** AllMacros includes the list of all spec-supported macros. */
   public static final List<Macro> AllMacros =
-      asList(
+      List.of(
           /* The macro "has(m.f)" which tests the presence of a field, avoiding the need to specify
            * the field as a string.
            */
@@ -87,7 +86,7 @@ public final class Macro {
 
   /** TestOnlyBlockMacros includes the test-only macros used by CEL-Spec block conformance tests. */
   public static final List<Macro> TestOnlyBlockMacros =
-      asList(
+      List.of(
           newReceiverMacro("block", 2, Macro::makeBlock),
           newReceiverMacro("index", 1, Macro::makeIndex),
           newReceiverMacro("iterVar", 2, Macro::makeIterVar),
@@ -389,7 +388,7 @@ public final class Macro {
     Expr init = eh.newMap(emptyList());
     Expr condition = eh.literalBool(true);
     Entry transformedEntry = eh.newMapEntry(eh.ident(v), fn);
-    Expr step = eh.newMap(asList(transformedEntry));
+    Expr step = eh.newMap(List.of(transformedEntry));
 
     if (filter != null) {
       step = eh.globalCall(Operator.Conditional.id, filter, step, accuExpr);
