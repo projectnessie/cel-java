@@ -139,10 +139,8 @@ class SimpleConformanceTest {
           "proto2/extensions_has/package_scoped_int32,package_scoped_nested_ext,package_scoped_test_all_types_ext,package_scoped_test_all_types_nested_enum_ext,package_scoped_repeated_test_all_types,message_scoped_int64,message_scoped_nested_ext,message_scoped_nested_enum_ext,message_scoped_repeated_test_all_types",
           "proto2/extensions_get/package_scoped_int32,package_scoped_nested_ext,package_scoped_test_all_types_ext,package_scoped_test_all_types_nested_enum_ext,package_scoped_repeated_test_all_types,message_scoped_int64,message_scoped_nested_ext,message_scoped_nested_enum_ext,message_scoped_repeated_test_all_types",
           // type_deduction.textproto coverage was added opportunistically. The remaining skips are
-          // checker limitations around optionals, flexible type parameter generality, and legacy
-          // nullable generic candidates.
-          "type_deductions/flexible_type_parameter_assignment/comprehension_type_var_aliasing,optional_none,optional_none_2,optional_dyn_promotion,optional_dyn_promotion_2,optional_in_ternary",
-          "type_deductions/type_parameters/multiple_parameters_generality,multiple_parameters_generality_2",
+          // checker limitations around optionals and legacy nullable generic candidates.
+          "type_deductions/flexible_type_parameter_assignment/optional_none,optional_none_2,optional_dyn_promotion,optional_dyn_promotion_2,optional_in_ternary",
           "type_deductions/legacy_nullable_types/null_assignable_to_abstract_parameter_candidate",
           "enums/strong_proto2",
           "enums/strong_proto3");

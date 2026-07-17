@@ -494,6 +494,8 @@ public final class Types {
         return Kind.kindWrapper;
       case NULL:
         return Kind.kindNull;
+      case ABSTRACT_TYPE:
+        return Kind.kindAbstract;
       case TYPE:
         return Kind.kindType;
       case LIST_TYPE:

@@ -48,8 +48,10 @@ import com.google.api.expr.v1alpha1.Type.MapType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.projectnessie.cel.checker.Types.Kind;
 import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.Source;
@@ -415,10 +417,11 @@ public final class Checker {
       }
 
       Type overloadType = Decls.newFunctionType(overload.getResultType(), overload.getParamsList());
-      if (overload.getTypeParamsCount() > 0) {
+      Set<String> typeParams = collectOverloadTypeParams(overload);
+      if (!typeParams.isEmpty()) {
         // Instantiate overload's type with fresh type variables.
         Mapping substitutions = newMapping();
-        for (String typePar : overload.getTypeParamsList()) {
+        for (String typePar : typeParams) {
           substitutions.add(Decls.newTypeParamType(typePar), newTypeVar());
         }
         overloadType = substitute(substitutions, overloadType, false);
@@ -682,7 +685,7 @@ public final class Checker {
   }
 
   Type getType(Expr.Builder e) {
-    return types.get(e.getId());
+    return substitute(mappings, types.get(e.getId()), false);
   }
 
   void setReference(Expr.Builder e, Reference r) {
@@ -714,6 +717,44 @@ public final class Checker {
 
   static OverloadResolution newResolution(Reference checkedRef, Type t) {
     return new OverloadResolution(checkedRef, t);
+  }
+
+  private static Set<String> collectOverloadTypeParams(Overload overload) {
+    Set<String> typeParams = new LinkedHashSet<>(overload.getTypeParamsList());
+    overload.getParamsList().forEach(type -> collectTypeParams(type, typeParams));
+    collectTypeParams(overload.getResultType(), typeParams);
+    return typeParams;
+  }
+
+  private static void collectTypeParams(Type type, Set<String> typeParams) {
+    switch (kindOf(type)) {
+      case kindTypeParam:
+        typeParams.add(type.getTypeParam());
+        return;
+      case kindAbstract:
+        type.getAbstractType()
+            .getParameterTypesList()
+            .forEach(t -> collectTypeParams(t, typeParams));
+        return;
+      case kindFunction:
+        type.getFunction().getArgTypesList().forEach(t -> collectTypeParams(t, typeParams));
+        collectTypeParams(type.getFunction().getResultType(), typeParams);
+        return;
+      case kindList:
+        collectTypeParams(type.getListType().getElemType(), typeParams);
+        return;
+      case kindMap:
+        MapType mapType = type.getMapType();
+        collectTypeParams(mapType.getKeyType(), typeParams);
+        collectTypeParams(mapType.getValueType(), typeParams);
+        return;
+      case kindType:
+        if (type.getType() != Type.getDefaultInstance()) {
+          collectTypeParams(type.getType(), typeParams);
+        }
+        return;
+      default:
+    }
   }
 
   Location location(Expr.Builder e) {

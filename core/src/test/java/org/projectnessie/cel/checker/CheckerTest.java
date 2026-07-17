@@ -220,6 +220,26 @@ public class CheckerTest {
           .r("[null~null, t~timestamp^t]~list(timestamp)")
           .type(Decls.newListType(Decls.Timestamp)),
       new TestCase()
+          .i("tuple(1, dyn(2u), 3.0)")
+          .env(
+              new env()
+                  .functions(
+                      Decls.newFunction(
+                          "tuple",
+                          Decls.newOverload(
+                              "tuple_T_U_V",
+                              asList(
+                                  Decls.newTypeParamType("T"),
+                                  Decls.newTypeParamType("U"),
+                                  Decls.newTypeParamType("V")),
+                              Decls.newAbstractType(
+                                  "tuple",
+                                  asList(
+                                      Decls.newTypeParamType("T"),
+                                      Decls.newTypeParamType("U"),
+                                      Decls.newTypeParamType("V")))))))
+          .type(Decls.newAbstractType("tuple", asList(Decls.Int, Decls.Dyn, Decls.Double))),
+      new TestCase()
           .i("[1, \"A\"]")
           .r("[1~int, \"A\"~string]~list(dyn)")
           .type(Decls.newListType(Decls.Dyn)),
@@ -1411,7 +1431,7 @@ public class CheckerTest {
       new TestCase()
           .i("[].map(x, [].map(y, x in y && y in x))")
           .error(
-              "ERROR: <input>:1:33: found no matching overload for '@in' applied to '(type_param: \"_var2\", type_param: \"_var0\")'\n"
+              "ERROR: <input>:1:33: found no matching overload for '@in' applied to '(list(type_param: \"_var0\"), type_param: \"_var0\")'\n"
                   + " | [].map(x, [].map(y, x in y && y in x))\n"
                   + " | ................................^"),
       new TestCase()
