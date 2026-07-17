@@ -276,20 +276,24 @@ public final class ProtoTypeRegistry implements TypeRegistry {
         continue;
       }
 
-      Object value = toNativeFieldValue(nv.getValue(), field);
-      if (value.getClass().isArray()) {
-        value = Arrays.asList((Object[]) value);
-      }
+      try {
+        Object value = toNativeFieldValue(nv.getValue(), field);
+        if (value.getClass().isArray()) {
+          value = Arrays.asList((Object[]) value);
+        }
 
-      if (pbDesc.getJavaType() == JavaType.ENUM) {
-        value = intToProtoEnumValues(field, value);
-      }
+        if (pbDesc.getJavaType() == JavaType.ENUM) {
+          value = intToProtoEnumValues(field, value);
+        }
 
-      if (pbDesc.isMapField()) {
-        value = toProtoMapStructure(pbDesc, value);
-      }
+        if (pbDesc.isMapField()) {
+          value = toProtoMapStructure(pbDesc, value);
+        }
 
-      builder.setField(pbDesc, value);
+        builder.setField(pbDesc, value);
+      } catch (RuntimeException e) {
+        return newErr(e, "invalid value for field '%s': %s", name, e.getMessage());
+      }
     }
     return null;
   }

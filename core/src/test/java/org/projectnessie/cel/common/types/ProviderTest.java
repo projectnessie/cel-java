@@ -298,6 +298,18 @@ public class ProviderTest {
   }
 
   @Test
+  void typeRegistryNewValue_InvalidNullFieldAssignmentsReturnErrors() {
+    TypeRegistry reg = newRegistry(TestAllTypes.getDefaultInstance());
+    String typeName = "cel.expr.conformance.proto3.TestAllTypes";
+
+    assertThat(reg.newValue(typeName, mapOf("single_bool", NullValue))).matches(Err::isError);
+    assertThat(reg.newValue(typeName, mapOf("repeated_int32", NullValue))).matches(Err::isError);
+    assertThat(reg.newValue(typeName, mapOf("map_string_string", NullValue))).matches(Err::isError);
+    assertThat(reg.newValue(typeName, mapOf("list_value", NullValue))).matches(Err::isError);
+    assertThat(reg.newValue(typeName, mapOf("single_struct", NullValue))).matches(Err::isError);
+  }
+
+  @Test
   void typeRegistryGetters() {
     TypeRegistry reg = newRegistry(ParsedExpr.getDefaultInstance());
     Val sourceInfo =
