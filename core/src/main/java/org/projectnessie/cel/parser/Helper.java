@@ -121,8 +121,13 @@ final class Helper {
   }
 
   Expr newList(Object ctx, List<Expr> elements) {
+    return newList(ctx, elements, List.of());
+  }
+
+  Expr newList(Object ctx, List<Expr> elements, List<Integer> optionalIndices) {
     return newExprBuilder(ctx)
-        .setListExpr(CreateList.newBuilder().addAllElements(elements))
+        .setListExpr(
+            CreateList.newBuilder().addAllElements(elements).addAllOptionalIndices(optionalIndices))
         .build();
   }
 
@@ -133,7 +138,16 @@ final class Helper {
   }
 
   Entry newMapEntry(long entryID, Expr key, Expr value) {
-    return Entry.newBuilder().setId(entryID).setMapKey(key).setValue(value).build();
+    return newMapEntry(entryID, key, value, false);
+  }
+
+  Entry newMapEntry(long entryID, Expr key, Expr value, boolean optional) {
+    return Entry.newBuilder()
+        .setId(entryID)
+        .setMapKey(key)
+        .setValue(value)
+        .setOptionalEntry(optional)
+        .build();
   }
 
   Expr newObject(Object ctx, String typeName, List<Entry> entries) {
@@ -143,7 +157,16 @@ final class Helper {
   }
 
   Entry newObjectField(long fieldID, String field, Expr value) {
-    return Entry.newBuilder().setId(fieldID).setFieldKey(field).setValue(value).build();
+    return newObjectField(fieldID, field, value, false);
+  }
+
+  Entry newObjectField(long fieldID, String field, Expr value, boolean optional) {
+    return Entry.newBuilder()
+        .setId(fieldID)
+        .setFieldKey(field)
+        .setValue(value)
+        .setOptionalEntry(optional)
+        .build();
   }
 
   Expr newComprehension(
