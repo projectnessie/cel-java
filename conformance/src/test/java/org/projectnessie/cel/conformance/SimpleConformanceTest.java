@@ -43,6 +43,7 @@ import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
+import static org.projectnessie.cel.extension.OptionalLib.optionals;
 import static org.projectnessie.cel.extension.ProtoLib.proto;
 import static org.projectnessie.cel.extension.StringsLib.strings;
 
@@ -138,11 +139,8 @@ class SimpleConformanceTest {
       SkipList.parse(
           // Malicious too-deep protobuf structure.
           "parse/nest/message_literal",
-          // New CEL-Spec v0.25.2 expectations that need follow-up parser/runtime changes.
-          // type_deduction.textproto coverage was added opportunistically. The remaining skips are
-          // checker limitations around optionals and legacy nullable generic candidates.
-          "type_deductions/flexible_type_parameter_assignment/optional_none,optional_none_2,optional_dyn_promotion,optional_dyn_promotion_2,optional_in_ternary",
-          "type_deductions/legacy_nullable_types/null_assignable_to_abstract_parameter_candidate",
+          // Strong enum semantics require typed enum values rather than treating enum literals as
+          // ints.
           "enums/strong_proto2",
           "enums/strong_proto3");
 
@@ -373,6 +371,9 @@ class SimpleConformanceTest {
       }
       if (usesStringExtensions(test.getExpr())) {
         envOptions.add(strings());
+      }
+      if (test.getExpr().contains("optional.")) {
+        envOptions.add(optionals());
       }
       envOptions.addAll(List.of(options));
       return envOptions;
