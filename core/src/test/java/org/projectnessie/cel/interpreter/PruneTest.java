@@ -91,6 +91,12 @@ class PruneTest {
           unknownActivation(), "test == {'field': [1 + 2, 2 + 3]}", "test == {\"field\": [3, 5]}"),
       new TestCase(
           unknownActivation(),
+          "test == {'field': [1 + 2, test]}",
+          "test == {\"field\": [3, test]}"),
+      new TestCase(
+          unknownActivation(), "test == {('fi' + 'eld'): test}", "test == {\"field\": test}"),
+      new TestCase(
+          unknownActivation(),
           "test in {'a': 1, 'field': [test, 3]}.field",
           "test in {\"a\": 1, \"field\": [test, 3]}.field")
       // TODO(issues/) the output test relies on tracking macro expansions back to their original
