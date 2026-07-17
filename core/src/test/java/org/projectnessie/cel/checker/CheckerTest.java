@@ -190,6 +190,16 @@ public class CheckerTest {
       new TestCase().i("[]").r("[]~list(dyn)").type(Decls.newListType(Decls.Dyn)),
       new TestCase().i("[1]").r("[1~int]~list(int)").type(Decls.newListType(Decls.Int)),
       new TestCase()
+          .i("[y, 1]")
+          .env(new env().idents(Decls.newVar("y", Decls.newWrapperType(Decls.Int))))
+          .r("[y~wrapper(int)^y, 1~int]~list(wrapper(int))")
+          .type(Decls.newListType(Decls.newWrapperType(Decls.Int))),
+      new TestCase()
+          .i("[1, y]")
+          .env(new env().idents(Decls.newVar("y", Decls.newWrapperType(Decls.Int))))
+          .r("[1~int, y~wrapper(int)^y]~list(wrapper(int))")
+          .type(Decls.newListType(Decls.newWrapperType(Decls.Int))),
+      new TestCase()
           .i("[1, \"A\"]")
           .r("[1~int, \"A\"~string]~list(dyn)")
           .type(Decls.newListType(Decls.Dyn)),

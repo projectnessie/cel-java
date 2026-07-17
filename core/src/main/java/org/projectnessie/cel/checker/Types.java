@@ -510,6 +510,18 @@ public final class Types {
 
   /** mostGeneral returns the more general of two types which are known to unify. */
   static Type mostGeneral(Type t1, Type t2) {
+    Kind kind1 = kindOf(t1);
+    Kind kind2 = kindOf(t2);
+    if (kind1 == Kind.kindPrimitive && kind2 == Kind.kindWrapper) {
+      if (t1.getPrimitive() == t2.getWrapper()) {
+        return t2;
+      }
+    }
+    if (kind1 == Kind.kindWrapper && kind2 == Kind.kindPrimitive) {
+      if (t1.getWrapper() == t2.getPrimitive()) {
+        return t1;
+      }
+    }
     if (isEqualOrLessSpecific(t1, t2)) {
       return t1;
     }
