@@ -62,6 +62,7 @@ import org.projectnessie.cel.parser.ast.ConstantLiteral;
 import org.projectnessie.cel.parser.ast.ExprList;
 import org.projectnessie.cel.parser.ast.Field;
 import org.projectnessie.cel.parser.ast.FieldInitializerList;
+import org.projectnessie.cel.parser.ast.ListInitializerList;
 import org.projectnessie.cel.parser.ast.MapInitializerList;
 import org.projectnessie.cel.parser.ast.Start;
 
@@ -321,7 +322,11 @@ public final class Parser {
       } else if (isToken(first, LPAREN)) {
         return exprVisit(children.get(1));
       } else if (isToken(first, LBRACKET)) {
-        return helper.newList(helper.id(first), expressionsBetween(children, 1, RBRACKET));
+        long listID = helper.id(first);
+        ListInitializerList list = firstChildOfType(children, ListInitializerList.class);
+        ListElements elements =
+            list != null ? listElements(list) : listElements(children.subList(1, children.size()));
+        return helper.newList(listID, elements.expressions(), elements.optionalIndices());
       } else if (isToken(first, LBRACE)) {
         return helper.newMap(
             helper.id(first), mapEntries(firstChildOfType(children, MapInitializerList.class)));
@@ -377,8 +382,17 @@ public final class Parser {
           if (i >= children.size()) {
             return helper.newExpr(node);
           }
+          boolean optional = false;
+          Node optionalNode = null;
+          if (isToken(children.get(i), QUESTIONMARK)) {
+            optional = true;
+            optionalNode = children.get(i++);
+          }
           String id = fieldName(children.get(i++));
           if (i < children.size() && isToken(children.get(i), LPAREN)) {
+            if (optional) {
+              return reportError(optionalNode, "optional select does not support function calls");
+            }
             Node open = children.get(i++);
             long openID = helper.id(open);
             List<Expr> args = expressionsBetween(children, i, RPAREN);
@@ -389,16 +403,30 @@ public final class Parser {
               i++;
             }
             operand = receiverCallOrMacro(openID, id, operand, args);
+          } else if (optional) {
+            operand =
+                globalCallOrMacro(
+                    helper.id(optionalNode),
+                    Operator.OptionalSelect.id,
+                    operand,
+                    helper.newLiteralString(optionalNode, id));
           } else {
             operand = helper.newSelect(op, operand, id);
           }
         } else if (isToken(op, LBRACKET)) {
           long opID = helper.id(op);
+          boolean optional = false;
+          if (isToken(children.get(i), QUESTIONMARK)) {
+            optional = true;
+            opID = helper.id(children.get(i++));
+          }
           Expr index = exprVisit(children.get(i++));
           if (i < children.size() && isToken(children.get(i), RBRACKET)) {
             i++;
           }
-          operand = globalCallOrMacro(opID, Operator.Index.id, operand, index);
+          operand =
+              globalCallOrMacro(
+                  opID, optional ? Operator.OptionalIndex.id : Operator.Index.id, operand, index);
         } else if (isToken(op, LBRACE)) {
           String messageName = extractQualifiedName(operand);
           FieldInitializerList fields =
@@ -530,6 +558,34 @@ public final class Parser {
       return result;
     }
 
+    private ListElements listElements(ListInitializerList list) {
+      if (list == null) {
+        return new ListElements(Collections.emptyList(), Collections.emptyList());
+      }
+      return listElements(significantChildren(list));
+    }
+
+    private ListElements listElements(List<Node> children) {
+      List<Expr> expressions = new ArrayList<>();
+      List<Integer> optionalIndices = new ArrayList<>();
+      boolean optional = false;
+      for (Node child : children) {
+        if (isToken(child, COMMA) || isToken(child, RBRACKET)) {
+          continue;
+        }
+        if (isToken(child, QUESTIONMARK)) {
+          optional = true;
+          continue;
+        }
+        if (optional) {
+          optionalIndices.add(expressions.size());
+          optional = false;
+        }
+        expressions.add(exprVisit(child));
+      }
+      return new ListElements(expressions, optionalIndices);
+    }
+
     private List<Expr> expressionsBetween(List<Node> children, int start, Token.TokenType end) {
       List<Expr> result = new ArrayList<>();
       for (int i = start; i < children.size() && !isToken(children.get(i), end); i++) {
@@ -553,6 +609,11 @@ public final class Parser {
       List<Node> children = significantChildren(fields);
       List<Entry> result = new ArrayList<>();
       for (int i = 0; i < children.size(); ) {
+        boolean optional = false;
+        if (isToken(children.get(i), QUESTIONMARK)) {
+          optional = true;
+          i++;
+        }
         Node field = children.get(i++);
         if (i >= children.size() || !isToken(children.get(i), COLON)) {
           break;
@@ -563,7 +624,7 @@ public final class Parser {
         }
         long colonID = helper.id(colon);
         Expr value = exprVisit(children.get(i++));
-        result.add(helper.newObjectField(colonID, fieldName(field), value));
+        result.add(helper.newObjectField(colonID, fieldName(field), value, optional));
         if (i < children.size() && isToken(children.get(i), COMMA)) {
           i++;
         }
@@ -578,6 +639,11 @@ public final class Parser {
       List<Node> children = significantChildren(entries);
       List<Entry> result = new ArrayList<>();
       for (int i = 0; i < children.size(); ) {
+        boolean optional = false;
+        if (isToken(children.get(i), QUESTIONMARK)) {
+          optional = true;
+          i++;
+        }
         Node keyNode = children.get(i++);
         if (i >= children.size() || !isToken(children.get(i), COLON)) {
           break;
@@ -589,7 +655,7 @@ public final class Parser {
           break;
         }
         Expr value = exprVisit(children.get(i++));
-        result.add(helper.newMapEntry(colonID, key, value));
+        result.add(helper.newMapEntry(colonID, key, value, optional));
         if (i < children.size() && isToken(children.get(i), COMMA)) {
           i++;
         }
@@ -775,4 +841,6 @@ public final class Parser {
     }
     return null;
   }
+
+  private record ListElements(List<Expr> expressions, List<Integer> optionalIndices) {}
 }
