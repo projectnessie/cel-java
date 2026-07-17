@@ -268,12 +268,16 @@ public final class ProtoTypeRegistry implements TypeRegistry {
       // TODO resolve inefficiency for maps: first converted from a MapT to a native Java map and
       //  then to a protobuf struct. The intermediate step (the Java map) could be omitted.
 
+      FieldDescriptor pbDesc = field.descriptor();
+      if (nv.getValue() == org.projectnessie.cel.common.types.NullT.NullValue
+          && isNullClearedField(pbDesc)) {
+        continue;
+      }
+
       Object value = nv.getValue().convertToNative(field.reflectType());
       if (value.getClass().isArray()) {
         value = Arrays.asList((Object[]) value);
       }
-
-      FieldDescriptor pbDesc = field.descriptor();
 
       if (pbDesc.getJavaType() == JavaType.ENUM) {
         value = intToProtoEnumValues(field, value);
@@ -286,6 +290,20 @@ public final class ProtoTypeRegistry implements TypeRegistry {
       builder.setField(pbDesc, value);
     }
     return null;
+  }
+
+  private static boolean isNullClearedField(FieldDescriptor field) {
+    if (field.getJavaType() != JavaType.MESSAGE || field.isRepeated() || field.isMapField()) {
+      return false;
+    }
+    String typeName = field.getMessageType().getFullName();
+    Type wellKnownType = Checked.CheckedWellKnowns.get(typeName);
+    if (wellKnownType == null) {
+      return true;
+    }
+    return wellKnownType.hasWrapper()
+        || typeName.equals("google.protobuf.Duration")
+        || typeName.equals("google.protobuf.Timestamp");
   }
 
   /**

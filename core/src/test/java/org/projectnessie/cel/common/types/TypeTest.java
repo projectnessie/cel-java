@@ -62,4 +62,17 @@ public class TypeTest {
   void typeType() {
     assertThat(TypeType.type()).isSameAs(TypeType);
   }
+
+  @Test
+  void objectTypeEqualsBuiltInTypeWithSameName() {
+    assertThat(TypeT.newObjectTypeValue("google.protobuf.Timestamp").equal(TimestampType))
+        .isSameAs(BoolT.True);
+    assertThat(TimestampType.equal(TypeT.newObjectTypeValue("google.protobuf.Timestamp")))
+        .isSameAs(BoolT.True);
+
+    assertThat(TypeT.newObjectTypeValue("google.protobuf.Duration").equal(DurationType))
+        .isSameAs(BoolT.True);
+    assertThat(DurationType.equal(TypeT.newObjectTypeValue("google.protobuf.Duration")))
+        .isSameAs(BoolT.True);
+  }
 }

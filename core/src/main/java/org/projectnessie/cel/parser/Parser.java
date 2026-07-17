@@ -52,6 +52,7 @@ import org.projectnessie.cel.parser.gen.CELParser.CreateStructContext;
 import org.projectnessie.cel.parser.gen.CELParser.DoubleContext;
 import org.projectnessie.cel.parser.gen.CELParser.ExprContext;
 import org.projectnessie.cel.parser.gen.CELParser.ExprListContext;
+import org.projectnessie.cel.parser.gen.CELParser.FieldContext;
 import org.projectnessie.cel.parser.gen.CELParser.FieldInitializerListContext;
 import org.projectnessie.cel.parser.gen.CELParser.IdentOrGlobalCallContext;
 import org.projectnessie.cel.parser.gen.CELParser.IndexContext;
@@ -694,14 +695,14 @@ public final class Parser {
       List<Token> cols = ctx.cols;
       List<ExprContext> vals = ctx.values;
       for (int i = 0; i < ctx.fields.size(); i++) {
-        Token f = ctx.fields.get(i);
+        FieldContext f = ctx.fields.get(i);
         if (i >= cols.size() || i >= vals.size()) {
           // This is the result of a syntax error detected elsewhere.
           return Collections.emptyList();
         }
         long initID = helper.id(cols.get(i));
         Expr value = exprVisit(vals.get(i));
-        Entry field = helper.newObjectField(initID, f.getText(), value);
+        Entry field = helper.newObjectField(initID, fieldName(f), value);
         result.add(field);
       }
       return result;
@@ -739,12 +740,20 @@ public final class Parser {
       if (ctx.id == null) {
         return helper.newExpr(ctx);
       }
-      String id = ctx.id.getText();
+      String id = fieldName(ctx.id);
       if (ctx.open != null) {
         long opID = helper.id(ctx.open);
         return receiverCallOrMacro(opID, id, operand, visitList(ctx.args));
       }
       return helper.newSelect(ctx.op, operand, id);
+    }
+
+    private String fieldName(FieldContext ctx) {
+      String text = ctx.getText();
+      if (text.length() >= 2 && text.charAt(0) == '`' && text.charAt(text.length() - 1) == '`') {
+        return text.substring(1, text.length() - 1);
+      }
+      return text;
     }
 
     private List<Entry> visitMapInitializerList(MapInitializerListContext ctx) {

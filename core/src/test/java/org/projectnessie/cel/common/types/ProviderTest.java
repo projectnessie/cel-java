@@ -208,6 +208,39 @@ public class ProviderTest {
   }
 
   @Test
+  void typeRegistryNewValue_NullWrapperFieldIsUnset() {
+    TypeRegistry reg = newRegistry(TestAllTypes.getDefaultInstance());
+    Val exp =
+        reg.newValue(
+            "cel.expr.conformance.proto3.TestAllTypes", mapOf("single_int32_wrapper", NullValue));
+
+    assertThat(exp).matches(v -> !Err.isError(v));
+    TestAllTypes ce = exp.convertToNative(TestAllTypes.class);
+    assertThat(ce.hasSingleInt32Wrapper()).isFalse();
+  }
+
+  @Test
+  void typeRegistryNewValue_NullMessageFieldsAreUnset() {
+    TypeRegistry reg = newRegistry(TestAllTypes.getDefaultInstance());
+    Val exp =
+        reg.newValue(
+            "cel.expr.conformance.proto3.TestAllTypes",
+            mapOf(
+                "single_nested_message",
+                NullValue,
+                "single_duration",
+                NullValue,
+                "single_timestamp",
+                NullValue));
+
+    assertThat(exp).matches(v -> !Err.isError(v));
+    TestAllTypes ce = exp.convertToNative(TestAllTypes.class);
+    assertThat(ce.hasSingleNestedMessage()).isFalse();
+    assertThat(ce.hasSingleDuration()).isFalse();
+    assertThat(ce.hasSingleTimestamp()).isFalse();
+  }
+
+  @Test
   void typeRegistryGetters() {
     TypeRegistry reg = newRegistry(ParsedExpr.getDefaultInstance());
     Val sourceInfo =

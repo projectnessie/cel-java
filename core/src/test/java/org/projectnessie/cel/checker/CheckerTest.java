@@ -270,6 +270,10 @@ public class CheckerTest {
                   + "}~cel.expr.conformance.proto3.TestAllTypes^cel.expr.conformance.proto3.TestAllTypes")
           .type(Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes")),
       new TestCase()
+          .i("TestAllTypes{single_bool_wrapper: null}")
+          .container("cel.expr.conformance.proto3")
+          .type(Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes")),
+      new TestCase()
           .i("TestAllTypes{single_int32: 1u}")
           .container("cel.expr.conformance.proto3")
           .error(

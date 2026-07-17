@@ -154,11 +154,11 @@ public class TypeT implements Type, Val {
     if (this == o) {
       return true;
     }
-    if (o == null || getClass() != o.getClass()) {
+    if (!(o instanceof Type)) {
       return false;
     }
     Type typeValue = (Type) o;
-    return typeEnum == typeValue.typeEnum() && typeName().equals(typeValue.typeName());
+    return typeName().equals(typeValue.typeName());
   }
 
   @Override

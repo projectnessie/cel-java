@@ -337,6 +337,9 @@ public final class Types {
     if (isDynOrError(t1) || isDynOrError(t2)) {
       return true;
     }
+    if (kind2 == Kind.kindNull) {
+      return internalIsAssignableNull(t1);
+    }
 
     // Test for when the types do not need to agree, but are more specific than dyn.
     switch (kind1) {
