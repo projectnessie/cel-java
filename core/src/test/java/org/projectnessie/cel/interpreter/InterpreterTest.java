@@ -345,6 +345,10 @@ class InterpreterTest {
       new TestCase(InterpreterTestCase.map_key_null)
           .expr("{null:false}[null]")
           .err("message: unsupported key type"),
+      new TestCase(InterpreterTestCase.map_key_float)
+          .expr("{3.3:15.15, 1.0: 5}[1.0]")
+          .unchecked()
+          .err("message: unsupported key type"),
       new TestCase(InterpreterTestCase.map_value_repeat_key_heterogeneous)
           .expr("{0: 1, 0u: 2}[0.0]")
           .err("message: Failed with repeated key"),

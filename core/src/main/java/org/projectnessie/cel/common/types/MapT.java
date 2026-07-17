@@ -87,6 +87,18 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
     return newWrappedMap(adapter, newMap);
   }
 
+  public static boolean isSupportedLiteralKeyType(Val key) {
+    switch (key.type().typeEnum()) {
+      case Bool:
+      case Int:
+      case String:
+      case Uint:
+        return true;
+      default:
+        return false;
+    }
+  }
+
   @Override
   public Type type() {
     return MapType;

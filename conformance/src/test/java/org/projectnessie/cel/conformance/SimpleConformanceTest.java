@@ -158,8 +158,7 @@ class SimpleConformanceTest {
           "type_deductions/type_parameters/multiple_parameters_generality,multiple_parameters_generality_2",
           "type_deductions/legacy_nullable_types/null_assignable_to_message_parameter_candidate,null_assignable_to_duration_parameter_candidate,null_assignable_to_timestamp_parameter_candidate,null_assignable_to_abstract_parameter_candidate",
           "enums/strong_proto2",
-          "enums/strong_proto3",
-          "fields/qualified_identifier_resolution/map_key_float");
+          "enums/strong_proto3");
 
   private static final Set<String> matchedSkips = new LinkedHashSet<>();
   private static final AtomicInteger total = new AtomicInteger();

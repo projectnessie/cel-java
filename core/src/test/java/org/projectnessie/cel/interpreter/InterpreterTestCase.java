@@ -72,6 +72,7 @@ public enum InterpreterTestCase {
   lt_dyn_int_big_uint,
   lt_dyn_uint_big_double,
   lt_ne_dyn_int_double,
+  map_key_float,
   map_key_mixed_numbers_lossy_double_key,
   map_key_string_and_int_are_distinct,
   eq_dyn_string_int,
