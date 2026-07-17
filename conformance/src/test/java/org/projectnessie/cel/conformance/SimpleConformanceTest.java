@@ -43,6 +43,7 @@ import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
+import static org.projectnessie.cel.extension.EncodersLib.encoders;
 import static org.projectnessie.cel.extension.OptionalLib.optionals;
 import static org.projectnessie.cel.extension.ProtoLib.proto;
 import static org.projectnessie.cel.extension.StringsLib.strings;
@@ -115,6 +116,7 @@ class SimpleConformanceTest {
           "comparisons.textproto",
           "conversions.textproto",
           "dynamic.textproto",
+          "encoders_ext.textproto",
           "enums.textproto",
           "fields.textproto",
           "fp_math.textproto",
@@ -402,6 +404,9 @@ class SimpleConformanceTest {
       }
       if (usesStringExtensions(test.getExpr())) {
         envOptions.add(strings());
+      }
+      if (test.getExpr().contains("base64.")) {
+        envOptions.add(encoders());
       }
       if (test.getExpr().contains("optional.")) {
         envOptions.add(optionals());
