@@ -24,6 +24,7 @@ import static org.projectnessie.cel.EnvOption.declarations;
 import static org.projectnessie.cel.EnvOption.types;
 import static org.projectnessie.cel.Library.StdLib;
 import static org.projectnessie.cel.Util.mapOf;
+import static org.projectnessie.cel.extension.ProtoLib.proto;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.Descriptors;
@@ -83,6 +84,37 @@ public class ProtoTest {
         .extracting(Val::booleanValue)
         .isEqualTo(TRUE);
     assertThat(env.program(checked.getAst()).eval(mapOf("msg", anyValue)).getVal())
+        .extracting(Val::booleanValue)
+        .isEqualTo(TRUE);
+  }
+
+  @Test
+  void protoExtensionLibraryFunctions() {
+    Env env =
+        newEnv(
+            proto(),
+            types(
+                TestAllTypes.getDefaultInstance(),
+                Proto2ExtensionScopedMessage.getDefaultInstance()),
+            declarations(
+                Decls.newVar(
+                    "msg", Decls.newObjectType("cel.expr.conformance.proto2.TestAllTypes"))));
+    TestAllTypes message =
+        TestAllTypes.newBuilder().setExtension(TestAllTypesExtensions.int32Ext, 42).build();
+
+    String expression =
+        "proto.hasExt(msg, cel.expr.conformance.proto2.int32_ext) "
+            + "&& proto.getExt(msg, cel.expr.conformance.proto2.int32_ext) == 42";
+
+    AstIssuesTuple parsed = env.parse(expression);
+    assertThat(parsed).extracting(AstIssuesTuple::hasIssues).isEqualTo(FALSE);
+    assertThat(env.program(parsed.getAst()).eval(mapOf("msg", message)).getVal())
+        .extracting(Val::booleanValue)
+        .isEqualTo(TRUE);
+
+    AstIssuesTuple checked = env.check(parsed.getAst());
+    assertThat(checked).extracting(AstIssuesTuple::hasIssues).isEqualTo(FALSE);
+    assertThat(env.program(checked.getAst()).eval(mapOf("msg", message)).getVal())
         .extracting(Val::booleanValue)
         .isEqualTo(TRUE);
   }

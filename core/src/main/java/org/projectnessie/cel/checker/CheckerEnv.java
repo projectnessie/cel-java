@@ -36,6 +36,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import org.projectnessie.cel.common.containers.Container;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.parser.Macro;
@@ -149,6 +150,17 @@ public final class CheckerEnv {
                 candidate,
                 Decls.Int,
                 Constant.newBuilder().setInt64Value(enumValue.intValue()).build());
+        declarations.addIdent(decl);
+        return decl;
+      }
+
+      Val identValue = provider.findIdent(candidate);
+      if (identValue != null && identValue.type().typeEnum() == TypeEnum.String) {
+        Decl decl =
+            Decls.newIdent(
+                candidate,
+                Decls.String,
+                Constant.newBuilder().setStringValue(identValue.value().toString()).build());
         declarations.addIdent(decl);
         return decl;
       }

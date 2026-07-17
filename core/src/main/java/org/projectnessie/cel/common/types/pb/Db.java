@@ -180,17 +180,19 @@ public final class Db {
 
   public FieldDescription describeExtension(String messageType, String extensionName) {
     extensionName = sanitizeProtoName(extensionName);
-    FileDescription fd = revFileDescriptorMap.get(extensionName);
-    if (fd == null) {
-      return null;
-    }
-    FieldDescription extension = fd.getExtensionDescription(extensionName);
+    FieldDescription extension = describeExtension(extensionName);
     if (extension == null
         || !sanitizeProtoName(messageType)
             .equals(extension.descriptor().getContainingType().getFullName())) {
       return null;
     }
     return extension;
+  }
+
+  public FieldDescription describeExtension(String extensionName) {
+    extensionName = sanitizeProtoName(extensionName);
+    FileDescription fd = revFileDescriptorMap.get(extensionName);
+    return fd != null ? fd.getExtensionDescription(extensionName) : null;
   }
 
   ExtensionRegistry extensionRegistry() {

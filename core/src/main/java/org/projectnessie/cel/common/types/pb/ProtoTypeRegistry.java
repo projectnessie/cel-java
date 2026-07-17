@@ -30,6 +30,7 @@ import static org.projectnessie.cel.common.types.ListT.ListType;
 import static org.projectnessie.cel.common.types.MapT.MapType;
 import static org.projectnessie.cel.common.types.NullT.NullType;
 import static org.projectnessie.cel.common.types.StringT.StringType;
+import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.TimestampT.TimestampType;
 import static org.projectnessie.cel.common.types.TypeT.TypeType;
 import static org.projectnessie.cel.common.types.TypeT.newObjectTypeValue;
@@ -244,6 +245,9 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     EnumValueDescription enumVal = pbdb.describeEnum(identName);
     if (enumVal != null) {
       return intOf(enumVal.value());
+    }
+    if (pbdb.describeExtension(identName) != null) {
+      return stringOf(identName);
     }
     return null;
   }

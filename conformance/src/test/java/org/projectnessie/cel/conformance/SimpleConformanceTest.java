@@ -43,6 +43,7 @@ import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
+import static org.projectnessie.cel.extension.ProtoLib.proto;
 
 import com.google.api.expr.v1alpha1.CheckedExpr;
 import com.google.api.expr.v1alpha1.Decl;
@@ -123,6 +124,7 @@ class SimpleConformanceTest {
           "parse.textproto",
           "plumbing.textproto",
           "proto2.textproto",
+          "proto2_ext.textproto",
           "proto3.textproto",
           "string.textproto",
           "timestamps.textproto",
@@ -316,13 +318,8 @@ class SimpleConformanceTest {
 
       Env env =
           newCustomEnv(
-              StdLib(),
-              container(test.getContainer()),
-              declarations(typeEnv),
-              types(
-                  dev.cel.expr.conformance.proto2.TestAllTypes.getDefaultInstance(),
-                  dev.cel.expr.conformance.proto2.Proto2ExtensionScopedMessage.getDefaultInstance(),
-                  dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance()));
+              conformanceEnvOptions(test, StdLib(), declarations(typeEnv))
+                  .toArray(new EnvOption[0]));
 
       AstIssuesTuple astIss = env.check(parsedExprToAst(parsedExpr));
       if (astIss.hasIssues()) {
@@ -340,13 +337,7 @@ class SimpleConformanceTest {
     }
 
     private static ExprValue eval(SimpleTest test, Ast ast) {
-      Env env =
-          newEnv(
-              container(test.getContainer()),
-              types(
-                  dev.cel.expr.conformance.proto2.TestAllTypes.getDefaultInstance(),
-                  dev.cel.expr.conformance.proto2.Proto2ExtensionScopedMessage.getDefaultInstance(),
-                  dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance()));
+      Env env = newEnv(conformanceEnvOptions(test).toArray(new EnvOption[0]));
 
       Program program = env.program(ast);
       Map<String, Object> args = new HashMap<>();
@@ -364,6 +355,22 @@ class SimpleConformanceTest {
       return ExprValue.newBuilder()
           .setError(ErrorSet.newBuilder().addErrors(Status.newBuilder().setMessage(err.toString())))
           .build();
+    }
+
+    private static List<EnvOption> conformanceEnvOptions(SimpleTest test, EnvOption... options) {
+      List<EnvOption> envOptions = new ArrayList<>();
+      envOptions.add(container(test.getContainer()));
+      envOptions.add(
+          types(
+              dev.cel.expr.conformance.proto2.TestAllTypes.getDefaultInstance(),
+              dev.cel.expr.conformance.proto2.Proto2ExtensionScopedMessage.getDefaultInstance(),
+              dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance()));
+      if (test.getExpr().startsWith("proto.hasExt(")
+          || test.getExpr().startsWith("proto.getExt(")) {
+        envOptions.add(proto());
+      }
+      envOptions.addAll(List.of(options));
+      return envOptions;
     }
   }
 
