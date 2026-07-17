@@ -62,22 +62,17 @@ public final class Types {
       case kindNull:
         return "null";
       case kindPrimitive:
-        switch (t.getPrimitive()) {
-          case UINT64:
-            return "uint";
-          case INT64:
-            return "int";
-          case BOOL:
-            return "bool";
-          case BYTES:
-            return "bytes";
-          case DOUBLE:
-            return "double";
-          case STRING:
-            return "string";
-        }
-        // unrecognizes & not-specified - ignore above
-        return t.getPrimitive().toString().toLowerCase(Locale.ROOT).trim();
+        return switch (t.getPrimitive()) {
+          case UINT64 -> "uint";
+          case INT64 -> "int";
+          case BOOL -> "bool";
+          case BYTES -> "bytes";
+          case DOUBLE -> "double";
+          case STRING -> "string";
+          default ->
+              // unrecognizes & not-specified - ignore above
+              t.getPrimitive().toString().toLowerCase(Locale.ROOT).trim();
+        };
       case kindWellKnown:
         switch (t.getWellKnown()) {
           case ANY:
@@ -196,14 +191,11 @@ public final class Types {
   static boolean isDyn(Type t) {
     // Note: object type values that are well-known and map to a DYN value in practice
     // are sanitized prior to being added to the environment.
-    switch (kindOf(t)) {
-      case kindDyn:
-        return true;
-      case kindWellKnown:
-        return t.getWellKnown() == WellKnownType.ANY;
-      default:
-        return false;
-    }
+    return switch (kindOf(t)) {
+      case kindDyn -> true;
+      case kindWellKnown -> t.getWellKnown() == WellKnownType.ANY;
+      default -> false;
+    };
   }
 
   /** isDynOrError returns true if the input is either an Error, DYN, or well-known ANY message. */
@@ -356,28 +348,22 @@ public final class Types {
     }
 
     // Test for when the types must agree.
-    switch (kind1) {
+    return switch (kind1) {
       // ERROR, TYPE_PARAM, and DYN handled above.
-      case kindAbstract:
-        return internalIsAssignableAbstractType(m, t1.getAbstractType(), t2.getAbstractType());
-      case kindFunction:
-        return internalIsAssignableFunction(m, t1.getFunction(), t2.getFunction());
-      case kindList:
-        return internalIsAssignable(
-            m, t1.getListType().getElemType(), t2.getListType().getElemType());
-      case kindMap:
-        return internalIsAssignableMap(m, t1.getMapType(), t2.getMapType());
-      case kindObject:
-        return t1.getMessageType().equals(t2.getMessageType());
-      case kindType:
-        // A type is a type is a type, any additional parameterization of the
-        // type cannot affect method resolution or assignability.
-        return true;
-      case kindWellKnown:
-        return t1.getWellKnown() == t2.getWellKnown();
-      default:
-        return false;
-    }
+      case kindAbstract ->
+          internalIsAssignableAbstractType(m, t1.getAbstractType(), t2.getAbstractType());
+      case kindFunction -> internalIsAssignableFunction(m, t1.getFunction(), t2.getFunction());
+      case kindList ->
+          internalIsAssignable(m, t1.getListType().getElemType(), t2.getListType().getElemType());
+      case kindMap -> internalIsAssignableMap(m, t1.getMapType(), t2.getMapType());
+      case kindObject -> t1.getMessageType().equals(t2.getMessageType());
+      case kindType ->
+          // A type is a type is a type, any additional parameterization of the
+          // type cannot affect method resolution or assignability.
+          true;
+      case kindWellKnown -> t1.getWellKnown() == t2.getWellKnown();
+      default -> false;
+    };
   }
 
   /**
@@ -429,16 +415,10 @@ public final class Types {
 
   /** internalIsAssignableNull returns true if the type is nullable. */
   static boolean internalIsAssignableNull(Type t) {
-    switch (kindOf(t)) {
-      case kindAbstract:
-      case kindObject:
-      case kindNull:
-      case kindWellKnown:
-      case kindWrapper:
-        return true;
-      default:
-        return false;
-    }
+    return switch (kindOf(t)) {
+      case kindAbstract, kindObject, kindNull, kindWellKnown, kindWrapper -> true;
+      default -> false;
+    };
   }
 
   /**
@@ -446,14 +426,11 @@ public final class Types {
    * for the primitive type.
    */
   static boolean internalIsAssignablePrimitive(PrimitiveType p, Type target) {
-    switch (kindOf(target)) {
-      case kindPrimitive:
-        return p == target.getPrimitive();
-      case kindWrapper:
-        return p == target.getWrapper();
-      default:
-        return false;
-    }
+    return switch (kindOf(target)) {
+      case kindPrimitive -> p == target.getPrimitive();
+      case kindWrapper -> p == target.getWrapper();
+      default -> false;
+    };
   }
 
   /** isAssignable returns an updated type substitution mapping if t1 is assignable to t2. */
@@ -479,35 +456,22 @@ public final class Types {
     if (t == null || t.getTypeKindCase() == TypeKindCase.TYPEKIND_NOT_SET) {
       return Kind.kindUnknown;
     }
-    switch (t.getTypeKindCase()) {
-      case ERROR:
-        return Kind.kindError;
-      case FUNCTION:
-        return Kind.kindFunction;
-      case DYN:
-        return Kind.kindDyn;
-      case PRIMITIVE:
-        return Kind.kindPrimitive;
-      case WELL_KNOWN:
-        return Kind.kindWellKnown;
-      case WRAPPER:
-        return Kind.kindWrapper;
-      case NULL:
-        return Kind.kindNull;
-      case ABSTRACT_TYPE:
-        return Kind.kindAbstract;
-      case TYPE:
-        return Kind.kindType;
-      case LIST_TYPE:
-        return Kind.kindList;
-      case MAP_TYPE:
-        return Kind.kindMap;
-      case MESSAGE_TYPE:
-        return Kind.kindObject;
-      case TYPE_PARAM:
-        return Kind.kindTypeParam;
-    }
-    return Kind.kindUnknown;
+    return switch (t.getTypeKindCase()) {
+      case ERROR -> Kind.kindError;
+      case FUNCTION -> Kind.kindFunction;
+      case DYN -> Kind.kindDyn;
+      case PRIMITIVE -> Kind.kindPrimitive;
+      case WELL_KNOWN -> Kind.kindWellKnown;
+      case WRAPPER -> Kind.kindWrapper;
+      case NULL -> Kind.kindNull;
+      case ABSTRACT_TYPE -> Kind.kindAbstract;
+      case TYPE -> Kind.kindType;
+      case LIST_TYPE -> Kind.kindList;
+      case MAP_TYPE -> Kind.kindMap;
+      case MESSAGE_TYPE -> Kind.kindObject;
+      case TYPE_PARAM -> Kind.kindTypeParam;
+      default -> Kind.kindUnknown;
+    };
   }
 
   /** mostGeneral returns the more general of two types which are known to unify. */

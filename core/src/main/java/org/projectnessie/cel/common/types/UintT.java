@@ -147,25 +147,24 @@ public final class UintT extends BaseVal
   /** ConvertToType implements ref.Val.ConvertToType. */
   @Override
   public Val convertToType(Type typeValue) {
-    switch (typeValue.typeEnum()) {
-      case Int:
+    return switch (typeValue.typeEnum()) {
+      case Int -> {
         if (i < 0L) {
-          return rangeError(Long.toUnsignedString(i), "int");
+          yield rangeError(Long.toUnsignedString(i), "int");
         }
-        return intOf(i);
-      case Uint:
-        return this;
-      case Double:
+        yield intOf(i);
+      }
+      case Uint -> this;
+      case Double -> {
         if (i < 0L) {
-          return doubleOf(new BigInteger(Long.toUnsignedString(i)).doubleValue());
+          yield doubleOf(new BigInteger(Long.toUnsignedString(i)).doubleValue());
         }
-        return doubleOf(i);
-      case String:
-        return stringOf(Long.toUnsignedString(i));
-      case Type:
-        return UintType;
-    }
-    return newTypeConversionError(UintType, typeValue);
+        yield doubleOf(i);
+      }
+      case String -> stringOf(Long.toUnsignedString(i));
+      case Type -> UintType;
+      default -> newTypeConversionError(UintType, typeValue);
+    };
   }
 
   /** Compare implements traits.Comparer.Compare. */

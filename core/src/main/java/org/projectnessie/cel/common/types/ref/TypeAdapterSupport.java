@@ -125,8 +125,7 @@ public final class TypeAdapterSupport {
     if (value instanceof Collection) {
       return newGenericArrayList(a, ((Collection<?>) value).toArray());
     }
-    if (value instanceof Optional) {
-      Optional<?> optional = (Optional<?>) value;
+    if (value instanceof Optional<?> optional) {
       return optional.map(a::nativeToValue).orElse(NullT.NullValue);
     }
     if (value instanceof Map) {

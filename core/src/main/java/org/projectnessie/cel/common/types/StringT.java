@@ -164,36 +164,21 @@ public final class StringT extends BaseVal implements Adder, Comparer, Matcher, 
   /** Compare implements traits.Comparer.Compare. */
   @Override
   public Val compare(Val other) {
-    switch (other.type().typeEnum()) {
-      case String:
-        return intOfCompare(s.compareTo(((StringT) other).s));
-      case Null:
-        return False;
-      default:
-        return noSuchOverload(this, "compare", other);
-    }
+    return switch (other.type().typeEnum()) {
+      case String -> intOfCompare(s.compareTo(((StringT) other).s));
+      case Null -> False;
+      default -> noSuchOverload(this, "compare", other);
+    };
   }
 
   /** Equal implements ref.Val.Equal. */
   @Override
   public Val equal(Val other) {
-    switch (other.type().typeEnum()) {
-      case String:
-        return boolOf(s.equals(((StringT) other).s));
-      case Null:
-      case Bool:
-      case Bytes:
-      case Int:
-      case Uint:
-      case Double:
-      case List:
-      case Map:
-      case Object:
-      case Type:
-        return False;
-      default:
-        return noSuchOverload(this, "equal", other);
-    }
+    return switch (other.type().typeEnum()) {
+      case String -> boolOf(s.equals(((StringT) other).s));
+      case Null, Bool, Bytes, Int, Uint, Double, List, Map, Object, Type -> False;
+      default -> noSuchOverload(this, "equal", other);
+    };
   }
 
   /** Match implements traits.Matcher.Match. */

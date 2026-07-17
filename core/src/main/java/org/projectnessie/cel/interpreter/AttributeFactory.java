@@ -235,8 +235,7 @@ public interface AttributeFactory {
       // Before creating a new qualifier check to see if this is a protobuf message field access.
       // If so, use the precomputed GetFrom qualification method rather than the standard
       // stringQualifier.
-      if (val instanceof String) {
-        String str = (String) val;
+      if (val instanceof String str) {
         if (objType != null && !objType.getMessageType().isEmpty()) {
           FieldType ft = provider.findFieldType(objType.getMessageType(), str);
           if (ft != null && ft.isSet != null && ft.getFrom != null) {
@@ -384,10 +383,8 @@ public interface AttributeFactory {
     }
 
     private Object tryResolveCurrentVar(org.projectnessie.cel.interpreter.Activation vars) {
-      if (vars instanceof org.projectnessie.cel.interpreter.Activation.VarActivation
+      if (vars instanceof Activation.VarActivation var
           && (namespaceNames.length > 1 || !qualifiers.isEmpty())) {
-        org.projectnessie.cel.interpreter.Activation.VarActivation var =
-            (org.projectnessie.cel.interpreter.Activation.VarActivation) vars;
         String localName = namespaceNames[namespaceNames.length - 1];
         if (localName.equals(var.name)) {
           return resolveQualifiers(vars, var.val);
@@ -602,8 +599,7 @@ public interface AttributeFactory {
     public Attribute addQualifier(AttributeFactory.Qualifier qual) {
       String str = "";
       boolean isStr = false;
-      if (qual instanceof ConstantQualifier) {
-        ConstantQualifier cq = (ConstantQualifier) qual;
+      if (qual instanceof ConstantQualifier cq) {
         Object cqv = cq.value().value();
         if (cqv instanceof String) {
           str = (String) cqv;
@@ -779,8 +775,7 @@ public interface AttributeFactory {
 
     Class<?> c = v.getClass();
 
-    if (v instanceof Val) {
-      Val val = (Val) v;
+    if (v instanceof Val val) {
       switch (val.type().typeEnum()) {
         case String:
           return new StringQualifier(id, (String) val.value(), val, adapter);
@@ -888,8 +883,7 @@ public interface AttributeFactory {
     @Override
     public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
       String s = value;
-      if (obj instanceof Map) {
-        Map m = (Map) obj;
+      if (obj instanceof Map m) {
         obj = m.get(s);
         if (obj == null) {
           if (m.containsKey(s)) {
@@ -965,8 +959,7 @@ public interface AttributeFactory {
     @Override
     public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
       double i = value;
-      if (obj instanceof Map) {
-        Map m = (Map) obj;
+      if (obj instanceof Map m) {
         obj = m.get(i);
         if (obj == null) {
           obj = m.get((int) i);
@@ -987,8 +980,7 @@ public interface AttributeFactory {
         obj = Array.get(obj, (int) i);
         return obj;
       }
-      if (obj instanceof List) {
-        List list = (List) obj;
+      if (obj instanceof List list) {
         int l = list.size();
         if (i < 0 || i >= l) {
           throw indexOutOfBoundsException(i);
@@ -1064,8 +1056,7 @@ public interface AttributeFactory {
     @Override
     public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
       long i = value;
-      if (obj instanceof Map) {
-        Map m = (Map) obj;
+      if (obj instanceof Map m) {
         obj = m.get(i);
         if (obj == null) {
           obj = m.get((int) i);
@@ -1086,8 +1077,7 @@ public interface AttributeFactory {
         obj = Array.get(obj, (int) i);
         return obj;
       }
-      if (obj instanceof List) {
-        List list = (List) obj;
+      if (obj instanceof List list) {
         int l = list.size();
         if (i < 0 || i >= l) {
           throw indexOutOfBoundsException(i);
@@ -1163,8 +1153,7 @@ public interface AttributeFactory {
     @Override
     public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
       long i = value;
-      if (obj instanceof Map) {
-        Map m = (Map) obj;
+      if (obj instanceof Map m) {
         obj = m.get(ULong.valueOf(i));
         if (obj == null) {
           throw noSuchKeyException(i);
@@ -1244,8 +1233,7 @@ public interface AttributeFactory {
     @Override
     public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
       boolean b = value;
-      if (obj instanceof Map) {
-        Map m = (Map) obj;
+      if (obj instanceof Map m) {
         obj = m.get(b);
         if (obj == null) {
           if (m.containsKey(b)) {
@@ -1433,16 +1421,14 @@ public interface AttributeFactory {
    */
   static Val refResolve(TypeAdapter adapter, Val idx, Object obj) {
     Val celVal = adapter.nativeToValue(obj);
-    if (celVal instanceof Mapper) {
-      Mapper mapper = (Mapper) celVal;
+    if (celVal instanceof Mapper mapper) {
       Val elem = mapper.find(idx);
       if (elem == null) {
         return noSuchKey(idx);
       }
       return elem;
     }
-    if (celVal instanceof Indexer) {
-      Indexer indexer = (Indexer) celVal;
+    if (celVal instanceof Indexer indexer) {
       return indexer.get(idx);
     }
     if (isUnknown(celVal)) {

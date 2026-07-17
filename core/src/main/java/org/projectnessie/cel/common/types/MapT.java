@@ -58,11 +58,10 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
   public static Val newMaybeWrappedMap(TypeAdapter adapter, Map<?, ?> value) {
     boolean alreadyWrapped = true;
     for (Map.Entry<?, ?> entry : value.entrySet()) {
-      if (!(entry.getKey() instanceof Val) || !(entry.getValue() instanceof Val)) {
+      if (!(entry.getKey() instanceof Val key) || !(entry.getValue() instanceof Val)) {
         alreadyWrapped = false;
         break;
       }
-      Val key = (Val) entry.getKey();
       if (key.type().typeEnum() == TypeEnum.Null) {
         return newErr("unsupported key type");
       }
@@ -87,15 +86,10 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
   }
 
   public static boolean isSupportedLiteralKeyType(Val key) {
-    switch (key.type().typeEnum()) {
-      case Bool:
-      case Int:
-      case String:
-      case Uint:
-        return true;
-      default:
-        return false;
-    }
+    return switch (key.type().typeEnum()) {
+      case Bool, Int, String, Uint -> true;
+      default -> false;
+    };
   }
 
   @Override
@@ -182,10 +176,9 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
     @Override
     public Val equal(Val other) {
       // TODO this is expensive :(
-      if (!(other instanceof MapT)) {
+      if (!(other instanceof MapT o)) {
         return False;
       }
-      MapT o = (MapT) other;
       if (!size().equal(o.size()).booleanValue()) {
         return False;
       }

@@ -268,8 +268,7 @@ public final class Err extends BaseVal {
   }
 
   public static void throwErrorAsIllegalStateException(Val val) {
-    if (val instanceof Err) {
-      Err e = (Err) val;
+    if (val instanceof Err e) {
       if (e.cause != null) {
         throw new IllegalStateException(e.error, e.cause);
       } else {

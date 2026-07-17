@@ -21,12 +21,10 @@ public final class Util {
 
   /** IsUnknownOrError returns whether the input element ref.Val is an ErrType or UnknonwType. */
   public static boolean isUnknownOrError(Val val) {
-    switch (val.type().typeEnum()) {
-      case Unknown:
-      case Err:
-        return true;
-    }
-    return false;
+    return switch (val.type().typeEnum()) {
+      case Unknown, Err -> true;
+      default -> false;
+    };
   }
 
   /**
@@ -34,15 +32,9 @@ public final class Util {
    * types do not include well-known types such as Duration and Timestamp.
    */
   public static boolean isPrimitiveType(Val val) {
-    switch (val.type().typeEnum()) {
-      case Bool:
-      case Bytes:
-      case Double:
-      case Int:
-      case String:
-      case Uint:
-        return true;
-    }
-    return false;
+    return switch (val.type().typeEnum()) {
+      case Bool, Bytes, Double, Int, String, Uint -> true;
+      default -> false;
+    };
   }
 }

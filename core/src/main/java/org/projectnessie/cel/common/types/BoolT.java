@@ -93,37 +93,22 @@ public final class BoolT extends BaseVal implements Comparer, Negater {
   /** ConvertToType implements the ref.Val interface method. */
   @Override
   public Val convertToType(Type typeVal) {
-    switch (typeVal.typeEnum()) {
-      case String:
-        return stringOf(Boolean.toString(b));
-      case Bool:
-        return this;
-      case Type:
-        return BoolType;
-    }
-    return newTypeConversionError(BoolType, typeVal);
+    return switch (typeVal.typeEnum()) {
+      case String -> stringOf(Boolean.toString(b));
+      case Bool -> this;
+      case Type -> BoolType;
+      default -> newTypeConversionError(BoolType, typeVal);
+    };
   }
 
   /** Equal implements the ref.Val interface method. */
   @Override
   public Val equal(Val other) {
-    switch (other.type().typeEnum()) {
-      case Bool:
-        return Types.boolOf(b == ((BoolT) other).b);
-      case Null:
-      case Bytes:
-      case Double:
-      case Int:
-      case List:
-      case Map:
-      case Object:
-      case String:
-      case Type:
-      case Uint:
-        return False;
-      default:
-        return noSuchOverload(this, "equal", other);
-    }
+    return switch (other.type().typeEnum()) {
+      case Bool -> Types.boolOf(b == ((BoolT) other).b);
+      case Null, Bytes, Double, Int, List, Map, Object, String, Type, Uint -> False;
+      default -> noSuchOverload(this, "equal", other);
+    };
   }
 
   /** Negate implements the traits.Negater interface method. */

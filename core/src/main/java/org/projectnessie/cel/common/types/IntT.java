@@ -178,29 +178,27 @@ public final class IntT extends BaseVal
   /** ConvertToType implements ref.Val.ConvertToType. */
   @Override
   public Val convertToType(Type typeValue) {
-    switch (typeValue.typeEnum()) {
-      case Int:
-        return this;
-      case Uint:
+    return switch (typeValue.typeEnum()) {
+      case Int -> this;
+      case Uint -> {
         if (i < 0) {
-          return rangeError(i, "uint");
+          yield rangeError(i, "uint");
         }
-        return uintOf(i);
-      case Double:
-        return doubleOf(i);
-      case String:
-        return stringOf(Long.toString(i));
-      case Timestamp:
+        yield uintOf(i);
+      }
+      case Double -> doubleOf(i);
+      case String -> stringOf(Long.toString(i));
+      case Timestamp -> {
         // The maximum positive value that can be passed to time.Unix is math.MaxInt64 minus the
         // number of seconds between year 1 and year 1970. See comments on unixToInternal.
         if (i < minUnixTime || i > maxUnixTime) {
-          return errTimestampOverflow;
+          yield errTimestampOverflow;
         }
-        return timestampOf(Instant.ofEpochSecond(i).atZone(ZoneIdZ));
-      case Type:
-        return IntType;
-    }
-    return newTypeConversionError(IntType, typeValue);
+        yield timestampOf(Instant.ofEpochSecond(i).atZone(ZoneIdZ));
+      }
+      case Type -> IntType;
+      default -> newTypeConversionError(IntType, typeValue);
+    };
   }
 
   /** Compare implements traits.Comparer.Compare. */

@@ -180,13 +180,11 @@ public abstract class ListT extends BaseVal implements Lister {
 
     @Override
     public Val convertToType(Type typeValue) {
-      switch (typeValue.typeEnum()) {
-        case List:
-          return this;
-        case Type:
-          return ListType;
-      }
-      return newTypeConversionError(ListType, typeValue);
+      return switch (typeValue.typeEnum()) {
+        case List -> this;
+        case Type -> ListType;
+        default -> newTypeConversionError(ListType, typeValue);
+      };
     }
 
     @Override
@@ -357,10 +355,9 @@ public abstract class ListT extends BaseVal implements Lister {
 
     @Override
     public Val add(Val other) {
-      if (!(other instanceof Lister)) {
+      if (!(other instanceof Lister otherList)) {
         return noSuchOverload(this, "add", other);
       }
-      Lister otherList = (Lister) other;
       int otherSize = (int) otherList.size().intValue();
       Object[] newArray = Arrays.copyOf(array, array.length + otherSize);
       Class<?> componentType = array.getClass().getComponentType();
@@ -414,10 +411,9 @@ public abstract class ListT extends BaseVal implements Lister {
 
     @Override
     public Val add(Val other) {
-      if (!(other instanceof Lister)) {
+      if (!(other instanceof Lister otherList)) {
         return noSuchOverload(this, "add", other);
       }
-      Lister otherList = (Lister) other;
       int otherSize = (int) otherList.size().intValue();
       Object[] newArray = new Object[list.size() + otherSize];
       for (int i = 0; i < list.size(); i++) {
@@ -461,7 +457,7 @@ public abstract class ListT extends BaseVal implements Lister {
 
     @Override
     public Val add(Val other) {
-      if (!(other instanceof Lister)) {
+      if (!(other instanceof Lister otherLister)) {
         return noSuchOverload(this, "add", other);
       }
       if (other instanceof ValListT) {
@@ -470,7 +466,6 @@ public abstract class ListT extends BaseVal implements Lister {
         System.arraycopy(otherArray, 0, newArray, array.length, otherArray.length);
         return new ValListT(adapter, newArray);
       } else {
-        Lister otherLister = (Lister) other;
         int otherSIze = (int) otherLister.size().intValue();
         Val[] newArray = Arrays.copyOf(array, array.length + otherSIze);
         for (int i = 0; i < otherSIze; i++) {
@@ -511,10 +506,9 @@ public abstract class ListT extends BaseVal implements Lister {
 
     @Override
     public Val add(Val other) {
-      if (!(other instanceof Lister)) {
+      if (!(other instanceof Lister otherLister)) {
         return noSuchOverload(this, "add", other);
       }
-      Lister otherLister = (Lister) other;
       int thisSize = (int) size;
       int otherSize = (int) otherLister.size().intValue();
       Val[] newArray = new Val[thisSize + otherSize];

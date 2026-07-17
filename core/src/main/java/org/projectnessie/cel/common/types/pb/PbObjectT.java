@@ -85,11 +85,10 @@ public final class PbObjectT extends ObjectT {
 
   @Override
   public Val equal(Val other) {
-    if (!(other instanceof PbObjectT)) {
+    if (!(other instanceof PbObjectT otherObject)) {
       return super.equal(other);
     }
 
-    PbObjectT otherObject = (PbObjectT) other;
     if (!typeDesc().name().equals(otherObject.typeDesc().name())) {
       return boolOf(false);
     }
@@ -107,9 +106,6 @@ public final class PbObjectT extends ObjectT {
     }
     if (typeDesc.isAssignableFrom(getClass())) {
       return (T) this;
-    }
-    if (typeDesc.isAssignableFrom(value.getClass())) {
-      return (T) value;
     }
     if (typeDesc == DynamicMessage.class) {
       return (T)
@@ -188,7 +184,7 @@ public final class PbObjectT extends ObjectT {
   private static String fieldMaskJsonValue(FieldMask fieldMask) {
     StringBuilder value = new StringBuilder();
     for (String path : fieldMask.getPathsList()) {
-      if (value.length() > 0) {
+      if (!value.isEmpty()) {
         value.append(',');
       }
       value.append(fieldMaskPathJsonValue(path));

@@ -81,8 +81,7 @@ public class Util {
         Object bv = Array.get(b, i);
         deepEquals(context + '[' + i + ']', av, bv);
       }
-    } else if (a instanceof List) {
-      List al = (List) a;
+    } else if (a instanceof List al) {
       List bl = (List) b;
       int as = al.size();
       int bs = bl.size();
@@ -95,8 +94,7 @@ public class Util {
       for (int i = 0; i < as; i++) {
         deepEquals(context + '[' + i + ']', al.get(i), bl.get(i));
       }
-    } else if (a instanceof Map) {
-      Map am = (Map) a;
+    } else if (a instanceof Map am) {
       Map bm = (Map) b;
       int as = am.size();
       int bs = bm.size();

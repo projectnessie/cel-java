@@ -165,8 +165,7 @@ public final class AttributePattern {
       if (wildcard) {
         return true;
       }
-      if (q instanceof QualifierValueEquator) {
-        QualifierValueEquator qve = (QualifierValueEquator) q;
+      if (q instanceof QualifierValueEquator qve) {
         return qve.qualifierValueEquals(value);
       }
       return false;
@@ -419,8 +418,7 @@ public final class AttributePattern {
     @Override
     public Object tryResolve(org.projectnessie.cel.interpreter.Activation vars) {
       long id = attr.id();
-      if (vars instanceof PartialActivation) {
-        PartialActivation partial = (PartialActivation) vars;
+      if (vars instanceof PartialActivation partial) {
         Object unk = fac.matchesUnknownPatterns(partial, id, candidateVariableNames(), qualifiers);
         if (unk != null) {
           return unk;

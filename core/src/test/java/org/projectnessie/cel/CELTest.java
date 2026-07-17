@@ -653,15 +653,13 @@ public class CELTest {
                   if (args.length != 3) {
                     return newErr("invalid arguments to 'get'");
                   }
-                  if (!(args[0] instanceof Mapper)) {
+                  if (!(args[0] instanceof Mapper attrs)) {
                     return newErr(
                         "invalid operand of type '%s' to obj.get(key, def)", args[0].type());
                   }
-                  Mapper attrs = (Mapper) args[0];
-                  if (!(args[1] instanceof StringT)) {
+                  if (!(args[1] instanceof StringT key)) {
                     return newErr("invalid key of type '%s' to obj.get(key, def)", args[1].type());
                   }
-                  StringT key = (StringT) args[1];
                   Val defVal = args[2];
                   if (attrs.contains(key) == True) {
                     return attrs.get(key);
@@ -922,10 +920,9 @@ public class CELTest {
         i -> {
           lastInstruction.set(i);
           // Only optimize the instruction if it is a call.
-          if (!(i instanceof InterpretableCall)) {
+          if (!(i instanceof InterpretableCall call)) {
             return i;
           }
-          InterpretableCall call = (InterpretableCall) i;
           // Only optimize the math functions when they have constant arguments.
           switch (call.function()) {
             case "_+_":

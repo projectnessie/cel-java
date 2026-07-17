@@ -109,10 +109,9 @@ public final class OptionalT extends BaseVal implements FieldTester, Indexer, Re
 
   @Override
   public Val equal(Val other) {
-    if (!(other instanceof OptionalT)) {
+    if (!(other instanceof OptionalT optional)) {
       return False;
     }
-    OptionalT optional = (OptionalT) other;
     if (!present || !optional.present) {
       return present == optional.present ? True : False;
     }
@@ -154,20 +153,16 @@ public final class OptionalT extends BaseVal implements FieldTester, Indexer, Re
 
   @Override
   public Val receive(String function, String overload, Val... args) {
-    switch (function) {
-      case "hasValue":
-        return args.length == 0
-            ? (present ? True : False)
-            : noSuchOverload(this, function, overload, args);
-      case "value":
-        return value(args, function, overload);
-      case "or":
-        return or(args, function, overload);
-      case "orValue":
-        return orValue(args, function, overload);
-      default:
-        return noSuchOverload(this, function, overload, args);
-    }
+    return switch (function) {
+      case "hasValue" ->
+          args.length == 0
+              ? (present ? True : False)
+              : noSuchOverload(this, function, overload, args);
+      case "value" -> value(args, function, overload);
+      case "or" -> or(args, function, overload);
+      case "orValue" -> orValue(args, function, overload);
+      default -> noSuchOverload(this, function, overload, args);
+    };
   }
 
   private Val value(Val[] args, String function, String overload) {
@@ -192,28 +187,17 @@ public final class OptionalT extends BaseVal implements FieldTester, Indexer, Re
   }
 
   private static boolean isZeroValue(Val value) {
-    switch (value.type().typeEnum()) {
-      case Null:
-        return true;
-      case Bool:
-        return value == False || !value.booleanValue();
-      case Int:
-      case Uint:
-        return value.intValue() == 0L;
-      case Double:
-        return value.doubleValue() == 0.0d;
-      case String:
-      case Bytes:
-      case List:
-      case Map:
-        return value.type().hasTrait(Trait.SizerType)
-            && ((Sizer) value).size().equal(IntZero) == True;
-      case Object:
-        return value.value() instanceof Message
-            && ((Message) value.value()).getAllFields().isEmpty();
-      default:
-        return false;
-    }
+    return switch (value.type().typeEnum()) {
+      case Null -> true;
+      case Bool -> value == False || !value.booleanValue();
+      case Int, Uint -> value.intValue() == 0L;
+      case Double -> value.doubleValue() == 0.0d;
+      case String, Bytes, List, Map ->
+          value.type().hasTrait(Trait.SizerType) && ((Sizer) value).size().equal(IntZero) == True;
+      case Object ->
+          value.value() instanceof Message && ((Message) value.value()).getAllFields().isEmpty();
+      default -> false;
+    };
   }
 
   private static Val optionalAccess(Val operand, Val index) {

@@ -387,29 +387,25 @@ public final class NetworkLib implements Library {
       if (args.length != 0) {
         return noSuchOverload(this, function, overload, args);
       }
-      switch (function) {
-        case "family":
-          return intOf(family);
-        case "isUnspecified":
-          return boolOf(unsigned(bytes).signum() == 0);
-        case "isLoopback":
-          return boolOf(
-              family == 4 ? (bytes[0] & 0xff) == 127 : unsigned(bytes).equals(BigInteger.ONE));
-        case "isGlobalUnicast":
-          return boolOf(!isMulticast() && unsigned(bytes).signum() != 0 && !isBroadcast());
-        case "isLinkLocalMulticast":
-          return boolOf(
-              family == 4
-                  ? canonical.startsWith("224.0.0.")
-                  : (bytes[0] & 0xff) == 0xff && (bytes[1] & 0xff) == 0x02);
-        case "isLinkLocalUnicast":
-          return boolOf(
-              family == 4
-                  ? (bytes[0] & 0xff) == 169 && (bytes[1] & 0xff) == 254
-                  : (bytes[0] & 0xff) == 0xfe && ((bytes[1] & 0xc0) == 0x80));
-        default:
-          return noSuchOverload(this, function, overload, args);
-      }
+      return switch (function) {
+        case "family" -> intOf(family);
+        case "isUnspecified" -> boolOf(unsigned(bytes).signum() == 0);
+        case "isLoopback" ->
+            boolOf(family == 4 ? (bytes[0] & 0xff) == 127 : unsigned(bytes).equals(BigInteger.ONE));
+        case "isGlobalUnicast" ->
+            boolOf(!isMulticast() && unsigned(bytes).signum() != 0 && !isBroadcast());
+        case "isLinkLocalMulticast" ->
+            boolOf(
+                family == 4
+                    ? canonical.startsWith("224.0.0.")
+                    : (bytes[0] & 0xff) == 0xff && (bytes[1] & 0xff) == 0x02);
+        case "isLinkLocalUnicast" ->
+            boolOf(
+                family == 4
+                    ? (bytes[0] & 0xff) == 169 && (bytes[1] & 0xff) == 254
+                    : (bytes[0] & 0xff) == 0xfe && ((bytes[1] & 0xc0) == 0x80));
+        default -> noSuchOverload(this, function, overload, args);
+      };
     }
 
     private boolean isMulticast() {
@@ -477,20 +473,16 @@ public final class NetworkLib implements Library {
 
     @Override
     public Val receive(String function, String overload, Val... args) {
-      switch (function) {
-        case "containsIP":
-          return containsIp(args);
-        case "containsCIDR":
-          return containsCidr(args);
-        case "ip":
-          return args.length == 0 ? ip : noSuchOverload(this, function, overload, args);
-        case "masked":
-          return args.length == 0 ? masked() : noSuchOverload(this, function, overload, args);
-        case "prefixLength":
-          return args.length == 0 ? intOf(prefix) : noSuchOverload(this, function, overload, args);
-        default:
-          return noSuchOverload(this, function, overload, args);
-      }
+      return switch (function) {
+        case "containsIP" -> containsIp(args);
+        case "containsCIDR" -> containsCidr(args);
+        case "ip" -> args.length == 0 ? ip : noSuchOverload(this, function, overload, args);
+        case "masked" ->
+            args.length == 0 ? masked() : noSuchOverload(this, function, overload, args);
+        case "prefixLength" ->
+            args.length == 0 ? intOf(prefix) : noSuchOverload(this, function, overload, args);
+        default -> noSuchOverload(this, function, overload, args);
+      };
     }
 
     private Val containsIp(Val[] args) {

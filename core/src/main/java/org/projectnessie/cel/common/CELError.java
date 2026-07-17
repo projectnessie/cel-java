@@ -102,9 +102,7 @@ public final class CELError implements Comparable<CELError> {
       // sophisticated way, maybe use jline's WCWidth, but that one is also quite rudimentary wrt
       // code-blocks (e.g. doesn't know about emojis).
       result.append("\n | ");
-      for (int i = 0; i < location.column(); i++) {
-        result.append(dot);
-      }
+      result.append(String.valueOf(dot).repeat(Math.max(0, location.column())));
       result.append(ind);
     }
     return result.toString();

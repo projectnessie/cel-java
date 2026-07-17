@@ -215,11 +215,9 @@ public interface Interpretable {
     public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
       // Handle field selection on a proto in the most efficient way possible.
       if (fieldType != null) {
-        if (op instanceof InterpretableAttribute) {
-          InterpretableAttribute opAttr = (InterpretableAttribute) op;
+        if (op instanceof InterpretableAttribute opAttr) {
           Object opVal = opAttr.resolve(ctx);
-          if (opVal instanceof Val) {
-            Val refVal = (Val) opVal;
+          if (opVal instanceof Val refVal) {
             opVal = refVal.value();
           }
           if (fieldType.isSet.isSet(opVal)) {
@@ -507,13 +505,11 @@ public interface Interpretable {
         return rVal;
       }
       Val eqVal = lVal.equal(rVal);
-      switch (eqVal.type().typeEnum()) {
-        case Err:
-          return eqVal;
-        case Bool:
-          return ((Negater) eqVal).negate();
-      }
-      return noSuchOverload(lVal, Operator.NotEquals.id, rVal);
+      return switch (eqVal.type().typeEnum()) {
+        case Err -> eqVal;
+        case Bool -> ((Negater) eqVal).negate();
+        default -> noSuchOverload(lVal, Operator.NotEquals.id, rVal);
+      };
     }
 
     /** Cost implements the Coster interface method. */
@@ -904,10 +900,9 @@ public interface Interpretable {
           return elemVal;
         }
         if (optionalIndices[i]) {
-          if (!(elemVal instanceof OptionalT)) {
+          if (!(elemVal instanceof OptionalT optional)) {
             return newErr("optional list element is not optional");
           }
-          OptionalT optional = (OptionalT) elemVal;
           if (!optional.hasValue()) {
             continue;
           }
@@ -972,10 +967,9 @@ public interface Interpretable {
           return valVal;
         }
         if (optionalEntries[i]) {
-          if (!(valVal instanceof OptionalT)) {
+          if (!(valVal instanceof OptionalT optional)) {
             return newErr("optional map entry is not optional");
           }
-          OptionalT optional = (OptionalT) valVal;
           if (!optional.hasValue()) {
             continue;
           }
@@ -1049,10 +1043,9 @@ public interface Interpretable {
           return val;
         }
         if (optionalEntries[i]) {
-          if (!(val instanceof OptionalT)) {
+          if (!(val instanceof OptionalT optional)) {
             return newErr("optional message field is not optional");
           }
-          OptionalT optional = (OptionalT) val;
           if (!optional.hasValue()) {
             continue;
           }
@@ -1599,14 +1592,11 @@ public interface Interpretable {
         return arg0;
       }
 
-      switch (args.length) {
-        case 3:
-          return evalReceiverTail2(ctx, arg0);
-        case 4:
-          return evalReceiverTail3(ctx, arg0);
-        default:
-          return evalReceiverTail(ctx, arg0);
-      }
+      return switch (args.length) {
+        case 3 -> evalReceiverTail2(ctx, arg0);
+        case 4 -> evalReceiverTail3(ctx, arg0);
+        default -> evalReceiverTail(ctx, arg0);
+      };
     }
 
     private Val evalReceiverTail2(org.projectnessie.cel.interpreter.Activation ctx, Val arg0) {
@@ -1699,18 +1689,14 @@ public interface Interpretable {
   }
 
   static Val receiveVarArgs(Receiver receiver, String function, String overload, Val[] argVals) {
-    switch (argVals.length) {
-      case 1:
-        return receiver.receive(function, overload);
-      case 2:
-        return receiver.receive(function, overload, argVals[1]);
-      case 3:
-        return receiver.receive(function, overload, argVals[1], argVals[2]);
-      case 4:
-        return receiver.receive(function, overload, argVals[1], argVals[2], argVals[3]);
-      default:
-        return receiver.receive(function, overload, Arrays.copyOfRange(argVals, 1, argVals.length));
-    }
+    return switch (argVals.length) {
+      case 1 -> receiver.receive(function, overload);
+      case 2 -> receiver.receive(function, overload, argVals[1]);
+      case 3 -> receiver.receive(function, overload, argVals[1], argVals[2]);
+      case 4 -> receiver.receive(function, overload, argVals[1], argVals[2], argVals[3]);
+      default ->
+          receiver.receive(function, overload, Arrays.copyOfRange(argVals, 1, argVals.length));
+    };
   }
 
   /**
@@ -1777,11 +1763,9 @@ public interface Interpretable {
      */
     @Override
     public Attribute addQualifier(AttributeFactory.Qualifier q) {
-      if (q instanceof ConstantQualifierEquator) {
-        ConstantQualifierEquator cq = (ConstantQualifierEquator) q;
+      if (q instanceof ConstantQualifierEquator cq) {
         q = new EvalWatchConstQualEquat(cq, observer, attr.adapter());
-      } else if (q instanceof ConstantQualifier) {
-        ConstantQualifier cq = (ConstantQualifier) q;
+      } else if (q instanceof ConstantQualifier cq) {
         q = new EvalWatchConstQual(cq, observer, attr.adapter());
       } else {
         q = new EvalWatchQual(q, observer, attr.adapter());

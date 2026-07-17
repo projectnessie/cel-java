@@ -366,38 +366,23 @@ public final class ProtoTypeRegistry implements TypeRegistry {
   }
 
   private static Class<?> messageNativeType(FieldDescriptor field) {
-    switch (field.getMessageType().getFullName()) {
-      case "google.protobuf.Any":
-        return Any.class;
-      case "google.protobuf.BoolValue":
-        return BoolValue.class;
-      case "google.protobuf.BytesValue":
-        return BytesValue.class;
-      case "google.protobuf.DoubleValue":
-        return DoubleValue.class;
-      case "google.protobuf.Duration":
-        return Duration.class;
-      case "google.protobuf.FieldMask":
-        return FieldMask.class;
-      case "google.protobuf.FloatValue":
-        return FloatValue.class;
-      case "google.protobuf.Int32Value":
-        return Int32Value.class;
-      case "google.protobuf.Int64Value":
-        return Int64Value.class;
-      case "google.protobuf.StringValue":
-        return StringValue.class;
-      case "google.protobuf.Timestamp":
-        return Timestamp.class;
-      case "google.protobuf.UInt32Value":
-        return UInt32Value.class;
-      case "google.protobuf.UInt64Value":
-        return UInt64Value.class;
-      case "google.protobuf.Value":
-        return Value.class;
-      default:
-        return Message.class;
-    }
+    return switch (field.getMessageType().getFullName()) {
+      case "google.protobuf.Any" -> Any.class;
+      case "google.protobuf.BoolValue" -> BoolValue.class;
+      case "google.protobuf.BytesValue" -> BytesValue.class;
+      case "google.protobuf.DoubleValue" -> DoubleValue.class;
+      case "google.protobuf.Duration" -> Duration.class;
+      case "google.protobuf.FieldMask" -> FieldMask.class;
+      case "google.protobuf.FloatValue" -> FloatValue.class;
+      case "google.protobuf.Int32Value" -> Int32Value.class;
+      case "google.protobuf.Int64Value" -> Int64Value.class;
+      case "google.protobuf.StringValue" -> StringValue.class;
+      case "google.protobuf.Timestamp" -> Timestamp.class;
+      case "google.protobuf.UInt32Value" -> UInt32Value.class;
+      case "google.protobuf.UInt64Value" -> UInt64Value.class;
+      case "google.protobuf.Value" -> Value.class;
+      default -> Message.class;
+    };
   }
 
   /**
@@ -454,8 +439,7 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     if (value instanceof Number) {
       int enumValue = ((Number) value).intValue();
       value = enumType.findValueByNumberCreatingIfUnknown(enumValue);
-    } else if (value instanceof List) {
-      List list = (List) value;
+    } else if (value instanceof List list) {
       List newList = new ArrayList(list.size());
       for (Object o : list) {
         int enumValue = ((Number) o).intValue();
@@ -502,8 +486,7 @@ public final class ProtoTypeRegistry implements TypeRegistry {
    */
   @Override
   public Val nativeToValue(Object value) {
-    if (value instanceof Message) {
-      Message v = (Message) value;
+    if (value instanceof Message v) {
       String typeName = typeNameFromMessage(v);
       if (typeName.isEmpty()) {
         return anyWithEmptyType();

@@ -82,37 +82,22 @@ public final class NullT extends BaseVal {
   /** ConvertToType implements ref.Val.ConvertToType. */
   @Override
   public Val convertToType(Type typeValue) {
-    switch (typeValue.typeEnum()) {
-      case String:
-        return stringOf("null");
-      case Null:
-        return this;
-      case Type:
-        return NullType;
-    }
-    return newTypeConversionError(NullType, typeValue);
+    return switch (typeValue.typeEnum()) {
+      case String -> stringOf("null");
+      case Null -> this;
+      case Type -> NullType;
+      default -> newTypeConversionError(NullType, typeValue);
+    };
   }
 
   /** Equal implements ref.Val.Equal. */
   @Override
   public Val equal(Val other) {
-    switch (other.type().typeEnum()) {
-      case Null:
-        return True;
-      case Int:
-      case Uint:
-      case Double:
-      case String:
-      case Bytes:
-      case Bool:
-      case List:
-      case Map:
-      case Object:
-      case Type:
-        return False;
-      default:
-        return noSuchOverload(this, "equal", other);
-    }
+    return switch (other.type().typeEnum()) {
+      case Null -> True;
+      case Int, Uint, Double, String, Bytes, Bool, List, Map, Object, Type -> False;
+      default -> noSuchOverload(this, "equal", other);
+    };
   }
 
   /** Type implements ref.Val.Type. */

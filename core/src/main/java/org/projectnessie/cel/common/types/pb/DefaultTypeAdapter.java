@@ -64,8 +64,7 @@ public final class DefaultTypeAdapter implements TypeAdapter {
     if (value instanceof Val) {
       return (Val) value;
     }
-    if (value instanceof Message) {
-      Message msg = (Message) value;
+    if (value instanceof Message msg) {
       String typeName = typeNameFromMessage(msg);
       if (typeName.isEmpty()) {
         return anyWithEmptyType();
@@ -84,8 +83,7 @@ public final class DefaultTypeAdapter implements TypeAdapter {
   }
 
   static Object maybeUnwrapValue(Object value) {
-    if (value instanceof Value) {
-      Value v = (Value) value;
+    if (value instanceof Value v) {
       switch (v.getKindCase()) {
         case BOOL_VALUE:
           return v.getBoolValue();

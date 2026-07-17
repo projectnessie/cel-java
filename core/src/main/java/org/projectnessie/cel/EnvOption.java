@@ -229,12 +229,11 @@ public interface EnvOption {
    */
   static EnvOption types(List<Object> addTypes) {
     return e -> {
-      if (!(e.provider instanceof TypeRegistry)) {
+      if (!(e.provider instanceof TypeRegistry reg)) {
         throw new RuntimeException(
             String.format(
                 "custom types not supported by provider: %s", e.provider.getClass().getName()));
       }
-      TypeRegistry reg = (TypeRegistry) e.provider;
       for (Object t : addTypes) {
         reg.register(t);
       }
