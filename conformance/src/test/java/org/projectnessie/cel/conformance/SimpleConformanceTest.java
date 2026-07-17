@@ -137,8 +137,6 @@ class SimpleConformanceTest {
 
   private static final Set<String> SKIP_TESTS =
       SkipList.parse(
-          // Malicious too-deep protobuf structure.
-          "parse/nest/message_literal",
           // Strong enum semantics require typed enum values rather than treating enum literals as
           // ints.
           "enums/strong_proto2/literal_global",
