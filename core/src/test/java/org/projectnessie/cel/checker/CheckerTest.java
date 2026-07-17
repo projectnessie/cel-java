@@ -200,6 +200,26 @@ public class CheckerTest {
           .r("[1~int, y~wrapper(int)^y]~list(wrapper(int))")
           .type(Decls.newListType(Decls.newWrapperType(Decls.Int))),
       new TestCase()
+          .i("[x, null]")
+          .env(new env().idents(Decls.newVar("x", Decls.newObjectType("test.Message"))))
+          .r("[x~test.Message^x, null~null]~list(test.Message)")
+          .type(Decls.newListType(Decls.newObjectType("test.Message"))),
+      new TestCase()
+          .i("[null, x]")
+          .env(new env().idents(Decls.newVar("x", Decls.newObjectType("test.Message"))))
+          .r("[null~null, x~test.Message^x]~list(test.Message)")
+          .type(Decls.newListType(Decls.newObjectType("test.Message"))),
+      new TestCase()
+          .i("[d, null]")
+          .env(new env().idents(Decls.newVar("d", Decls.Duration)))
+          .r("[d~duration^d, null~null]~list(duration)")
+          .type(Decls.newListType(Decls.Duration)),
+      new TestCase()
+          .i("[null, t]")
+          .env(new env().idents(Decls.newVar("t", Decls.Timestamp)))
+          .r("[null~null, t~timestamp^t]~list(timestamp)")
+          .type(Decls.newListType(Decls.Timestamp)),
+      new TestCase()
           .i("[1, \"A\"]")
           .r("[1~int, \"A\"~string]~list(dyn)")
           .type(Decls.newListType(Decls.Dyn)),

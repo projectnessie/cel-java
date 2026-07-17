@@ -143,7 +143,7 @@ class SimpleConformanceTest {
           // nullable generic candidates.
           "type_deductions/flexible_type_parameter_assignment/comprehension_type_var_aliasing,optional_none,optional_none_2,optional_dyn_promotion,optional_dyn_promotion_2,optional_in_ternary",
           "type_deductions/type_parameters/multiple_parameters_generality,multiple_parameters_generality_2",
-          "type_deductions/legacy_nullable_types/null_assignable_to_message_parameter_candidate,null_assignable_to_duration_parameter_candidate,null_assignable_to_timestamp_parameter_candidate,null_assignable_to_abstract_parameter_candidate",
+          "type_deductions/legacy_nullable_types/null_assignable_to_abstract_parameter_candidate",
           "enums/strong_proto2",
           "enums/strong_proto3");
 

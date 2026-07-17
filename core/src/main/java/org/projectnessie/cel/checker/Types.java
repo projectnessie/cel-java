@@ -512,6 +512,12 @@ public final class Types {
   static Type mostGeneral(Type t1, Type t2) {
     Kind kind1 = kindOf(t1);
     Kind kind2 = kindOf(t2);
+    if (kind1 == Kind.kindNull && internalIsAssignableNull(t2)) {
+      return t2;
+    }
+    if (kind2 == Kind.kindNull && internalIsAssignableNull(t1)) {
+      return t1;
+    }
     if (kind1 == Kind.kindPrimitive && kind2 == Kind.kindWrapper) {
       if (t1.getPrimitive() == t2.getWrapper()) {
         return t2;
