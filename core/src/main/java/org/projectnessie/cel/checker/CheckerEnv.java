@@ -118,6 +118,12 @@ public final class CheckerEnv {
    * such identifier is found in the Env.
    */
   public Decl lookupIdent(String name) {
+    if (!name.startsWith(".") && hasLocalIdent(name)) {
+      Decl ident = declarations.findIdentInScope(name);
+      if (ident != null) {
+        return ident;
+      }
+    }
     for (String candidate : container.resolveCandidateNames(name)) {
       Decl ident = declarations.findIdent(candidate);
       if (ident != null) {
@@ -148,6 +154,10 @@ public final class CheckerEnv {
       }
     }
     return null;
+  }
+
+  boolean hasLocalIdent(String name) {
+    return declarations.hasParent() && declarations.findIdentInScope(name) != null;
   }
 
   /**

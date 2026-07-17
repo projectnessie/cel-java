@@ -223,6 +223,8 @@ public interface InterpretablePlanner {
     }
 
     Interpretable planCheckedIdent(long id, Reference identRef) {
+      String identName = identRef.getName();
+      String providerName = identName.startsWith(".") ? identName.substring(1) : identName;
       // Plan a constant reference if this is the case for this simple identifier.
       if (identRef.getValue() != Reference.getDefaultInstance().getValue()) {
         return plan(Expr.newBuilder().setId(id).setConstExpr(identRef.getValue()).build());
@@ -232,10 +234,10 @@ public interface InterpretablePlanner {
       // registered with the provider.
       Type cType = typeMap.get(id);
       if (cType != null && cType.getType() != Type.getDefaultInstance()) {
-        Val cVal = provider.findIdent(identRef.getName());
+        Val cVal = provider.findIdent(providerName);
         if (cVal == null) {
           throw new IllegalStateException(
-              String.format("reference to undefined type: %s", identRef.getName()));
+              String.format("reference to undefined type: %s", providerName));
         }
         return newConstValue(id, cVal);
       }
@@ -243,9 +245,9 @@ public interface InterpretablePlanner {
       // Otherwise, evaluate the checked top-level variable directly for ordinary plans. Decorated
       // programs keep the attribute shape because custom decorators may inspect attributes.
       if (decorators.length == 0) {
-        return new EvalIdent(id, identRef.getName(), adapter);
+        return new EvalIdent(id, identName, adapter);
       }
-      return new EvalAttr(adapter, attrFactory.absoluteAttribute(id, identRef.getName()));
+      return new EvalAttr(adapter, attrFactory.absoluteAttribute(id, identName));
     }
 
     /**

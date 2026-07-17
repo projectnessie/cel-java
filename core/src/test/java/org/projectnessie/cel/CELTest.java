@@ -127,6 +127,31 @@ public class CELTest {
   }
 
   @Test
+  void comprehensionLocalVariablesShadowNamespacedIdentifiers() {
+    Env env =
+        newEnv(
+            container("com.example"),
+            declarations(
+                Decls.newVar("com.example.y", Decls.Int),
+                Decls.newVar("y", Decls.String),
+                Decls.newVar("com.example.y.z", Decls.Int)));
+
+    AstIssuesTuple astIss = env.compile("[0].exists(y, y == 0)");
+    assertThat(astIss.hasIssues()).isFalse();
+    assertThat(env.program(astIss.getAst()).eval(mapOf("com.example.y", 42L)).getVal())
+        .isSameAs(True);
+
+    astIss = env.compile("['compre'].exists(y, .y == 'y')");
+    assertThat(astIss.hasIssues()).isFalse();
+    assertThat(env.program(astIss.getAst()).eval(mapOf("y", "y")).getVal()).isSameAs(True);
+
+    astIss = env.compile("[{'z': 0}].exists(y, y.z == 0)");
+    assertThat(astIss.hasIssues()).isFalse();
+    assertThat(env.program(astIss.getAst()).eval(mapOf("com.example.y.z", 42L)).getVal())
+        .isSameAs(True);
+  }
+
+  @Test
   void AstToString() {
     Env stdEnv = newEnv();
     String in = "a + b - (c ? (-d + 4) : e)";

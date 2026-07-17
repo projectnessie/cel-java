@@ -101,6 +101,9 @@ public interface Activation {
     /** ResolveName implements the Activation interface method. */
     @Override
     public ResolvedValue resolveName(String name) {
+      if (name.startsWith(".")) {
+        name = name.substring(1);
+      }
       Object obj = bindings.get(name);
       if (obj == null) {
         if (!bindings.containsKey(name)) {
@@ -139,6 +142,9 @@ public interface Activation {
     /** ResolveName implements the Activation interface method. */
     @Override
     public ResolvedValue resolveName(String name) {
+      if (name.startsWith(".")) {
+        name = name.substring(1);
+      }
       Object result = provider.apply(name);
       if (result instanceof ResolvedValue) {
         return (ResolvedValue) result;
@@ -176,6 +182,9 @@ public interface Activation {
     /** ResolveName implements the Activation interface method. */
     @Override
     public ResolvedValue resolveName(String name) {
+      if (name.startsWith(".")) {
+        return parent.resolveName(name.substring(1));
+      }
       ResolvedValue object = child.resolveName(name);
       if (object.present()) {
         return object;
@@ -236,6 +245,9 @@ public interface Activation {
 
     @Override
     public ResolvedValue resolveName(String name) {
+      if (name.startsWith(".")) {
+        return delegate.resolveName(name);
+      }
       return delegate.resolveName(name);
     }
 
@@ -278,6 +290,9 @@ public interface Activation {
     /** ResolveName implements the Activation interface method. */
     @Override
     public ResolvedValue resolveName(String name) {
+      if (name.startsWith(".")) {
+        return parent.resolveName(name.substring(1));
+      }
       if (name.equals(this.name)) {
         return ResolvedValue.resolvedValue(val);
       }

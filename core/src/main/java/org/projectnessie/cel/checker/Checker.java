@@ -230,9 +230,11 @@ public final class Checker {
     Decl ident = env.lookupIdent(identExpr.getName());
     if (ident != null) {
       setType(e, ident.getIdent().getType());
-      setReference(e, newIdentReference(ident.getName(), ident.getIdent().getValue()));
+      String identName =
+          identExpr.getName().startsWith(".") ? "." + ident.getName() : ident.getName();
+      setReference(e, newIdentReference(identName, ident.getIdent().getValue()));
       // Overwrite the identifier with its fully qualified name.
-      identExpr.setName(ident.getName());
+      identExpr.setName(identName);
       return;
     }
 
@@ -244,7 +246,7 @@ public final class Checker {
     Select.Builder sel = e.getSelectExprBuilder();
     // Before traversing down the tree, try to interpret as qualified name.
     String qname = Container.toQualifiedName(e.build());
-    if (qname != null) {
+    if (qname != null && !isQualifiedLocalVariableSelection(sel.getOperandBuilder())) {
       Decl ident = env.lookupIdent(qname);
       if (ident != null) {
         if (sel.getTestOnly()) {
@@ -305,6 +307,16 @@ public final class Checker {
       resultType = Decls.Bool;
     }
     setType(e, resultType);
+  }
+
+  private boolean isQualifiedLocalVariableSelection(Expr.Builder e) {
+    if (e.getExprKindCase() == Expr.ExprKindCase.IDENT_EXPR) {
+      return env.hasLocalIdent(e.getIdentExpr().getName());
+    }
+    if (e.getExprKindCase() == Expr.ExprKindCase.SELECT_EXPR) {
+      return isQualifiedLocalVariableSelection(e.getSelectExprBuilder().getOperandBuilder());
+    }
+    return false;
   }
 
   void checkCall(Expr.Builder e) {

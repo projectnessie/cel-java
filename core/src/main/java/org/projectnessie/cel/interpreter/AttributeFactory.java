@@ -216,7 +216,10 @@ public interface AttributeFactory {
     @Override
     public Attribute maybeAttribute(long id, String name) {
       List<NamespacedAttribute> attrs = new ArrayList<>();
-      attrs.add(absoluteAttribute(id, container.resolveCandidateNames(name)));
+      attrs.add(
+          name.startsWith(".")
+              ? absoluteAttribute(id, name)
+              : absoluteAttribute(id, container.resolveCandidateNames(name)));
       return new MaybeAttribute(id, attrs, adapter, provider, this);
     }
 
@@ -357,24 +360,16 @@ public interface AttributeFactory {
      */
     @Override
     public Object tryResolve(org.projectnessie.cel.interpreter.Activation vars) {
+      Object local = tryResolveCurrentVar(vars);
+      if (local != null) {
+        return local;
+      }
       for (String nm : namespaceNames) {
         // If the variable is found, process it. Otherwise, wait until the checks to
         // determine whether the type is unknown before returning.
         ResolvedValue obj = vars.resolveName(nm);
         if (obj.present()) {
-          Object op = obj.value();
-          for (int i = 0; i < qualifiers.size(); i++) {
-            Qualifier qual = qualifiers.get(i);
-            Object op2 = qualify(vars, op, qual, i == qualifiers.size() - 1);
-            if (op2 instanceof Err) {
-              return op2;
-            }
-            if (op2 == null) {
-              break;
-            }
-            op = op2;
-          }
-          return op;
+          return resolveQualifiers(vars, obj.value());
         }
         // Attempt to resolve the qualified type name if the name is not a variable identifier.
         Val typ = provider.findIdent(nm);
@@ -386,6 +381,36 @@ public interface AttributeFactory {
         }
       }
       throw noSuchAttributeException(this);
+    }
+
+    private Object tryResolveCurrentVar(org.projectnessie.cel.interpreter.Activation vars) {
+      if (vars instanceof org.projectnessie.cel.interpreter.Activation.VarActivation
+          && (namespaceNames.length > 1 || !qualifiers.isEmpty())) {
+        org.projectnessie.cel.interpreter.Activation.VarActivation var =
+            (org.projectnessie.cel.interpreter.Activation.VarActivation) vars;
+        String localName = namespaceNames[namespaceNames.length - 1];
+        if (localName.equals(var.name)) {
+          return resolveQualifiers(vars, var.val);
+        }
+      }
+      return null;
+    }
+
+    private Object resolveQualifiers(
+        org.projectnessie.cel.interpreter.Activation vars, Object obj) {
+      Object op = obj;
+      for (int i = 0; i < qualifiers.size(); i++) {
+        Qualifier qual = qualifiers.get(i);
+        Object op2 = qualify(vars, op, qual, i == qualifiers.size() - 1);
+        if (op2 instanceof Err) {
+          return op2;
+        }
+        if (op2 == null) {
+          break;
+        }
+        op = op2;
+      }
+      return op;
     }
 
     private Object qualify(
@@ -624,6 +649,14 @@ public interface AttributeFactory {
      */
     @Override
     public Object resolve(org.projectnessie.cel.interpreter.Activation vars) {
+      for (NamespacedAttribute attr : attrs) {
+        if (attr instanceof AbsoluteAttribute) {
+          Object result = ((AbsoluteAttribute) attr).tryResolveCurrentVar(vars);
+          if (result != null) {
+            return result;
+          }
+        }
+      }
       for (NamespacedAttribute attr : attrs) {
         try {
           return attr.tryResolve(vars);

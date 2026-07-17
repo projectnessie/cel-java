@@ -135,7 +135,6 @@ class SimpleConformanceTest {
           // Malicious too-deep protobuf structure.
           "parse/nest/message_literal",
           // New CEL-Spec v0.25.2 expectations that need follow-up parser/runtime changes.
-          "namespace/namespace_shadowing/comprehension_shadowing,comprehension_shadowing_disambiguation,comprehension_shadowing_parse_only,comprehension_shadowing_selector,comprehension_shadowing_selector_parse_only,comprehension_shadowing_namespaced_selector,comprehension_shadowing_namespaced_selector_parse_only,comprehension_shadowing_nesting",
           "proto2/extensions_has/package_scoped_int32,package_scoped_nested_ext,package_scoped_test_all_types_ext,package_scoped_test_all_types_nested_enum_ext,package_scoped_repeated_test_all_types,message_scoped_int64,message_scoped_nested_ext,message_scoped_nested_enum_ext,message_scoped_repeated_test_all_types",
           "proto2/extensions_get/package_scoped_int32,package_scoped_nested_ext,package_scoped_test_all_types_ext,package_scoped_test_all_types_nested_enum_ext,package_scoped_repeated_test_all_types,message_scoped_int64,message_scoped_nested_ext,message_scoped_nested_enum_ext,message_scoped_repeated_test_all_types",
           // type_deduction.textproto coverage was added opportunistically. The remaining skips are
