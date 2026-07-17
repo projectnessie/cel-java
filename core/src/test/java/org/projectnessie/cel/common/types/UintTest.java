@@ -109,9 +109,12 @@ public class UintTest {
     Value val = uintOf(maxIntJSON).convertToNative(Value.class);
     assertThat(val).isEqualTo(Value.newBuilder().setNumberValue(9007199254740991.0d).build());
 
-    // Value converts to a JSON decimal string
-    val = intOf(maxIntJSON + 1).convertToNative(Value.class);
+    // Value converts to a JSON decimal string.
+    val = uintOf(maxIntJSON + 1).convertToNative(Value.class);
     assertThat(val).isEqualTo(Value.newBuilder().setStringValue("9007199254740992").build());
+
+    val = uintOf(-1L).convertToNative(Value.class);
+    assertThat(val).isEqualTo(Value.newBuilder().setStringValue("18446744073709551615").build());
   }
 
   @Test

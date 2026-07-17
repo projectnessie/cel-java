@@ -160,7 +160,6 @@ class SimpleConformanceTest {
           "enums/strong_proto2",
           "enums/strong_proto3",
           "fields/qualified_identifier_resolution/map_key_float",
-          "wrappers/uint64/to_json_string",
           "wrappers/field_mask/to_json",
           "wrappers/timestamp/to_json",
           "wrappers/empty/to_json");
