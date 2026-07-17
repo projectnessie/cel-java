@@ -163,23 +163,11 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
   /** Equal implements the ref.Val interface method. */
   @Override
   public Val equal(Val other) {
-    switch (other.type().typeEnum()) {
-      case Bytes:
-        return boolOf(Arrays.equals(b, ((BytesT) other).b));
-      case Null:
-      case Bool:
-      case Double:
-      case Int:
-      case List:
-      case Map:
-      case Object:
-      case String:
-      case Type:
-      case Uint:
-        return False;
-      default:
-        return noSuchOverload(this, "equal", other);
-    }
+    return switch (other.type().typeEnum()) {
+      case Bytes -> boolOf(Arrays.equals(b, ((BytesT) other).b));
+      case Null, Bool, Double, Int, List, Map, Object, String, Type, Uint -> False;
+      default -> noSuchOverload(this, "equal", other);
+    };
   }
 
   /** Size implements the traits.Sizer interface method. */

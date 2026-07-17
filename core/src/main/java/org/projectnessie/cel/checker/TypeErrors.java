@@ -117,10 +117,6 @@ public final class TypeErrors extends Errors {
         formatCheckedType(actual));
   }
 
-  public void unknownType(Location l, String info) {
-    //    reportError(l, "unknown type%s", info != null ? " for: " + info : "");
-  }
-
   static String formatFunction(Type resultType, List<Type> argTypes, boolean isInstance) {
     StringBuilder result = new StringBuilder();
     formatFunction(result, resultType, argTypes, isInstance);

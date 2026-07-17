@@ -363,9 +363,7 @@ public final class Debug {
     void doIndent() {
       if (lineStart) {
         lineStart = false;
-        for (int i = 0; i < indent; i++) {
-          buffer.append("  ");
-        }
+        buffer.append("  ".repeat(Math.max(0, indent)));
       }
     }
 

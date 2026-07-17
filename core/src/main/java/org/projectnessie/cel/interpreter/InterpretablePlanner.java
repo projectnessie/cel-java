@@ -177,24 +177,18 @@ public interface InterpretablePlanner {
      */
     @Override
     public Interpretable plan(Expr expr) {
-      switch (expr.getExprKindCase()) {
-        case CALL_EXPR:
-          return decorate(planCall(expr));
-        case IDENT_EXPR:
-          return decorate(planIdent(expr));
-        case SELECT_EXPR:
-          return decorate(planSelect(expr));
-        case LIST_EXPR:
-          return decorate(planCreateList(expr));
-        case STRUCT_EXPR:
-          return decorate(planCreateStruct(expr));
-        case COMPREHENSION_EXPR:
-          return decorate(planComprehension(expr));
-        case CONST_EXPR:
-          return decorate(planConst(expr));
-      }
-      throw new IllegalArgumentException(
-          String.format("unsupported expr of kind %s: '%s'", expr.getExprKindCase(), expr));
+      return switch (expr.getExprKindCase()) {
+        case CALL_EXPR -> decorate(planCall(expr));
+        case IDENT_EXPR -> decorate(planIdent(expr));
+        case SELECT_EXPR -> decorate(planSelect(expr));
+        case LIST_EXPR -> decorate(planCreateList(expr));
+        case STRUCT_EXPR -> decorate(planCreateStruct(expr));
+        case COMPREHENSION_EXPR -> decorate(planComprehension(expr));
+        case CONST_EXPR -> decorate(planConst(expr));
+        default ->
+            throw new IllegalArgumentException(
+                String.format("unsupported expr of kind %s: '%s'", expr.getExprKindCase(), expr));
+      };
     }
 
     /**
@@ -310,8 +304,7 @@ public interface InterpretablePlanner {
         return null;
       }
       // Lastly, create a field selection Interpretable.
-      if (op instanceof InterpretableAttribute) {
-        InterpretableAttribute attr = (InterpretableAttribute) op;
+      if (op instanceof InterpretableAttribute attr) {
         attr.addQualifier(qual);
         return attr;
       }
@@ -405,16 +398,12 @@ public interface InterpretablePlanner {
       if (fnDef == null) {
         fnDef = disp.findOverload(resolvedFunc.fnName);
       }
-      switch (argCount) {
-        case 0:
-          return planCallZero(expr, resolvedFunc.fnName, resolvedFunc.overloadId, fnDef);
-        case 1:
-          return planCallUnary(expr, resolvedFunc.fnName, resolvedFunc.overloadId, fnDef, args);
-        case 2:
-          return planCallBinary(expr, resolvedFunc.fnName, resolvedFunc.overloadId, fnDef, args);
-        default:
-          return planCallVarArgs(expr, resolvedFunc.fnName, resolvedFunc.overloadId, fnDef, args);
-      }
+      return switch (argCount) {
+        case 0 -> planCallZero(expr, resolvedFunc.fnName, resolvedFunc.overloadId, fnDef);
+        case 1 -> planCallUnary(expr, resolvedFunc.fnName, resolvedFunc.overloadId, fnDef, args);
+        case 2 -> planCallBinary(expr, resolvedFunc.fnName, resolvedFunc.overloadId, fnDef, args);
+        default -> planCallVarArgs(expr, resolvedFunc.fnName, resolvedFunc.overloadId, fnDef, args);
+      };
     }
 
     /** planCallZero generates a zero-arity callable Interpretable. */
@@ -498,8 +487,7 @@ public interface InterpretablePlanner {
 
       Interpretable t = args[1];
       Attribute tAttr;
-      if (t instanceof InterpretableAttribute) {
-        InterpretableAttribute truthyAttr = (InterpretableAttribute) t;
+      if (t instanceof InterpretableAttribute truthyAttr) {
         tAttr = truthyAttr.attr();
       } else {
         tAttr = attrFactory.relativeAttribute(t.id(), t);
@@ -507,8 +495,7 @@ public interface InterpretablePlanner {
 
       Interpretable f = args[2];
       Attribute fAttr;
-      if (f instanceof InterpretableAttribute) {
-        InterpretableAttribute falsyAttr = (InterpretableAttribute) f;
+      if (f instanceof InterpretableAttribute falsyAttr) {
         fAttr = falsyAttr.attr();
       } else {
         fAttr = attrFactory.relativeAttribute(f.id(), f);
@@ -530,8 +517,7 @@ public interface InterpretablePlanner {
         return null;
       }
       Type opType = typeMap.get(expr.getCallExpr().getTarget().getId());
-      if (ind instanceof InterpretableConst) {
-        InterpretableConst indConst = (InterpretableConst) ind;
+      if (ind instanceof InterpretableConst indConst) {
         Qualifier qual = attrFactory.newQualifier(opType, expr.getId(), indConst.value());
         if (qual == null) {
           return null;
@@ -539,8 +525,7 @@ public interface InterpretablePlanner {
         opAttr.addQualifier(qual);
         return opAttr;
       }
-      if (ind instanceof InterpretableAttribute) {
-        InterpretableAttribute indAttr = (InterpretableAttribute) ind;
+      if (ind instanceof InterpretableAttribute indAttr) {
         Qualifier qual = attrFactory.newQualifier(opType, expr.getId(), indAttr);
         if (qual == null) {
           return null;
@@ -910,28 +895,21 @@ public interface InterpretablePlanner {
     /** constValue converts a proto Constant value to a ref.Val. */
     @SuppressWarnings("deprecation")
     static Val constValue(Constant c) {
-      switch (c.getConstantKindCase()) {
-        case BOOL_VALUE:
-          return boolOf(c.getBoolValue());
-        case BYTES_VALUE:
-          return bytesOf(c.getBytesValue());
-        case DOUBLE_VALUE:
-          return doubleOf(c.getDoubleValue());
-        case DURATION_VALUE:
-          return durationOf(c.getDurationValue());
-        case INT64_VALUE:
-          return intOf(c.getInt64Value());
-        case NULL_VALUE:
-          return NullT.NullValue;
-        case STRING_VALUE:
-          return stringOf(c.getStringValue());
-        case TIMESTAMP_VALUE:
-          return timestampOf(c.getTimestampValue());
-        case UINT64_VALUE:
-          return uintOf(c.getUint64Value());
-      }
-      throw new IllegalArgumentException(
-          String.format("unknown constant type: '%s' of kind '%s'", c, c.getConstantKindCase()));
+      return switch (c.getConstantKindCase()) {
+        case BOOL_VALUE -> boolOf(c.getBoolValue());
+        case BYTES_VALUE -> bytesOf(c.getBytesValue());
+        case DOUBLE_VALUE -> doubleOf(c.getDoubleValue());
+        case DURATION_VALUE -> durationOf(c.getDurationValue());
+        case INT64_VALUE -> intOf(c.getInt64Value());
+        case NULL_VALUE -> NullT.NullValue;
+        case STRING_VALUE -> stringOf(c.getStringValue());
+        case TIMESTAMP_VALUE -> timestampOf(c.getTimestampValue());
+        case UINT64_VALUE -> uintOf(c.getUint64Value());
+        default ->
+            throw new IllegalArgumentException(
+                String.format(
+                    "unknown constant type: '%s' of kind '%s'", c, c.getConstantKindCase()));
+      };
     }
 
     /**

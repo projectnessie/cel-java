@@ -619,16 +619,12 @@ class SimpleConformanceTest {
   }
 
   private static Val exprValueToRefValue(TypeAdapter adapter, ExprValue ev) {
-    switch (ev.getKindCase()) {
-      case VALUE:
-        return valueToRefValue(adapter, ev.getValue());
-      case ERROR:
-        return newErr("XXX add details later");
-      case UNKNOWN:
-        return unknownOf(ev.getUnknown().getExprs(0));
-      default:
-        throw new IllegalArgumentException("unknown ExprValue kind " + ev.getKindCase());
-    }
+    return switch (ev.getKindCase()) {
+      case VALUE -> valueToRefValue(adapter, ev.getValue());
+      case ERROR -> newErr("XXX add details later");
+      case UNKNOWN -> unknownOf(ev.getUnknown().getExprs(0));
+      default -> throw new IllegalArgumentException("unknown ExprValue kind " + ev.getKindCase());
+    };
   }
 
   private static Val valueToRefValue(TypeAdapter adapter, Value v) {
