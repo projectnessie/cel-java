@@ -159,7 +159,6 @@ class SimpleConformanceTest {
           "type_deductions/legacy_nullable_types/null_assignable_to_message_parameter_candidate,null_assignable_to_duration_parameter_candidate,null_assignable_to_timestamp_parameter_candidate,null_assignable_to_abstract_parameter_candidate",
           "dynamic/int32/field_assign_proto2_range,field_assign_proto3_range",
           "dynamic/uint32/field_assign_proto2_range,field_assign_proto3_range",
-          "dynamic/float/field_assign_proto2_range,field_assign_proto3_range",
           "enums/legacy_proto2/assign_standalone_int_too_big,assign_standalone_int_too_neg",
           "enums/legacy_proto3/assign_standalone_int_too_big,assign_standalone_int_too_neg",
           "enums/strong_proto2",
