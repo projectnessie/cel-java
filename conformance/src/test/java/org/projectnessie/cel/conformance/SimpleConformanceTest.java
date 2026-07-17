@@ -44,6 +44,7 @@ import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
 import static org.projectnessie.cel.extension.ProtoLib.proto;
+import static org.projectnessie.cel.extension.StringsLib.strings;
 
 import com.google.api.expr.v1alpha1.CheckedExpr;
 import com.google.api.expr.v1alpha1.Decl;
@@ -127,6 +128,7 @@ class SimpleConformanceTest {
           "proto2_ext.textproto",
           "proto3.textproto",
           "string.textproto",
+          "string_ext.textproto",
           "timestamps.textproto",
           "type_deduction.textproto",
           "unknowns.textproto",
@@ -141,6 +143,11 @@ class SimpleConformanceTest {
           // checker limitations around optionals and legacy nullable generic candidates.
           "type_deductions/flexible_type_parameter_assignment/optional_none,optional_none_2,optional_dyn_promotion,optional_dyn_promotion_2,optional_in_ternary",
           "type_deductions/legacy_nullable_types/null_assignable_to_abstract_parameter_candidate",
+          // StringsLib does not implement the CEL string quote/format/reverse extensions.
+          "string_ext/quote",
+          "string_ext/format",
+          "string_ext/format_errors",
+          "string_ext/reverse",
           "enums/strong_proto2",
           "enums/strong_proto3");
 
@@ -369,8 +376,27 @@ class SimpleConformanceTest {
           || test.getExpr().startsWith("proto.getExt(")) {
         envOptions.add(proto());
       }
+      if (usesStringExtensions(test.getExpr())) {
+        envOptions.add(strings());
+      }
       envOptions.addAll(List.of(options));
       return envOptions;
+    }
+
+    private static boolean usesStringExtensions(String expression) {
+      return expression.contains(".charAt(")
+          || expression.contains(".indexOf(")
+          || expression.contains(".lastIndexOf(")
+          || expression.contains(".lowerAscii(")
+          || expression.contains(".upperAscii(")
+          || expression.contains(".replace(")
+          || expression.contains(".split(")
+          || expression.contains(".substring(")
+          || expression.contains(".trim(")
+          || expression.contains(".join(")
+          || expression.contains("strings.quote(")
+          || expression.contains(".format(")
+          || expression.contains(".reverse(");
     }
   }
 

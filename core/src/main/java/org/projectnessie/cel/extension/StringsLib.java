@@ -363,7 +363,10 @@ public class StringsLib implements Library {
                 null,
                 null,
                 Guards.callInStrStrOutInt(StringsLib::indexOf),
-                Guards.callInStrStrIntOutInt(StringsLib::indexOfOffset)),
+                values ->
+                    values.length == 3
+                        ? Guards.callInStrStrIntOutInt(StringsLib::indexOfOffset).invoke(values)
+                        : Err.maybeNoSuchOverloadErr(null)),
             Overload.overload(
                 JOIN,
                 null,
@@ -375,7 +378,10 @@ public class StringsLib implements Library {
                 null,
                 null,
                 Guards.callInStrStrOutInt(StringsLib::lastIndexOf),
-                Guards.callInStrStrIntOutInt(StringsLib::lastIndexOfOffset)),
+                values ->
+                    values.length == 3
+                        ? Guards.callInStrStrIntOutInt(StringsLib::lastIndexOfOffset).invoke(values)
+                        : Err.maybeNoSuchOverloadErr(null)),
             Overload.unary(LOWER_ASCII, Guards.callInStrOutStr(StringsLib::lowerASCII)),
             Overload.overload(
                 REPLACE,
@@ -396,13 +402,19 @@ public class StringsLib implements Library {
                 null,
                 null,
                 Guards.callInStrStrOutStrArr(StringsLib::split),
-                Guards.callInStrStrIntOutStrArr(StringsLib::splitN)),
+                values ->
+                    values.length == 3
+                        ? Guards.callInStrStrIntOutStrArr(StringsLib::splitN).invoke(values)
+                        : Err.maybeNoSuchOverloadErr(null)),
             Overload.overload(
                 SUBSTR,
                 null,
                 null,
                 Guards.callInStrIntOutStr(StringsLib::substr),
-                Guards.callInStrIntIntOutStr(StringsLib::substrRange)),
+                values ->
+                    values.length == 3
+                        ? Guards.callInStrIntIntOutStr(StringsLib::substrRange).invoke(values)
+                        : Err.maybeNoSuchOverloadErr(null)),
             Overload.unary(TRIM_SPACE, Guards.callInStrOutStr(StringsLib::trimSpace)),
             Overload.unary(UPPER_ASCII, Guards.callInStrOutStr(StringsLib::upperASCII)));
     return List.of(functions);
