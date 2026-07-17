@@ -211,16 +211,8 @@ public final class FieldDescription extends Description {
   public boolean isSet(Object target) {
     if (target instanceof Message) {
       Message v = (Message) target;
-      // pbRef = v.ProtoReflect()
-      Descriptor pbDesc = v.getDescriptorForType();
-      if (pbDesc == desc.getContainingType()) {
-        // When the target protobuf shares the same message descriptor instance as the field
-        // descriptor, use the cached field descriptor value.
-        return FieldDescription.hasValueForField(desc, v);
-      }
-      // Otherwise, fallback to a dynamic lookup of the field descriptor from the target
-      // instance as an attempt to use the cached field descriptor will result in a panic.
-      return FieldDescription.hasValueForField(pbDesc.findFieldByName(name()), v);
+      FieldDescriptor fd = fieldDescriptorFor(v);
+      return fd != null && FieldDescription.hasValueForField(fd, v);
     }
     return false;
   }
@@ -242,20 +234,8 @@ public final class FieldDescription extends Description {
     }
     Message v = (Message) target;
     // pbRef = v.protoReflect();
-    Descriptor pbDesc = v.getDescriptorForType();
-    Object fieldVal;
-
-    FieldDescriptor fd;
-    if (pbDesc == desc.getContainingType()) {
-      // When the target protobuf shares the same message descriptor instance as the field
-      // descriptor, use the cached field descriptor value.
-      fd = desc;
-    } else {
-      // Otherwise, fallback to a dynamic lookup of the field descriptor from the target
-      // instance as an attempt to use the cached field descriptor will result in a panic.
-      fd = pbDesc.findFieldByName(name());
-    }
-    fieldVal = getValueFromField(fd, v);
+    FieldDescriptor fd = fieldDescriptorFor(v);
+    Object fieldVal = getValueFromField(fd, v);
 
     Class<?> fieldType = fieldVal.getClass();
     if (fd.getJavaType() != JavaType.MESSAGE
@@ -447,7 +427,12 @@ public final class FieldDescription extends Description {
   }
 
   public boolean hasField(Object target) {
-    return hasValueForField(desc, (Message) target);
+    if (!(target instanceof Message)) {
+      return false;
+    }
+    Message message = (Message) target;
+    FieldDescriptor fd = fieldDescriptorFor(message);
+    return fd != null && hasValueForField(fd, message);
   }
 
   public Object getField(Object target) {
@@ -541,7 +526,18 @@ public final class FieldDescription extends Description {
     if (messageDesc == desc.getContainingType()) {
       return desc;
     }
-    return messageDesc.findFieldByName(name());
+    if (!desc.isExtension()) {
+      return messageDesc.findFieldByName(name());
+    }
+    for (FieldDescriptor field : message.getAllFields().keySet()) {
+      if (field.getFullName().equals(desc.getFullName())) {
+        return field;
+      }
+    }
+    if (messageDesc.getFullName().equals(desc.getContainingType().getFullName())) {
+      return desc;
+    }
+    return null;
   }
 
   private static final class UnsignedLongList extends AbstractList<ULong> {

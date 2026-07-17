@@ -18,6 +18,7 @@ package org.projectnessie.cel.common.types.pb;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumDescriptor;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
+import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
 import java.util.HashMap;
 import java.util.List;
@@ -29,11 +30,15 @@ public final class FileDescription {
 
   private final Map<String, PbTypeDescription> types;
   private final Map<String, EnumValueDescription> enums;
+  private final Map<String, FieldDescription> extensions;
 
   private FileDescription(
-      Map<String, PbTypeDescription> types, Map<String, EnumValueDescription> enums) {
+      Map<String, PbTypeDescription> types,
+      Map<String, EnumValueDescription> enums,
+      Map<String, FieldDescription> extensions) {
     this.types = types;
     this.enums = enums;
+    this.extensions = extensions;
   }
 
   @Override
@@ -45,12 +50,14 @@ public final class FileDescription {
       return false;
     }
     FileDescription that = (FileDescription) o;
-    return Objects.equals(types, that.types) && Objects.equals(enums, that.enums);
+    return Objects.equals(types, that.types)
+        && Objects.equals(enums, that.enums)
+        && Objects.equals(extensions, that.extensions);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(types, enums);
+    return Objects.hash(types, enums, extensions);
   }
 
   /**
@@ -66,7 +73,10 @@ public final class FileDescription {
     Map<String, PbTypeDescription> types = new HashMap<>();
     metadata.msgTypes.forEach(
         (name, msgType) -> types.put(name, PbTypeDescription.newTypeDescription(name, msgType)));
-    return new FileDescription(types, enums);
+    Map<String, FieldDescription> extensions = new HashMap<>();
+    metadata.extensions.forEach(
+        (name, extension) -> extensions.put(name, FieldDescription.newFieldDescription(extension)));
+    return new FileDescription(types, enums, extensions);
   }
 
   /**
@@ -80,6 +90,21 @@ public final class FileDescription {
   /** GetEnumNames returns the string names of all enum values in the file. */
   public String[] getEnumNames() {
     return enums.keySet().toArray(new String[0]);
+  }
+
+  /** GetExtensionDescription returns a field description for a qualified extension name. */
+  public FieldDescription getExtensionDescription(String extensionName) {
+    return extensions.get(sanitizeProtoName(extensionName));
+  }
+
+  /** GetExtensionNames returns the string names of all extensions in the file. */
+  public String[] getExtensionNames() {
+    return extensions.keySet().toArray(new String[0]);
+  }
+
+  /** GetExtensionDescriptions returns all extension field descriptions in the file. */
+  public Iterable<FieldDescription> getExtensionDescriptions() {
+    return extensions.values();
   }
 
   /**
@@ -111,12 +136,18 @@ public final class FileDescription {
     /** enumValues maps from fully-qualified enum value to enum value descriptor. */
     final Map<String, EnumValueDescriptor> enumValues;
 
+    /** extensions maps from fully-qualified extension name to field descriptor. */
+    final Map<String, FieldDescriptor> extensions;
+
     // TODO: support enum type definitions for use in future type-check enhancements.
 
     private FileMetadata(
-        Map<String, Descriptor> msgTypes, Map<String, EnumValueDescriptor> enumValues) {
+        Map<String, Descriptor> msgTypes,
+        Map<String, EnumValueDescriptor> enumValues,
+        Map<String, FieldDescriptor> extensions) {
       this.msgTypes = msgTypes;
       this.enumValues = enumValues;
+      this.extensions = extensions;
     }
 
     /**
@@ -126,10 +157,12 @@ public final class FileDescription {
     static FileMetadata collectFileMetadata(FileDescriptor fileDesc) {
       Map<String, Descriptor> msgTypes = new HashMap<>();
       Map<String, EnumValueDescriptor> enumValues = new HashMap<>();
+      Map<String, FieldDescriptor> extensions = new HashMap<>();
 
-      collectMsgTypes(fileDesc.getMessageTypes(), msgTypes, enumValues);
+      collectMsgTypes(fileDesc.getMessageTypes(), msgTypes, enumValues, extensions);
       collectEnumValues(fileDesc.getEnumTypes(), enumValues);
-      return new FileMetadata(msgTypes, enumValues);
+      collectExtensions(fileDesc.getExtensions(), extensions);
+      return new FileMetadata(msgTypes, enumValues, extensions);
     }
 
     /**
@@ -139,17 +172,26 @@ public final class FileDescription {
     private static void collectMsgTypes(
         List<Descriptor> msgTypes,
         Map<String, Descriptor> msgTypeMap,
-        Map<String, EnumValueDescriptor> enumValueMap) {
+        Map<String, EnumValueDescriptor> enumValueMap,
+        Map<String, FieldDescriptor> extensionMap) {
       for (Descriptor msgType : msgTypes) {
         msgTypeMap.put(msgType.getFullName(), msgType);
         List<Descriptor> nestedMsgTypes = msgType.getNestedTypes();
         if (!nestedMsgTypes.isEmpty()) {
-          collectMsgTypes(nestedMsgTypes, msgTypeMap, enumValueMap);
+          collectMsgTypes(nestedMsgTypes, msgTypeMap, enumValueMap, extensionMap);
         }
         List<EnumDescriptor> nestedEnumTypes = msgType.getEnumTypes();
         if (!nestedEnumTypes.isEmpty()) {
           collectEnumValues(nestedEnumTypes, enumValueMap);
         }
+        collectExtensions(msgType.getExtensions(), extensionMap);
+      }
+    }
+
+    private static void collectExtensions(
+        List<FieldDescriptor> extensions, Map<String, FieldDescriptor> extensionMap) {
+      for (FieldDescriptor extension : extensions) {
+        extensionMap.put(extension.getFullName(), extension);
       }
     }
 

@@ -63,7 +63,7 @@ public final class PbObjectT extends ObjectT {
       return noSuchOverload(this, "isSet", field);
     }
     String protoFieldStr = (String) field.value();
-    FieldDescription fd = typeDesc().fieldByName(protoFieldStr);
+    FieldDescription fd = fieldDescription(protoFieldStr);
     if (fd == null) {
       return noSuchField(protoFieldStr);
     }
@@ -76,7 +76,7 @@ public final class PbObjectT extends ObjectT {
       return noSuchOverload(this, "get", index);
     }
     String protoFieldStr = (String) index.value();
-    FieldDescription fd = typeDesc().fieldByName(protoFieldStr);
+    FieldDescription fd = fieldDescription(protoFieldStr);
     if (fd == null) {
       return noSuchField(protoFieldStr);
     }
@@ -215,6 +215,14 @@ public final class PbObjectT extends ObjectT {
 
   private PbTypeDescription typeDesc() {
     return (PbTypeDescription) typeDesc;
+  }
+
+  private FieldDescription fieldDescription(String fieldName) {
+    FieldDescription field = typeDesc().fieldByName(fieldName);
+    if (field != null || !(adapter instanceof ProtoTypeRegistry)) {
+      return field;
+    }
+    return ((ProtoTypeRegistry) adapter).findFieldDescription(typeDesc().name(), fieldName);
   }
 
   @SuppressWarnings("unchecked")

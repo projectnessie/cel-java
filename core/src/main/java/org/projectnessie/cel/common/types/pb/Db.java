@@ -24,6 +24,7 @@ import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.Duration;
 import com.google.protobuf.Empty;
+import com.google.protobuf.ExtensionRegistry;
 import com.google.protobuf.FieldMask;
 import com.google.protobuf.Message;
 import com.google.protobuf.Timestamp;
@@ -49,6 +50,8 @@ public final class Db {
 
   /** files contains the deduped set of FileDescriptions whose types are contained in the pb.Db. */
   private final List<FileDescription> files;
+
+  private volatile ExtensionRegistry extensionRegistry;
 
   /** DefaultDb used at evaluation time or unless overridden at check time. */
   public static final Db defaultDb = new Db(new HashMap<>(), new ArrayList<>());
@@ -123,10 +126,14 @@ public final class Db {
     for (String enumValName : fd.getEnumNames()) {
       revFileDescriptorMap.put(enumValName, fd);
     }
+    for (String extensionName : fd.getExtensionNames()) {
+      revFileDescriptorMap.put(extensionName, fd);
+    }
     for (String msgTypeName : fd.getTypeNames()) {
       revFileDescriptorMap.put(msgTypeName, fd);
     }
     revFileDescriptorMap.put(path, fd);
+    extensionRegistry = null;
 
     // Return the specific file descriptor registered.
     files.add(fd);
@@ -169,6 +176,45 @@ public final class Db {
     typeName = sanitizeProtoName(typeName);
     FileDescription fd = revFileDescriptorMap.get(typeName);
     return fd != null ? fd.getTypeDescription(typeName) : null;
+  }
+
+  public FieldDescription describeExtension(String messageType, String extensionName) {
+    extensionName = sanitizeProtoName(extensionName);
+    FileDescription fd = revFileDescriptorMap.get(extensionName);
+    if (fd == null) {
+      return null;
+    }
+    FieldDescription extension = fd.getExtensionDescription(extensionName);
+    if (extension == null
+        || !sanitizeProtoName(messageType)
+            .equals(extension.descriptor().getContainingType().getFullName())) {
+      return null;
+    }
+    return extension;
+  }
+
+  ExtensionRegistry extensionRegistry() {
+    ExtensionRegistry registry = extensionRegistry;
+    if (registry != null) {
+      return registry;
+    }
+    synchronized (this) {
+      registry = extensionRegistry;
+      if (registry == null) {
+        registry = ExtensionRegistry.newInstance();
+        for (FileDescription file : files) {
+          for (FieldDescription extension : file.getExtensionDescriptions()) {
+            if (extension.isMessage()) {
+              registry.add(extension.descriptor(), extension.zero());
+            } else {
+              registry.add(extension.descriptor());
+            }
+          }
+        }
+        extensionRegistry = registry;
+      }
+      return registry;
+    }
   }
 
   /**

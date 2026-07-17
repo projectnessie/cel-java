@@ -19,16 +19,23 @@ import static java.lang.Boolean.FALSE;
 import static java.lang.Boolean.TRUE;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.projectnessie.cel.Env.newCustomEnv;
+import static org.projectnessie.cel.Env.newEnv;
 import static org.projectnessie.cel.EnvOption.declarations;
 import static org.projectnessie.cel.EnvOption.types;
 import static org.projectnessie.cel.Library.StdLib;
+import static org.projectnessie.cel.Util.mapOf;
 
+import com.google.protobuf.Any;
 import com.google.protobuf.Descriptors;
 import com.google.protobuf.DynamicMessage;
+import dev.cel.expr.conformance.proto2.Proto2ExtensionScopedMessage;
+import dev.cel.expr.conformance.proto2.TestAllTypes;
+import dev.cel.expr.conformance.proto2.TestAllTypesExtensions;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.projectnessie.cel.Ast;
@@ -43,6 +50,43 @@ import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.proto.tests.ProtoTestTypes;
 
 public class ProtoTest {
+  @Test
+  void proto2ExtensionFieldSelection() {
+    Env env =
+        newEnv(
+            types(
+                TestAllTypes.getDefaultInstance(),
+                Proto2ExtensionScopedMessage.getDefaultInstance()),
+            declarations(
+                Decls.newVar(
+                    "msg", Decls.newObjectType("cel.expr.conformance.proto2.TestAllTypes"))));
+    TestAllTypes message =
+        TestAllTypes.newBuilder().setExtension(TestAllTypesExtensions.int32Ext, 42).build();
+
+    String expression =
+        "has(msg.`cel.expr.conformance.proto2.int32_ext`) "
+            + "&& msg.`cel.expr.conformance.proto2.int32_ext` == 42";
+
+    AstIssuesTuple parsed = env.parse(expression);
+    assertThat(parsed).extracting(AstIssuesTuple::hasIssues).isEqualTo(FALSE);
+    assertThat(env.program(parsed.getAst()).eval(mapOf("msg", message)).getVal())
+        .extracting(Val::booleanValue)
+        .isEqualTo(TRUE);
+
+    AstIssuesTuple checked = env.check(parsed.getAst());
+    assertThat(checked).extracting(AstIssuesTuple::hasIssues).isEqualTo(FALSE);
+    assertThat(env.program(checked.getAst()).eval(mapOf("msg", message)).getVal())
+        .extracting(Val::booleanValue)
+        .isEqualTo(TRUE);
+    Val anyValue = env.getTypeAdapter().nativeToValue(Any.pack(message));
+    assertThat(env.program(parsed.getAst()).eval(mapOf("msg", anyValue)).getVal())
+        .extracting(Val::booleanValue)
+        .isEqualTo(TRUE);
+    assertThat(env.program(checked.getAst()).eval(mapOf("msg", anyValue)).getVal())
+        .extracting(Val::booleanValue)
+        .isEqualTo(TRUE);
+  }
+
   @ParameterizedTest
   @ValueSource(
       strings = {

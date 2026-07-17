@@ -209,16 +209,30 @@ public final class ProtoTypeRegistry implements TypeRegistry {
   }
 
   private FieldType loadFieldType(String messageType, String fieldName) {
+    FieldDescription field = findFieldDescription(messageType, fieldName);
+    if (field == null) {
+      return null;
+    }
+    FieldDescription resolvedField = field;
+    return new FieldType(
+        resolvedField.checkedType(),
+        resolvedField::hasField,
+        target -> resolvedField.getField(target, this));
+  }
+
+  FieldDescription findFieldDescription(String messageType, String fieldName) {
     PbTypeDescription msgType = pbdb.describeType(messageType);
     if (msgType == null) {
       return null;
     }
     FieldDescription field = msgType.fieldByName(fieldName);
     if (field == null) {
+      field = pbdb.describeExtension(messageType, fieldName);
+    }
+    if (field == null) {
       return null;
     }
-    return new FieldType(
-        field.checkedType(), field::hasField, target -> field.getField(target, this));
+    return field;
   }
 
   @Override
