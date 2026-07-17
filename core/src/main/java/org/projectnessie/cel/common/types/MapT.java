@@ -20,7 +20,6 @@ import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.Err.isError;
 import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
-import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.TypeT.TypeType;
 import static org.projectnessie.cel.common.types.Types.boolOf;
 
@@ -148,9 +147,12 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
     private Struct toPbStruct() {
       Struct.Builder struct = Struct.newBuilder();
       map.forEach(
-          (k, v) ->
-              struct.putFields(
-                  k.convertToType(StringType).value().toString(), v.convertToNative(Value.class)));
+          (k, v) -> {
+            if (k.type().typeEnum() != TypeEnum.String) {
+              throw new IllegalArgumentException("bad key type");
+            }
+            struct.putFields(k.value().toString(), v.convertToNative(Value.class));
+          });
       return struct.build();
     }
 

@@ -16,6 +16,7 @@
 package org.projectnessie.cel.common.types;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.IntT.intOf;
@@ -26,6 +27,7 @@ import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newRegistry;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.protobuf.Struct;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Disabled;
@@ -97,6 +99,19 @@ public class MapTest {
     assertThat(celMap.convertToNative(Map.class))
         .isEqualTo(
             ImmutableMap.of(1L, "one", 2L, "two", 3.1d, "three", true, "true", "str", "string"));
+  }
+
+  @Test
+  void mapToProtobufStructRequiresStringKeys() {
+    MapT stringKeyMap =
+        (MapT) newWrappedMap(newRegistry(), ImmutableMap.of(stringOf("one"), doubleOf(1.0d)));
+    assertThat(stringKeyMap.convertToNative(Struct.class).getFieldsMap()).containsOnlyKeys("one");
+
+    MapT intKeyMap =
+        (MapT) newWrappedMap(newRegistry(), ImmutableMap.of(intOf(1), stringOf("one")));
+    assertThatThrownBy(() -> intKeyMap.convertToNative(Struct.class))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("bad key type");
   }
 
   //	type testStruct struct {

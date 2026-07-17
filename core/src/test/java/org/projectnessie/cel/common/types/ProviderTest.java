@@ -310,6 +310,20 @@ public class ProviderTest {
   }
 
   @Test
+  void typeRegistryNewValue_ProtobufStructFieldRequiresStringKeys() {
+    TypeRegistry reg = newRegistry(TestAllTypes.getDefaultInstance());
+    String typeName = "cel.expr.conformance.proto3.TestAllTypes";
+
+    Val value =
+        reg.newValue(
+            typeName,
+            mapOf("single_struct", newMaybeWrappedMap(reg, mapOf(intOf(1), stringOf("one")))));
+
+    assertThat(value).matches(Err::isError);
+    assertThat(value.toString()).contains("invalid value for field 'single_struct': bad key type");
+  }
+
+  @Test
   void typeRegistryGetters() {
     TypeRegistry reg = newRegistry(ParsedExpr.getDefaultInstance());
     Val sourceInfo =

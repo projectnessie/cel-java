@@ -132,11 +132,6 @@ class SimpleConformanceTest {
 
   private static final Set<String> SKIP_TESTS =
       SkipList.parse(
-          // Without the checker, verifying whether an assignment is allowed by the CEL spec is
-          // difficult, especially from a map to a struct. The checker catches this case, while the
-          // evaluator currently converts int(1) to string("1").
-          "dynamic/struct/field_assign_proto2_bad",
-          "dynamic/struct/field_assign_proto3_bad",
           // The test expects -0.0d, but in Java -0.0d == 0.0d, so -0.0d is evaluated as not set.
           "dynamic/float/field_assign_proto3_round_to_zero",
           // Malicious too-deep protobuf structure.
