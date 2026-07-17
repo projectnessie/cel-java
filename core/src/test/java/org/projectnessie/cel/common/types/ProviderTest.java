@@ -36,8 +36,6 @@ import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newEmptyRegistry;
 import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newRegistry;
 
-import com.google.api.expr.test.v1.proto3.TestAllTypesProto.GlobalEnum;
-import com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes;
 import com.google.api.expr.v1alpha1.CheckedExpr;
 import com.google.api.expr.v1alpha1.Constant;
 import com.google.api.expr.v1alpha1.Expr;
@@ -55,6 +53,8 @@ import com.google.protobuf.StringValue;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
+import dev.cel.expr.conformance.proto3.GlobalEnum;
+import dev.cel.expr.conformance.proto3.TestAllTypes;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -105,10 +105,10 @@ public class ProviderTest {
     reg.registerDescriptor(GlobalEnum.getDescriptor().getFile());
     reg.registerDescriptor(OutOfOrderEnumOuterClass.getDescriptor().getFile());
 
-    Val enumVal = reg.enumValue("google.api.expr.test.v1.proto3.GlobalEnum.GOO");
+    Val enumVal = reg.enumValue("cel.expr.conformance.proto3.GlobalEnum.GOO");
     assertThat(enumVal).extracting(Val::intValue).isEqualTo((long) GlobalEnum.GOO.getNumber());
 
-    Val enumVal2 = reg.findIdent("google.api.expr.test.v1.proto3.GlobalEnum.GOO");
+    Val enumVal2 = reg.findIdent("cel.expr.conformance.proto3.GlobalEnum.GOO");
     assertThat(enumVal2.equal(enumVal)).isSameAs(True);
 
     // Previously, we checked `getIndex` on the `EnumValueDescriptor`, which is the same as the
@@ -140,7 +140,7 @@ public class ProviderTest {
     ProtoTypeRegistry reg = newEmptyRegistry();
     reg.registerDescriptor(GlobalEnum.getDescriptor().getFile());
 
-    String msgTypeName = "google.api.expr.test.v1.proto3.TestAllTypes";
+    String msgTypeName = "cel.expr.conformance.proto3.TestAllTypes";
     assertThat(reg.findType(msgTypeName)).isNotNull();
     // assertThat(reg.findType(msgTypeName + "Undefined")).isNotNull(); ... this doesn't exist in
     // protobuf-java
@@ -198,8 +198,7 @@ public class ProviderTest {
     TypeRegistry reg = newRegistry(TestAllTypes.getDefaultInstance());
     Val exp =
         reg.newValue(
-            "google.api.expr.test.v1.proto3.TestAllTypes",
-            mapOf("single_int32_wrapper", intOf(123)));
+            "cel.expr.conformance.proto3.TestAllTypes", mapOf("single_int32_wrapper", intOf(123)));
     assertThat(exp).matches(v -> !Err.isError(v));
     TestAllTypes ce = exp.convertToNative(TestAllTypes.class);
     assertThat(ce)

@@ -61,7 +61,6 @@ import static org.projectnessie.cel.interpreter.Interpreter.optimize;
 import static org.projectnessie.cel.interpreter.Interpreter.trackState;
 import static org.projectnessie.cel.interpreter.functions.Overload.standardOverloads;
 
-import com.google.api.expr.test.v1.proto2.TestAllTypesProto.TestAllTypes;
 import com.google.api.expr.v1alpha1.Constant;
 import com.google.api.expr.v1alpha1.Decl;
 import com.google.api.expr.v1alpha1.Expr;
@@ -75,6 +74,7 @@ import com.google.protobuf.StringValue;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
+import dev.cel.expr.conformance.proto2.TestAllTypes;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Arrays;
@@ -373,10 +373,8 @@ class InterpreterTest {
           .out(False),
       new TestCase(InterpreterTestCase.eq_proto_different_types)
           .expr("dyn(TestAllTypes{}) == dyn(NestedTestAllTypes{})")
-          .container("google.api.expr.test.v1.proto2")
-          .types(
-              com.google.api.expr.test.v1.proto2.TestAllTypesProto.TestAllTypes
-                  .getDefaultInstance())
+          .container("cel.expr.conformance.proto2")
+          .types(dev.cel.expr.conformance.proto2.TestAllTypes.getDefaultInstance())
           .out(False),
       new TestCase(InterpreterTestCase.not_lt_dyn_big_uint_int)
           .expr("dyn(9223372036854775808u) < 1")
@@ -394,10 +392,8 @@ class InterpreterTest {
       new TestCase(InterpreterTestCase.eq_proto_nan_equal)
           .expr(
               "TestAllTypes{single_double: double('NaN')} == TestAllTypes{single_double: double('NaN')}")
-          .container("google.api.expr.test.v1.proto3")
-          .types(
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
-                  .getDefaultInstance())
+          .container("cel.expr.conformance.proto3")
+          .types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance())
           // The outcome in the generated Java proto code is different than in the conformance-test,
           // it is NOT: "For proto equality, fields with NaN value are treated as not equal."
           .out(True),
@@ -406,10 +402,9 @@ class InterpreterTest {
           .out(True),
       new TestCase(InterpreterTestCase.literal_any)
           .expr(
-              "google.protobuf.Any{type_url: 'type.googleapis.com/google.api.expr.test.v1.proto2.TestAllTypes', value: b'\\x08\\x96\\x01'}")
+              "google.protobuf.Any{type_url: 'type.googleapis.com/cel.expr.conformance.proto2.TestAllTypes', value: b'\\x08\\x96\\x01'}")
           .types(
-              com.google.api.expr.test.v1.proto2.TestAllTypesProto.TestAllTypes
-                  .getDefaultInstance(),
+              dev.cel.expr.conformance.proto2.TestAllTypes.getDefaultInstance(),
               Any.getDefaultInstance())
           .out(TestAllTypes.newBuilder().setSingleInt32(150).build()),
       new TestCase(InterpreterTestCase.literal_var)
@@ -418,24 +413,21 @@ class InterpreterTest {
           .types(
               Any.getDefaultInstance(),
               com.google.api.expr.v1alpha1.Value.getDefaultInstance(),
-              com.google.api.expr.test.v1.proto2.TestAllTypesProto.TestAllTypes
-                  .getDefaultInstance())
+              dev.cel.expr.conformance.proto2.TestAllTypes.getDefaultInstance())
           .in(
               "x",
               com.google.api.expr.v1alpha1.Value.newBuilder()
                   .setObjectValue(
                       Any.newBuilder()
                           .setTypeUrl(
-                              "type.googleapis.com/google.api.expr.test.v1.proto2.TestAllTypes")
+                              "type.googleapis.com/cel.expr.conformance.proto2.TestAllTypes")
                           .setValue(ByteString.copyFrom(new byte[] {8, (byte) 150, 1})))
                   .build())
           .out(TestAllTypes.newBuilder().setSingleInt32(150).build()),
       new TestCase(InterpreterTestCase.select_pb3_unset)
           .expr("TestAllTypes{}.single_struct")
-          .container("google.api.expr.test.v1.proto3")
-          .types(
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
-                  .getDefaultInstance())
+          .container("cel.expr.conformance.proto3")
+          .types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance())
           .out(Struct.getDefaultInstance()),
       new TestCase(InterpreterTestCase.elem_in_mixed_type_list2)
           .expr("'elem' in [1u, 'str', 2, b'bytes']")
@@ -448,10 +440,8 @@ class InterpreterTest {
           .out(ULong.valueOf(123)),
       new TestCase(InterpreterTestCase.select_pb3_unset)
           .expr("TestAllTypes{}.single_struct")
-          .container("google.api.expr.test.v1.proto3")
-          .types(
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
-                  .getDefaultInstance())
+          .container("cel.expr.conformance.proto3")
+          .types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance())
           .out(Struct.getDefaultInstance()),
       new TestCase(InterpreterTestCase.select_on_int64)
           .expr("a.pancakes")
@@ -460,37 +450,29 @@ class InterpreterTest {
           .err("no such overload: int.ref-resolve(*)")
           .unchecked(),
       new TestCase(InterpreterTestCase.select_pb3_empty_list)
-          .container("google.api.expr.test.v1.proto3")
+          .container("cel.expr.conformance.proto3")
           .expr("TestAllTypes{list_value: []}.list_value")
-          .types(
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
-                  .getDefaultInstance())
+          .types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance())
           .out(ListValue.getDefaultInstance()),
       new TestCase(InterpreterTestCase.select_pb3_enum_big)
-          .container("google.api.expr.test.v1.proto3")
+          .container("cel.expr.conformance.proto3")
           .expr("x.standalone_enum")
-          .types(
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
-                  .getDefaultInstance())
-          .env(
-              Decls.newVar("x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes")))
+          .types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance())
+          .env(Decls.newVar("x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes")))
           .in(
               "x",
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.newBuilder()
+              dev.cel.expr.conformance.proto3.TestAllTypes.newBuilder()
                   .setStandaloneEnumValue(108)
                   .build())
           .out(intOf(108)),
       new TestCase(InterpreterTestCase.select_pb3_enum_neg)
-          .container("google.api.expr.test.v1.proto3")
+          .container("cel.expr.conformance.proto3")
           .expr("x.standalone_enum")
-          .types(
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
-                  .getDefaultInstance())
-          .env(
-              Decls.newVar("x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes")))
+          .types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance())
+          .env(Decls.newVar("x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes")))
           .in(
               "x",
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.newBuilder()
+              dev.cel.expr.conformance.proto3.TestAllTypes.newBuilder()
                   .setStandaloneEnumValue(-3)
                   .build())
           .out(intOf(-3)),
@@ -511,7 +493,7 @@ class InterpreterTest {
           .out(False),
       new TestCase(InterpreterTestCase.not_eq_list_one_element2).expr("[1] == [2]").out(False),
       new TestCase(InterpreterTestCase.parse_nest_message_literal)
-          .container("google.api.expr.test.v1.proto3")
+          .container("cel.expr.conformance.proto3")
           .expr(
               "NestedTestAllTypes{child: NestedTestAllTypes{child: NestedTestAllTypes{child: NestedTestAllTypes{child: NestedTestAllTypes{child: NestedTestAllTypes{child: "
                   + "NestedTestAllTypes{child: NestedTestAllTypes{child: NestedTestAllTypes{child: NestedTestAllTypes{child: NestedTestAllTypes{child: NestedTestAllTypes{child: "
@@ -519,9 +501,7 @@ class InterpreterTest {
                   + "NestedTestAllTypes{child: NestedTestAllTypes{child: NestedTestAllTypes{child: NestedTestAllTypes{child: NestedTestAllTypes{child: NestedTestAllTypes{child: "
                   + "NestedTestAllTypes{child: NestedTestAllTypes{child: NestedTestAllTypes{child: NestedTestAllTypes{child: NestedTestAllTypes{child: NestedTestAllTypes{child: "
                   + "NestedTestAllTypes{payload: TestAllTypes{single_int64: 137}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}}.payload.single_int64")
-          .types(
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.NestedTestAllTypes
-                  .getDefaultInstance())
+          .types(dev.cel.expr.conformance.proto3.NestedTestAllTypes.getDefaultInstance())
           .out(intOf(0)),
       new TestCase(InterpreterTestCase.parse_repeat_index)
           .expr(
@@ -762,10 +742,8 @@ class InterpreterTest {
                   .setConstExpr(Constant.newBuilder().setStringValue("oneof_test"))
                   .build()),
       new TestCase(InterpreterTestCase.literal_pb_enum)
-          .container("google.api.expr.test.v1.proto3")
-          .types(
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
-                  .getDefaultInstance())
+          .container("cel.expr.conformance.proto3")
+          .types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance())
           .expr(
               "TestAllTypes{\n"
                   + "repeated_nested_enum: [\n"
@@ -777,16 +755,13 @@ class InterpreterTest {
                   + "	TestAllTypes.NestedEnum.BAZ]}")
           .cost(costOf(0, 0))
           .out(
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.newBuilder()
+              dev.cel.expr.conformance.proto3.TestAllTypes.newBuilder()
                   .addRepeatedNestedEnum(
-                      com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.NestedEnum
-                          .FOO)
+                      dev.cel.expr.conformance.proto3.TestAllTypes.NestedEnum.FOO)
                   .addRepeatedNestedEnum(
-                      com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.NestedEnum
-                          .BAZ)
+                      dev.cel.expr.conformance.proto3.TestAllTypes.NestedEnum.BAZ)
                   .addRepeatedNestedEnum(
-                      com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.NestedEnum
-                          .BAR)
+                      dev.cel.expr.conformance.proto3.TestAllTypes.NestedEnum.BAR)
                   .addRepeatedInt32(0)
                   .addRepeatedInt32(2)
                   .build()),
@@ -849,21 +824,15 @@ class InterpreterTest {
           .cost(costOf(1, 4))
           .exhaustiveCost(costOf(4, 4)),
       new TestCase(InterpreterTestCase.macro_has_pb2_field)
-          .container("google.api.expr.test.v1.proto2")
-          .types(
-              com.google.api.expr.test.v1.proto2.TestAllTypesProto.TestAllTypes
-                  .getDefaultInstance())
-          .env(
-              Decls.newVar(
-                  "pb2", Decls.newObjectType("google.api.expr.test.v1.proto2.TestAllTypes")))
+          .container("cel.expr.conformance.proto2")
+          .types(dev.cel.expr.conformance.proto2.TestAllTypes.getDefaultInstance())
+          .env(Decls.newVar("pb2", Decls.newObjectType("cel.expr.conformance.proto2.TestAllTypes")))
           .in(
               "pb2",
-              com.google.api.expr.test.v1.proto2.TestAllTypesProto.TestAllTypes.newBuilder()
+              dev.cel.expr.conformance.proto2.TestAllTypes.newBuilder()
                   .addRepeatedBool(false)
                   .putMapInt64NestedType(
-                      1,
-                      com.google.api.expr.test.v1.proto2.TestAllTypesProto.NestedTestAllTypes
-                          .getDefaultInstance())
+                      1, dev.cel.expr.conformance.proto2.NestedTestAllTypes.getDefaultInstance())
                   .build())
           .expr(
               "has(TestAllTypes{standalone_enum: TestAllTypes.NestedEnum.BAR}.standalone_enum) \n"
@@ -879,21 +848,15 @@ class InterpreterTest {
           .cost(costOf(1, 29))
           .exhaustiveCost(costOf(29, 29)),
       new TestCase(InterpreterTestCase.macro_has_pb3_field)
-          .types(
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
-                  .getDefaultInstance())
-          .env(
-              Decls.newVar(
-                  "pb3", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes")))
-          .container("google.api.expr.test.v1.proto3")
+          .types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance())
+          .env(Decls.newVar("pb3", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes")))
+          .container("cel.expr.conformance.proto3")
           .in(
               "pb3",
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.newBuilder()
+              dev.cel.expr.conformance.proto3.TestAllTypes.newBuilder()
                   .addRepeatedBool(false)
                   .putMapInt64NestedType(
-                      1,
-                      com.google.api.expr.test.v1.proto3.TestAllTypesProto.NestedTestAllTypes
-                          .getDefaultInstance())
+                      1, dev.cel.expr.conformance.proto3.NestedTestAllTypes.getDefaultInstance())
                   .build())
           .expr(
               "has(TestAllTypes{standalone_enum: TestAllTypes.NestedEnum.BAR}.standalone_enum) \n"
@@ -927,18 +890,13 @@ class InterpreterTest {
       new TestCase(InterpreterTestCase.nested_proto_field)
           .expr("pb3.single_nested_message.bb")
           .cost(costOf(1, 1))
-          .types(
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
-                  .getDefaultInstance())
-          .env(
-              Decls.newVar(
-                  "pb3", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes")))
+          .types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance())
+          .env(Decls.newVar("pb3", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes")))
           .in(
               "pb3",
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.newBuilder()
+              dev.cel.expr.conformance.proto3.TestAllTypes.newBuilder()
                   .setSingleNestedMessage(
-                      com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
-                          .NestedMessage.newBuilder()
+                      dev.cel.expr.conformance.proto3.TestAllTypes.NestedMessage.newBuilder()
                           .setBb(1234)
                           .build())
                   .build())
@@ -946,25 +904,18 @@ class InterpreterTest {
       new TestCase(InterpreterTestCase.nested_proto_field_with_index)
           .expr("pb3.map_int64_nested_type[0].child.payload.single_int32 == 1")
           .cost(costOf(2, 2))
-          .types(
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
-                  .getDefaultInstance())
-          .env(
-              Decls.newVar(
-                  "pb3", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes")))
+          .types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance())
+          .env(Decls.newVar("pb3", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes")))
           .in(
               "pb3",
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.newBuilder()
+              dev.cel.expr.conformance.proto3.TestAllTypes.newBuilder()
                   .putMapInt64NestedType(
                       0,
-                      com.google.api.expr.test.v1.proto3.TestAllTypesProto.NestedTestAllTypes
-                          .newBuilder()
+                      dev.cel.expr.conformance.proto3.NestedTestAllTypes.newBuilder()
                           .setChild(
-                              com.google.api.expr.test.v1.proto3.TestAllTypesProto
-                                  .NestedTestAllTypes.newBuilder()
+                              dev.cel.expr.conformance.proto3.NestedTestAllTypes.newBuilder()
                                   .setPayload(
-                                      com.google.api.expr.test.v1.proto3.TestAllTypesProto
-                                          .TestAllTypes.newBuilder()
+                                      dev.cel.expr.conformance.proto3.TestAllTypes.newBuilder()
                                           .setSingleInt32(1)))
                           .build())
                   .build()),
@@ -1144,23 +1095,19 @@ class InterpreterTest {
                   + "&& json.list[0] == 'world'")
           .cost(costOf(1, 7))
           .exhaustiveCost(costOf(7, 7))
-          .container("google.api.expr.test.v1.proto3")
-          .types(
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
-                  .getDefaultInstance())
+          .container("cel.expr.conformance.proto3")
+          .types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance())
           .env(
               Decls.newVar("a.b", Decls.newMapType(Decls.String, Decls.Bool)),
-              Decls.newVar(
-                  "pb3", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes")),
+              Decls.newVar("pb3", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes")),
               Decls.newVar("json", Decls.newMapType(Decls.String, Decls.Dyn)))
           .in(
               "a.b",
               mapOf("c", true),
               "pb3",
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.newBuilder()
+              dev.cel.expr.conformance.proto3.TestAllTypes.newBuilder()
                   .addRepeatedNestedEnum(
-                      com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.NestedEnum
-                          .BAR)
+                      dev.cel.expr.conformance.proto3.TestAllTypes.NestedEnum.BAR)
                   .build(),
               "json",
               Value.newBuilder()
@@ -1190,9 +1137,7 @@ class InterpreterTest {
           .exhaustiveCost(costOf(26, 26))
           .types(TestAllTypes.getDefaultInstance())
           .in("a", TestAllTypes.newBuilder().build())
-          .env(
-              Decls.newVar(
-                  "a", Decls.newObjectType("google.api.expr.test.v1.proto2.TestAllTypes"))),
+          .env(Decls.newVar("a", Decls.newObjectType("cel.expr.conformance.proto2.TestAllTypes"))),
       // Wrapper type nil or value test.
       new TestCase(InterpreterTestCase.select_pb3_wrapper_fields)
           .expr(
@@ -1202,69 +1147,53 @@ class InterpreterTest {
                   + "&& a.single_int64_wrapper == Int32Value{value: 0}")
           .cost(costOf(3, 21))
           .exhaustiveCost(costOf(21, 21))
-          .types(
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
-                  .getDefaultInstance())
+          .types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance())
           .abbrevs("google.protobuf.Int32Value")
-          .env(
-              Decls.newVar("a", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes")))
+          .env(Decls.newVar("a", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes")))
           .in(
               "a",
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.newBuilder()
+              dev.cel.expr.conformance.proto3.TestAllTypes.newBuilder()
                   .setSingleInt64Wrapper(Int64Value.newBuilder().build())
                   .setSingleStringWrapper(StringValue.of("hello"))
                   .build()),
       new TestCase(InterpreterTestCase.select_pb3_compare)
           .expr("a.single_uint64 > 3u")
           .cost(costOf(2, 2))
-          .container("google.api.expr.test.v1.proto3")
-          .types(
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
-                  .getDefaultInstance())
-          .env(
-              Decls.newVar("a", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes")))
+          .container("cel.expr.conformance.proto3")
+          .types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance())
+          .env(Decls.newVar("a", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes")))
           .in(
               "a",
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.newBuilder()
-                  .setSingleUint64(10)
-                  .build())
+              dev.cel.expr.conformance.proto3.TestAllTypes.newBuilder().setSingleUint64(10).build())
           .out(True),
       new TestCase(InterpreterTestCase.select_pb3_compare_signed)
           .expr("a.single_int64 > 3")
           .cost(costOf(2, 2))
-          .container("google.api.expr.test.v1.proto3")
-          .types(
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
-                  .getDefaultInstance())
-          .env(
-              Decls.newVar("a", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes")))
+          .container("cel.expr.conformance.proto3")
+          .types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance())
+          .env(Decls.newVar("a", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes")))
           .in(
               "a",
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.newBuilder()
-                  .setSingleInt64(10)
-                  .build())
+              dev.cel.expr.conformance.proto3.TestAllTypes.newBuilder().setSingleInt64(10).build())
           .out(True),
       new TestCase(InterpreterTestCase.select_custom_pb3_compare)
           .expr("a.bb > 100")
           .cost(costOf(2, 2))
-          .container("google.api.expr.test.v1.proto3")
-          .types(
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.NestedMessage
-                  .getDefaultInstance())
+          .container("cel.expr.conformance.proto3")
+          .types(dev.cel.expr.conformance.proto3.TestAllTypes.NestedMessage.getDefaultInstance())
           .env(
               Decls.newVar(
                   "a",
-                  Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes.NestedMessage")))
+                  Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes.NestedMessage")))
           .attrs(
               new CustAttrFactory(
                   newAttributeFactory(
-                      testContainer("google.api.expr.test.v1.proto3"),
+                      testContainer("cel.expr.conformance.proto3"),
                       DefaultTypeAdapter.Instance,
                       newEmptyRegistry())))
           .in(
               "a",
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.NestedMessage
-                  .newBuilder()
+              dev.cel.expr.conformance.proto3.TestAllTypes.NestedMessage.newBuilder()
                   .setBb(101)
                   .build())
           .out(True),
@@ -1302,10 +1231,8 @@ class InterpreterTest {
       new TestCase(InterpreterTestCase.select_empty_repeated_nested)
           .expr("TestAllTypes{}.repeated_nested_message.size() == 0")
           .cost(costOf(2, 2))
-          .types(
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
-                  .getDefaultInstance())
-          .container("google.api.expr.test.v1.proto3")
+          .types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance())
+          .container("cel.expr.conformance.proto3")
           .out(True),
       new TestCase(InterpreterTestCase.duration_get_milliseconds)
           .expr("x.getMilliseconds()")
@@ -1423,25 +1350,21 @@ class InterpreterTest {
         program(
             new TestCase(InterpreterTestCase.nested_proto_field_with_index)
                 .expr("pb3.map_int64_nested_type[0].child.payload.single_int32")
-                .types(
-                    com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
-                        .getDefaultInstance())
+                .types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance())
                 .env(
                     Decls.newVar(
-                        "pb3", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes")))
+                        "pb3", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes")))
                 .in(
                     "pb3",
-                    com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.newBuilder()
+                    dev.cel.expr.conformance.proto3.TestAllTypes.newBuilder()
                         .putMapInt64NestedType(
                             0,
-                            com.google.api.expr.test.v1.proto3.TestAllTypesProto.NestedTestAllTypes
-                                .newBuilder()
+                            dev.cel.expr.conformance.proto3.NestedTestAllTypes.newBuilder()
                                 .setChild(
-                                    com.google.api.expr.test.v1.proto3.TestAllTypesProto
-                                        .NestedTestAllTypes.newBuilder()
+                                    dev.cel.expr.conformance.proto3.NestedTestAllTypes.newBuilder()
                                         .setPayload(
-                                            com.google.api.expr.test.v1.proto3.TestAllTypesProto
-                                                .TestAllTypes.newBuilder()
+                                            dev.cel.expr.conformance.proto3.TestAllTypes
+                                                .newBuilder()
                                                 .setSingleInt32(1)))
                                 .build())
                         .build()),
@@ -1608,15 +1531,14 @@ class InterpreterTest {
     ParseResult parsed = Parser.parseAllMacros(src);
     assertThat(parsed.hasErrors()).withFailMessage(parsed.getErrors()::toDisplayString).isFalse();
 
-    Container cont = testContainer("google.api.expr.test.v1.proto2");
+    Container cont = testContainer("cel.expr.conformance.proto2");
     TypeRegistry reg =
-        newRegistry(
-            com.google.api.expr.test.v1.proto2.TestAllTypesProto.TestAllTypes.getDefaultInstance());
+        newRegistry(dev.cel.expr.conformance.proto2.TestAllTypes.getDefaultInstance());
     CheckerEnv env = newStandardCheckerEnv(cont, reg);
     env.add(
         singletonList(
             Decls.newVar(
-                "input", Decls.newObjectType("google.api.expr.test.v1.proto2.TestAllTypes"))));
+                "input", Decls.newObjectType("cel.expr.conformance.proto2.TestAllTypes"))));
     CheckResult checkResult = Checker.Check(parsed, src, env);
     if (parsed.hasErrors()) {
       throw new IllegalArgumentException(parsed.getErrors().toDisplayString());
@@ -1633,8 +1555,8 @@ class InterpreterTest {
     double six = -2.2d;
     String str = "hello world";
     boolean truth = true;
-    com.google.api.expr.test.v1.proto2.TestAllTypesProto.TestAllTypes input =
-        com.google.api.expr.test.v1.proto2.TestAllTypesProto.TestAllTypes.newBuilder()
+    dev.cel.expr.conformance.proto2.TestAllTypes input =
+        dev.cel.expr.conformance.proto2.TestAllTypes.newBuilder()
             .setSingleInt32(one)
             .setSingleInt64(two)
             .setSingleUint32(three)

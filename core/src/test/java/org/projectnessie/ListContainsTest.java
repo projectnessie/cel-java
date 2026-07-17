@@ -17,8 +17,8 @@ package org.projectnessie.cel;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 
-import com.google.api.expr.test.v1.proto3.TestAllTypesProto;
 import com.google.api.expr.v1alpha1.UnknownSet;
+import dev.cel.expr.conformance.proto3.TestAllTypes;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -72,11 +72,8 @@ public class ListContainsTest {
 
   @Test
   public void uintInList() throws ScriptException {
-    TestAllTypesProto.TestAllTypes rule =
-        TestAllTypesProto.TestAllTypes.newBuilder()
-            .addRepeatedFixed32(2)
-            .addRepeatedFixed32(3)
-            .build();
+    TestAllTypes rule =
+        TestAllTypes.newBuilder().addRepeatedFixed32(2).addRepeatedFixed32(3).build();
     ScriptHost scriptHost = ScriptHost.newBuilder().build();
     Script script =
         scriptHost
@@ -95,11 +92,8 @@ public class ListContainsTest {
 
   @Test
   public void uintNotInList() throws ScriptException {
-    TestAllTypesProto.TestAllTypes rule =
-        TestAllTypesProto.TestAllTypes.newBuilder()
-            .addRepeatedFixed32(2)
-            .addRepeatedFixed32(3)
-            .build();
+    TestAllTypes rule =
+        TestAllTypes.newBuilder().addRepeatedFixed32(2).addRepeatedFixed32(3).build();
     ScriptHost scriptHost = ScriptHost.newBuilder().build();
     Script script =
         scriptHost

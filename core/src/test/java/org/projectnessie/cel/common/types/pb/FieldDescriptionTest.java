@@ -22,10 +22,6 @@ import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.pb.Db.newDb;
 
-import com.google.api.expr.test.v1.proto3.TestAllTypesProto.NestedTestAllTypes;
-import com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes;
-import com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.NestedEnum;
-import com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.NestedMessage;
 import com.google.api.expr.v1alpha1.Type;
 import com.google.protobuf.BoolValue;
 import com.google.protobuf.Duration;
@@ -36,6 +32,10 @@ import com.google.protobuf.NullValue;
 import com.google.protobuf.Struct;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
+import dev.cel.expr.conformance.proto3.NestedTestAllTypes;
+import dev.cel.expr.conformance.proto3.TestAllTypes;
+import dev.cel.expr.conformance.proto3.TestAllTypes.NestedEnum;
+import dev.cel.expr.conformance.proto3.TestAllTypes.NestedMessage;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
@@ -69,7 +69,7 @@ public class FieldDescriptionTest {
     // matches the one determined by the TypeDescription utils.
     Type got = fd.checkedType();
     Type wanted =
-        Type.newBuilder().setMessageType("google.api.expr.test.v1.proto3.TestAllTypes").build();
+        Type.newBuilder().setMessageType("cel.expr.conformance.proto3.TestAllTypes").build();
     assertThat(got).isEqualTo(wanted);
   }
 

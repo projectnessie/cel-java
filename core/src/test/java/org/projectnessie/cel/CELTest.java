@@ -741,9 +741,7 @@ public class CELTest {
     Env e2 =
         e.extend(
             customTypeAdapter(DefaultTypeAdapter.Instance),
-            types(
-                com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
-                    .getDefaultInstance()));
+            types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance()));
     assertThat(e).isNotEqualTo(e2);
     assertThat(e.getTypeAdapter()).isNotEqualTo(e2.getTypeAdapter());
     assertThat(e.getTypeProvider()).isNotEqualTo(e2.getTypeProvider());
@@ -756,22 +754,18 @@ public class CELTest {
   void EnvExtensionIsolation() {
     Env baseEnv =
         newEnv(
-            container("google.api.expr.test.v1"),
+            container("cel.expr.conformance"),
             declarations(
                 Decls.newVar("age", Decls.Int),
                 Decls.newVar("gender", Decls.String),
                 Decls.newVar("country", Decls.String)));
     Env env1 =
         baseEnv.extend(
-            types(
-                com.google.api.expr.test.v1.proto2.TestAllTypesProto.TestAllTypes
-                    .getDefaultInstance()),
+            types(dev.cel.expr.conformance.proto2.TestAllTypes.getDefaultInstance()),
             declarations(Decls.newVar("name", Decls.String)));
     Env env2 =
         baseEnv.extend(
-            types(
-                com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
-                    .getDefaultInstance()),
+            types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance()),
             declarations(Decls.newVar("group", Decls.String)));
     AstIssuesTuple astIss =
         env2.compile("size(group) > 10 && !has(proto3.TestAllTypes{}.single_int32)");

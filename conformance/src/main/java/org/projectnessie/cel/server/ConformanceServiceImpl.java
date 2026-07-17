@@ -147,10 +147,8 @@ public class ConformanceServiceImpl extends ConformanceServiceImplBase {
       checkOptions.add(declarations(request.getTypeEnvList()));
       checkOptions.add(
           types(
-              com.google.api.expr.test.v1.proto2.TestAllTypesProto.TestAllTypes
-                  .getDefaultInstance(),
-              com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
-                  .getDefaultInstance()));
+              dev.cel.expr.conformance.proto2.TestAllTypes.getDefaultInstance(),
+              dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance()));
       Env env = newCustomEnv(checkOptions.toArray(new EnvOption[0]));
 
       // Check the expression.
@@ -183,10 +181,8 @@ public class ConformanceServiceImpl extends ConformanceServiceImplBase {
           newEnv(
               container(request.getContainer()),
               types(
-                  com.google.api.expr.test.v1.proto2.TestAllTypesProto.TestAllTypes
-                      .getDefaultInstance(),
-                  com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes
-                      .getDefaultInstance()));
+                  dev.cel.expr.conformance.proto2.TestAllTypes.getDefaultInstance(),
+                  dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance()));
 
       Program prg;
       Ast ast;

@@ -37,6 +37,14 @@ val syncMainProtoSources =
     from(layout.settingsDirectory.dir("submodules/googleapis/google/api/expr/conformance")) {
       into("google/api/expr/conformance")
     }
+    from(layout.settingsDirectory.dir("submodules/cel-spec/proto/cel/expr")) {
+      include("checked.proto", "eval.proto", "syntax.proto", "value.proto")
+      into("cel/expr")
+    }
+    from(layout.settingsDirectory.dir("submodules/cel-spec/proto/cel/expr/conformance/test")) {
+      include("simple.proto")
+      into("cel/expr/conformance/test")
+    }
   }
 
 val emptyTestProtoDir = layout.buildDirectory.dir("pb-src/test/proto")

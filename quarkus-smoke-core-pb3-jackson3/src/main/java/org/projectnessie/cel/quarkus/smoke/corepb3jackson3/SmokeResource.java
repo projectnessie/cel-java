@@ -22,8 +22,9 @@ import static org.projectnessie.cel.EnvOption.declarations;
 import static org.projectnessie.cel.EnvOption.types;
 import static org.projectnessie.cel.Library.StdLib;
 
-import com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes;
 import com.google.protobuf.Int32Value;
+import dev.cel.expr.conformance.proto3.NestedTestAllTypes;
+import dev.cel.expr.conformance.proto3.TestAllTypes;
 import io.quarkus.runtime.annotations.RegisterForReflection;
 import jakarta.ws.rs.GET;
 import jakarta.ws.rs.Path;
@@ -123,7 +124,7 @@ public class SmokeResource {
 
   public record SmokeResponse(String engine, boolean jackson, boolean protobuf) {}
 
-  @RegisterForReflection(targets = TestAllTypes.class)
+  @RegisterForReflection(targets = {TestAllTypes.class, NestedTestAllTypes.class})
   static final class ProtobufReflection {}
 
   @RegisterForReflection

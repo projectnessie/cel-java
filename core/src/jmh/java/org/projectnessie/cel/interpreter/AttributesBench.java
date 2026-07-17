@@ -25,9 +25,9 @@ import static org.projectnessie.cel.interpreter.AttributeFactory.newAttributeFac
 import static org.projectnessie.cel.interpreter.Coster.Cost.estimateCost;
 import static org.projectnessie.cel.interpreter.Interpretable.newConstValue;
 
-import com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes;
-import com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.NestedMessage;
 import com.google.api.expr.v1alpha1.Type;
+import dev.cel.expr.conformance.proto3.TestAllTypes;
+import dev.cel.expr.conformance.proto3.TestAllTypes.NestedMessage;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -120,9 +120,9 @@ public class AttributesBench {
       TypeRegistry reg = newRegistry(msg);
       Activation vars = newActivation(mapOf("msg", msg));
 
-      Type opType = reg.findType("google.api.expr.test.v1.proto3.TestAllTypes");
+      Type opType = reg.findType("cel.expr.conformance.proto3.TestAllTypes");
       assertThat(opType).isNotNull();
-      Type fieldType = reg.findType("google.api.expr.test.v1.proto3.TestAllTypes.NestedMessage");
+      Type fieldType = reg.findType("cel.expr.conformance.proto3.TestAllTypes.NestedMessage");
       assertThat(fieldType).isNotNull();
 
       AttributeFactory attrs = newAttributeFactory(Container.defaultContainer, reg, reg);
@@ -157,7 +157,7 @@ public class AttributesBench {
       Qualifier qualBB =
           attrs.newQualifier(
               Type.newBuilder()
-                  .setMessageType("google.api.expr.test.v1.proto3.TestAllTypes.NestedMessage")
+                  .setMessageType("cel.expr.conformance.proto3.TestAllTypes.NestedMessage")
                   .build(),
               2,
               "bb");

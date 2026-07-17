@@ -49,11 +49,11 @@ val syncTestFixturesProtoSources =
   tasks.register<Sync>("syncTestFixturesProtoSources") {
     into(syncedTestFixturesProtoDir)
     from(layout.settingsDirectory.dir("generated-pb/src/testFixtures/proto")) { include("*.proto") }
-    from(layout.settingsDirectory.dir("submodules/cel-spec/proto/test/v1/proto2")) {
-      into("proto/test/v1/proto2")
+    from(layout.settingsDirectory.dir("submodules/cel-spec/proto/cel/expr/conformance/proto2")) {
+      into("cel/expr/conformance/proto2")
     }
-    from(layout.settingsDirectory.dir("submodules/cel-spec/proto/test/v1/proto3")) {
-      into("proto/test/v1/proto3")
+    from(layout.settingsDirectory.dir("submodules/cel-spec/proto/cel/expr/conformance/proto3")) {
+      into("cel/expr/conformance/proto3")
     }
   }
 

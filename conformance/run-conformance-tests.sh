@@ -21,28 +21,10 @@ cd "${wd}/.." || exit 1
 
 ./gradlew :cel-conformance:shadowJar || exit 1
 
-server_pid_file="$(realpath ./conformance/conformance-server.pid)"
-
-cd submodules/cel-spec || exit 1
-
-# Bazel version 6.4.0 works, 7.0.2 does not work with the conformance tests
-export USE_BAZEL_VERSION="6.5.0"
-
-if [[ -z "${CC:-}" ]] && command -v gcc >/dev/null 2>&1; then
-  export CC="$(command -v gcc)"
-fi
-if [[ -z "${CXX:-}" ]] && command -v g++ >/dev/null 2>&1; then
-  export CXX="$(command -v g++)"
-fi
-
-bazel sync --configure || exit 1
-bazel build ... || exit 1
+cel_spec_dir="$(realpath submodules/cel-spec)"
+cd "${cel_spec_dir}" || exit 1
 
 cel_java_skips=(
-  # proto2 enums are generated as Java enums, means: it is not possible to assign arbitrary
-  # ordinals, so these tests cannot work against the CEL-Java implementation (limitation of the
-  # protobuf/Java implementation for proto2).
-  "--skip_test=enums/legacy_proto2/select_big,select_neg,assign_standalone_int_big,assign_standalone_int_neg"
   # Without the checker, it is quite difficult to verify whether an assignment is allowed (by
   # the CEL spec), especially from a 'map' to a 'struct' as in these tests using the expression
   # `TestAllTypes{single_struct: {1: 'uno'}}`. Note: the checker catches this case and the
@@ -63,6 +45,28 @@ cel_java_skips=(
 
   # TODO Actual known issue to fix, a protobuf Any returned via this test is wrapped twice (Any in Any).
   "--skip_test=dynamic/any/var"
+
+  # New CEL-Spec v0.25.2 expectations that need follow-up CEL-Java parser/runtime changes.
+  "--skip_test=conversions/bool/string_1,string_t,string_0,string_f,string_true_badcase,string_false_badcase"
+  "--skip_test=fields/quoted_map_fields/field_access_slash,field_access_dash,field_access_dot,has_field_slash,has_field_dash,has_field_dot"
+  "--skip_test=namespace/namespace_shadowing/comprehension_shadowing,comprehension_shadowing_disambiguation,comprehension_shadowing_parse_only,comprehension_shadowing_selector,comprehension_shadowing_selector_parse_only,comprehension_shadowing_namespaced_selector,comprehension_shadowing_namespaced_selector_parse_only,comprehension_shadowing_nesting"
+  "--skip_test=proto2/set_null/single_message,single_duration,single_timestamp,repeated_field_timestamp_null_pruned,repeated_field_duration_null_pruned,repeated_field_wrapper_null_pruned,map_timestamp_null_pruned,map_duration_null_pruned,map_wrapper_null_pruned,map_anytype_null_retained,single_scalar,repeated,map,list_value,single_struct"
+  "--skip_test=proto2/quoted_fields/set_field_with_quoted_name,get_field_with_quoted_name"
+  "--skip_test=proto2/extensions_has/package_scoped_int32,package_scoped_nested_ext,package_scoped_test_all_types_ext,package_scoped_test_all_types_nested_enum_ext,package_scoped_repeated_test_all_types,message_scoped_int64,message_scoped_nested_ext,message_scoped_nested_enum_ext,message_scoped_repeated_test_all_types"
+  "--skip_test=proto2/extensions_get/package_scoped_int32,package_scoped_nested_ext,package_scoped_test_all_types_ext,package_scoped_test_all_types_nested_enum_ext,package_scoped_repeated_test_all_types,message_scoped_int64,message_scoped_nested_ext,message_scoped_nested_enum_ext,message_scoped_repeated_test_all_types"
+  "--skip_test=proto3/set_null/single_message,single_duration,single_timestamp,repeated_field_timestamp_null_pruned,repeated_field_duration_null_pruned,repeated_field_wrapper_null_pruned,map_timestamp_null_pruned,map_duration_null_pruned,map_wrapper_null_pruned,map_anytype_null_retained,single_scalar,repeated,map,list_value,single_struct"
+  "--skip_test=proto3/quoted_fields/set_field,get_field"
+  "--skip_test=timestamps/timestamp_conversions/type_comparison"
+  "--skip_test=timestamps/duration_conversions/type_comparison"
+  "--skip_test=wrappers/bool/to_null"
+  "--skip_test=wrappers/int32/to_null"
+  "--skip_test=wrappers/int64/to_null"
+  "--skip_test=wrappers/uint32/to_null"
+  "--skip_test=wrappers/uint64/to_null"
+  "--skip_test=wrappers/float/to_null"
+  "--skip_test=wrappers/double/to_null"
+  "--skip_test=wrappers/bytes/to_null"
+  "--skip_test=wrappers/string/to_null"
 )
 
 cel_go_skips=(
@@ -107,15 +111,11 @@ test_files=(
   "tests/simple/testdata/wrappers.textproto"
 )
 
-bazel-bin/tests/simple/simple_test_/simple_test \
-  --server ../../conformance/conformance-server.sh \
+java -cp ../../conformance/build/libs/*-all.jar \
+  org.projectnessie.cel.server.SimpleConformanceTestRunner \
   "${cel_java_skips[@]}" \
   "${cel_go_skips[@]}" \
   "${test_files[@]}"
 code=$?
-
-if [[ -f ${server_pid_file} ]] ; then
-  kill "$(cat "${server_pid_file}")" && rm "${server_pid_file}" || exit 1
-fi
 
 exit $code

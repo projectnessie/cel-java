@@ -262,23 +262,23 @@ public class CheckerTest {
           .r("{1~int : 2u~uint, 2u~uint : 3~int}~map(dyn, dyn)"),
       new TestCase()
           .i("TestAllTypes{single_int32: 1, single_int64: 2}")
-          .container("google.api.expr.test.v1.proto3")
+          .container("cel.expr.conformance.proto3")
           .r(
-              "google.api.expr.test.v1.proto3.TestAllTypes{\n"
+              "cel.expr.conformance.proto3.TestAllTypes{\n"
                   + "	single_int32 : 1~int,\n"
                   + "	single_int64 : 2~int\n"
-                  + "}~google.api.expr.test.v1.proto3.TestAllTypes^google.api.expr.test.v1.proto3.TestAllTypes")
-          .type(Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes")),
+                  + "}~cel.expr.conformance.proto3.TestAllTypes^cel.expr.conformance.proto3.TestAllTypes")
+          .type(Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes")),
       new TestCase()
           .i("TestAllTypes{single_int32: 1u}")
-          .container("google.api.expr.test.v1.proto3")
+          .container("cel.expr.conformance.proto3")
           .error(
               "ERROR: <input>:1:26: expected type of field 'single_int32' is 'int' but provided type is 'uint'\n"
                   + " | TestAllTypes{single_int32: 1u}\n"
                   + " | .........................^"),
       new TestCase()
           .i("TestAllTypes{single_int32: 1, undefined: 2}")
-          .container("google.api.expr.test.v1.proto3")
+          .container("cel.expr.conformance.proto3")
           .error(
               "ERROR: <input>:1:40: undefined field 'undefined'\n"
                   + " | TestAllTypes{single_int32: 1, undefined: 2}\n"
@@ -374,10 +374,9 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "x",
-                          Decls.newObjectType("google.api.expr.test.v1.proto3.Proto2Message"))))
+                          "x", Decls.newObjectType("cel.expr.conformance.proto3.Proto2Message"))))
           .error(
-              "ERROR: <input>:1:2: [internal] unexpected failed resolution of 'google.api.expr.test.v1.proto3.Proto2Message'\n"
+              "ERROR: <input>:1:2: [internal] unexpected failed resolution of 'cel.expr.conformance.proto3.Proto2Message'\n"
                   + " | x.single_int32 != null\n"
                   + " | .^"),
       new TestCase()
@@ -386,14 +385,14 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))))
+                          "x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))))
           .r(
               "_==_(\n"
                   + "\t\t\t_+_(\n"
-                  + "\t\t\t  x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_value~dyn,\n"
+                  + "\t\t\t  x~cel.expr.conformance.proto3.TestAllTypes^x.single_value~dyn,\n"
                   + "\t\t\t  _/_(\n"
                   + "\t\t\t\t1~int,\n"
-                  + "\t\t\t\tx~google.api.expr.test.v1.proto3.TestAllTypes^x.single_struct~map(string, dyn).y~dyn\n"
+                  + "\t\t\t\tx~cel.expr.conformance.proto3.TestAllTypes^x.single_struct~map(string, dyn).y~dyn\n"
                   + "\t\t\t  )~int^divide_int64\n"
                   + "\t\t\t)~int^add_int64,\n"
                   + "\t\t\t23~int\n"
@@ -405,25 +404,25 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))))
+                          "x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))))
           .r(
               "_+_(\n"
                   + "_[_](\n"
-                  + "  x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_value~dyn,\n"
+                  + "  x~cel.expr.conformance.proto3.TestAllTypes^x.single_value~dyn,\n"
                   + "  23~int\n"
                   + ")~dyn^index_list|index_map,\n"
                   + "_[_](\n"
-                  + "  x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_struct~map(string, dyn),\n"
+                  + "  x~cel.expr.conformance.proto3.TestAllTypes^x.single_struct~map(string, dyn),\n"
                   + "  \"y\"~string\n"
                   + ")~dyn^index_map\n"
                   + ")~dyn^add_int64|add_uint64|add_double|add_string|add_bytes|add_list|add_timestamp_duration|add_duration_timestamp|add_duration_duration")
           .type(Decls.Dyn),
       new TestCase()
           .i("TestAllTypes.NestedEnum.BAR != 99")
-          .container("google.api.expr.test.v1.proto3")
+          .container("cel.expr.conformance.proto3")
           .r(
-              "_!=_(google.api.expr.test.v1.proto3.TestAllTypes.NestedEnum.BAR\n"
-                  + "     ~int^google.api.expr.test.v1.proto3.TestAllTypes.NestedEnum.BAR,\n"
+              "_!=_(cel.expr.conformance.proto3.TestAllTypes.NestedEnum.BAR\n"
+                  + "     ~int^cel.expr.conformance.proto3.TestAllTypes.NestedEnum.BAR,\n"
                   + "    99~int)\n"
                   + "~bool^not_equals")
           .type(Decls.Bool),
@@ -435,8 +434,7 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "x",
-                          Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes")))),
+                          "x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes")))),
       new TestCase()
           .i(
               "x[\"claims\"][\"groups\"][0].name == \"dummy\"\n"
@@ -498,10 +496,10 @@ public class CheckerTest {
                       Decls.newVar(
                           "x",
                           Decls.newListType(
-                              Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))),
+                              Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))),
                       Decls.newVar("y", Decls.newListType(Decls.Int))))
           .error(
-              "ERROR: <input>:1:3: found no matching overload for '_+_' applied to '(list(google.api.expr.test.v1.proto3.TestAllTypes), list(int))'\n"
+              "ERROR: <input>:1:3: found no matching overload for '_+_' applied to '(list(cel.expr.conformance.proto3.TestAllTypes), list(int))'\n"
                   + " | x + y\n"
                   + " | ..^"),
       new TestCase()
@@ -512,9 +510,9 @@ public class CheckerTest {
                       Decls.newVar(
                           "x",
                           Decls.newListType(
-                              Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes")))))
+                              Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes")))))
           .error(
-              "ERROR: <input>:1:2: found no matching overload for '_[_]' applied to '(list(google.api.expr.test.v1.proto3.TestAllTypes), uint)'\n"
+              "ERROR: <input>:1:2: found no matching overload for '_[_]' applied to '(list(cel.expr.conformance.proto3.TestAllTypes), uint)'\n"
                   + " | x[1u]\n"
                   + " | .^"),
       new TestCase()
@@ -525,17 +523,17 @@ public class CheckerTest {
                       Decls.newVar(
                           "x",
                           Decls.newListType(
-                              Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes")))))
+                              Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes")))))
           .r(
-              "_==_(_[_](_+_(x~list(google.api.expr.test.v1.proto3.TestAllTypes)^x,\n"
-                  + "                x~list(google.api.expr.test.v1.proto3.TestAllTypes)^x)\n"
-                  + "            ~list(google.api.expr.test.v1.proto3.TestAllTypes)^add_list,\n"
+              "_==_(_[_](_+_(x~list(cel.expr.conformance.proto3.TestAllTypes)^x,\n"
+                  + "                x~list(cel.expr.conformance.proto3.TestAllTypes)^x)\n"
+                  + "            ~list(cel.expr.conformance.proto3.TestAllTypes)^add_list,\n"
                   + "           1~int)\n"
-                  + "       ~google.api.expr.test.v1.proto3.TestAllTypes^index_list\n"
+                  + "       ~cel.expr.conformance.proto3.TestAllTypes^index_list\n"
                   + "       .\n"
                   + "       single_int32\n"
                   + "       ~int,\n"
-                  + "      size(x~list(google.api.expr.test.v1.proto3.TestAllTypes)^x)~int^size_list)\n"
+                  + "      size(x~list(cel.expr.conformance.proto3.TestAllTypes)^x)~int^size_list)\n"
                   + "  ~bool^equals")
           .type(Decls.Bool),
       new TestCase()
@@ -544,10 +542,10 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))))
+                          "x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))))
           .r(
-              "_==_(_[_](x~google.api.expr.test.v1.proto3.TestAllTypes^x.repeated_int64~list(int),\n"
-                  + "           x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_int32~int)\n"
+              "_==_(_[_](x~cel.expr.conformance.proto3.TestAllTypes^x.repeated_int64~list(int),\n"
+                  + "           x~cel.expr.conformance.proto3.TestAllTypes^x.single_int32~int)\n"
                   + "       ~int^index_list,\n"
                   + "      23~int)\n"
                   + "  ~bool^equals")
@@ -558,10 +556,10 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))))
+                          "x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))))
           .r(
-              "_==_(size(x~google.api.expr.test.v1.proto3.TestAllTypes^x.map_int64_nested_type\n"
-                  + "            ~map(int, google.api.expr.test.v1.proto3.NestedTestAllTypes))\n"
+              "_==_(size(x~cel.expr.conformance.proto3.TestAllTypes^x.map_int64_nested_type\n"
+                  + "            ~map(int, cel.expr.conformance.proto3.NestedTestAllTypes))\n"
                   + "       ~int^size_map,\n"
                   + "      0~int)\n"
                   + "  ~bool^equals")
@@ -603,13 +601,13 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))))
+                          "x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))))
           .r(
               "__comprehension__(\n"
                   + "// Variable\n"
                   + "x,\n"
                   + "// Target\n"
-                  + "x~google.api.expr.test.v1.proto3.TestAllTypes^x.repeated_int64~list(int),\n"
+                  + "x~cel.expr.conformance.proto3.TestAllTypes^x.repeated_int64~list(int),\n"
                   + "// Accumulator\n"
                   + "__result__,\n"
                   + "// Init\n"
@@ -634,13 +632,13 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))))
+                          "x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))))
           .r(
               "__comprehension__(\n"
                   + "// Variable\n"
                   + "x,\n"
                   + "// Target\n"
-                  + "x~google.api.expr.test.v1.proto3.TestAllTypes^x.repeated_int64~list(int),\n"
+                  + "x~cel.expr.conformance.proto3.TestAllTypes^x.repeated_int64~list(int),\n"
                   + "// Accumulator\n"
                   + "__result__,\n"
                   + "// Init\n"
@@ -675,9 +673,9 @@ public class CheckerTest {
                           "x",
                           Decls.newMapType(
                               Decls.String,
-                              Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes")))))
+                              Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes")))))
           .error(
-              "ERROR: <input>:1:2: found no matching overload for '_[_]' applied to '(map(string, google.api.expr.test.v1.proto3.TestAllTypes), int)'\n"
+              "ERROR: <input>:1:2: found no matching overload for '_[_]' applied to '(map(string, cel.expr.conformance.proto3.TestAllTypes), int)'\n"
                   + " | x[2].single_int32 == 23\n"
                   + " | .^"),
       new TestCase()
@@ -689,10 +687,10 @@ public class CheckerTest {
                           "x",
                           Decls.newMapType(
                               Decls.String,
-                              Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes")))))
+                              Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes")))))
           .r(
-              "_==_(_[_](x~map(string, google.api.expr.test.v1.proto3.TestAllTypes)^x, \"a\"~string)\n"
-                  + "~google.api.expr.test.v1.proto3.TestAllTypes^index_map\n"
+              "_==_(_[_](x~map(string, cel.expr.conformance.proto3.TestAllTypes)^x, \"a\"~string)\n"
+                  + "~cel.expr.conformance.proto3.TestAllTypes^index_map\n"
                   + ".\n"
                   + "single_int32\n"
                   + "~int,\n"
@@ -705,15 +703,15 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))))
+                          "x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))))
           // Our implementation code is expanding the macro
           .r(
               "_&&_(\n"
                   + "  _==_(\n"
-                  + "    x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_nested_message~google.api.expr.test.v1.proto3.TestAllTypes.NestedMessage.bb~int,\n"
+                  + "    x~cel.expr.conformance.proto3.TestAllTypes^x.single_nested_message~cel.expr.conformance.proto3.TestAllTypes.NestedMessage.bb~int,\n"
                   + "    43~int\n"
                   + "  )~bool^equals,\n"
-                  + "  x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_nested_message~test-only~~bool\n"
+                  + "  x~cel.expr.conformance.proto3.TestAllTypes^x.single_nested_message~test-only~~bool\n"
                   + ")~bool^logical_and")
           .type(Decls.Bool),
       new TestCase()
@@ -723,7 +721,7 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))))
+                          "x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))))
           .error(
               "ERROR: <input>:1:24: undefined field 'undefined'\n"
                   + " | x.single_nested_message.undefined == x.undefined && has(x.single_int32) && has(x.repeated_int32)\n"
@@ -737,10 +735,10 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))))
+                          "x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))))
           .r(
-              "_!=_(x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_nested_message\n"
-                  + "~google.api.expr.test.v1.proto3.TestAllTypes.NestedMessage,\n"
+              "_!=_(x~cel.expr.conformance.proto3.TestAllTypes^x.single_nested_message\n"
+                  + "~cel.expr.conformance.proto3.TestAllTypes.NestedMessage,\n"
                   + "null~null)\n"
                   + "~bool^not_equals")
           .type(Decls.Bool),
@@ -750,9 +748,9 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))))
+                          "x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))))
           .r(
-              "_!=_(x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_int64~int,null~null)~bool^not_equals")
+              "_!=_(x~cel.expr.conformance.proto3.TestAllTypes^x.single_int64~int,null~null)~bool^not_equals")
           .type(Decls.Bool),
       new TestCase()
           .i("x.single_int64_wrapper == null")
@@ -760,9 +758,9 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))))
+                          "x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))))
           .r(
-              "_==_(x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_int64_wrapper\n"
+              "_==_(x~cel.expr.conformance.proto3.TestAllTypes^x.single_int64_wrapper\n"
                   + "~wrapper(int),\n"
                   + "null~null)\n"
                   + "~bool^equals")
@@ -782,30 +780,30 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))))
+                          "x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))))
           .r(
               "_&&_(\n"
                   + "	_&&_(\n"
                   + "		_&&_(\n"
                   + "		_&&_(\n"
-                  + "			x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_bool_wrapper~wrapper(bool),\n"
+                  + "			x~cel.expr.conformance.proto3.TestAllTypes^x.single_bool_wrapper~wrapper(bool),\n"
                   + "			_==_(\n"
-                  + "			x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_bytes_wrapper~wrapper(bytes),\n"
+                  + "			x~cel.expr.conformance.proto3.TestAllTypes^x.single_bytes_wrapper~wrapper(bytes),\n"
                   + "			b\"hi\"~bytes\n"
                   + "			)~bool^equals\n"
                   + "		)~bool^logical_and,\n"
                   + "		_!=_(\n"
-                  + "			x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_double_wrapper~wrapper(double),\n"
+                  + "			x~cel.expr.conformance.proto3.TestAllTypes^x.single_double_wrapper~wrapper(double),\n"
                   + "			2.0~double\n"
                   + "		)~bool^not_equals\n"
                   + "		)~bool^logical_and,\n"
                   + "		_&&_(\n"
                   + "		_==_(\n"
-                  + "			x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_float_wrapper~wrapper(double),\n"
+                  + "			x~cel.expr.conformance.proto3.TestAllTypes^x.single_float_wrapper~wrapper(double),\n"
                   + "			1.0~double\n"
                   + "		)~bool^equals,\n"
                   + "		_!=_(\n"
-                  + "			x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_int32_wrapper~wrapper(int),\n"
+                  + "			x~cel.expr.conformance.proto3.TestAllTypes^x.single_int32_wrapper~wrapper(int),\n"
                   + "			2~int\n"
                   + "		)~bool^not_equals\n"
                   + "		)~bool^logical_and\n"
@@ -813,21 +811,21 @@ public class CheckerTest {
                   + "	_&&_(\n"
                   + "		_&&_(\n"
                   + "		_==_(\n"
-                  + "			x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_int64_wrapper~wrapper(int),\n"
+                  + "			x~cel.expr.conformance.proto3.TestAllTypes^x.single_int64_wrapper~wrapper(int),\n"
                   + "			1~int\n"
                   + "		)~bool^equals,\n"
                   + "		_==_(\n"
-                  + "			x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_string_wrapper~wrapper(string),\n"
+                  + "			x~cel.expr.conformance.proto3.TestAllTypes^x.single_string_wrapper~wrapper(string),\n"
                   + "			\"hi\"~string\n"
                   + "		)~bool^equals\n"
                   + "		)~bool^logical_and,\n"
                   + "		_&&_(\n"
                   + "		_==_(\n"
-                  + "			x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_uint32_wrapper~wrapper(uint),\n"
+                  + "			x~cel.expr.conformance.proto3.TestAllTypes^x.single_uint32_wrapper~wrapper(uint),\n"
                   + "			1u~uint\n"
                   + "		)~bool^equals,\n"
                   + "		_!=_(\n"
-                  + "			x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_uint64_wrapper~wrapper(uint),\n"
+                  + "			x~cel.expr.conformance.proto3.TestAllTypes^x.single_uint64_wrapper~wrapper(uint),\n"
                   + "			42u~uint\n"
                   + "		)~bool^not_equals\n"
                   + "		)~bool^logical_and\n"
@@ -850,7 +848,7 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))))
+                          "x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))))
           .type(Decls.Bool),
       new TestCase()
           .i(
@@ -866,7 +864,7 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))))
+                          "x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))))
           .type(Decls.Bool),
       new TestCase()
           .i("x.repeated_int64.exists(y, y > 10) && y < 5")
@@ -874,7 +872,7 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))))
+                          "x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))))
           .error(
               "ERROR: <input>:1:39: undeclared reference to 'y' (in container '')\n"
                   + " | x.repeated_int64.exists(y, y > 10) && y < 5\n"
@@ -886,7 +884,7 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))))
+                          "x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))))
           .r(
               "_&&_(\n"
                   + "\t\t\t_&&_(\n"
@@ -894,7 +892,7 @@ public class CheckerTest {
                   + "\t\t\t\t// Variable\n"
                   + "\t\t\t\te,\n"
                   + "\t\t\t\t// Target\n"
-                  + "\t\t\t\tx~google.api.expr.test.v1.proto3.TestAllTypes^x.repeated_int64~list(int),\n"
+                  + "\t\t\t\tx~cel.expr.conformance.proto3.TestAllTypes^x.repeated_int64~list(int),\n"
                   + "\t\t\t\t// Accumulator\n"
                   + "\t\t\t\t__result__,\n"
                   + "\t\t\t\t// Init\n"
@@ -917,7 +915,7 @@ public class CheckerTest {
                   + "\t\t\t\t// Variable\n"
                   + "\t\t\t\te,\n"
                   + "\t\t\t\t// Target\n"
-                  + "\t\t\t\tx~google.api.expr.test.v1.proto3.TestAllTypes^x.repeated_int64~list(int),\n"
+                  + "\t\t\t\tx~cel.expr.conformance.proto3.TestAllTypes^x.repeated_int64~list(int),\n"
                   + "\t\t\t\t// Accumulator\n"
                   + "\t\t\t\t__result__,\n"
                   + "\t\t\t\t// Init\n"
@@ -943,7 +941,7 @@ public class CheckerTest {
                   + "\t\t\t  // Variable\n"
                   + "\t\t\t  e,\n"
                   + "\t\t\t  // Target\n"
-                  + "\t\t\t  x~google.api.expr.test.v1.proto3.TestAllTypes^x.repeated_int64~list(int),\n"
+                  + "\t\t\t  x~cel.expr.conformance.proto3.TestAllTypes^x.repeated_int64~list(int),\n"
                   + "\t\t\t  // Accumulator\n"
                   + "\t\t\t  __result__,\n"
                   + "\t\t\t  // Init\n"
@@ -975,9 +973,9 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))))
+                          "x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))))
           .error(
-              "ERROR: <input>:1:1: expression of type 'google.api.expr.test.v1.proto3.TestAllTypes' cannot be range of a comprehension (must be list, map, or dynamic)\n"
+              "ERROR: <input>:1:1: expression of type 'cel.expr.conformance.proto3.TestAllTypes' cannot be range of a comprehension (must be list, map, or dynamic)\n"
                   + " | x.all(e, 0)\n"
                   + " | ^\n"
                   + "ERROR: <input>:1:6: found no matching overload for '_&&_' applied to '(bool, int)'\n"
@@ -1016,24 +1014,20 @@ public class CheckerTest {
           .type(Decls.newListType(Decls.Dyn))
           .env(new env().idents(Decls.newVar("lists", Decls.Dyn))),
       new TestCase()
-          .i("google.api.expr.test.v1.proto3.TestAllTypes")
+          .i("cel.expr.conformance.proto3.TestAllTypes")
           .r(
-              "google.api.expr.test.v1.proto3.TestAllTypes\n"
-                  + "\t~type(google.api.expr.test.v1.proto3.TestAllTypes)\n"
-                  + "\t^google.api.expr.test.v1.proto3.TestAllTypes")
-          .type(
-              Decls.newTypeType(
-                  Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))),
+              "cel.expr.conformance.proto3.TestAllTypes\n"
+                  + "\t~type(cel.expr.conformance.proto3.TestAllTypes)\n"
+                  + "\t^cel.expr.conformance.proto3.TestAllTypes")
+          .type(Decls.newTypeType(Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))),
       new TestCase()
           .i("proto3.TestAllTypes")
-          .container("google.api.expr.test.v1")
+          .container("cel.expr.conformance")
           .r(
-              "google.api.expr.test.v1.proto3.TestAllTypes\n"
-                  + "\t~type(google.api.expr.test.v1.proto3.TestAllTypes)\n"
-                  + "\t^google.api.expr.test.v1.proto3.TestAllTypes")
-          .type(
-              Decls.newTypeType(
-                  Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))),
+              "cel.expr.conformance.proto3.TestAllTypes\n"
+                  + "\t~type(cel.expr.conformance.proto3.TestAllTypes)\n"
+                  + "\t^cel.expr.conformance.proto3.TestAllTypes")
+          .type(Decls.newTypeType(Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))),
       new TestCase()
           .i("1 + x")
           .error(
@@ -1043,9 +1037,9 @@ public class CheckerTest {
       new TestCase()
           .i(
               "x == google.protobuf.Any{\n"
-                  + "\t\t\t\ttype_url:'types.googleapis.com/google.api.expr.test.v1.proto3.TestAllTypes'\n"
+                  + "\t\t\t\ttype_url:'types.googleapis.com/cel.expr.conformance.proto3.TestAllTypes'\n"
                   + "\t\t\t} && x.single_nested_message.bb == 43\n"
-                  + "\t\t\t|| x == google.api.expr.test.v1.proto3.TestAllTypes{}\n"
+                  + "\t\t\t|| x == cel.expr.conformance.proto3.TestAllTypes{}\n"
                   + "\t\t\t|| y < x\n"
                   + "\t\t\t|| x >= x")
           .env(
@@ -1060,7 +1054,7 @@ public class CheckerTest {
                   + "\t\t\t_==_(\n"
                   + "\t\t\t\tx~any^x,\n"
                   + "\t\t\t\tgoogle.protobuf.Any{\n"
-                  + "\t\t\t\t\ttype_url:\"types.googleapis.com/google.api.expr.test.v1.proto3.TestAllTypes\"~string\n"
+                  + "\t\t\t\t\ttype_url:\"types.googleapis.com/cel.expr.conformance.proto3.TestAllTypes\"~string\n"
                   + "\t\t\t\t}~any^google.protobuf.Any\n"
                   + "\t\t\t)~bool^equals,\n"
                   + "\t\t\t_==_(\n"
@@ -1070,7 +1064,7 @@ public class CheckerTest {
                   + "\t\t)~bool^logical_and,\n"
                   + "\t\t_==_(\n"
                   + "\t\t\tx~any^x,\n"
-                  + "\t\t\tgoogle.api.expr.test.v1.proto3.TestAllTypes{}~google.api.expr.test.v1.proto3.TestAllTypes^google.api.expr.test.v1.proto3.TestAllTypes\n"
+                  + "\t\t\tcel.expr.conformance.proto3.TestAllTypes{}~cel.expr.conformance.proto3.TestAllTypes^cel.expr.conformance.proto3.TestAllTypes\n"
                   + "\t\t)~bool^equals\n"
                   + "\t)~bool^logical_or,\n"
                   + "\t_||_(\n"
@@ -1093,9 +1087,9 @@ public class CheckerTest {
                   .idents(
                       Decls.newVar(
                           "container.x",
-                          Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))))
-          .r("container.x~google.api.expr.test.v1.proto3.TestAllTypes^container.x")
-          .type(Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes")),
+                          Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))))
+          .r("container.x~cel.expr.conformance.proto3.TestAllTypes^container.x")
+          .type(Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes")),
       new TestCase()
           .i("list == .type([1]) && map == .type({1:2u})")
           .r(
@@ -1144,15 +1138,14 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes")))
+                          "x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes")))
                   .functions(
                       Decls.newFunction(
                           "size",
                           Decls.newOverload(
                               "size_message",
                               singletonList(
-                                  Decls.newObjectType(
-                                      "google.api.expr.test.v1.proto3.TestAllTypes")),
+                                  Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes")),
                               Decls.Int))))
           .type(Decls.Bool),
       new TestCase()
@@ -1161,9 +1154,9 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))))
+                          "x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))))
           .r(
-              "_!=_(_+_(x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_int64_wrapper\n"
+              "_!=_(_+_(x~cel.expr.conformance.proto3.TestAllTypes^x.single_int64_wrapper\n"
                   + "~wrapper(int),\n"
                   + "1~int)\n"
                   + "~int^add_int64,\n"
@@ -1176,12 +1169,12 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "x", Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes")),
+                          "x", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes")),
                       Decls.newVar("y", Decls.newObjectType("google.protobuf.Int32Value"))))
           .r(
               "_!=_(\n"
                   + "\t_+_(\n"
-                  + "\t  x~google.api.expr.test.v1.proto3.TestAllTypes^x.single_int64_wrapper~wrapper(int),\n"
+                  + "\t  x~cel.expr.conformance.proto3.TestAllTypes^x.single_int64_wrapper~wrapper(int),\n"
                   + "\t  y~wrapper(int)^y\n"
                   + "\t)~int^add_int64,\n"
                   + "\t23~int\n"
@@ -1449,63 +1442,59 @@ public class CheckerTest {
               new env()
                   .idents(
                       Decls.newVar(
-                          "pb2",
-                          Decls.newObjectType("google.api.expr.test.v1.proto2.TestAllTypes")),
+                          "pb2", Decls.newObjectType("cel.expr.conformance.proto2.TestAllTypes")),
                       Decls.newVar(
-                          "pb3",
-                          Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes"))))
+                          "pb3", Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes"))))
           .r(
               "_&&_(\n"
                   + "\t_&&_(\n"
                   + "\t  _&&_(\n"
                   + "\t\t!_(\n"
-                  + "\t\t  pb2~google.api.expr.test.v1.proto2.TestAllTypes^pb2.single_int64~test-only~~bool\n"
+                  + "\t\t  pb2~cel.expr.conformance.proto2.TestAllTypes^pb2.single_int64~test-only~~bool\n"
                   + "\t\t)~bool^logical_not,\n"
                   + "\t\t!_(\n"
-                  + "\t\t  pb2~google.api.expr.test.v1.proto2.TestAllTypes^pb2.repeated_int32~test-only~~bool\n"
+                  + "\t\t  pb2~cel.expr.conformance.proto2.TestAllTypes^pb2.repeated_int32~test-only~~bool\n"
                   + "\t\t)~bool^logical_not\n"
                   + "\t  )~bool^logical_and,\n"
                   + "\t  !_(\n"
-                  + "\t\tpb2~google.api.expr.test.v1.proto2.TestAllTypes^pb2.map_string_string~test-only~~bool\n"
+                  + "\t\tpb2~cel.expr.conformance.proto2.TestAllTypes^pb2.map_string_string~test-only~~bool\n"
                   + "\t  )~bool^logical_not\n"
                   + "\t)~bool^logical_and,\n"
                   + "\t_&&_(\n"
                   + "\t  _&&_(\n"
                   + "\t\t!_(\n"
-                  + "\t\t  pb3~google.api.expr.test.v1.proto3.TestAllTypes^pb3.single_int64~test-only~~bool\n"
+                  + "\t\t  pb3~cel.expr.conformance.proto3.TestAllTypes^pb3.single_int64~test-only~~bool\n"
                   + "\t\t)~bool^logical_not,\n"
                   + "\t\t!_(\n"
-                  + "\t\t  pb3~google.api.expr.test.v1.proto3.TestAllTypes^pb3.repeated_int32~test-only~~bool\n"
+                  + "\t\t  pb3~cel.expr.conformance.proto3.TestAllTypes^pb3.repeated_int32~test-only~~bool\n"
                   + "\t\t)~bool^logical_not\n"
                   + "\t  )~bool^logical_and,\n"
                   + "\t  !_(\n"
-                  + "\t\tpb3~google.api.expr.test.v1.proto3.TestAllTypes^pb3.map_string_string~test-only~~bool\n"
+                  + "\t\tpb3~cel.expr.conformance.proto3.TestAllTypes^pb3.map_string_string~test-only~~bool\n"
                   + "\t  )~bool^logical_not\n"
                   + "\t)~bool^logical_and\n"
                   + "  )~bool^logical_and")
           .type(Decls.Bool),
       new TestCase()
           .i("TestAllTypes{}.repeated_nested_message")
-          .container("google.api.expr.test.v1.proto2")
+          .container("cel.expr.conformance.proto2")
           .r(
-              "google.api.expr.test.v1.proto2.TestAllTypes{}~google.api.expr.test.v1.proto2.TestAllTypes^\n"
-                  + "\t\tgoogle.api.expr.test.v1.proto2.TestAllTypes.repeated_nested_message\n"
-                  + "\t\t~list(google.api.expr.test.v1.proto2.TestAllTypes.NestedMessage)")
+              "cel.expr.conformance.proto2.TestAllTypes{}~cel.expr.conformance.proto2.TestAllTypes^\n"
+                  + "\t\tcel.expr.conformance.proto2.TestAllTypes.repeated_nested_message\n"
+                  + "\t\t~list(cel.expr.conformance.proto2.TestAllTypes.NestedMessage)")
           .type(
               Decls.newListType(
-                  Decls.newObjectType(
-                      "google.api.expr.test.v1.proto2.TestAllTypes.NestedMessage"))),
+                  Decls.newObjectType("cel.expr.conformance.proto2.TestAllTypes.NestedMessage"))),
       new TestCase()
           .i("TestAllTypes{}.repeated_nested_message")
-          .container("google.api.expr.test.v1.proto3")
+          .container("cel.expr.conformance.proto3")
           .r(
-              "google.api.expr.test.v1.proto3.TestAllTypes{}~google.api.expr.test.v1.proto3.TestAllTypes^\n"
-                  + "\t\tgoogle.api.expr.test.v1.proto3.TestAllTypes.repeated_nested_message\n"
-                  + "\t\t~list(google.api.expr.test.v1.proto3.TestAllTypes.NestedMessage)")
+              "cel.expr.conformance.proto3.TestAllTypes{}~cel.expr.conformance.proto3.TestAllTypes^\n"
+                  + "\t\tcel.expr.conformance.proto3.TestAllTypes.repeated_nested_message\n"
+                  + "\t\t~list(cel.expr.conformance.proto3.TestAllTypes.NestedMessage)")
           .type(
               Decls.newListType(
-                  Decls.newObjectType(
-                      "google.api.expr.test.v1.proto3.TestAllTypes.NestedMessage"))),
+                  Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes.NestedMessage"))),
       new TestCase()
           .i("base64.encode('hello')")
           .env(
@@ -1545,8 +1534,8 @@ public class CheckerTest {
 
     TypeRegistry reg =
         ProtoTypeRegistry.newRegistry(
-            com.google.api.expr.test.v1.proto2.TestAllTypesProto.TestAllTypes.getDefaultInstance(),
-            com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.getDefaultInstance());
+            dev.cel.expr.conformance.proto2.TestAllTypes.getDefaultInstance(),
+            dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance());
     Container cont = Container.newContainer(Container.name(tc.container));
     CheckerEnv env = newStandardCheckerEnv(cont, reg);
     if (tc.disableStdEnv) {
