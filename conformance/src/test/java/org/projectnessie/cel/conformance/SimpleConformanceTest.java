@@ -45,6 +45,7 @@ import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
 import static org.projectnessie.cel.extension.EncodersLib.encoders;
 import static org.projectnessie.cel.extension.MathLib.math;
+import static org.projectnessie.cel.extension.NetworkLib.network;
 import static org.projectnessie.cel.extension.OptionalLib.optionals;
 import static org.projectnessie.cel.extension.ProtoLib.proto;
 import static org.projectnessie.cel.extension.StringsLib.strings;
@@ -128,6 +129,7 @@ class SimpleConformanceTest {
           "macros.textproto",
           "math_ext.textproto",
           "namespace.textproto",
+          "network_ext.textproto",
           "parse.textproto",
           "plumbing.textproto",
           "proto2.textproto",
@@ -414,6 +416,9 @@ class SimpleConformanceTest {
       if (test.getExpr().contains("math.")) {
         envOptions.add(math());
       }
+      if (usesNetworkExtensions(test.getExpr())) {
+        envOptions.add(network());
+      }
       if (test.getExpr().contains("optional.")) {
         envOptions.add(optionals());
       }
@@ -435,6 +440,15 @@ class SimpleConformanceTest {
           || expression.contains("strings.quote(")
           || expression.contains(".format(")
           || expression.contains(".reverse(");
+    }
+
+    private static boolean usesNetworkExtensions(String expression) {
+      return expression.contains("ip(")
+          || expression.contains("cidr(")
+          || expression.contains("isIP(")
+          || expression.contains("ip.isCanonical(")
+          || expression.contains("net.IP")
+          || expression.contains("net.CIDR");
     }
   }
 

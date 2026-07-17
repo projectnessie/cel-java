@@ -55,11 +55,20 @@ public class TypeT implements Type, Val {
     return new ObjectTypeT(name);
   }
 
+  /** NewObjectTypeValue returns a *TypeValue with the supplied traits for a qualified type name. */
+  public static Type newObjectTypeValue(String name, Trait... traits) {
+    return new ObjectTypeT(name, traits);
+  }
+
   static final class ObjectTypeT extends TypeT {
     private final String typeName;
 
     ObjectTypeT(String typeName) {
-      super(TypeEnum.Object, Trait.FieldTesterType, Trait.IndexerType);
+      this(typeName, Trait.FieldTesterType, Trait.IndexerType);
+    }
+
+    ObjectTypeT(String typeName, Trait... traits) {
+      super(TypeEnum.Object, traits);
       this.typeName = typeName;
     }
 
