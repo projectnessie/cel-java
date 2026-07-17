@@ -44,6 +44,7 @@ import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
 import static org.projectnessie.cel.extension.EncodersLib.encoders;
+import static org.projectnessie.cel.extension.MathLib.math;
 import static org.projectnessie.cel.extension.OptionalLib.optionals;
 import static org.projectnessie.cel.extension.ProtoLib.proto;
 import static org.projectnessie.cel.extension.StringsLib.strings;
@@ -125,6 +126,7 @@ class SimpleConformanceTest {
           "lists.textproto",
           "logic.textproto",
           "macros.textproto",
+          "math_ext.textproto",
           "namespace.textproto",
           "parse.textproto",
           "plumbing.textproto",
@@ -408,6 +410,9 @@ class SimpleConformanceTest {
       }
       if (test.getExpr().contains("base64.")) {
         envOptions.add(encoders());
+      }
+      if (test.getExpr().contains("math.")) {
+        envOptions.add(math());
       }
       if (test.getExpr().contains("optional.")) {
         envOptions.add(optionals());
