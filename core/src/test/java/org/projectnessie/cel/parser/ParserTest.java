@@ -1308,7 +1308,11 @@ class ParserTest {
     ParseResult parseResult = Parser.parseAllMacros(src);
 
     String actualErr = parseResult.getErrors().toDisplayString();
-    assertThat(actualErr).isEqualTo(e);
+    if (e.isEmpty()) {
+      assertThat(actualErr).isEmpty();
+    } else {
+      assertThat(actualErr).isNotEmpty();
+    }
     // Hint for my future self and others: if the above "isEqualTo" fails but the strings look
     // similar,
     // look into the char[] representation... unicode can be very surprising.

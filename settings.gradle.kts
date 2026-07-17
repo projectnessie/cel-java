@@ -139,8 +139,6 @@ fun celProject(name: String) {
   project(":cel-$name").projectDir = file(name)
 }
 
-celProject("generated-antlr")
-
 celProject("generated-pb")
 
 celProject("generated-pb3")

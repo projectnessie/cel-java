@@ -36,8 +36,6 @@ import java.util.Map;
 import org.agrona.collections.LongArrayList;
 import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.Source;
-import org.projectnessie.cel.shaded.org.antlr.v4.runtime.ParserRuleContext;
-import org.projectnessie.cel.shaded.org.antlr.v4.runtime.Token;
 
 final class Helper {
   private final Source source;
@@ -197,12 +195,9 @@ final class Helper {
 
   long id(Object ctx) {
     Location location;
-    if (ctx instanceof ParserRuleContext) {
-      Token token = ((ParserRuleContext) ctx).start;
-      location = source.newLocation(token.getLine(), token.getCharPositionInLine());
-    } else if (ctx instanceof Token) {
-      Token token = (Token) ctx;
-      location = source.newLocation(token.getLine(), token.getCharPositionInLine());
+    if (ctx instanceof Node) {
+      Node node = (Node) ctx;
+      location = source.newLocation(node.getBeginLine(), node.getBeginColumn() - 1);
     } else if (ctx instanceof Location) {
       location = (Location) ctx;
     } else {

@@ -1,0 +1,84 @@
+/*
+ * Copyright (C) 2026 The Authors of CEL-Java
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+SKIP : <WHITESPACE : (" " | "\t" | "\r" | "\n" | "\f")+> #Whitespace;
+
+UNPARSED : <COMMENT : "//" (~["\n"])*> #Comment;
+
+TOKEN #Operator :
+    <EQUALS : "==">
+  | <NOT_EQUALS : "!=">
+  | <LESS_EQUALS : "<=">
+  | <GREATER_EQUALS : ">=">
+  | <LOGICAL_AND : "&&">
+  | <LOGICAL_OR : "||">
+  | <IN : "in">
+  | <LESS : "<">
+  | <GREATER : ">">
+  | <LBRACKET : "[">
+  | <RBRACKET : "]">
+  | <LBRACE : "{">
+  | <RBRACE : "}">
+  | <LPAREN : "(">
+  | <RPAREN : ")">
+  | <DOT : ".">
+  | <COMMA : ",">
+  | <MINUS : "-">
+  | <EXCLAM : "!">
+  | <QUESTIONMARK : "?">
+  | <COLON : ":">
+  | <PLUS : "+">
+  | <STAR : "*">
+  | <SLASH : "/">
+  | <PERCENT : "%">
+  ;
+
+TOKEN #Literal :
+    <TRUE : "true">
+  | <FALSE : "false">
+  | <NULL : "null">
+  | <#HEXDIGIT : ["0"-"9", "a"-"f", "A"-"F"]>
+  | <#DIGIT : ["0"-"9"]>
+  | <#EXPONENT : ["e", "E"] (["+", "-"])? (<DIGIT>)+>
+  | <NUM_UINT : ((<DIGIT>)+ | "0x" (<HEXDIGIT>)+) ["u", "U"]>
+  | <NUM_FLOAT : ((<DIGIT>)+ "." (<DIGIT>)+ (<EXPONENT>)? | (<DIGIT>)+ <EXPONENT> | "." (<DIGIT>)+ (<EXPONENT>)?)>
+  | <NUM_INT : (<DIGIT>)+ | "0x" (<HEXDIGIT>)+>
+  | <#ESC_CHAR_SEQ : "\\" ["a", "b", "f", "n", "r", "t", "v", "\"", "'", "\\", "?", "`"]>
+  | <#ESC_OCT_SEQ : "\\" ["0"-"3"] ["0"-"7"] ["0"-"7"]>
+  | <#ESC_BYTE_SEQ : "\\" ["x", "X"] <HEXDIGIT> <HEXDIGIT>>
+  | <#ESC_UNI_SEQ : "\\" "u" <HEXDIGIT> <HEXDIGIT> <HEXDIGIT> <HEXDIGIT> | "\\" "U" <HEXDIGIT> <HEXDIGIT> <HEXDIGIT> <HEXDIGIT> <HEXDIGIT> <HEXDIGIT> <HEXDIGIT> <HEXDIGIT>>
+  | <#ESC_SEQ : <ESC_CHAR_SEQ> | <ESC_BYTE_SEQ> | <ESC_UNI_SEQ> | <ESC_OCT_SEQ>>
+  | <#DQ_CHAR : <ESC_SEQ> | ~["\\", "\"", "\n", "\r"]>
+  | <#SQ_CHAR : <ESC_SEQ> | ~["\\", "'", "\n", "\r"]>
+  | <#TDQ_CHAR : <ESC_SEQ> | ~["\\"]>
+  | <#TSQ_CHAR : <ESC_SEQ> | ~["\\"]>
+  | <STRING :
+        "\"" (<DQ_CHAR>)* "\""
+      | "'" (<SQ_CHAR>)* "'"
+      | "\"\"\"" (<TDQ_CHAR>)* "\"\"\""
+      | "'''" (<TSQ_CHAR>)* "'''"
+      | ["r", "R"] "\"" (~["\"", "\n", "\r"])* "\""
+      | ["r", "R"] "'" (~["'", "\n", "\r"])* "'"
+      | ["r", "R"] "\"\"\"" (~[])* "\"\"\""
+      | ["r", "R"] "'''" (~[])* "'''"
+    >
+  | <BYTES : ["b", "B"] <STRING>>
+  ;
+
+TOKEN #Identifier :
+    <IDENTIFIER : ["A"-"Z", "a"-"z", "_"] (["A"-"Z", "a"-"z", "0"-"9", "_"])*>
+  | <ESC_IDENTIFIER : "`" (<ESC_SEQ> | ~["\\", "`", "\n", "\r"])* "`">
+  ;

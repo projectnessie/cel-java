@@ -142,7 +142,7 @@ class ScriptHostTest {
     assertThatThrownBy(() -> scriptHost.buildScript("-.,").build())
         .isInstanceOf(ScriptCreateException.class)
         .hasMessageStartingWith(
-            "parse failed: ERROR: <input>:1:3: Syntax error: mismatched input ',' expecting IDENTIFIER");
+            "parse failed: ERROR: <input>:1:3: Syntax error: Encountered an error");
   }
 
   @Test
