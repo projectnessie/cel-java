@@ -147,10 +147,10 @@ class SimpleConformanceTest {
           "dynamic/any/var",
           // New CEL-Spec v0.25.2 expectations that need follow-up parser/runtime changes.
           "namespace/namespace_shadowing/comprehension_shadowing,comprehension_shadowing_disambiguation,comprehension_shadowing_parse_only,comprehension_shadowing_selector,comprehension_shadowing_selector_parse_only,comprehension_shadowing_namespaced_selector,comprehension_shadowing_namespaced_selector_parse_only,comprehension_shadowing_nesting",
-          "proto2/set_null/map_anytype_null_retained,single_scalar,repeated,map,list_value,single_struct",
+          "proto2/set_null/single_scalar,repeated,map,list_value,single_struct",
           "proto2/extensions_has/package_scoped_int32,package_scoped_nested_ext,package_scoped_test_all_types_ext,package_scoped_test_all_types_nested_enum_ext,package_scoped_repeated_test_all_types,message_scoped_int64,message_scoped_nested_ext,message_scoped_nested_enum_ext,message_scoped_repeated_test_all_types",
           "proto2/extensions_get/package_scoped_int32,package_scoped_nested_ext,package_scoped_test_all_types_ext,package_scoped_test_all_types_nested_enum_ext,package_scoped_repeated_test_all_types,message_scoped_int64,message_scoped_nested_ext,message_scoped_nested_enum_ext,message_scoped_repeated_test_all_types",
-          "proto3/set_null/map_anytype_null_retained,single_scalar,repeated,map,list_value,single_struct",
+          "proto3/set_null/single_scalar,repeated,map,list_value,single_struct",
           "dynamic/int32/field_assign_proto2_range,field_assign_proto3_range",
           "dynamic/uint32/field_assign_proto2_range,field_assign_proto3_range",
           "dynamic/float/field_assign_proto2_range,field_assign_proto3_range",
