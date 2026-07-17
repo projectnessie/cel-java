@@ -466,7 +466,7 @@ public final class FieldDescription extends Description {
 
   public static Object getValueFromField(FieldDescriptor desc, Message message) {
 
-    if (isWellKnownType(desc) && !message.hasField(desc)) {
+    if (!desc.isRepeated() && isWellKnownType(desc) && !message.hasField(desc)) {
       return NullValue.NULL_VALUE;
     }
 

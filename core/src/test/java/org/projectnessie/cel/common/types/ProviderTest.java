@@ -241,6 +241,63 @@ public class ProviderTest {
   }
 
   @Test
+  void typeRegistryNewValue_RepeatedMessageFieldNullsArePruned() {
+    TypeRegistry reg = newRegistry(TestAllTypes.getDefaultInstance());
+    Val exp =
+        reg.newValue(
+            "cel.expr.conformance.proto3.TestAllTypes",
+            mapOf(
+                "repeated_timestamp",
+                newGenericArrayList(
+                    reg,
+                    new Val[] {timestampOf(Instant.ofEpochSecond(1).atZone(ZoneIdZ)), NullValue}),
+                "repeated_duration",
+                newGenericArrayList(reg, new Val[] {durationOf(Duration.ofSeconds(1)), NullValue}),
+                "repeated_int32_wrapper",
+                newGenericArrayList(reg, new Val[] {intOf(1), NullValue})));
+
+    assertThat(exp).matches(v -> !Err.isError(v));
+    TestAllTypes ce = exp.convertToNative(TestAllTypes.class);
+    assertThat(ce.getRepeatedTimestampList())
+        .containsExactly(Timestamp.newBuilder().setSeconds(1).build());
+    assertThat(ce.getRepeatedDurationList())
+        .containsExactly(com.google.protobuf.Duration.newBuilder().setSeconds(1).build());
+    assertThat(ce.getRepeatedInt32WrapperList()).containsExactly(Int32Value.of(1));
+  }
+
+  @Test
+  void typeRegistryNewValue_MapMessageFieldNullsArePruned() {
+    TypeRegistry reg = newRegistry(TestAllTypes.getDefaultInstance());
+    Val exp =
+        reg.newValue(
+            "cel.expr.conformance.proto3.TestAllTypes",
+            mapOf(
+                "map_bool_timestamp",
+                newMaybeWrappedMap(
+                    reg,
+                    mapOf(
+                        true,
+                        NullValue,
+                        false,
+                        timestampOf(Instant.ofEpochSecond(1).atZone(ZoneIdZ)))),
+                "map_bool_duration",
+                newMaybeWrappedMap(
+                    reg, mapOf(true, NullValue, false, durationOf(Duration.ofSeconds(1)))),
+                "map_bool_int32_wrapper",
+                newMaybeWrappedMap(reg, mapOf(true, NullValue, false, intOf(1)))));
+
+    assertThat(exp).matches(v -> !Err.isError(v));
+    TestAllTypes ce = exp.convertToNative(TestAllTypes.class);
+    assertThat(ce.getMapBoolTimestampMap())
+        .containsExactlyEntriesOf(mapOf(false, Timestamp.newBuilder().setSeconds(1).build()));
+    assertThat(ce.getMapBoolDurationMap())
+        .containsExactlyEntriesOf(
+            mapOf(false, com.google.protobuf.Duration.newBuilder().setSeconds(1).build()));
+    assertThat(ce.getMapBoolInt32WrapperMap())
+        .containsExactlyEntriesOf(mapOf(false, Int32Value.of(1)));
+  }
+
+  @Test
   void typeRegistryGetters() {
     TypeRegistry reg = newRegistry(ParsedExpr.getDefaultInstance());
     Val sourceInfo =

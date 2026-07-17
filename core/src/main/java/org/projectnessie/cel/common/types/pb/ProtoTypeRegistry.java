@@ -79,10 +79,12 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.TypeT;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.common.types.traits.Lister;
 
 public final class ProtoTypeRegistry implements TypeRegistry {
   private static final ProtoTypeRegistry DEFAULT_REGISTRY = newDefaultRegistry();
@@ -274,7 +276,7 @@ public final class ProtoTypeRegistry implements TypeRegistry {
         continue;
       }
 
-      Object value = nv.getValue().convertToNative(field.reflectType());
+      Object value = toNativeFieldValue(nv.getValue(), field);
       if (value.getClass().isArray()) {
         value = Arrays.asList((Object[]) value);
       }
@@ -292,18 +294,84 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     return null;
   }
 
+  private Object toNativeFieldValue(Val value, FieldDescription field) {
+    FieldDescriptor fieldDesc = field.descriptor();
+    if (fieldDesc.isRepeated()
+        && !fieldDesc.isMapField()
+        && isNullPrunedMessageField(fieldDesc)
+        && value instanceof Lister) {
+      return toNativeRepeatedFieldValue((Lister) value, fieldDesc);
+    }
+    return value.convertToNative(field.reflectType());
+  }
+
+  private Object toNativeRepeatedFieldValue(Lister value, FieldDescriptor fieldDesc) {
+    Class<?> elementType = messageNativeType(fieldDesc);
+    int size = (int) value.size().intValue();
+    List<Object> converted = new ArrayList<>(size);
+    for (int i = 0; i < size; i++) {
+      Val element = value.get(intOf(i));
+      if (element == NullT.NullValue && isNullPrunedMessageField(fieldDesc)) {
+        continue;
+      }
+      converted.add(element.convertToNative(elementType));
+    }
+    return converted;
+  }
+
   private static boolean isNullClearedField(FieldDescriptor field) {
     if (field.getJavaType() != JavaType.MESSAGE || field.isRepeated() || field.isMapField()) {
+      return false;
+    }
+    Type wellKnownType = Checked.CheckedWellKnowns.get(field.getMessageType().getFullName());
+    return wellKnownType == null || isNullPrunedMessageField(field);
+  }
+
+  private static boolean isNullPrunedMessageField(FieldDescriptor field) {
+    if (field.getJavaType() != JavaType.MESSAGE) {
       return false;
     }
     String typeName = field.getMessageType().getFullName();
     Type wellKnownType = Checked.CheckedWellKnowns.get(typeName);
     if (wellKnownType == null) {
-      return true;
+      return false;
     }
     return wellKnownType.hasWrapper()
         || typeName.equals("google.protobuf.Duration")
         || typeName.equals("google.protobuf.Timestamp");
+  }
+
+  private static Class<?> messageNativeType(FieldDescriptor field) {
+    switch (field.getMessageType().getFullName()) {
+      case "google.protobuf.Any":
+        return Any.class;
+      case "google.protobuf.BoolValue":
+        return BoolValue.class;
+      case "google.protobuf.BytesValue":
+        return BytesValue.class;
+      case "google.protobuf.DoubleValue":
+        return DoubleValue.class;
+      case "google.protobuf.Duration":
+        return Duration.class;
+      case "google.protobuf.FloatValue":
+        return FloatValue.class;
+      case "google.protobuf.Int32Value":
+        return Int32Value.class;
+      case "google.protobuf.Int64Value":
+        return Int64Value.class;
+      case "google.protobuf.StringValue":
+        return StringValue.class;
+      case "google.protobuf.Timestamp":
+        return Timestamp.class;
+      case "google.protobuf.UInt32Value":
+        return UInt32Value.class;
+      case "google.protobuf.UInt64Value":
+        return UInt64Value.class;
+      case "google.protobuf.Value":
+        return Value.class;
+      default:
+        return Message.class;
+    }
   }
 
   /**
@@ -327,8 +395,13 @@ public final class ProtoTypeRegistry implements TypeRegistry {
         // if (!(k instanceof String)) {
         //   return Err.newTypeConversionError(k.getClass().getName(), String.class.getName());
         // }
-        if (valueFieldType == WireFormat.FieldType.MESSAGE && !(v instanceof Message)) {
-          v = nativeToValue(v).convertToNative(Value.class);
+        if (valueFieldType == WireFormat.FieldType.MESSAGE) {
+          if (isNullNativeValue(v) && isNullPrunedMessageField(valueType)) {
+            continue;
+          }
+          if (!(v instanceof Message)) {
+            v = nativeToValue(v).convertToNative(messageNativeType(valueType));
+          }
         }
 
         MapEntry newEntry =
@@ -339,6 +412,10 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     }
 
     return value;
+  }
+
+  private static boolean isNullNativeValue(Object value) {
+    return value == null || value == com.google.protobuf.NullValue.NULL_VALUE;
   }
 
   /**
