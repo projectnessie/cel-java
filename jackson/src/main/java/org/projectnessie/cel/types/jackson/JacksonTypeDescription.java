@@ -110,7 +110,7 @@ final class JacksonTypeDescription implements TypeDescription {
       com.google.api.expr.v1alpha1.Type keyType =
           findTypeForJacksonType(type.getKeyType(), typeQuery);
       com.google.api.expr.v1alpha1.Type valueType =
-          findTypeForJacksonType(elementType(type), typeQuery);
+          findTypeForJacksonType(type.getContentType(), typeQuery);
       return Decls.newMapType(keyType, valueType);
     } else if (Collection.class.isAssignableFrom(rawClass)) {
       com.google.api.expr.v1alpha1.Type valueType =
