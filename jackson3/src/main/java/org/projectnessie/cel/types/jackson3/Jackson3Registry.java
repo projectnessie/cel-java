@@ -169,20 +169,11 @@ public final class Jackson3Registry implements TypeRegistry {
     if (ed != null) {
       return ed;
     }
-    ed = computeEnumDescription(clazz);
+    JavaType javaType = typeFactory.constructType(clazz);
+    ed = new JacksonEnumDescription(javaType);
+    ed.buildValues().forEach(v -> enumValues.put(v.fullyQualifiedName(), v));
     enumMap.put(clazz, ed);
     return ed;
-  }
-
-  private JacksonEnumDescription computeEnumDescription(Class<?> clazz) {
-    JavaType javaType = typeFactory.constructType(clazz);
-
-    JacksonEnumDescription enumDesc = new JacksonEnumDescription(javaType);
-    enumMap.put(clazz, enumDesc);
-
-    enumDesc.buildValues().forEach(v -> enumValues.put(v.fullyQualifiedName(), v));
-
-    return enumDesc;
   }
 
   synchronized JacksonTypeDescription typeDescription(Class<?> clazz) {
