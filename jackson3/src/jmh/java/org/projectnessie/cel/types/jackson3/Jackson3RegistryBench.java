@@ -31,6 +31,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.Blackhole;
+import org.projectnessie.cel.common.types.ref.FieldType;
 
 @Warmup(iterations = 1, time = 1500, timeUnit = TimeUnit.MILLISECONDS)
 @Measurement(iterations = 5, time = 300, timeUnit = TimeUnit.MILLISECONDS)
@@ -43,18 +44,18 @@ public class Jackson3RegistryBench {
   @State(Scope.Benchmark)
   public static class ReadState {
     Jackson3Registry registry;
+    Policy policy;
     JacksonObjectT value;
+    FieldType ownerField;
 
     @Setup
     public void init() {
       registry = (Jackson3Registry) Jackson3Registry.newRegistry();
       registry.typeDescription(Policy.class);
       registry.enumDescription(Status.class);
-      value =
-          JacksonObjectT.newObject(
-              registry,
-              new Policy("policy-1", 7, new Principal("alice@example.com"), Status.ACTIVE),
-              registry.typeDescription(Policy.class));
+      policy = new Policy("policy-1", 7, new Principal("alice@example.com"), Status.ACTIVE);
+      value = JacksonObjectT.newObject(registry, policy, registry.typeDescription(Policy.class));
+      ownerField = registry.findFieldType(Policy.class.getName(), "owner");
     }
   }
 
@@ -89,6 +90,11 @@ public class Jackson3RegistryBench {
   @Benchmark
   public void propertyRead(ReadState state, Blackhole blackhole) {
     blackhole.consume(state.value.get(stringOf("owner")));
+  }
+
+  @Benchmark
+  public void preResolvedPropertyRead(ReadState state, Blackhole blackhole) {
+    blackhole.consume(state.ownerField.getFrom.getFrom(state.policy));
   }
 
   @Benchmark
