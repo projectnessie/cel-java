@@ -89,6 +89,7 @@ import org.projectnessie.cel.common.types.MapT;
 import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.TypeT;
 import org.projectnessie.cel.common.types.ref.FieldGetter;
+import org.projectnessie.cel.common.types.ref.FieldTester;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.TypeAdapterSupport;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
@@ -99,7 +100,7 @@ public final class ProtoTypeRegistry implements TypeRegistry {
   private static final ProtoTypeRegistry DEFAULT_REGISTRY = newDefaultRegistry();
 
   private final Map<String, org.projectnessie.cel.common.types.ref.Type> revTypeMap;
-  private final Map<String, FieldType> fieldTypeCache;
+  private final Map<String, Map<String, FieldType>> fieldTypeCache;
   private final Db pbdb;
 
   private ProtoTypeRegistry(
@@ -212,8 +213,22 @@ public final class ProtoTypeRegistry implements TypeRegistry {
 
   @Override
   public FieldType findFieldType(String messageType, String fieldName) {
-    String cacheKey = messageType + '\n' + fieldName;
-    return fieldTypeCache.computeIfAbsent(cacheKey, key -> loadFieldType(messageType, fieldName));
+    Map<String, FieldType> messageFields = fieldTypeCache.get(messageType);
+    if (messageFields == null) {
+      Map<String, FieldType> newFields = new ConcurrentHashMap<>();
+      Map<String, FieldType> existing = fieldTypeCache.putIfAbsent(messageType, newFields);
+      messageFields = existing != null ? existing : newFields;
+    }
+    FieldType fieldType = messageFields.get(fieldName);
+    if (fieldType != null) {
+      return fieldType;
+    }
+    FieldType loaded = loadFieldType(messageType, fieldName);
+    if (loaded == null) {
+      return null;
+    }
+    FieldType existing = messageFields.putIfAbsent(fieldName, loaded);
+    return existing != null ? existing : loaded;
   }
 
   private FieldType loadFieldType(String messageType, String fieldName) {
@@ -221,18 +236,70 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     if (field == null) {
       return null;
     }
-    FieldGetter getter = target -> field.getField(target, this);
+    FieldTester descriptorTester = field::hasField;
+    FieldGetter descriptorGetter = target -> field.getField(target, this);
     PbTypeDescription type = pbdb.describeType(messageType);
     FieldGetter generatedGetter = type != null ? GeneratedFieldAccessor.create(type, field) : null;
-    if (generatedGetter != null) {
+    FieldGetter objectGetter = generatedGetter;
+    if (objectGetter == null && type != null) {
+      objectGetter = GeneratedFieldAccessor.createForObject(type, field);
+    }
+    FieldTester generatedTester =
+        type != null ? GeneratedFieldAccessor.createTester(type, field) : null;
+    FieldTester tester = descriptorTester;
+    if (generatedTester != null) {
       Class<?> generatedType = type.reflectType();
-      getter =
+      tester =
           target ->
               generatedType.isInstance(target)
-                  ? generatedGetter.getFrom(target)
-                  : field.getField(target, this);
+                  ? generatedTester.isSet(target)
+                  : field.hasField(target);
     }
-    return new FieldType(field.checkedType(), field::hasField, getter);
+    FieldGetter getter =
+        generatedGetter != null
+            ? bindGeneratedGetter(type, field, generatedGetter, tester)
+            : descriptorGetter;
+    FieldGetter optimizedObjectGetter =
+        objectGetter != null ? bindGeneratedGetter(type, field, objectGetter, tester) : null;
+    return new ProtoFieldType(
+        field.checkedType(), tester, getter, generatedTester, optimizedObjectGetter);
+  }
+
+  private FieldGetter bindGeneratedGetter(
+      PbTypeDescription type,
+      FieldDescription field,
+      FieldGetter generatedGetter,
+      FieldTester tester) {
+    Class<?> generatedType = type.reflectType();
+    if (field.isWrapper()) {
+      return target ->
+          generatedType.isInstance(target)
+              ? !tester.isSet(target)
+                  ? com.google.protobuf.NullValue.NULL_VALUE
+                  : generatedGetter.getFrom(target)
+              : field.getField(target, this);
+    }
+    if (field.generatedValueNeedsAdaptation()) {
+      return target ->
+          generatedType.isInstance(target)
+              ? field.adaptGeneratedValue(generatedGetter.getFrom(target), this)
+              : field.getField(target, this);
+    }
+    return target ->
+        generatedType.isInstance(target)
+            ? generatedGetter.getFrom(target)
+            : field.getField(target, this);
+  }
+
+  FieldType findFieldTypeForObjectAccess(
+      String messageType, String fieldName, boolean presenceTest) {
+    FieldType fieldType = findFieldType(messageType, fieldName);
+    if (!(fieldType instanceof ProtoFieldType protoFieldType)) {
+      return null;
+    }
+    return presenceTest
+        ? protoFieldType.objectPresenceFieldType
+        : protoFieldType.objectGetterFieldType;
   }
 
   FieldDescription findFieldDescription(String messageType, String fieldName) {
@@ -344,10 +411,10 @@ public final class ProtoTypeRegistry implements TypeRegistry {
 
   private Object toNativeRepeatedFieldValue(Lister value, FieldDescriptor fieldDesc) {
     Class<?> elementType = messageNativeType(fieldDesc);
-    int size = (int) value.size().intValue();
+    int size = value.nativeSize();
     List<Object> converted = new ArrayList<>(size);
     for (int i = 0; i < size; i++) {
-      Val element = value.get(intOf(i));
+      Val element = value.nativeGetAt(i);
       if (element == NullT.NullValue && isNullPrunedMessageField(fieldDesc)) {
         continue;
       }
@@ -406,7 +473,7 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     FieldDescriptor valueType = field.valueType.descriptor();
     WireFormat.FieldType keyFieldType = WireFormat.FieldType.valueOf(keyType.getType().name());
     WireFormat.FieldType valueFieldType = WireFormat.FieldType.valueOf(valueType.getType().name());
-    List<MapEntry<?, ?>> entries = new ArrayList<>((int) value.size().intValue());
+    List<MapEntry<?, ?>> entries = new ArrayList<>(value.nativeSize());
 
     IteratorT iterator = value.iterator();
     while (iterator.hasNext() == True) {
@@ -532,6 +599,7 @@ public final class ProtoTypeRegistry implements TypeRegistry {
   /** RegisterMessage registers a protocol buffer message and its dependencies. */
   public void registerMessage(Message message) {
     FileDescription fd = pbdb.registerMessage(message);
+    fieldTypeCache.remove(typeNameFromMessage(message));
     registerAllTypes(fd);
   }
 
@@ -635,6 +703,24 @@ public final class ProtoTypeRegistry implements TypeRegistry {
   @Override
   public String toString() {
     return "ProtoTypeRegistry{" + "revTypeMap.size=" + revTypeMap.size() + ", pbdb=" + pbdb + '}';
+  }
+
+  private static final class ProtoFieldType extends FieldType {
+    private final FieldType objectPresenceFieldType;
+    private final FieldType objectGetterFieldType;
+
+    private ProtoFieldType(
+        Type type,
+        FieldTester isSet,
+        FieldGetter getFrom,
+        FieldTester generatedTester,
+        FieldGetter objectGetter) {
+      super(type, isSet, getFrom);
+      this.objectPresenceFieldType =
+          generatedTester != null ? new FieldType(type, isSet, getFrom) : null;
+      this.objectGetterFieldType =
+          objectGetter != null ? new FieldType(type, isSet, objectGetter) : null;
+    }
   }
 
   @Override

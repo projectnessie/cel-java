@@ -17,7 +17,6 @@ package org.projectnessie.cel.extension;
 
 import static java.math.RoundingMode.HALF_EVEN;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.projectnessie.cel.common.types.IntT.intOf;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -748,7 +747,7 @@ public class StringsLib implements Library {
   }
 
   private static String formatPattern(String pattern, Sizer argsSizer, Indexer argsIndexer) {
-    int argCount = Math.toIntExact(argsSizer.size().intValue());
+    int argCount = argsSizer.nativeSize();
     int argIndex = 0;
     StringBuilder out = new StringBuilder(pattern.length());
     for (int i = 0; i < pattern.length(); i++) {
@@ -784,7 +783,7 @@ public class StringsLib implements Library {
       if (argIndex >= argCount) {
         throw new FormatException("index %d out of range", argIndex);
       }
-      Val arg = argsIndexer.get(intOf(argIndex++));
+      Val arg = argsIndexer.nativeGetAt(argIndex++);
       out.append(formatValue(ch, precision, arg));
     }
     return out.toString();
@@ -919,13 +918,13 @@ public class StringsLib implements Library {
   private static String renderList(Val value) {
     Sizer sizer = (Sizer) value;
     Indexer indexer = (Indexer) value;
-    int size = Math.toIntExact(sizer.size().intValue());
+    int size = sizer.nativeSize();
     StringBuilder out = new StringBuilder("[");
     for (int i = 0; i < size; i++) {
       if (i > 0) {
         out.append(", ");
       }
-      out.append(renderStringClause(indexer.get(intOf(i))));
+      out.append(renderStringClause(indexer.nativeGetAt(i)));
     }
     return out.append(']').toString();
   }

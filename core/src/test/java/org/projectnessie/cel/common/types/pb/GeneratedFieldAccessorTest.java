@@ -16,17 +16,27 @@
 package org.projectnessie.cel.common.types.pb;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.projectnessie.cel.common.types.BoolT.True;
+import static org.projectnessie.cel.common.types.IntT.intOf;
+import static org.projectnessie.cel.common.types.StringT.stringOf;
+import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.pb.Db.newDb;
 
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.Int32Value;
+import com.google.protobuf.NullValue;
 import dev.cel.expr.conformance.proto3.TestAllTypes;
 import dev.cel.expr.conformance.proto3.TestAllTypes.NestedEnum;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.projectnessie.cel.common.ULong;
+import org.projectnessie.cel.common.types.MapT;
 import org.projectnessie.cel.common.types.ref.FieldGetter;
+import org.projectnessie.cel.common.types.ref.FieldTester;
 import org.projectnessie.cel.common.types.ref.FieldType;
+import org.projectnessie.cel.common.types.traits.Lister;
 
 class GeneratedFieldAccessorTest {
 
@@ -73,7 +83,7 @@ class GeneratedFieldAccessorTest {
   }
 
   @Test
-  void excludesFieldsThatNeedSpecializedNormalization() {
+  void bindsFieldsWithSpecializedNormalization() {
     Db db = newDb();
     db.registerMessage(TestAllTypes.getDefaultInstance());
     PbTypeDescription type = db.describeType(TestAllTypes.getDescriptor().getFullName());
@@ -82,20 +92,127 @@ class GeneratedFieldAccessorTest {
         List.of(
             "single_uint32",
             "standalone_enum",
-            "single_nested_message",
             "single_int32_wrapper",
             "repeated_int32",
-            "map_string_string")) {
+            "map_string_string",
+            "single_any",
+            "single_duration",
+            "single_timestamp")) {
       assertThat(GeneratedFieldAccessor.create(type, type.fieldByName(fieldName)))
+          .as(fieldName)
+          .isNotNull();
+    }
+
+    assertThat(GeneratedFieldAccessor.create(type, type.fieldByName("optional_null_value")))
+        .isNull();
+    assertThat(GeneratedFieldAccessor.create(type, type.fieldByName("repeated_null_value")))
+        .isNotNull();
+    assertThat(GeneratedFieldAccessor.create(type, type.fieldByName("single_nested_message")))
+        .isNull();
+    assertThat(
+            GeneratedFieldAccessor.createForObject(type, type.fieldByName("single_nested_message")))
+        .isNotNull();
+  }
+
+  @Test
+  void bindsOnlyGeneratedPresenceMethods() {
+    Db db = newDb();
+    db.registerMessage(TestAllTypes.getDefaultInstance());
+    PbTypeDescription type = db.describeType(TestAllTypes.getDescriptor().getFullName());
+    TestAllTypes present =
+        TestAllTypes.newBuilder()
+            .setOptionalBool(false)
+            .setSingleNestedMessage(TestAllTypes.NestedMessage.getDefaultInstance())
+            .setSingleInt32Wrapper(Int32Value.getDefaultInstance())
+            .build();
+
+    for (String fieldName :
+        List.of("optional_bool", "single_nested_message", "single_int32_wrapper")) {
+      FieldTester tester = GeneratedFieldAccessor.createTester(type, type.fieldByName(fieldName));
+      assertThat(tester).as(fieldName).isNotNull();
+      assertThat(tester.isSet(TestAllTypes.getDefaultInstance())).as(fieldName).isFalse();
+      assertThat(tester.isSet(present)).as(fieldName).isTrue();
+    }
+
+    for (String fieldName :
+        List.of("single_int32", "standalone_enum", "repeated_int32", "map_string_string")) {
+      assertThat(GeneratedFieldAccessor.createTester(type, type.fieldByName(fieldName)))
           .as(fieldName)
           .isNull();
     }
   }
 
   @Test
+  void registryNormalizesGeneratedFieldValues() {
+    TestAllTypes message =
+        TestAllTypes.newBuilder()
+            .setSingleUint32(-1)
+            .setSingleUint64(Long.MIN_VALUE)
+            .setStandaloneEnumValue(12_345)
+            .setSingleNestedMessage(TestAllTypes.NestedMessage.newBuilder().setBb(50_000))
+            .setSingleInt32Wrapper(Int32Value.of(50_000))
+            .addRepeatedUint32(-1)
+            .addRepeatedNestedEnumValue(12_345)
+            .addRepeatedNullValue(NullValue.NULL_VALUE)
+            .putMapStringString("key", "value")
+            .putMapUint32Uint64(-1, Long.MIN_VALUE)
+            .putMapStringEnumValue("unknown", 12_345)
+            .putMapBoolNullValue(true, NullValue.NULL_VALUE)
+            .build();
+    ProtoTypeRegistry registry = ProtoTypeRegistry.newRegistry(TestAllTypes.getDefaultInstance());
+    String typeName = message.getDescriptorForType().getFullName();
+
+    assertThat(registry.findFieldType(typeName, "single_uint32").getFrom.getFrom(message))
+        .isEqualTo(ULong.valueOf(-1L));
+    assertThat(registry.findFieldType(typeName, "single_uint64").getFrom.getFrom(message))
+        .isEqualTo(ULong.valueOf(Long.MIN_VALUE));
+    assertThat(registry.findFieldType(typeName, "standalone_enum").getFrom.getFrom(message))
+        .isEqualTo(12_345);
+    assertThat(registry.findFieldType(typeName, "single_nested_message").getFrom.getFrom(message))
+        .isEqualTo(message.getSingleNestedMessage());
+    assertThat(registry.findFieldType(typeName, "single_int32_wrapper").getFrom.getFrom(message))
+        .isEqualTo(Int32Value.of(50_000));
+    assertThat(
+            registry
+                .findFieldType(typeName, "single_int32_wrapper")
+                .getFrom
+                .getFrom(TestAllTypes.getDefaultInstance()))
+        .isEqualTo(NullValue.NULL_VALUE);
+    assertThat(registry.findFieldType(typeName, "repeated_uint32").getFrom.getFrom(message))
+        .isEqualTo(List.of(ULong.valueOf(-1L)));
+    assertThat(registry.findFieldType(typeName, "repeated_nested_enum").getFrom.getFrom(message))
+        .isEqualTo(List.of(12_345));
+
+    Object mapValue =
+        registry.findFieldType(typeName, "map_string_string").getFrom.getFrom(message);
+    assertThat(mapValue).isInstanceOf(MapT.class);
+    assertThat(((MapT) mapValue).get(stringOf("key"))).isEqualTo(stringOf("value"));
+    MapT unsignedMap =
+        (MapT) registry.findFieldType(typeName, "map_uint32_uint64").getFrom.getFrom(message);
+    assertThat(unsignedMap.get(uintOf(-1L))).isEqualTo(uintOf(Long.MIN_VALUE));
+    MapT enumMap =
+        (MapT) registry.findFieldType(typeName, "map_string_enum").getFrom.getFrom(message);
+    assertThat(enumMap.get(stringOf("unknown"))).isEqualTo(intOf(12_345));
+    MapT nullMap =
+        (MapT) registry.findFieldType(typeName, "map_bool_null_value").getFrom.getFrom(message);
+    assertThat(nullMap.get(True)).isEqualTo(intOf(0));
+
+    PbObjectT object = (PbObjectT) registry.nativeToValue(message);
+    assertThat(object.get(stringOf("single_uint32"))).isEqualTo(uintOf(-1L));
+    assertThat(object.get(stringOf("standalone_enum"))).isEqualTo(intOf(12_345));
+    assertThat(object.get(stringOf("single_int32_wrapper"))).isEqualTo(intOf(50_000));
+    assertThat(((Lister) object.get(stringOf("repeated_null_value"))).get(intOf(0)))
+        .isEqualTo(intOf(0));
+  }
+
+  @Test
   void generatedRegistryGetterFallsBackForDynamicMessages() {
     TestAllTypes generated =
-        TestAllTypes.newBuilder().setSingleInt32(42).setStandaloneEnum(NestedEnum.BAR).build();
+        TestAllTypes.newBuilder()
+            .setSingleInt32(42)
+            .setStandaloneEnum(NestedEnum.BAR)
+            .setSingleNestedMessage(TestAllTypes.NestedMessage.newBuilder().setBb(50_000))
+            .build();
     DynamicMessage dynamic =
         DynamicMessage.newBuilder(generated.getDescriptorForType()).mergeFrom(generated).build();
     ProtoTypeRegistry registry = ProtoTypeRegistry.newRegistry(TestAllTypes.getDefaultInstance());
@@ -110,6 +227,16 @@ class GeneratedFieldAccessorTest {
     FieldDescriptor enumDescriptor =
         generated.getDescriptorForType().findFieldByName("standalone_enum");
     assertThat(enumField.getFrom.getFrom(dynamic)).isEqualTo(dynamic.getField(enumDescriptor));
+
+    PbObjectT generatedObject = (PbObjectT) registry.nativeToValue(generated);
+    PbObjectT dynamicObject = (PbObjectT) registry.nativeToValue(dynamic);
+    assertThat(generatedObject.get(stringOf("single_nested_message")))
+        .isEqualTo(registry.nativeToValue(generated.getSingleNestedMessage()));
+    assertThat(dynamicObject.get(stringOf("single_nested_message")))
+        .isEqualTo(
+            registry.nativeToValue(
+                dynamic.getField(
+                    generated.getDescriptorForType().findFieldByName("single_nested_message"))));
   }
 
   @Test
@@ -136,5 +263,23 @@ class GeneratedFieldAccessorTest {
     PbTypeDescription type = db.describeType(zero.getDescriptorForType().getFullName());
 
     assertThat(GeneratedFieldAccessor.create(type, type.fieldByName("single_int32"))).isNull();
+    assertThat(GeneratedFieldAccessor.createTester(type, type.fieldByName("optional_bool")))
+        .isNull();
+  }
+
+  @Test
+  void generatedRegistrationInvalidatesDescriptorOnlyFieldCache() {
+    DynamicMessage dynamicZero = DynamicMessage.getDefaultInstance(TestAllTypes.getDescriptor());
+    ProtoTypeRegistry registry = ProtoTypeRegistry.newEmptyRegistry();
+    registry.registerMessage(dynamicZero);
+    String typeName = dynamicZero.getDescriptorForType().getFullName();
+
+    FieldType descriptorOnly = registry.findFieldType(typeName, "single_int32");
+    registry.registerMessage(TestAllTypes.getDefaultInstance());
+    FieldType generated = registry.findFieldType(typeName, "single_int32");
+
+    assertThat(generated).isNotSameAs(descriptorOnly);
+    assertThat(generated.getFrom.getFrom(TestAllTypes.newBuilder().setSingleInt32(50_000).build()))
+        .isEqualTo(50_000);
   }
 }

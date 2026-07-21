@@ -20,7 +20,6 @@ package org.projectnessie.cel.interpreter;
 //  common subexpressions.
 
 import static org.projectnessie.cel.common.types.BoolT.True;
-import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.common.types.Util.isUnknownOrError;
 
@@ -122,10 +121,10 @@ public final class AstPruner {
 
     // Attempt to build a list literal.
     if (v instanceof Lister list) {
-      int sz = (int) list.size().intValue();
+      int sz = list.nativeSize();
       List<Expr> elemExprs = new ArrayList<>(sz);
       for (int i = 0; i < sz; i++) {
-        Val elem = list.get(intOf(i));
+        Val elem = list.nativeGetAt(i);
         if (isUnknownOrError(elem)) {
           return null;
         }
@@ -144,7 +143,7 @@ public final class AstPruner {
     // Create a map literal if possible.
     if (v instanceof Mapper mp) {
       IteratorT it = mp.iterator();
-      List<Entry> entries = new ArrayList<>((int) mp.size().intValue());
+      List<Entry> entries = new ArrayList<>(mp.nativeSize());
       while (it.hasNext() == True) {
         Val key = it.next();
         Val val = mp.get(key);

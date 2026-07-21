@@ -38,6 +38,7 @@ import com.google.protobuf.Int32Value;
 import com.google.protobuf.Int64Value;
 import com.google.protobuf.Value;
 import java.time.Instant;
+import java.util.stream.IntStream;
 import org.projectnessie.cel.common.types.Overflow.OverflowException;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
@@ -68,11 +69,14 @@ public final class IntT extends BaseVal
           Trait.NegatorType,
           Trait.SubtractorType);
 
-  /** Int constants used for comparison results. IntZero is the zero-value for Int */
-  public static final IntT IntZero = new IntT(0);
+  private static final IntT[] CONST =
+      IntStream.rangeClosed(-10, 10).mapToObj(IntT::new).toArray(IntT[]::new);
 
-  public static final IntT IntOne = new IntT(1);
-  public static final IntT IntNegOne = new IntT(-1);
+  /** Int constants used for comparison results. IntZero is the zero-value for Int */
+  public static final IntT IntZero = CONST[10];
+
+  public static final IntT IntOne = CONST[11];
+  public static final IntT IntNegOne = CONST[9];
 
   /** maxIntJSON is defined as the Number.MAX_SAFE_INTEGER value per EcmaScript 6. */
   public static final long maxIntJSON = (1L << 53) - 1;
@@ -97,14 +101,8 @@ public final class IntT extends BaseVal
   }
 
   public static IntT intOf(long i) {
-    if (i == 0L) {
-      return IntZero;
-    }
-    if (i == 1L) {
-      return IntOne;
-    }
-    if (i == -1L) {
-      return IntNegOne;
+    if (i >= -10 && i <= 10) {
+      return CONST[(int) i + 10];
     }
     return new IntT(i);
   }
@@ -369,7 +367,6 @@ public final class IntT extends BaseVal
 
   @Override
   public int hashCode() {
-    // Used to allow heterogeneous numeric map keys
-    return (int) i;
+    return Types.numericHashCode(i);
   }
 }

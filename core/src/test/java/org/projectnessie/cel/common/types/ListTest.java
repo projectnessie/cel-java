@@ -237,6 +237,7 @@ public abstract class ListTest<CONSTRUCT> {
     // Sizer.size()
     int size = tc.sourceSize();
     assertThat(list.size()).isEqualTo(intOf(tc.sourceSize()));
+    assertThat(list.nativeSize()).isEqualTo(size);
 
     for (int i = 0; i < size; i++) {
       Object src = tc.sourceGet(i);
@@ -244,6 +245,7 @@ public abstract class ListTest<CONSTRUCT> {
 
       // Indexer.get()
       Val elem = list.get(intOf(i));
+      assertThat(list.nativeGetAt(i)).isEqualTo(elem);
       Object nat = elem.convertToNative((src instanceof Val) ? (Class) Val.class : src.getClass());
 
       assertThat(src).isOfAnyClassIn(nat.getClass());

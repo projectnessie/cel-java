@@ -58,7 +58,25 @@ public final class DoubleT extends BaseVal
           Trait.NegatorType,
           Trait.SubtractorType);
 
+  public static final DoubleT DoubleNegOne = new DoubleT(-1d);
+  public static final DoubleT DoubleNegZero = new DoubleT(-0d);
+  public static final DoubleT DoubleZero = new DoubleT(0d);
+  public static final DoubleT DoubleOne = new DoubleT(1d);
+
   public static DoubleT doubleOf(double d) {
+    var raw = Double.doubleToRawLongBits(d);
+    if (raw == 0L) {
+      return DoubleZero;
+    }
+    if (raw == 0x8000000000000000L) {
+      return DoubleNegZero;
+    }
+    if (raw == 0x3ff0000000000000L) {
+      return DoubleOne;
+    }
+    if (raw == 0xbff0000000000000L) {
+      return DoubleNegOne;
+    }
     return new DoubleT(d);
   }
 
@@ -270,7 +288,6 @@ public final class DoubleT extends BaseVal
 
   @Override
   public int hashCode() {
-    // Used to allow heterogeneous numeric map keys
-    return (int) d;
+    return Types.numericHashCode(d);
   }
 }

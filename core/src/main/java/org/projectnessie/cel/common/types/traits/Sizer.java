@@ -21,4 +21,13 @@ import org.projectnessie.cel.common.types.ref.Val;
 public interface Sizer {
   /** Size returns the number of elements or length of the value. */
   Val size();
+
+  /**
+   * Returns the size as a native integer for internal traversal and capacity calculations.
+   *
+   * @throws ArithmeticException if the size cannot be represented as an {@code int}
+   */
+  default int nativeSize() {
+    return Math.toIntExact(size().intValue());
+  }
 }

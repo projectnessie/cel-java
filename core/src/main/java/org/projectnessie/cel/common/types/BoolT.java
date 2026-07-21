@@ -18,7 +18,6 @@ package org.projectnessie.cel.common.types;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.IntT.intOfCompare;
-import static org.projectnessie.cel.common.types.StringT.stringOf;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.BoolValue;
@@ -94,7 +93,7 @@ public final class BoolT extends BaseVal implements Comparer, Negater {
   @Override
   public Val convertToType(Type typeVal) {
     return switch (typeVal.typeEnum()) {
-      case String -> stringOf(Boolean.toString(b));
+      case String -> b ? StringT.TRUE : StringT.FALSE;
       case Bool -> this;
       case Type -> BoolType;
       default -> newTypeConversionError(BoolType, typeVal);
