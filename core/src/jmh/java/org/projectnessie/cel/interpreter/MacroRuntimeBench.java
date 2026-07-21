@@ -75,7 +75,7 @@ public class MacroRuntimeBench {
           return;
         case "all":
           program = program("items.all(i, i >= 0)");
-          vars = mapOf("items", list(size), "target", (long) size - 1);
+          vars = mapOf("items", list(size));
           return;
         case "filter":
           program = program("items.filter(i, i > target)");
@@ -83,7 +83,7 @@ public class MacroRuntimeBench {
           return;
         case "map":
           program = program("items.map(i, i + 1)");
-          vars = mapOf("items", list(size), "target", (long) size - 1);
+          vars = mapOf("items", list(size));
           return;
         default:
           throw new IllegalArgumentException("Unknown macro benchmark expression: " + expression);

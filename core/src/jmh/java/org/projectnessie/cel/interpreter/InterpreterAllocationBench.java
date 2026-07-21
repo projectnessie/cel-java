@@ -144,7 +144,7 @@ public class InterpreterAllocationBench {
   public static class ProtoInputState {
     @Param({
       "mapLookup",
-      "mapLookupMiss",
+      "mapLookupMissingKeyError",
       "mapLookupRepeated",
       "repeatedUintExistsEarly",
       "repeatedUintExistsLate"
@@ -170,7 +170,7 @@ public class InterpreterAllocationBench {
               mapOf(
                   "msg", protoMessage(size), "key", "key-" + (size - 1), "target", (long) size - 1);
           return;
-        case "mapLookupMiss":
+        case "mapLookupMissingKeyError":
           program =
               protoProgram(
                   "msg.map_string_uint64[key] == target",

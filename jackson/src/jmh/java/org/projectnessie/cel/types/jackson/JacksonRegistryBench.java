@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
+import org.openjdk.jmh.annotations.Level;
 import org.openjdk.jmh.annotations.Measurement;
 import org.openjdk.jmh.annotations.Mode;
 import org.openjdk.jmh.annotations.OutputTimeUnit;
@@ -41,12 +42,14 @@ public class JacksonRegistryBench {
 
   @State(Scope.Benchmark)
   public static class ReadState {
+    JacksonRegistry registry;
     JacksonObjectT value;
 
     @Setup
     public void init() {
-      JacksonRegistry registry = (JacksonRegistry) JacksonRegistry.newRegistry();
+      registry = (JacksonRegistry) JacksonRegistry.newRegistry();
       registry.typeDescription(Policy.class);
+      registry.enumDescription(Status.class);
       value =
           JacksonObjectT.newObject(
               registry,
@@ -55,16 +58,32 @@ public class JacksonRegistryBench {
     }
   }
 
-  @Benchmark
-  public void registerType(Blackhole blackhole) {
-    JacksonRegistry registry = (JacksonRegistry) JacksonRegistry.newRegistry();
-    blackhole.consume(registry.typeDescription(Policy.class));
+  /** Supplies a fresh registry to each single-shot cold-registration benchmark iteration. */
+  @State(Scope.Thread)
+  public static class RegistrationState {
+    JacksonRegistry registry;
+
+    @Setup(Level.Iteration)
+    public void init() {
+      registry = (JacksonRegistry) JacksonRegistry.newRegistry();
+    }
   }
 
   @Benchmark
-  public void registerEnum(Blackhole blackhole) {
-    JacksonRegistry registry = (JacksonRegistry) JacksonRegistry.newRegistry();
-    blackhole.consume(registry.enumDescription(Status.class));
+  public void registryCreation(Blackhole blackhole) {
+    blackhole.consume(JacksonRegistry.newRegistry());
+  }
+
+  @Benchmark
+  @BenchmarkMode(Mode.SingleShotTime)
+  public void registerType(RegistrationState state, Blackhole blackhole) {
+    blackhole.consume(state.registry.typeDescription(Policy.class));
+  }
+
+  @Benchmark
+  @BenchmarkMode(Mode.SingleShotTime)
+  public void registerEnum(RegistrationState state, Blackhole blackhole) {
+    blackhole.consume(state.registry.enumDescription(Status.class));
   }
 
   @Benchmark
@@ -73,10 +92,8 @@ public class JacksonRegistryBench {
   }
 
   @Benchmark
-  public void enumConversion(Blackhole blackhole) {
-    JacksonRegistry registry = (JacksonRegistry) JacksonRegistry.newRegistry();
-    registry.enumDescription(Status.class);
-    blackhole.consume(registry.nativeToValue(Status.ACTIVE));
+  public void enumConversion(ReadState state, Blackhole blackhole) {
+    blackhole.consume(state.registry.nativeToValue(Status.ACTIVE));
   }
 
   public enum Status {
