@@ -176,6 +176,11 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
     return IntT.intOf(b.length);
   }
 
+  @Override
+  public int nativeSize() {
+    return b.length;
+  }
+
   /** Type implements the ref.Val interface method. */
   @Override
   public Type type() {

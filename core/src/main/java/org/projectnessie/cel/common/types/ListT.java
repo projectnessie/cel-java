@@ -145,7 +145,7 @@ public abstract class ListT extends BaseVal implements Lister {
       ListValue.Builder list = ListValue.newBuilder();
       int s = (int) size;
       for (int i = 0; i < s; i++) {
-        Val v = get(intOf(i));
+        Val v = getUnchecked(i);
         Value e = adapter.valueToNative(v, Value.class);
         list.addValues(e);
       }
@@ -167,7 +167,7 @@ public abstract class ListT extends BaseVal implements Lister {
       Object array = Array.newInstance(compType, s);
 
       for (int i = 0; i < s; i++) {
-        Val v = get(intOf(i));
+        Val v = getUnchecked(i);
         Object e = adapter.valueToNative(v, compType);
         Array.set(array, i, e);
       }
@@ -188,22 +188,37 @@ public abstract class ListT extends BaseVal implements Lister {
       return new ArrayListIteratorT();
     }
 
+    abstract Val getUnchecked(int index);
+
+    static Val elementAt(Lister list, int index) {
+      return list instanceof BaseListT baseList
+          ? baseList.getUnchecked(index)
+          : list.nativeGetAt(index);
+    }
+
+    @Override
+    public Val nativeGetAt(int index) {
+      if (index < 0 || index >= size) {
+        return newErr(
+            "invalid_argument: index '%d' out of range in list of size '%d'", index, size);
+      }
+      return getUnchecked(index);
+    }
+
     @Override
     public Val equal(Val other) {
-      if (other.type() != ListType) {
+      if (!(other instanceof ListT o)) {
         return False;
       }
-      ListT o = (ListT) other;
       if (size != o.size().intValue()) {
         return False;
       }
-      for (long i = 0; i < size; i++) {
-        IntT idx = intOf(i);
-        Val e1 = get(idx);
+      for (int i = 0; i < size; i++) {
+        Val e1 = getUnchecked(i);
         if (isError(e1)) {
           return e1;
         }
-        Val e2 = o.get(idx);
+        Val e2 = elementAt(o, i);
         if (isError(e2)) {
           return e2;
         }
@@ -222,8 +237,8 @@ public abstract class ListT extends BaseVal implements Lister {
 
     @Override
     public Val contains(Val value) {
-      for (long i = 0; i < size; i++) {
-        Val elem = get(intOf(i));
+      for (int i = 0; i < size; i++) {
+        Val elem = getUnchecked(i);
         if (value.equal(elem) == True) {
           return True;
         }
@@ -237,21 +252,26 @@ public abstract class ListT extends BaseVal implements Lister {
     }
 
     @Override
+    public int nativeSize() {
+      return Math.toIntExact(size);
+    }
+
+    @Override
     public boolean equals(Object o) {
       if (this == o) {
         return true;
       }
-      if (!(o instanceof Val)) {
+      if (!(o instanceof Val val)) {
         return false;
       }
-      return equal((Val) o) == True;
+      return equal(val) == True;
     }
 
     @Override
     public int hashCode() {
       int result = 1;
-      for (long i = 0; i < size; i++) {
-        result = 31 * result + get(intOf(i)).hashCode();
+      for (int i = 0; i < size; i++) {
+        result = 31 * result + getUnchecked(i).hashCode();
       }
       return result;
     }
@@ -281,7 +301,7 @@ public abstract class ListT extends BaseVal implements Lister {
     }
 
     private final class ArrayListIteratorT extends BaseVal implements IteratorT {
-      private long index;
+      private int index;
 
       @Override
       public Val hasNext() {
@@ -291,7 +311,7 @@ public abstract class ListT extends BaseVal implements Lister {
       @Override
       public Val next() {
         if (index < size) {
-          return get(intOf(index++));
+          return getUnchecked(index++);
         }
         return noMoreElements();
       }
@@ -355,11 +375,11 @@ public abstract class ListT extends BaseVal implements Lister {
       if (!(other instanceof Lister otherList)) {
         return noSuchOverload(this, "add", other);
       }
-      int otherSize = (int) otherList.size().intValue();
+      int otherSize = otherList.nativeSize();
       Object[] newArray = Arrays.copyOf(array, array.length + otherSize);
       Class<?> componentType = array.getClass().getComponentType();
       for (int i = 0; i < otherSize; i++) {
-        Val otherValue = otherList.get(intOf(i));
+        Val otherValue = elementAt(otherList, i);
         newArray[array.length + i] =
             componentType.isInstance(otherValue)
                 ? otherValue
@@ -377,7 +397,12 @@ public abstract class ListT extends BaseVal implements Lister {
         return e.error;
       }
 
-      return adapter.nativeToValue(array[i]);
+      return getUnchecked(i);
+    }
+
+    @Override
+    Val getUnchecked(int index) {
+      return adapter.nativeToValue(array[index]);
     }
 
     @Override
@@ -411,13 +436,13 @@ public abstract class ListT extends BaseVal implements Lister {
       if (!(other instanceof Lister otherList)) {
         return noSuchOverload(this, "add", other);
       }
-      int otherSize = (int) otherList.size().intValue();
+      int otherSize = otherList.nativeSize();
       Object[] newArray = new Object[list.size() + otherSize];
       for (int i = 0; i < list.size(); i++) {
         newArray[i] = list.get(i);
       }
       for (int i = 0; i < otherSize; i++) {
-        newArray[list.size() + i] = otherList.get(intOf(i));
+        newArray[list.size() + i] = elementAt(otherList, i);
       }
       return new GenericListT(adapter, newArray);
     }
@@ -431,7 +456,12 @@ public abstract class ListT extends BaseVal implements Lister {
         return e.error;
       }
 
-      return adapter.nativeToValue(list.get(i));
+      return getUnchecked(i);
+    }
+
+    @Override
+    Val getUnchecked(int index) {
+      return adapter.nativeToValue(list.get(index));
     }
   }
 
@@ -457,16 +487,16 @@ public abstract class ListT extends BaseVal implements Lister {
       if (!(other instanceof Lister otherLister)) {
         return noSuchOverload(this, "add", other);
       }
-      if (other instanceof ValListT) {
-        Val[] otherArray = ((ValListT) other).array;
+      if (other instanceof ValListT valListT) {
+        Val[] otherArray = valListT.array;
         Val[] newArray = Arrays.copyOf(array, array.length + otherArray.length);
         System.arraycopy(otherArray, 0, newArray, array.length, otherArray.length);
         return new ValListT(adapter, newArray);
       } else {
-        int otherSIze = (int) otherLister.size().intValue();
-        Val[] newArray = Arrays.copyOf(array, array.length + otherSIze);
-        for (int i = 0; i < otherSIze; i++) {
-          newArray[array.length + i] = otherLister.get(intOf(i));
+        int otherSize = otherLister.nativeSize();
+        Val[] newArray = Arrays.copyOf(array, array.length + otherSize);
+        for (int i = 0; i < otherSize; i++) {
+          newArray[array.length + i] = elementAt(otherLister, i);
         }
         return new ValListT(adapter, newArray);
       }
@@ -480,7 +510,12 @@ public abstract class ListT extends BaseVal implements Lister {
       } catch (InvalidIndexException e) {
         return e.error;
       }
-      return array[i];
+      return getUnchecked(i);
+    }
+
+    @Override
+    Val getUnchecked(int index) {
+      return array[index];
     }
 
     @Override
@@ -507,13 +542,13 @@ public abstract class ListT extends BaseVal implements Lister {
         return noSuchOverload(this, "add", other);
       }
       int thisSize = (int) size;
-      int otherSize = (int) otherLister.size().intValue();
+      int otherSize = otherLister.nativeSize();
       Val[] newArray = new Val[thisSize + otherSize];
       for (int i = 0; i < thisSize; i++) {
-        newArray[i] = get(intOf(i));
+        newArray[i] = getUnchecked(i);
       }
       for (int i = 0; i < otherSize; i++) {
-        newArray[thisSize + i] = otherLister.get(intOf(i));
+        newArray[thisSize + i] = elementAt(otherLister, i);
       }
       return new ValListT(adapter, newArray);
     }
@@ -540,7 +575,49 @@ public abstract class ListT extends BaseVal implements Lister {
       } catch (InvalidIndexException e) {
         return e.error;
       }
-      return intOf(array[i]);
+      return getUnchecked(i);
+    }
+
+    @Override
+    Val getUnchecked(int index) {
+      return intOf(array[index]);
+    }
+
+    @Override
+    public Val contains(Val value) {
+      if (value instanceof IntT intValue) {
+        long needle = intValue.intValue();
+        if (needle >= Integer.MIN_VALUE && needle <= Integer.MAX_VALUE) {
+          int intNeedle = (int) needle;
+          for (int element : array) {
+            if (element == intNeedle) {
+              return True;
+            }
+          }
+          return False;
+        }
+        return False;
+      }
+      return super.contains(value);
+    }
+
+    @Override
+    public Val equal(Val other) {
+      if (other instanceof IntArrayListT intList) {
+        return boolOf(Arrays.equals(array, intList.array));
+      }
+      if (other instanceof LongArrayListT longList) {
+        if (array.length != longList.array.length) {
+          return False;
+        }
+        for (int i = 0; i < array.length; i++) {
+          if (array[i] != longList.array[i]) {
+            return False;
+          }
+        }
+        return True;
+      }
+      return super.equal(other);
     }
   }
 
@@ -565,7 +642,37 @@ public abstract class ListT extends BaseVal implements Lister {
       } catch (InvalidIndexException e) {
         return e.error;
       }
-      return intOf(array[i]);
+      return getUnchecked(i);
+    }
+
+    @Override
+    Val getUnchecked(int index) {
+      return intOf(array[index]);
+    }
+
+    @Override
+    public Val contains(Val value) {
+      if (value instanceof IntT intValue) {
+        long needle = intValue.intValue();
+        for (long element : array) {
+          if (element == needle) {
+            return True;
+          }
+        }
+        return False;
+      }
+      return super.contains(value);
+    }
+
+    @Override
+    public Val equal(Val other) {
+      if (other instanceof LongArrayListT longList) {
+        return boolOf(Arrays.equals(array, longList.array));
+      }
+      if (other instanceof IntArrayListT intList) {
+        return intList.equal(this);
+      }
+      return super.equal(other);
     }
   }
 
@@ -590,7 +697,42 @@ public abstract class ListT extends BaseVal implements Lister {
       } catch (InvalidIndexException e) {
         return e.error;
       }
-      return doubleOf(array[i]);
+      return getUnchecked(i);
+    }
+
+    @Override
+    Val getUnchecked(int index) {
+      return doubleOf(array[index]);
+    }
+
+    @Override
+    public Val contains(Val value) {
+      if (value instanceof DoubleT doubleValue) {
+        double needle = doubleValue.doubleValue();
+        for (double element : array) {
+          if (element == needle) {
+            return True;
+          }
+        }
+        return False;
+      }
+      return super.contains(value);
+    }
+
+    @Override
+    public Val equal(Val other) {
+      if (other instanceof DoubleArrayListT doubleList) {
+        if (array.length != doubleList.array.length) {
+          return False;
+        }
+        for (int i = 0; i < array.length; i++) {
+          if (array[i] != doubleList.array[i]) {
+            return False;
+          }
+        }
+        return True;
+      }
+      return super.equal(other);
     }
   }
 

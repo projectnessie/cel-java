@@ -32,6 +32,7 @@ import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
 import org.projectnessie.cel.common.types.ObjectT;
 import org.projectnessie.cel.common.types.StringT;
+import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
@@ -63,6 +64,10 @@ public final class PbObjectT extends ObjectT {
       return noSuchOverload(this, "isSet", field);
     }
     String protoFieldStr = (String) field.value();
+    FieldType fieldType = fieldType(protoFieldStr, true);
+    if (fieldType != null) {
+      return boolOf(fieldType.isSet.isSet(value));
+    }
     FieldDescription fd = fieldDescription(protoFieldStr);
     if (fd == null) {
       return noSuchField(protoFieldStr);
@@ -76,6 +81,10 @@ public final class PbObjectT extends ObjectT {
       return noSuchOverload(this, "get", index);
     }
     String protoFieldStr = (String) index.value();
+    FieldType fieldType = fieldType(protoFieldStr, false);
+    if (fieldType != null) {
+      return adapter.nativeToValue(fieldType.getFrom.getFrom(value));
+    }
     FieldDescription fd = fieldDescription(protoFieldStr);
     if (fd == null) {
       return noSuchField(protoFieldStr);
@@ -219,6 +228,13 @@ public final class PbObjectT extends ObjectT {
       return field;
     }
     return ((ProtoTypeRegistry) adapter).findFieldDescription(typeDesc().name(), fieldName);
+  }
+
+  private FieldType fieldType(String fieldName, boolean presenceTest) {
+    if (adapter instanceof ProtoTypeRegistry registry) {
+      return registry.findFieldTypeForObjectAccess(typeDesc().name(), fieldName, presenceTest);
+    }
+    return null;
   }
 
   @SuppressWarnings("unchecked")

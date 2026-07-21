@@ -232,6 +232,7 @@ public class StringTest {
     assertThat(stringOf("").size()).isSameAs(IntZero);
     assertThat(stringOf("hello world").size()).isEqualTo(intOf(11));
     assertThat(stringOf("\u65e5\u672c\u8a9e").size()).isEqualTo(intOf(3));
+    assertThat(stringOf("\u65e5\u672c\u8a9e").nativeSize()).isEqualTo(3);
   }
 
   @Test

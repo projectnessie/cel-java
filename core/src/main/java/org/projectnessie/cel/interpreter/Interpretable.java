@@ -39,7 +39,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import org.projectnessie.cel.common.operators.Operator;
-import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.IterableT;
 import org.projectnessie.cel.common.types.IteratorT;
 import org.projectnessie.cel.common.types.ListT;
@@ -166,8 +165,8 @@ public interface Interpretable {
     /** Eval implements the Interpretable interface method. */
     @Override
     public Val eval(Activation ctx) {
-      if (ctx instanceof PartialActivation) {
-        for (AttributePattern pattern : ((PartialActivation) ctx).unknownAttributePatterns()) {
+      if (ctx instanceof PartialActivation partialActivation) {
+        for (AttributePattern pattern : partialActivation.unknownAttributePatterns()) {
           if (pattern.variableMatches(name)) {
             return unknownOf(id);
           }
@@ -231,11 +230,11 @@ public interface Interpretable {
       }
 
       Val obj = op.eval(ctx);
-      if (obj instanceof FieldTester) {
-        return ((FieldTester) obj).isSet(field);
+      if (obj instanceof FieldTester tester) {
+        return tester.isSet(field);
       }
-      if (obj instanceof Container) {
-        return ((Container) obj).contains(field);
+      if (obj instanceof Container container) {
+        return container.contains(field);
       }
       return valOrErr(obj, "invalid type for field selection.");
     }
@@ -1481,17 +1480,19 @@ public interface Interpretable {
       }
       IteratorT it = ((IterableT) foldRange).iterator();
       long index = 0L;
+      var isLister = foldRange instanceof Lister;
+      var mapper = (foldRange instanceof Mapper m) ? m : null;
       while (it.hasNext() == True) {
         // Modify the iter var in the fold activation.
         Val next = it.next();
         Activation loopCtx = iterCtx;
         if (iterCtx2 != null) {
-          if (foldRange instanceof Lister) {
+          if (isLister) {
             iterCtx.val = intOf(index);
             iterCtx2.val = next;
-          } else if (foldRange instanceof Mapper) {
+          } else if (mapper != null) {
             iterCtx.val = next;
-            iterCtx2.val = ((Mapper) foldRange).get(next);
+            iterCtx2.val = mapper.get(next);
           } else {
             return valOrErr(
                 foldRange, "got '%s', expected list or map type", foldRange.getClass().getName());
@@ -1528,11 +1529,16 @@ public interface Interpretable {
       if (!foldRange.type().hasTrait(Trait.IterableType)) {
         return Cost.Unknown;
       }
-      long rangeCnt = 0L;
-      IteratorT it = ((IterableT) foldRange).iterator();
-      while (it.hasNext() == True) {
-        it.next();
-        rangeCnt++;
+      long rangeCnt;
+      if (foldRange instanceof Sizer sizer) {
+        rangeCnt = sizer.nativeSize();
+      } else {
+        rangeCnt = 0L;
+        IteratorT it = ((IterableT) foldRange).iterator();
+        while (it.hasNext() == True) {
+          it.next();
+          rangeCnt++;
+        }
       }
       Cost a = estimateCost(accu);
       Cost c = estimateCost(cond);
@@ -1620,16 +1626,18 @@ public interface Interpretable {
       List<Val> values = new ArrayList<>(listCapacity(foldRange));
       IteratorT it = ((IterableT) foldRange).iterator();
       long index = 0L;
+      var isLister = foldRange instanceof Lister;
+      var mapper = (foldRange instanceof Mapper m) ? m : null;
       while (it.hasNext() == True) {
         Val next = it.next();
         Activation loopCtx = iterCtx;
         if (iterCtx2 != null) {
-          if (foldRange instanceof Lister) {
+          if (isLister) {
             iterCtx.val = intOf(index);
             iterCtx2.val = next;
-          } else if (foldRange instanceof Mapper) {
+          } else if (mapper != null) {
             iterCtx.val = next;
-            iterCtx2.val = ((Mapper) foldRange).get(next);
+            iterCtx2.val = mapper.get(next);
           } else {
             return valOrErr(
                 foldRange, "got '%s', expected list or map type", foldRange.getClass().getName());
@@ -1661,7 +1669,7 @@ public interface Interpretable {
 
     private int listCapacity(Val foldRange) {
       if (foldRange.type().hasTrait(Trait.SizerType)) {
-        long size = ((Sizer) foldRange).size().intValue();
+        long size = ((Sizer) foldRange).nativeSize();
         if (size > 0 && size <= Integer.MAX_VALUE) {
           return (int) size;
         }
@@ -1680,11 +1688,16 @@ public interface Interpretable {
       if (!foldRange.type().hasTrait(Trait.IterableType)) {
         return Cost.Unknown;
       }
-      long rangeCnt = 0L;
-      IteratorT it = ((IterableT) foldRange).iterator();
-      while (it.hasNext() == True) {
-        it.next();
-        rangeCnt++;
+      long rangeCnt;
+      if (foldRange instanceof Sizer sizer) {
+        rangeCnt = sizer.nativeSize();
+      } else {
+        rangeCnt = 0L;
+        IteratorT it = ((IterableT) foldRange).iterator();
+        while (it.hasNext() == True) {
+          it.next();
+          rangeCnt++;
+        }
       }
       return range.add(result.multiply(rangeCnt));
     }
@@ -1755,19 +1768,21 @@ public interface Interpretable {
       Map<Val, Val> values = new HashMap<>(mapCapacity(foldRange));
       IteratorT it = ((IterableT) foldRange).iterator();
       long index = 0L;
+      var isLister = foldRange instanceof Lister;
+      var mapper = (foldRange instanceof Mapper m) ? m : null;
       while (it.hasNext() == True) {
         Val next = it.next();
         Val key;
         Activation loopCtx = iterCtx;
         if (iterCtx2 != null) {
-          if (foldRange instanceof Lister) {
+          if (isLister) {
             key = intOf(index);
             iterCtx.val = key;
             iterCtx2.val = next;
-          } else if (foldRange instanceof Mapper) {
+          } else if (mapper != null) {
             key = next;
             iterCtx.val = key;
-            iterCtx2.val = ((Mapper) foldRange).get(next);
+            iterCtx2.val = mapper.get(next);
           } else {
             return valOrErr(
                 foldRange, "got '%s', expected list or map type", foldRange.getClass().getName());
@@ -1800,7 +1815,7 @@ public interface Interpretable {
 
     private int mapCapacity(Val foldRange) {
       if (foldRange.type().hasTrait(Trait.SizerType)) {
-        long size = ((Sizer) foldRange).size().intValue();
+        long size = ((Sizer) foldRange).nativeSize();
         if (size > 0 && size <= Integer.MAX_VALUE) {
           long capacity = size * 4 / 3 + 1;
           return capacity <= Integer.MAX_VALUE ? (int) capacity : Integer.MAX_VALUE;
@@ -1820,11 +1835,16 @@ public interface Interpretable {
       if (!foldRange.type().hasTrait(Trait.IterableType)) {
         return Cost.Unknown;
       }
-      long rangeCnt = 0L;
-      IteratorT it = ((IterableT) foldRange).iterator();
-      while (it.hasNext() == True) {
-        it.next();
-        rangeCnt++;
+      long rangeCnt;
+      if (foldRange instanceof Sizer sizer) {
+        rangeCnt = sizer.nativeSize();
+      } else {
+        rangeCnt = 0L;
+        IteratorT it = ((IterableT) foldRange).iterator();
+        while (it.hasNext() == True) {
+          it.next();
+          rangeCnt++;
+        }
       }
       return range.add(result.multiply(rangeCnt));
     }
@@ -1876,6 +1896,12 @@ public interface Interpretable {
     @Override
     public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
       Val val = arg.eval(ctx);
+      if (isUnknownOrError(val)) {
+        return val;
+      }
+      if (valueSet.isEmpty()) {
+        return False;
+      }
       if (!val.type().typeName().equals(argTypeName)) {
         return noSuchOverload(null, Operator.In.id, val);
       }
@@ -2485,18 +2511,20 @@ public interface Interpretable {
         iterCtx2.name = iterVar2;
       }
       IteratorT it = ((IterableT) foldRange).iterator();
+      var isLister = foldRange instanceof Lister;
+      var mapper = (foldRange instanceof Mapper m) ? m : null;
       long index = 0L;
       while (it.hasNext() == True) {
         // Modify the iter var in the fold activation.
         Val next = it.next();
         Activation loopCtx = iterCtx;
         if (iterCtx2 != null) {
-          if (foldRange instanceof Lister) {
+          if (isLister) {
             iterCtx.val = intOf(index);
             iterCtx2.val = next;
-          } else if (foldRange instanceof Mapper) {
+          } else if (mapper != null) {
             iterCtx.val = next;
-            iterCtx2.val = ((Mapper) foldRange).get(next);
+            iterCtx2.val = mapper.get(next);
           } else {
             return valOrErr(
                 foldRange, "got '%s', expected list or map type", foldRange.getClass().getName());
@@ -2530,11 +2558,16 @@ public interface Interpretable {
       if (!foldRange.type().hasTrait(Trait.IterableType)) {
         return Cost.Unknown;
       }
-      long rangeCnt = 0L;
-      IteratorT it = ((IterableT) foldRange).iterator();
-      while (it.hasNext() == True) {
-        it.next();
-        rangeCnt++;
+      long rangeCnt;
+      if (foldRange instanceof Sizer sizer) {
+        rangeCnt = sizer.nativeSize();
+      } else {
+        rangeCnt = 0L;
+        IteratorT it = ((IterableT) foldRange).iterator();
+        while (it.hasNext() == True) {
+          it.next();
+          rangeCnt++;
+        }
       }
 
       Cost a = estimateCost(accu);
