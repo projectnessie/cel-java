@@ -384,6 +384,7 @@ public class StringsLib implements Library {
                 null,
                 null,
                 Guards.callInStrStrOutInt(StringsLib::indexOf),
+                Guards.callInStrStrIntOutIntTernary(StringsLib::indexOfOffset),
                 values ->
                     values.length == 3
                         ? Guards.callInStrStrIntOutInt(StringsLib::indexOfOffset).invoke(values)
@@ -399,6 +400,7 @@ public class StringsLib implements Library {
                 null,
                 null,
                 Guards.callInStrStrOutInt(StringsLib::lastIndexOf),
+                Guards.callInStrStrIntOutIntTernary(StringsLib::lastIndexOfOffset),
                 values ->
                     values.length == 3
                         ? Guards.callInStrStrIntOutInt(StringsLib::lastIndexOfOffset).invoke(values)
@@ -409,6 +411,8 @@ public class StringsLib implements Library {
                 null,
                 null,
                 null,
+                Guards.callInStrStrStrOutStrTernary(StringsLib::replace),
+                Guards.callInStrStrStrIntOutStrQuaternary(StringsLib::replaceN),
                 values -> {
                   if (values.length == 3) {
                     return Guards.callInStrStrStrOutStr(StringsLib::replace).invoke(values);
@@ -424,6 +428,7 @@ public class StringsLib implements Library {
                 null,
                 null,
                 Guards.callInStrStrOutStrArr(StringsLib::split),
+                Guards.callInStrStrIntOutStrArrTernary(StringsLib::splitN),
                 values ->
                     values.length == 3
                         ? Guards.callInStrStrIntOutStrArr(StringsLib::splitN).invoke(values)
@@ -433,6 +438,7 @@ public class StringsLib implements Library {
                 null,
                 null,
                 Guards.callInStrIntOutStr(StringsLib::substr),
+                Guards.callInStrIntIntOutStrTernary(StringsLib::substrRange),
                 values ->
                     values.length == 3
                         ? Guards.callInStrIntIntOutStr(StringsLib::substrRange).invoke(values)
