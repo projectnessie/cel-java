@@ -137,15 +137,15 @@ public final class OptionalT extends BaseVal implements FieldTester, Indexer, Re
     if (!present) {
       return False;
     }
-    if (value instanceof OptionalT) {
-      return ((OptionalT) value).isSet(field);
+    if (value instanceof OptionalT optionalT) {
+      return optionalT.isSet(field);
     }
-    if (value instanceof FieldTester) {
-      Val present = ((FieldTester) value).isSet(field);
+    if (value instanceof FieldTester fieldTester) {
+      Val present = fieldTester.isSet(field);
       return isMissingAccess(present) ? False : present;
     }
-    if (value instanceof Container) {
-      return ((Container) value).contains(field);
+    if (value instanceof Container container) {
+      return container.contains(field);
     }
     return noSuchOverload(value, "has", field);
   }
@@ -201,19 +201,18 @@ public final class OptionalT extends BaseVal implements FieldTester, Indexer, Re
           value.value() instanceof ZonedDateTime timestamp
               && timestamp.toInstant().equals(Instant.EPOCH);
       case String, Bytes, List, Map ->
-          value.type().hasTrait(Trait.SizerType) && ((Sizer) value).size().equal(IntZero) == True;
-      case Object ->
-          value.value() instanceof Message && ((Message) value.value()).getAllFields().isEmpty();
+          value instanceof Sizer sizer && sizer.size().equal(IntZero) == True;
+      case Object -> value.value() instanceof Message message && message.getAllFields().isEmpty();
       default -> false;
     };
   }
 
   private static Val optionalAccess(Val operand, Val index) {
-    if (operand instanceof OptionalT) {
-      return ((OptionalT) operand).get(index);
+    if (operand instanceof OptionalT optionalT) {
+      return optionalT.get(index);
     }
-    if (operand instanceof FieldTester && index.type().typeEnum() == TypeEnum.String) {
-      Val present = ((FieldTester) operand).isSet(index);
+    if (operand instanceof FieldTester fieldTester && index.type().typeEnum() == TypeEnum.String) {
+      Val present = fieldTester.isSet(index);
       if (present == False) {
         return none();
       }
@@ -221,12 +220,12 @@ public final class OptionalT extends BaseVal implements FieldTester, Indexer, Re
         return isMissingAccess(present) ? none() : present;
       }
     }
-    if (operand instanceof Mapper) {
-      Val value = ((Mapper) operand).find(index);
+    if (operand instanceof Mapper mapper) {
+      Val value = mapper.find(index);
       return value == null ? none() : of(value);
     }
-    if (operand instanceof Indexer) {
-      Val value = ((Indexer) operand).get(index);
+    if (operand instanceof Indexer indexer) {
+      Val value = indexer.get(index);
       if (isMissingAccess(value)) {
         return none();
       }

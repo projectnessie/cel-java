@@ -36,6 +36,7 @@ import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
 import com.google.protobuf.Value;
 import java.math.BigInteger;
+import java.util.stream.IntStream;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.Overflow.OverflowException;
 import org.projectnessie.cel.common.types.ref.BaseVal;
@@ -65,16 +66,19 @@ public final class UintT extends BaseVal
           Trait.MultiplierType,
           Trait.SubtractorType);
 
+  private static final UintT[] CONST =
+      IntStream.rangeClosed(0, 10).mapToObj(UintT::new).toArray(UintT[]::new);
+
   /** Uint constants */
-  public static final UintT UintZero = new UintT(0);
+  public static final UintT UintZero = CONST[0];
 
   public static UintT uintOf(ULong i) {
     return uintOf(i.longValue());
   }
 
   public static UintT uintOf(long i) {
-    if (i == 0L) {
-      return UintZero;
+    if (i >= 0L && i <= 10) {
+      return CONST[(int) i];
     }
     return new UintT(i);
   }
@@ -326,17 +330,16 @@ public final class UintT extends BaseVal
     if (this == o) {
       return true;
     }
-    if (!(o instanceof Val)) {
+    if (!(o instanceof Val val)) {
       return false;
     }
     // Defer to CEL's equal functionality to allow heterogeneous numeric map keys
-    return equal((Val) o).booleanValue();
+    return equal(val).booleanValue();
   }
 
   @Override
   public int hashCode() {
-    // Used to allow heterogeneous numeric map keys
-    return (int) i;
+    return Types.unsignedNumericHashCode(i);
   }
 
   public String toString() {
