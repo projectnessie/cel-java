@@ -107,7 +107,7 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
       this.map = map;
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"removal", "unchecked"})
     @Override
     public <T> T convertToNative(Class<T> typeDesc) {
       if (Map.class.isAssignableFrom(typeDesc) || typeDesc == Object.class) {
@@ -145,7 +145,7 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
             if (k.type().typeEnum() != TypeEnum.String) {
               throw new IllegalArgumentException("bad key type");
             }
-            struct.putFields(k.value().toString(), v.convertToNative(Value.class));
+            struct.putFields(k.value().toString(), adapter.valueToNative(v, Value.class));
           });
       return struct.build();
     }

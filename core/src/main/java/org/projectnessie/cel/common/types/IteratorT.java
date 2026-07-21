@@ -67,6 +67,7 @@ public interface IteratorT extends Val {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public <T> T convertToNative(Class<T> typeDesc) {
       throw new UnsupportedOperationException();
     }

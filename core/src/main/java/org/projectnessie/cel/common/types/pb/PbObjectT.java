@@ -80,7 +80,7 @@ public final class PbObjectT extends ObjectT {
     if (fd == null) {
       return noSuchField(protoFieldStr);
     }
-    return nativeToValue(fd.getField(value, adapter));
+    return adapter.nativeToValue(fd.getField(value, adapter));
   }
 
   @Override
@@ -98,7 +98,7 @@ public final class PbObjectT extends ObjectT {
     return boolOf(message().equals(otherObject.message()));
   }
 
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"removal", "unchecked"})
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
     if (typeDesc.isAssignableFrom(value.getClass())) {
@@ -127,7 +127,7 @@ public final class PbObjectT extends ObjectT {
         return (T) Value.newBuilder().setStringValue(fieldMaskJsonValue((FieldMask) value)).build();
       }
       if (value instanceof Timestamp) {
-        return adapter.nativeToValue(value).convertToNative(typeDesc);
+        return adapter.valueToNative(adapter.nativeToValue(value), typeDesc);
       }
     }
     if (typeDesc.isAssignableFrom(this.typeDesc.reflectType()) || typeDesc == Object.class) {

@@ -405,7 +405,7 @@ class SimpleConformanceTest {
 
       EvalResult res = program.eval(args);
       if (!isError(res.getVal())) {
-        return refValueToExprValue(res.getVal());
+        return refValueToExprValue(env.getTypeAdapter(), res.getVal());
       }
 
       Err err = (Err) res.getVal();
@@ -672,23 +672,25 @@ class SimpleConformanceTest {
     }
   }
 
-  private static ExprValue refValueToExprValue(Val res) {
+  private static ExprValue refValueToExprValue(TypeAdapter adapter, Val res) {
     if (isUnknown(res)) {
       return ExprValue.newBuilder()
           .setUnknown(UnknownSet.newBuilder().addExprs(res.intValue()))
           .build();
     }
-    return ExprValue.newBuilder().setValue(refValueToValue(res)).build();
+    return ExprValue.newBuilder().setValue(refValueToValue(adapter, res)).build();
   }
 
-  private static Value refValueToValue(Val res) {
+  private static Value refValueToValue(TypeAdapter adapter, Val res) {
     switch (res.type().typeEnum()) {
       case Bool:
         return Value.newBuilder().setBoolValue(res.booleanValue()).build();
       case Bytes:
-        return Value.newBuilder().setBytesValue(res.convertToNative(ByteString.class)).build();
+        return Value.newBuilder()
+            .setBytesValue(adapter.valueToNative(res, ByteString.class))
+            .build();
       case Double:
-        return Value.newBuilder().setDoubleValue(res.convertToNative(Double.class)).build();
+        return Value.newBuilder().setDoubleValue(adapter.valueToDouble(res)).build();
       case Int:
         return Value.newBuilder().setInt64Value(res.intValue()).build();
       case Null:
@@ -701,17 +703,17 @@ class SimpleConformanceTest {
         return Value.newBuilder().setUint64Value(res.intValue()).build();
       case Duration:
         return Value.newBuilder()
-            .setObjectValue(Any.pack(res.convertToNative(Duration.class)))
+            .setObjectValue(Any.pack(adapter.valueToNative(res, Duration.class)))
             .build();
       case Timestamp:
         return Value.newBuilder()
-            .setObjectValue(Any.pack(res.convertToNative(Timestamp.class)))
+            .setObjectValue(Any.pack(adapter.valueToNative(res, Timestamp.class)))
             .build();
       case List:
         Lister lister = (Lister) res;
         ListValue.Builder elements = ListValue.newBuilder();
         for (IteratorT i = lister.iterator(); i.hasNext() == True; ) {
-          elements.addValues(refValueToValue(i.next()));
+          elements.addValues(refValueToValue(adapter, i.next()));
         }
         return Value.newBuilder().setListValue(elements).build();
       case Map:
@@ -721,8 +723,8 @@ class SimpleConformanceTest {
           Val key = i.next();
           entries
               .addEntriesBuilder()
-              .setKey(refValueToValue(key))
-              .setValue(refValueToValue(mapper.get(key)));
+              .setKey(refValueToValue(adapter, key))
+              .setValue(refValueToValue(adapter, mapper.get(key)));
         }
         return Value.newBuilder().setMapValue(entries).build();
       case Object:

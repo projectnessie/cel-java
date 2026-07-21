@@ -158,7 +158,7 @@ public final class DurationT extends BaseVal
   }
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"removal", "unchecked"})
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
     if (Duration.class.isAssignableFrom(typeDesc)) {
