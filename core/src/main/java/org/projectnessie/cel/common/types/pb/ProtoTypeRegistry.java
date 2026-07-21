@@ -16,6 +16,7 @@
 package org.projectnessie.cel.common.types.pb;
 
 import static org.projectnessie.cel.common.types.BoolT.BoolType;
+import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.BytesT.BytesType;
 import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
 import static org.projectnessie.cel.common.types.DurationT.DurationType;
@@ -45,6 +46,7 @@ import static org.projectnessie.cel.common.types.ref.TypeAdapterSupport.maybeNat
 import com.google.api.expr.v1alpha1.Type;
 import com.google.protobuf.Any;
 import com.google.protobuf.BoolValue;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.BytesValue;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumDescriptor;
@@ -81,8 +83,12 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import org.projectnessie.cel.common.ULong;
+import org.projectnessie.cel.common.types.IteratorT;
+import org.projectnessie.cel.common.types.MapT;
 import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.TypeT;
+import org.projectnessie.cel.common.types.ref.FieldGetter;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
@@ -214,11 +220,18 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     if (field == null) {
       return null;
     }
-    FieldDescription resolvedField = field;
-    return new FieldType(
-        resolvedField.checkedType(),
-        resolvedField::hasField,
-        target -> resolvedField.getField(target, this));
+    FieldGetter getter = target -> field.getField(target, this);
+    PbTypeDescription type = pbdb.describeType(messageType);
+    FieldGetter generatedGetter = type != null ? GeneratedFieldAccessor.create(type, field) : null;
+    if (generatedGetter != null) {
+      Class<?> generatedType = type.reflectType();
+      getter =
+          target ->
+              generatedType.isInstance(target)
+                  ? generatedGetter.getFrom(target)
+                  : field.getField(target, this);
+    }
+    return new FieldType(field.checkedType(), field::hasField, getter);
   }
 
   FieldDescription findFieldDescription(String messageType, String fieldName) {
@@ -229,9 +242,6 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     FieldDescription field = msgType.fieldByName(fieldName);
     if (field == null) {
       field = pbdb.describeExtension(messageType, fieldName);
-    }
-    if (field == null) {
-      return null;
     }
     return field;
   }
@@ -287,9 +297,6 @@ public final class ProtoTypeRegistry implements TypeRegistry {
         return noSuchField(name);
       }
 
-      // TODO resolve inefficiency for maps: first converted from a MapT to a native Java map and
-      //  then to a protobuf struct. The intermediate step (the Java map) could be omitted.
-
       FieldDescriptor pbDesc = field.descriptor();
       if (nv.getValue() == org.projectnessie.cel.common.types.NullT.NullValue
           && isNullClearedField(pbDesc)) {
@@ -297,17 +304,22 @@ public final class ProtoTypeRegistry implements TypeRegistry {
       }
 
       try {
-        Object value = toNativeFieldValue(nv.getValue(), field);
-        if (value.getClass().isArray()) {
-          value = Arrays.asList((Object[]) value);
-        }
+        Object value;
+        if (pbDesc.isMapField() && nv.getValue() instanceof MapT map) {
+          value = toProtoMapStructure(field, map);
+        } else {
+          value = toNativeFieldValue(nv.getValue(), field);
+          if (value.getClass().isArray()) {
+            value = Arrays.asList((Object[]) value);
+          }
 
-        if (pbDesc.getJavaType() == JavaType.ENUM) {
-          value = intToProtoEnumValues(field, value);
-        }
+          if (pbDesc.getJavaType() == JavaType.ENUM) {
+            value = intToProtoEnumValues(field, value);
+          }
 
-        if (pbDesc.isMapField()) {
-          value = toProtoMapStructure(pbDesc, value);
+          if (pbDesc.isMapField()) {
+            value = toProtoMapStructure(pbDesc, value);
+          }
         }
 
         builder.setField(pbDesc, value);
@@ -382,6 +394,58 @@ public final class ProtoTypeRegistry implements TypeRegistry {
       case "google.protobuf.UInt64Value" -> UInt64Value.class;
       case "google.protobuf.Value" -> Value.class;
       default -> Message.class;
+    };
+  }
+
+  /** Converts a CEL map directly to protobuf map entries without an intermediate Java map. */
+  private Object toProtoMapStructure(FieldDescription field, MapT value) {
+    FieldDescriptor fieldDesc = field.descriptor();
+    Descriptor entryType = fieldDesc.getMessageType();
+    FieldDescriptor keyType = field.keyType.descriptor();
+    FieldDescriptor valueType = field.valueType.descriptor();
+    WireFormat.FieldType keyFieldType = WireFormat.FieldType.valueOf(keyType.getType().name());
+    WireFormat.FieldType valueFieldType = WireFormat.FieldType.valueOf(valueType.getType().name());
+    List<MapEntry<?, ?>> entries = new ArrayList<>((int) value.size().intValue());
+
+    IteratorT iterator = value.iterator();
+    while (iterator.hasNext() == True) {
+      Val key = iterator.next();
+      Val mapValue = value.find(key);
+      if (mapValue == NullT.NullValue && isNullPrunedMessageField(valueType)) {
+        continue;
+      }
+
+      Object nativeKey = toNativeMapEntryValue(key, keyType);
+      Object nativeValue = toNativeMapEntryValue(mapValue, valueType);
+      entries.add(
+          MapEntry.newDefaultInstance(
+              entryType, keyFieldType, nativeKey, valueFieldType, nativeValue));
+    }
+    return entries;
+  }
+
+  private static Object toNativeMapEntryValue(Val value, FieldDescriptor field) {
+    return switch (field.getType()) {
+      case DOUBLE -> value.convertToNative(Double.class);
+      case FLOAT -> value.convertToNative(Float.class);
+      case INT64, SINT64, SFIXED64 -> value.convertToNative(Long.class);
+      case UINT64, FIXED64 -> value.convertToNative(ULong.class).longValue();
+      case INT32, SINT32, SFIXED32 -> value.convertToNative(Integer.class);
+      case UINT32, FIXED32 -> value.convertToNative(ULong.class).intValue();
+      case BOOL -> value.convertToNative(Boolean.class);
+      case STRING -> value.convertToNative(String.class);
+      case BYTES -> value.convertToNative(ByteString.class);
+      case ENUM -> {
+        if (value == NullT.NullValue) {
+          if (field.getEnumType().getFullName().equals("google.protobuf.NullValue")) {
+            yield 0;
+          }
+          throw new IllegalArgumentException("null is only valid for google.protobuf.NullValue");
+        }
+        yield value.convertToNative(Integer.class);
+      }
+      case MESSAGE -> value.convertToNative(messageNativeType(field));
+      case GROUP -> throw new IllegalArgumentException("protobuf maps cannot contain group values");
     };
   }
 

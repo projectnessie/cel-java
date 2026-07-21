@@ -50,11 +50,12 @@ final class JacksonObjectT extends ObjectT {
     }
     String fieldName = (String) field.value();
 
-    if (!typeDesc().hasProperty(fieldName)) {
+    JacksonFieldType fieldType = typeDesc().fieldType(fieldName);
+    if (fieldType == null) {
       return noSuchField(fieldName);
     }
 
-    Object value = typeDesc().fromObject(value(), fieldName);
+    Object value = fieldType.getFrom.getFrom(value());
 
     return boolOf(value != null);
   }
@@ -66,11 +67,12 @@ final class JacksonObjectT extends ObjectT {
     }
     String fieldName = (String) index.value();
 
-    if (!typeDesc().hasProperty(fieldName)) {
+    JacksonFieldType fieldType = typeDesc().fieldType(fieldName);
+    if (fieldType == null) {
       return noSuchField(fieldName);
     }
 
-    Object v = typeDesc().fromObject(value(), fieldName);
+    Object v = fieldType.getFrom.getFrom(value());
 
     return registry().nativeToValue(v);
   }

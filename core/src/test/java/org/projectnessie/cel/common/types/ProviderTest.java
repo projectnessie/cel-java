@@ -60,6 +60,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
@@ -164,7 +165,7 @@ public class ProviderTest {
     assertThat(srcInfo)
         .extracting(
             SourceInfo::getLocation, SourceInfo::getLineOffsetsList, SourceInfo::getPositionsMap)
-        .containsExactly("TestTypeRegistryNewValue", asList(0, 2), mapOf(1L, 2L, 3L, 4L));
+        .containsExactly("TestTypeRegistryNewValue", asList(0, 2), mapOf(1L, 2, 3L, 4));
   }
 
   @Test
@@ -298,6 +299,47 @@ public class ProviderTest {
   }
 
   @Test
+  void typeRegistryNewValue_ConvertsMapEntriesDirectly() {
+    TypeRegistry reg = newRegistry(TestAllTypes.getDefaultInstance());
+    Val nestedMessage =
+        reg.newValue(
+            "cel.expr.conformance.proto3.TestAllTypes.NestedMessage", mapOf("bb", intOf(42)));
+
+    Val exp =
+        reg.newValue(
+            "cel.expr.conformance.proto3.TestAllTypes",
+            mapOf(
+                "map_bool_bytes",
+                new DirectConversionMap(reg, mapOf(true, bytesOf("bytes"))),
+                "map_bool_int32",
+                new DirectConversionMap(reg, mapOf(true, intOf(Integer.MIN_VALUE))),
+                "map_bool_uint32",
+                new DirectConversionMap(reg, mapOf(true, uintOf(0xffff_ffffL))),
+                "map_bool_uint64",
+                new DirectConversionMap(reg, mapOf(true, uintOf(-1L))),
+                "map_bool_float",
+                new DirectConversionMap(reg, mapOf(true, doubleOf(1.25))),
+                "map_bool_enum",
+                new DirectConversionMap(reg, mapOf(true, intOf(TestAllTypes.NestedEnum.BAR_VALUE))),
+                "map_bool_null_value",
+                new DirectConversionMap(reg, mapOf(true, NullValue)),
+                "map_bool_message",
+                new DirectConversionMap(reg, mapOf(true, nestedMessage))));
+
+    assertThat(exp).matches(v -> !Err.isError(v));
+    TestAllTypes value = exp.convertToNative(TestAllTypes.class);
+    assertThat(value.getMapBoolBytesMap()).containsEntry(true, ByteString.copyFromUtf8("bytes"));
+    assertThat(value.getMapBoolInt32Map()).containsEntry(true, Integer.MIN_VALUE);
+    assertThat(value.getMapBoolUint32Map()).containsEntry(true, -1);
+    assertThat(value.getMapBoolUint64Map()).containsEntry(true, -1L);
+    assertThat(value.getMapBoolFloatMap()).containsEntry(true, 1.25F);
+    assertThat(value.getMapBoolEnumMap()).containsEntry(true, TestAllTypes.NestedEnum.BAR);
+    assertThat(value.getMapBoolNullValueMap()).containsEntry(true, NULL_VALUE);
+    assertThat(value.getMapBoolMessageMap())
+        .containsEntry(true, TestAllTypes.NestedMessage.newBuilder().setBb(42).build());
+  }
+
+  @Test
   void typeRegistryNewValue_InvalidNullFieldAssignmentsReturnErrors() {
     TypeRegistry reg = newRegistry(TestAllTypes.getDefaultInstance());
     String typeName = "cel.expr.conformance.proto3.TestAllTypes";
@@ -305,8 +347,65 @@ public class ProviderTest {
     assertThat(reg.newValue(typeName, mapOf("single_bool", NullValue))).matches(Err::isError);
     assertThat(reg.newValue(typeName, mapOf("repeated_int32", NullValue))).matches(Err::isError);
     assertThat(reg.newValue(typeName, mapOf("map_string_string", NullValue))).matches(Err::isError);
+    assertThat(
+            reg.newValue(
+                typeName, mapOf("map_bool_enum", newMaybeWrappedMap(reg, mapOf(true, NullValue)))))
+        .matches(Err::isError);
     assertThat(reg.newValue(typeName, mapOf("list_value", NullValue))).matches(Err::isError);
     assertThat(reg.newValue(typeName, mapOf("single_struct", NullValue))).matches(Err::isError);
+  }
+
+  private static final class DirectConversionMap extends MapT {
+    private final MapT delegate;
+
+    private DirectConversionMap(TypeRegistry registry, Map<?, ?> value) {
+      this.delegate = (MapT) newMaybeWrappedMap(registry, value);
+    }
+
+    @Override
+    public <T> T convertToNative(Class<T> typeDesc) {
+      throw new AssertionError("protobuf map conversion must not materialize a native Java map");
+    }
+
+    @Override
+    public Val convertToType(org.projectnessie.cel.common.types.ref.Type typeValue) {
+      return delegate.convertToType(typeValue);
+    }
+
+    @Override
+    public IteratorT iterator() {
+      return delegate.iterator();
+    }
+
+    @Override
+    public Val equal(Val other) {
+      return delegate.equal(other);
+    }
+
+    @Override
+    public Object value() {
+      return delegate.value();
+    }
+
+    @Override
+    public Val contains(Val value) {
+      return delegate.contains(value);
+    }
+
+    @Override
+    public Val get(Val index) {
+      return delegate.get(index);
+    }
+
+    @Override
+    public Val size() {
+      return delegate.size();
+    }
+
+    @Override
+    public Val find(Val key) {
+      return delegate.find(key);
+    }
   }
 
   @Test
