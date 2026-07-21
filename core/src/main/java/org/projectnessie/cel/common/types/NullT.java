@@ -42,7 +42,7 @@ public final class NullT extends BaseVal {
   private static final Any PbAny = Any.pack(PbValue);
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"removal", "unchecked"})
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
     if (typeDesc == Integer.class || typeDesc == int.class) {

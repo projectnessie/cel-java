@@ -95,6 +95,7 @@ public class TypeT implements Type, Val {
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
   @Override
+  @SuppressWarnings("removal")
   public <T> T convertToNative(Class<T> typeDesc) {
     throw new UnsupportedOperationException("type conversion not supported for 'type'");
   }

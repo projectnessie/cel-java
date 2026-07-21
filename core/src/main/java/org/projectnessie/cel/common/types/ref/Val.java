@@ -21,9 +21,14 @@ package org.projectnessie.cel.common.types.ref;
  */
 public interface Val {
   /**
-   * ConvertToNative converts the Value to a native Go struct according to the reflected type
-   * description, or error if the conversion is not feasible.
+   * Converts the value to a native Java value according to the requested type, or reports an error
+   * if the conversion is not feasible.
+   *
+   * @deprecated Use {@link TypeAdapter#valueToNative(Val, Class)} with the adapter associated with
+   *     the evaluation environment. {@code DefaultTypeAdapter.Instance} can be used for
+   *     context-free built-in values.
    */
+  @Deprecated(forRemoval = true)
   <T> T convertToNative(Class<T> typeDesc);
 
   /**

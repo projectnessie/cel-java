@@ -84,6 +84,7 @@ public final class OptionalT extends BaseVal implements FieldTester, Indexer, Re
   }
 
   @Override
+  @SuppressWarnings("removal")
   public <T> T convertToNative(Class<T> typeDesc) {
     if (typeDesc == Val.class || typeDesc == OptionalT.class) {
       return typeDesc.cast(this);

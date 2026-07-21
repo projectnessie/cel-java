@@ -42,7 +42,7 @@ public final class UnknownT extends BaseVal {
   }
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"removal", "unchecked"})
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
     if (Long.class.isAssignableFrom(typeDesc)

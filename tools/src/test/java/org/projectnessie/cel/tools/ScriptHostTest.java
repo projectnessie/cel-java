@@ -450,7 +450,7 @@ class ScriptHostTest {
                     if (!(keyVal instanceof StringT) || !(defaultVal instanceof StringT)) {
                       return newErr("invalid arguments to getAttribute");
                     }
-                    String key = keyVal.convertToNative(String.class);
+                    String key = keyVal.value().toString();
                     if ("error".equals(key)) {
                       return newErr("forced getAttribute error");
                     }
@@ -485,8 +485,8 @@ class ScriptHostTest {
                     if (!(valueVal instanceof StringT) || !(prefixVal instanceof StringT)) {
                       return newErr("invalid arguments to extractAfter");
                     }
-                    String value = valueVal.convertToNative(String.class);
-                    String prefix = prefixVal.convertToNative(String.class);
+                    String value = valueVal.value().toString();
+                    String prefix = prefixVal.value().toString();
                     if ("error".equals(prefix)) {
                       return newErr("forced extractAfter error");
                     }

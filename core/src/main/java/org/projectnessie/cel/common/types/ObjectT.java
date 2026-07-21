@@ -29,7 +29,7 @@ import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.FieldTester;
 import org.projectnessie.cel.common.types.traits.Indexer;
 
-public abstract class ObjectT extends BaseVal implements FieldTester, Indexer, TypeAdapter {
+public abstract class ObjectT extends BaseVal implements FieldTester, Indexer {
   protected final TypeAdapter adapter;
   protected final Object value;
   protected final TypeDescription typeDesc;
@@ -76,11 +76,6 @@ public abstract class ObjectT extends BaseVal implements FieldTester, Indexer, T
   @Override
   public Object value() {
     return value;
-  }
-
-  @Override
-  public Val nativeToValue(Object value) {
-    return adapter.nativeToValue(value);
   }
 
   @Override
