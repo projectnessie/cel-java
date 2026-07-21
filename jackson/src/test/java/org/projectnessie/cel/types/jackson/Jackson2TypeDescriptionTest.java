@@ -26,6 +26,7 @@ import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.types.jackson.JacksonRegistry.newRegistry;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JavaType;
 import com.google.api.expr.v1alpha1.Type.ListType;
 import com.google.api.expr.v1alpha1.Type.MapType;
@@ -51,6 +52,7 @@ import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.ObjectT;
 import org.projectnessie.cel.common.types.TypeT;
 import org.projectnessie.cel.common.types.pb.Checked;
+import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.types.jackson.types.AnEnum;
 import org.projectnessie.cel.types.jackson.types.CollectionsObject;
@@ -59,6 +61,27 @@ import org.projectnessie.cel.types.jackson.types.EnumWithConstantBody;
 import org.projectnessie.cel.types.jackson.types.InnerType;
 
 class Jackson2TypeDescriptionTest {
+
+  static final class AccessorObject {
+    public final String field;
+
+    @JsonProperty private final String hidden;
+
+    private final String original;
+
+    AccessorObject(String field, String hidden, String original) {
+      this.field = field;
+      this.hidden = hidden;
+      this.original = original;
+    }
+
+    @JsonProperty("renamed")
+    public String getOriginal() {
+      return original;
+    }
+  }
+
+  record AccessorRecord(@JsonProperty("record_name") String name) {}
 
   @Test
   void basics() {
@@ -119,6 +142,32 @@ class Jackson2TypeDescriptionTest {
 
     assertThatThrownBy(() -> reg.enumDescription(InnerType.class))
         .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void cachedPropertyAccessorsPreserveDiscoveredMembers() {
+    JacksonRegistry reg = (JacksonRegistry) newRegistry();
+    AccessorObject value = new AccessorObject("field-value", "hidden-value", "method-value");
+    reg.register(AccessorObject.class);
+
+    FieldType field = reg.findFieldType(AccessorObject.class.getName(), "field");
+    FieldType hidden = reg.findFieldType(AccessorObject.class.getName(), "hidden");
+    FieldType renamed = reg.findFieldType(AccessorObject.class.getName(), "renamed");
+
+    assertThat(field.getFrom.getFrom(value)).isEqualTo("field-value");
+    assertThat(hidden.getFrom.getFrom(value)).isEqualTo("hidden-value");
+    assertThat(renamed.getFrom.getFrom(value)).isEqualTo("method-value");
+    assertThat(renamed.isSet.isSet(value)).isTrue();
+
+    ObjectT object = (ObjectT) reg.nativeToValue(value);
+    assertThat(object.get(stringOf("field"))).isEqualTo(stringOf("field-value"));
+    assertThat(object.get(stringOf("hidden"))).isEqualTo(stringOf("hidden-value"));
+    assertThat(object.get(stringOf("renamed"))).isEqualTo(stringOf("method-value"));
+
+    AccessorRecord record = new AccessorRecord("record-value");
+    reg.register(AccessorRecord.class);
+    FieldType recordName = reg.findFieldType(AccessorRecord.class.getName(), "record_name");
+    assertThat(recordName.getFrom.getFrom(record)).isEqualTo("record-value");
   }
 
   @Test
