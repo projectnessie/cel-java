@@ -70,6 +70,9 @@ import org.projectnessie.cel.interpreter.Coster.Cost;
 import org.projectnessie.cel.interpreter.InterpretableDecorator.EvalObserver;
 import org.projectnessie.cel.interpreter.functions.BinaryOp;
 import org.projectnessie.cel.interpreter.functions.FunctionOp;
+import org.projectnessie.cel.interpreter.functions.QuaternaryOp;
+import org.projectnessie.cel.interpreter.functions.QuinaryOp;
+import org.projectnessie.cel.interpreter.functions.TernaryOp;
 import org.projectnessie.cel.interpreter.functions.UnaryOp;
 
 /**
@@ -764,6 +767,337 @@ public interface Interpretable {
           + lhs
           + ", rhs="
           + rhs
+          + ", function='"
+          + function
+          + '\''
+          + ", overload='"
+          + overload
+          + '\''
+          + ", trait="
+          + trait
+          + ", impl="
+          + impl
+          + '}';
+    }
+  }
+
+  final class EvalTernary extends AbstractEval implements Coster, InterpretableCall {
+    private final String function;
+    private final String overload;
+    private final Interpretable first;
+    private final Interpretable second;
+    private final Interpretable third;
+    private final Trait trait;
+    private final TernaryOp impl;
+
+    EvalTernary(
+        long id,
+        String function,
+        String overload,
+        Interpretable first,
+        Interpretable second,
+        Interpretable third,
+        Trait trait,
+        TernaryOp impl) {
+      super(id);
+      this.function = Objects.requireNonNull(function);
+      this.overload = Objects.requireNonNull(overload);
+      this.first = Objects.requireNonNull(first);
+      this.second = Objects.requireNonNull(second);
+      this.third = Objects.requireNonNull(third);
+      this.trait = trait;
+      this.impl = Objects.requireNonNull(impl);
+    }
+
+    @Override
+    public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
+      Val firstVal = first.eval(ctx);
+      if (isUnknownOrError(firstVal)) {
+        return firstVal;
+      }
+      Val secondVal = second.eval(ctx);
+      if (isUnknownOrError(secondVal)) {
+        return secondVal;
+      }
+      Val thirdVal = third.eval(ctx);
+      if (isUnknownOrError(thirdVal)) {
+        return thirdVal;
+      }
+      if (trait == null || firstVal.type().hasTrait(trait)) {
+        return impl.invoke(firstVal, secondVal, thirdVal);
+      }
+      if (firstVal.type().hasTrait(Trait.ReceiverType)) {
+        return ((Receiver) firstVal).receive(function, overload, secondVal, thirdVal);
+      }
+      return noSuchOverload(
+          firstVal, function, overload, new Val[] {firstVal, secondVal, thirdVal});
+    }
+
+    @Override
+    public Cost cost() {
+      return estimateCost(first).add(estimateCost(second)).add(estimateCost(third)).add(OneOne);
+    }
+
+    @Override
+    public String function() {
+      return function;
+    }
+
+    @Override
+    public String overloadID() {
+      return overload;
+    }
+
+    @Override
+    public Interpretable[] args() {
+      return new Interpretable[] {first, second, third};
+    }
+
+    @Override
+    public String toString() {
+      return "EvalTernary{"
+          + "id="
+          + id
+          + ", first="
+          + first
+          + ", second="
+          + second
+          + ", third="
+          + third
+          + ", function='"
+          + function
+          + '\''
+          + ", overload='"
+          + overload
+          + '\''
+          + ", trait="
+          + trait
+          + ", impl="
+          + impl
+          + '}';
+    }
+  }
+
+  final class EvalQuaternary extends AbstractEval implements Coster, InterpretableCall {
+    private final String function;
+    private final String overload;
+    private final Interpretable first;
+    private final Interpretable second;
+    private final Interpretable third;
+    private final Interpretable fourth;
+    private final Trait trait;
+    private final QuaternaryOp impl;
+
+    EvalQuaternary(
+        long id,
+        String function,
+        String overload,
+        Interpretable first,
+        Interpretable second,
+        Interpretable third,
+        Interpretable fourth,
+        Trait trait,
+        QuaternaryOp impl) {
+      super(id);
+      this.function = Objects.requireNonNull(function);
+      this.overload = Objects.requireNonNull(overload);
+      this.first = Objects.requireNonNull(first);
+      this.second = Objects.requireNonNull(second);
+      this.third = Objects.requireNonNull(third);
+      this.fourth = Objects.requireNonNull(fourth);
+      this.trait = trait;
+      this.impl = Objects.requireNonNull(impl);
+    }
+
+    @Override
+    public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
+      Val firstVal = first.eval(ctx);
+      if (isUnknownOrError(firstVal)) {
+        return firstVal;
+      }
+      Val secondVal = second.eval(ctx);
+      if (isUnknownOrError(secondVal)) {
+        return secondVal;
+      }
+      Val thirdVal = third.eval(ctx);
+      if (isUnknownOrError(thirdVal)) {
+        return thirdVal;
+      }
+      Val fourthVal = fourth.eval(ctx);
+      if (isUnknownOrError(fourthVal)) {
+        return fourthVal;
+      }
+      if (trait == null || firstVal.type().hasTrait(trait)) {
+        return impl.invoke(firstVal, secondVal, thirdVal, fourthVal);
+      }
+      if (firstVal.type().hasTrait(Trait.ReceiverType)) {
+        return ((Receiver) firstVal).receive(function, overload, secondVal, thirdVal, fourthVal);
+      }
+      return noSuchOverload(
+          firstVal, function, overload, new Val[] {firstVal, secondVal, thirdVal, fourthVal});
+    }
+
+    @Override
+    public Cost cost() {
+      return estimateCost(first)
+          .add(estimateCost(second))
+          .add(estimateCost(third))
+          .add(estimateCost(fourth))
+          .add(OneOne);
+    }
+
+    @Override
+    public String function() {
+      return function;
+    }
+
+    @Override
+    public String overloadID() {
+      return overload;
+    }
+
+    @Override
+    public Interpretable[] args() {
+      return new Interpretable[] {first, second, third, fourth};
+    }
+
+    @Override
+    public String toString() {
+      return "EvalQuaternary{"
+          + "id="
+          + id
+          + ", first="
+          + first
+          + ", second="
+          + second
+          + ", third="
+          + third
+          + ", fourth="
+          + fourth
+          + ", function='"
+          + function
+          + '\''
+          + ", overload='"
+          + overload
+          + '\''
+          + ", trait="
+          + trait
+          + ", impl="
+          + impl
+          + '}';
+    }
+  }
+
+  final class EvalQuinary extends AbstractEval implements Coster, InterpretableCall {
+    private final String function;
+    private final String overload;
+    private final Interpretable first;
+    private final Interpretable second;
+    private final Interpretable third;
+    private final Interpretable fourth;
+    private final Interpretable fifth;
+    private final Trait trait;
+    private final QuinaryOp impl;
+
+    EvalQuinary(
+        long id,
+        String function,
+        String overload,
+        Interpretable first,
+        Interpretable second,
+        Interpretable third,
+        Interpretable fourth,
+        Interpretable fifth,
+        Trait trait,
+        QuinaryOp impl) {
+      super(id);
+      this.function = Objects.requireNonNull(function);
+      this.overload = Objects.requireNonNull(overload);
+      this.first = Objects.requireNonNull(first);
+      this.second = Objects.requireNonNull(second);
+      this.third = Objects.requireNonNull(third);
+      this.fourth = Objects.requireNonNull(fourth);
+      this.fifth = Objects.requireNonNull(fifth);
+      this.trait = trait;
+      this.impl = Objects.requireNonNull(impl);
+    }
+
+    @Override
+    public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
+      Val firstVal = first.eval(ctx);
+      if (isUnknownOrError(firstVal)) {
+        return firstVal;
+      }
+      Val secondVal = second.eval(ctx);
+      if (isUnknownOrError(secondVal)) {
+        return secondVal;
+      }
+      Val thirdVal = third.eval(ctx);
+      if (isUnknownOrError(thirdVal)) {
+        return thirdVal;
+      }
+      Val fourthVal = fourth.eval(ctx);
+      if (isUnknownOrError(fourthVal)) {
+        return fourthVal;
+      }
+      Val fifthVal = fifth.eval(ctx);
+      if (isUnknownOrError(fifthVal)) {
+        return fifthVal;
+      }
+      if (trait == null || firstVal.type().hasTrait(trait)) {
+        return impl.invoke(firstVal, secondVal, thirdVal, fourthVal, fifthVal);
+      }
+      if (firstVal.type().hasTrait(Trait.ReceiverType)) {
+        return ((Receiver) firstVal)
+            .receive(function, overload, secondVal, thirdVal, fourthVal, fifthVal);
+      }
+      return noSuchOverload(
+          firstVal,
+          function,
+          overload,
+          new Val[] {firstVal, secondVal, thirdVal, fourthVal, fifthVal});
+    }
+
+    @Override
+    public Cost cost() {
+      return estimateCost(first)
+          .add(estimateCost(second))
+          .add(estimateCost(third))
+          .add(estimateCost(fourth))
+          .add(estimateCost(fifth))
+          .add(OneOne);
+    }
+
+    @Override
+    public String function() {
+      return function;
+    }
+
+    @Override
+    public String overloadID() {
+      return overload;
+    }
+
+    @Override
+    public Interpretable[] args() {
+      return new Interpretable[] {first, second, third, fourth, fifth};
+    }
+
+    @Override
+    public String toString() {
+      return "EvalQuinary{"
+          + "id="
+          + id
+          + ", first="
+          + first
+          + ", second="
+          + second
+          + ", third="
+          + third
+          + ", fourth="
+          + fourth
+          + ", fifth="
+          + fifth
           + ", function='"
           + function
           + '\''

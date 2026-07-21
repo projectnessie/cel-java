@@ -63,7 +63,10 @@ import org.projectnessie.cel.interpreter.Interpretable.EvalMapFold;
 import org.projectnessie.cel.interpreter.Interpretable.EvalNe;
 import org.projectnessie.cel.interpreter.Interpretable.EvalObj;
 import org.projectnessie.cel.interpreter.Interpretable.EvalOr;
+import org.projectnessie.cel.interpreter.Interpretable.EvalQuaternary;
+import org.projectnessie.cel.interpreter.Interpretable.EvalQuinary;
 import org.projectnessie.cel.interpreter.Interpretable.EvalReceiverVarArgs;
+import org.projectnessie.cel.interpreter.Interpretable.EvalTernary;
 import org.projectnessie.cel.interpreter.Interpretable.EvalTestOnly;
 import org.projectnessie.cel.interpreter.Interpretable.EvalUnary;
 import org.projectnessie.cel.interpreter.Interpretable.EvalVarArgs;
@@ -73,6 +76,9 @@ import org.projectnessie.cel.interpreter.Interpretable.InterpretableConst;
 import org.projectnessie.cel.interpreter.functions.BinaryOp;
 import org.projectnessie.cel.interpreter.functions.FunctionOp;
 import org.projectnessie.cel.interpreter.functions.Overload;
+import org.projectnessie.cel.interpreter.functions.QuaternaryOp;
+import org.projectnessie.cel.interpreter.functions.QuinaryOp;
+import org.projectnessie.cel.interpreter.functions.TernaryOp;
 import org.projectnessie.cel.interpreter.functions.UnaryOp;
 
 /** interpretablePlanner creates an Interpretable evaluation plan from a proto Expr value. */
@@ -402,6 +408,10 @@ public interface InterpretablePlanner {
         case 0 -> planCallZero(expr, resolvedFunc.fnName, resolvedFunc.overloadId, fnDef);
         case 1 -> planCallUnary(expr, resolvedFunc.fnName, resolvedFunc.overloadId, fnDef, args);
         case 2 -> planCallBinary(expr, resolvedFunc.fnName, resolvedFunc.overloadId, fnDef, args);
+        case 3 -> planCallTernary(expr, resolvedFunc.fnName, resolvedFunc.overloadId, fnDef, args);
+        case 4 ->
+            planCallQuaternary(expr, resolvedFunc.fnName, resolvedFunc.overloadId, fnDef, args);
+        case 5 -> planCallQuinary(expr, resolvedFunc.fnName, resolvedFunc.overloadId, fnDef, args);
         default -> planCallVarArgs(expr, resolvedFunc.fnName, resolvedFunc.overloadId, fnDef, args);
       };
     }
@@ -443,6 +453,77 @@ public interface InterpretablePlanner {
         trait = impl.operandTrait;
       }
       return new EvalBinary(expr.getId(), function, overload, args[0], args[1], trait, fn);
+    }
+
+    /** planCallTernary generates a ternary or variable argument callable Interpretable. */
+    Interpretable planCallTernary(
+        Expr expr, String function, String overload, Overload impl, Interpretable... args) {
+      if (impl == null) {
+        return new EvalReceiverVarArgs(expr.getId(), function, overload, args);
+      }
+      if (impl.ternary != null) {
+        TernaryOp fn = impl.ternary;
+        return new EvalTernary(
+            expr.getId(), function, overload, args[0], args[1], args[2], impl.operandTrait, fn);
+      }
+      if (impl.function != null) {
+        return new EvalVarArgs(
+            expr.getId(), function, overload, args, impl.operandTrait, impl.function);
+      }
+      throw new IllegalStateException(String.format("no such overload: %s(...)", function));
+    }
+
+    /** planCallQuaternary generates a quaternary or variable argument callable Interpretable. */
+    Interpretable planCallQuaternary(
+        Expr expr, String function, String overload, Overload impl, Interpretable... args) {
+      if (impl == null) {
+        return new EvalReceiverVarArgs(expr.getId(), function, overload, args);
+      }
+      if (impl.quaternary != null) {
+        QuaternaryOp fn = impl.quaternary;
+        return new EvalQuaternary(
+            expr.getId(),
+            function,
+            overload,
+            args[0],
+            args[1],
+            args[2],
+            args[3],
+            impl.operandTrait,
+            fn);
+      }
+      if (impl.function != null) {
+        return new EvalVarArgs(
+            expr.getId(), function, overload, args, impl.operandTrait, impl.function);
+      }
+      throw new IllegalStateException(String.format("no such overload: %s(...)", function));
+    }
+
+    /** planCallQuinary generates a quinary or variable argument callable Interpretable. */
+    Interpretable planCallQuinary(
+        Expr expr, String function, String overload, Overload impl, Interpretable... args) {
+      if (impl == null) {
+        return new EvalReceiverVarArgs(expr.getId(), function, overload, args);
+      }
+      if (impl.quinary != null) {
+        QuinaryOp fn = impl.quinary;
+        return new EvalQuinary(
+            expr.getId(),
+            function,
+            overload,
+            args[0],
+            args[1],
+            args[2],
+            args[3],
+            args[4],
+            impl.operandTrait,
+            fn);
+      }
+      if (impl.function != null) {
+        return new EvalVarArgs(
+            expr.getId(), function, overload, args, impl.operandTrait, impl.function);
+      }
+      throw new IllegalStateException(String.format("no such overload: %s(...)", function));
     }
 
     /** planCallVarArgs generates a variable argument callable Interpretable. */

@@ -52,8 +52,8 @@ import org.projectnessie.cel.common.types.traits.Trait;
 
 /**
  * Overload defines a named overload of a function, indicating an operand trait which must be
- * present on the first argument to the overload as well as one of either a unary, binary, or
- * function implementation.
+ * present on the first argument to the overload as well as one or more fixed-arity or generic
+ * function implementations.
  *
  * <p>The majority of operators within the expression language are unary or binary and the
  * specializations simplify the call contract for implementers of types with operator overloads. Any
@@ -75,6 +75,15 @@ public final class Overload {
   /** Binary defines the overload with a BinaryOp implementation. May be nil. */
   public final BinaryOp binary;
 
+  /** Ternary defines the overload with a TernaryOp implementation. May be nil. */
+  public final TernaryOp ternary;
+
+  /** Quaternary defines the overload with a QuaternaryOp implementation. May be nil. */
+  public final QuaternaryOp quaternary;
+
+  /** Quinary defines the overload with a QuinaryOp implementation. May be nil. */
+  public final QuinaryOp quinary;
+
   /** Function defines the overload with a FunctionOp implementation. May be nil. */
   public final FunctionOp function;
 
@@ -91,7 +100,7 @@ public final class Overload {
   }
 
   public static Overload unary(String operator, Trait trait, UnaryOp op) {
-    return new Overload(operator, trait, op, null, null);
+    return new Overload(operator, trait, op, null, null, null, null, null);
   }
 
   public static Overload binary(Operator operator, BinaryOp op) {
@@ -107,7 +116,31 @@ public final class Overload {
   }
 
   public static Overload binary(String operator, Trait trait, BinaryOp op) {
-    return new Overload(operator, trait, null, op, null);
+    return new Overload(operator, trait, null, op, null, null, null, null);
+  }
+
+  public static Overload ternary(String operator, TernaryOp op) {
+    return ternary(operator, null, op);
+  }
+
+  public static Overload ternary(String operator, Trait trait, TernaryOp op) {
+    return new Overload(operator, trait, null, null, op, null, null, null);
+  }
+
+  public static Overload quaternary(String operator, QuaternaryOp op) {
+    return quaternary(operator, null, op);
+  }
+
+  public static Overload quaternary(String operator, Trait trait, QuaternaryOp op) {
+    return new Overload(operator, trait, null, null, null, op, null, null);
+  }
+
+  public static Overload quinary(String operator, QuinaryOp op) {
+    return quinary(operator, null, op);
+  }
+
+  public static Overload quinary(String operator, Trait trait, QuinaryOp op) {
+    return new Overload(operator, trait, null, null, null, null, op, null);
   }
 
   public static Overload function(String operator, FunctionOp op) {
@@ -115,20 +148,63 @@ public final class Overload {
   }
 
   public static Overload function(String operator, Trait trait, FunctionOp op) {
-    return new Overload(operator, trait, null, null, op);
+    return new Overload(operator, trait, null, null, null, null, null, op);
   }
 
   public static Overload overload(
       String operator, Trait trait, UnaryOp unary, BinaryOp binary, FunctionOp function) {
-    return new Overload(operator, trait, unary, binary, function);
+    return new Overload(operator, trait, unary, binary, null, null, null, function);
+  }
+
+  public static Overload overload(
+      String operator,
+      Trait trait,
+      UnaryOp unary,
+      BinaryOp binary,
+      TernaryOp ternary,
+      FunctionOp function) {
+    return new Overload(operator, trait, unary, binary, ternary, null, null, function);
+  }
+
+  public static Overload overload(
+      String operator,
+      Trait trait,
+      UnaryOp unary,
+      BinaryOp binary,
+      TernaryOp ternary,
+      QuaternaryOp quaternary,
+      FunctionOp function) {
+    return new Overload(operator, trait, unary, binary, ternary, quaternary, null, function);
+  }
+
+  public static Overload overload(
+      String operator,
+      Trait trait,
+      UnaryOp unary,
+      BinaryOp binary,
+      TernaryOp ternary,
+      QuaternaryOp quaternary,
+      QuinaryOp quinary,
+      FunctionOp function) {
+    return new Overload(operator, trait, unary, binary, ternary, quaternary, quinary, function);
   }
 
   private Overload(
-      String operator, Trait operandTrait, UnaryOp unary, BinaryOp binary, FunctionOp function) {
+      String operator,
+      Trait operandTrait,
+      UnaryOp unary,
+      BinaryOp binary,
+      TernaryOp ternary,
+      QuaternaryOp quaternary,
+      QuinaryOp quinary,
+      FunctionOp function) {
     this.operator = operator;
     this.operandTrait = operandTrait;
     this.unary = unary;
     this.binary = binary;
+    this.ternary = ternary;
+    this.quaternary = quaternary;
+    this.quinary = quinary;
     this.function = function;
   }
 
@@ -143,7 +219,16 @@ public final class Overload {
     if (binary != null) {
       sb.append(", binary");
     }
-    if (binary != null) {
+    if (ternary != null) {
+      sb.append(", ternary");
+    }
+    if (quaternary != null) {
+      sb.append(", quaternary");
+    }
+    if (quinary != null) {
+      sb.append(", quinary");
+    }
+    if (function != null) {
       sb.append(", function");
     }
     sb.append('}');
