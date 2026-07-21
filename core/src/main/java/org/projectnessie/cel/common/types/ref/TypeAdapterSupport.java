@@ -18,6 +18,7 @@ package org.projectnessie.cel.common.types.ref;
 import static org.projectnessie.cel.common.types.BytesT.bytesOf;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.DurationT.durationOf;
+import static org.projectnessie.cel.common.types.Err.rangeError;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.ListT.newDoubleArrayList;
 import static org.projectnessie.cel.common.types.ListT.newGenericArrayList;
@@ -56,11 +57,15 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
 import org.projectnessie.cel.common.ULong;
+import org.projectnessie.cel.common.types.BoolT;
+import org.projectnessie.cel.common.types.DoubleT;
+import org.projectnessie.cel.common.types.Err;
+import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.NullT;
+import org.projectnessie.cel.common.types.UintT;
+import org.projectnessie.cel.common.types.UnknownT;
 
-/**
- * Helper class for {@link TypeAdapter} implementations to convert from a Java type to a CEL type.
- */
+/** Helper class for {@link TypeAdapter} implementations to convert between Java and CEL types. */
 public final class TypeAdapterSupport {
   private TypeAdapterSupport() {}
 
@@ -150,5 +155,87 @@ public final class TypeAdapterSupport {
     }
 
     return null;
+  }
+
+  public static Val nativeToValue(boolean value) {
+    return boolOf(value);
+  }
+
+  public static Val nativeToValue(byte value) {
+    return intOf(value);
+  }
+
+  public static Val nativeToValue(short value) {
+    return intOf(value);
+  }
+
+  public static Val nativeToValue(int value) {
+    return intOf(value);
+  }
+
+  public static Val nativeToValue(long value) {
+    return intOf(value);
+  }
+
+  public static Val nativeToValue(float value) {
+    return doubleOf(value);
+  }
+
+  public static Val nativeToValue(double value) {
+    return doubleOf(value);
+  }
+
+  @SuppressWarnings("unchecked")
+  public static <T> T valueToNative(TypeAdapter adapter, Val value, Class<T> targetType) {
+    if (targetType == boolean.class) {
+      return (T) Boolean.valueOf(adapter.valueToBoolean(value));
+    }
+    if (targetType == int.class) {
+      return (T) Integer.valueOf(adapter.valueToInt(value));
+    }
+    if (targetType == long.class) {
+      return (T) Long.valueOf(adapter.valueToLong(value));
+    }
+    if (targetType == double.class) {
+      return (T) Double.valueOf(adapter.valueToDouble(value));
+    }
+    return legacyValueToNative(value, targetType);
+  }
+
+  public static boolean valueToBoolean(Val value) {
+    if (value instanceof BoolT boolValue) {
+      return boolValue.booleanValue();
+    }
+    return legacyValueToNative(value, boolean.class);
+  }
+
+  public static int valueToInt(Val value) {
+    if (value instanceof IntT || value instanceof UintT) {
+      long longValue = value.intValue();
+      if (longValue < Integer.MIN_VALUE || longValue > Integer.MAX_VALUE) {
+        Err.throwErrorAsIllegalStateException(rangeError(longValue, "Java int"));
+      }
+      return (int) longValue;
+    }
+    return legacyValueToNative(value, int.class);
+  }
+
+  public static long valueToLong(Val value) {
+    if (value instanceof IntT || value instanceof UintT || value instanceof UnknownT) {
+      return value.intValue();
+    }
+    return legacyValueToNative(value, long.class);
+  }
+
+  public static double valueToDouble(Val value) {
+    if (value instanceof DoubleT doubleValue) {
+      return doubleValue.doubleValue();
+    }
+    return legacyValueToNative(value, double.class);
+  }
+
+  @SuppressWarnings("removal")
+  private static <T> T legacyValueToNative(Val value, Class<T> targetType) {
+    return value.convertToNative(targetType);
   }
 }

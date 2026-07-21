@@ -27,6 +27,7 @@ import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.Types;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
+import org.projectnessie.cel.common.types.ref.TypeAdapterSupport;
 import org.projectnessie.cel.common.types.ref.Val;
 
 /** defaultTypeAdapter converts go native types to CEL values. */
@@ -48,6 +49,41 @@ public final class DefaultTypeAdapter implements TypeAdapter {
       return val;
     }
     return Err.unsupportedRefValConversionErr(value);
+  }
+
+  @Override
+  public Val nativeToValue(boolean value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(byte value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(short value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(int value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(long value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(float value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(double value) {
+    return TypeAdapterSupport.nativeToValue(value);
   }
 
   /**

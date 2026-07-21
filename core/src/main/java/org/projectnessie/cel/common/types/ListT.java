@@ -35,7 +35,6 @@ import com.google.protobuf.Value;
 import java.lang.reflect.Array;
 import java.util.Arrays;
 import java.util.List;
-import java.util.function.Function;
 import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
@@ -98,7 +97,7 @@ public abstract class ListT extends BaseVal implements Lister {
       this.size = size;
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"removal", "unchecked"})
     @Override
     public <T> T convertToNative(Class<T> typeDesc) {
       if (typeDesc.isArray()) {
@@ -147,14 +146,14 @@ public abstract class ListT extends BaseVal implements Lister {
       int s = (int) size;
       for (int i = 0; i < s; i++) {
         Val v = get(intOf(i));
-        Value e = v.convertToNative(Value.class);
+        Value e = adapter.valueToNative(v, Value.class);
         list.addValues(e);
       }
       return list.build();
     }
 
     private List<Object> toJavaList() {
-      return asList(convertToNative(Object[].class));
+      return asList((Object[]) toJavaArray(Object[].class));
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -167,12 +166,9 @@ public abstract class ListT extends BaseVal implements Lister {
       }
       Object array = Array.newInstance(compType, s);
 
-      Function<Object, Object> fixForTarget = Function.identity();
-
       for (int i = 0; i < s; i++) {
         Val v = get(intOf(i));
-        Object e = v.convertToNative(compType);
-        e = fixForTarget.apply(e);
+        Object e = adapter.valueToNative(v, compType);
         Array.set(array, i, e);
       }
       return array;
@@ -301,6 +297,7 @@ public abstract class ListT extends BaseVal implements Lister {
       }
 
       @Override
+      @SuppressWarnings("removal")
       public <T> T convertToNative(Class<T> typeDesc) {
         throw new UnsupportedOperationException("IMPLEMENT ME??");
       }
@@ -366,7 +363,7 @@ public abstract class ListT extends BaseVal implements Lister {
         newArray[array.length + i] =
             componentType.isInstance(otherValue)
                 ? otherValue
-                : otherValue.convertToNative(componentType);
+                : adapter.valueToNative(otherValue, componentType);
       }
       return new GenericListT(adapter, newArray);
     }

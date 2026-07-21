@@ -542,10 +542,10 @@ public final class FieldDescription extends Description {
       this.valueDesc = field.getMessageType().findFieldByNumber(2);
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"removal", "unchecked"})
     @Override
     public <T> T convertToNative(Class<T> typeDesc) {
-      return (T) MapT.newMaybeWrappedMap(adapter, toJavaMap()).convertToNative(typeDesc);
+      return adapter.valueToNative(MapT.newMaybeWrappedMap(adapter, toJavaMap()), typeDesc);
     }
 
     @Override
@@ -699,6 +699,7 @@ public final class FieldDescription extends Description {
       }
 
       @Override
+      @SuppressWarnings("removal")
       public <T> T convertToNative(Class<T> typeDesc) {
         throw new UnsupportedOperationException();
       }

@@ -200,6 +200,7 @@ public final class Err extends BaseVal {
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
   @Override
+  @SuppressWarnings("removal")
   public <T> T convertToNative(Class<T> typeDesc) {
     throw new UnsupportedOperationException(error);
   }

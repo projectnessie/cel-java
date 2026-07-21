@@ -37,6 +37,7 @@ import org.projectnessie.cel.common.types.ref.Val;
 public class MapTest {
 
   @Test
+  @SuppressWarnings("removal")
   void heterogenousKeys() {
     Map<Val, Val> javaMap =
         ImmutableMap.of(
@@ -102,6 +103,7 @@ public class MapTest {
   }
 
   @Test
+  @SuppressWarnings("removal")
   void mapToProtobufStructRequiresStringKeys() {
     MapT stringKeyMap =
         (MapT) newWrappedMap(newRegistry(), ImmutableMap.of(stringOf("one"), doubleOf(1.0d)));

@@ -145,6 +145,7 @@ class InterpreterTest {
         }
 
         @Override
+        @SuppressWarnings("removal")
         public <T> T convertToNative(Class<T> typeDesc) {
           throw new UnsupportedOperationException();
         }
@@ -188,6 +189,7 @@ class InterpreterTest {
   private static final class ReceiverTestVal extends BaseVal implements Receiver {
 
     @Override
+    @SuppressWarnings("removal")
     public <T> T convertToNative(Class<T> typeDesc) {
       throw new UnsupportedOperationException();
     }

@@ -71,6 +71,6 @@ public final class Script {
       return (T) result;
     }
 
-    return result.convertToNative(resultType);
+    return env.getTypeAdapter().valueToNative(result, resultType);
   }
 }

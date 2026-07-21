@@ -186,7 +186,7 @@ public class ProviderTest {
                             mapOf("string_value", stringOf("oneof")))))));
 
     assertThat(exp).matches(v -> !Err.isError(v));
-    CheckedExpr ce = exp.convertToNative(CheckedExpr.class);
+    CheckedExpr ce = reg.valueToNative(exp, CheckedExpr.class);
     assertThat(ce)
         .extracting(CheckedExpr::getExpr)
         .extracting(Expr::getConstExpr)
@@ -201,7 +201,7 @@ public class ProviderTest {
         reg.newValue(
             "cel.expr.conformance.proto3.TestAllTypes", mapOf("single_int32_wrapper", intOf(123)));
     assertThat(exp).matches(v -> !Err.isError(v));
-    TestAllTypes ce = exp.convertToNative(TestAllTypes.class);
+    TestAllTypes ce = reg.valueToNative(exp, TestAllTypes.class);
     assertThat(ce)
         .extracting(TestAllTypes::getSingleInt32Wrapper)
         .extracting(Int32Value::getValue)
@@ -216,7 +216,7 @@ public class ProviderTest {
             "cel.expr.conformance.proto3.TestAllTypes", mapOf("single_int32_wrapper", NullValue));
 
     assertThat(exp).matches(v -> !Err.isError(v));
-    TestAllTypes ce = exp.convertToNative(TestAllTypes.class);
+    TestAllTypes ce = reg.valueToNative(exp, TestAllTypes.class);
     assertThat(ce.hasSingleInt32Wrapper()).isFalse();
   }
 
@@ -235,7 +235,7 @@ public class ProviderTest {
                 NullValue));
 
     assertThat(exp).matches(v -> !Err.isError(v));
-    TestAllTypes ce = exp.convertToNative(TestAllTypes.class);
+    TestAllTypes ce = reg.valueToNative(exp, TestAllTypes.class);
     assertThat(ce.hasSingleNestedMessage()).isFalse();
     assertThat(ce.hasSingleDuration()).isFalse();
     assertThat(ce.hasSingleTimestamp()).isFalse();
@@ -258,7 +258,7 @@ public class ProviderTest {
                 newGenericArrayList(reg, new Val[] {intOf(1), NullValue})));
 
     assertThat(exp).matches(v -> !Err.isError(v));
-    TestAllTypes ce = exp.convertToNative(TestAllTypes.class);
+    TestAllTypes ce = reg.valueToNative(exp, TestAllTypes.class);
     assertThat(ce.getRepeatedTimestampList())
         .containsExactly(Timestamp.newBuilder().setSeconds(1).build());
     assertThat(ce.getRepeatedDurationList())
@@ -288,7 +288,7 @@ public class ProviderTest {
                 newMaybeWrappedMap(reg, mapOf(true, NullValue, false, intOf(1)))));
 
     assertThat(exp).matches(v -> !Err.isError(v));
-    TestAllTypes ce = exp.convertToNative(TestAllTypes.class);
+    TestAllTypes ce = reg.valueToNative(exp, TestAllTypes.class);
     assertThat(ce.getMapBoolTimestampMap())
         .containsExactlyEntriesOf(mapOf(false, Timestamp.newBuilder().setSeconds(1).build()));
     assertThat(ce.getMapBoolDurationMap())
@@ -327,7 +327,7 @@ public class ProviderTest {
                 new DirectConversionMap(reg, mapOf(true, nestedMessage))));
 
     assertThat(exp).matches(v -> !Err.isError(v));
-    TestAllTypes value = exp.convertToNative(TestAllTypes.class);
+    TestAllTypes value = reg.valueToNative(exp, TestAllTypes.class);
     assertThat(value.getMapBoolBytesMap()).containsEntry(true, ByteString.copyFromUtf8("bytes"));
     assertThat(value.getMapBoolInt32Map()).containsEntry(true, Integer.MIN_VALUE);
     assertThat(value.getMapBoolUint32Map()).containsEntry(true, -1);
@@ -363,6 +363,7 @@ public class ProviderTest {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public <T> T convertToNative(Class<T> typeDesc) {
       throw new AssertionError("protobuf map conversion must not materialize a native Java map");
     }
@@ -455,67 +456,80 @@ public class ProviderTest {
     TypeRegistry reg = newRegistry(ParsedExpr.getDefaultInstance());
 
     // Core type conversion tests.
-    expectValueToNative(True, true);
-    expectValueToNative(True, True);
+    expectValueToNative(reg, True, true);
+    expectValueToNative(reg, True, True);
     expectValueToNative(
-        newGenericArrayList(reg, new Val[] {True, False}), new Object[] {true, false});
-    expectValueToNative(newGenericArrayList(reg, new Val[] {True, False}), new Val[] {True, False});
-    expectValueToNative(intOf(-1), -1);
-    expectValueToNative(intOf(2), 2L);
-    expectValueToNative(intOf(-1), -1);
-    expectValueToNative(newGenericArrayList(reg, new Val[] {intOf(4)}), new Object[] {4L});
-    expectValueToNative(newGenericArrayList(reg, new Val[] {intOf(5)}), new Val[] {intOf(5)});
-    expectValueToNative(uintOf(3), ULong.valueOf(3));
-    expectValueToNative(uintOf(4), ULong.valueOf(4));
-    expectValueToNative(uintOf(5), 5);
+        reg, newGenericArrayList(reg, new Val[] {True, False}), new Object[] {true, false});
     expectValueToNative(
-        newGenericArrayList(reg, new Val[] {uintOf(4)}), new Object[] {4L}); // loses "ULong" here
-    expectValueToNative(newGenericArrayList(reg, new Val[] {uintOf(5)}), new Val[] {uintOf(5)});
-    expectValueToNative(doubleOf(5.5d), 5.5f);
-    expectValueToNative(doubleOf(-5.5d), -5.5d);
-    expectValueToNative(newGenericArrayList(reg, new Val[] {doubleOf(-5.5)}), new Object[] {-5.5});
+        reg, newGenericArrayList(reg, new Val[] {True, False}), new Val[] {True, False});
+    expectValueToNative(reg, intOf(-1), -1);
+    expectValueToNative(reg, intOf(2), 2L);
+    expectValueToNative(reg, intOf(-1), -1);
+    expectValueToNative(reg, newGenericArrayList(reg, new Val[] {intOf(4)}), new Object[] {4L});
+    expectValueToNative(reg, newGenericArrayList(reg, new Val[] {intOf(5)}), new Val[] {intOf(5)});
+    expectValueToNative(reg, uintOf(3), ULong.valueOf(3));
+    expectValueToNative(reg, uintOf(4), ULong.valueOf(4));
+    expectValueToNative(reg, uintOf(5), 5);
     expectValueToNative(
-        newGenericArrayList(reg, new Val[] {doubleOf(-5.5)}), new Val[] {doubleOf(-5.5)});
-    expectValueToNative(doubleOf(-5.5), doubleOf(-5.5));
-    expectValueToNative(stringOf("hello"), "hello");
-    expectValueToNative(stringOf("hello"), stringOf("hello"));
-    expectValueToNative(NullValue, NULL_VALUE);
-    expectValueToNative(NullValue, NullValue);
-    expectValueToNative(newGenericArrayList(reg, new Val[] {NullValue}), new Object[] {null});
-    expectValueToNative(newGenericArrayList(reg, new Val[] {NullValue}), new Val[] {NullValue});
-    expectValueToNative(bytesOf("world"), "world".getBytes(StandardCharsets.UTF_8));
-    expectValueToNative(bytesOf("world"), "world".getBytes(StandardCharsets.UTF_8));
+        reg,
+        newGenericArrayList(reg, new Val[] {uintOf(4)}),
+        new Object[] {4L}); // loses "ULong" here
     expectValueToNative(
+        reg, newGenericArrayList(reg, new Val[] {uintOf(5)}), new Val[] {uintOf(5)});
+    expectValueToNative(reg, doubleOf(5.5d), 5.5f);
+    expectValueToNative(reg, doubleOf(-5.5d), -5.5d);
+    expectValueToNative(
+        reg, newGenericArrayList(reg, new Val[] {doubleOf(-5.5)}), new Object[] {-5.5});
+    expectValueToNative(
+        reg, newGenericArrayList(reg, new Val[] {doubleOf(-5.5)}), new Val[] {doubleOf(-5.5)});
+    expectValueToNative(reg, doubleOf(-5.5), doubleOf(-5.5));
+    expectValueToNative(reg, stringOf("hello"), "hello");
+    expectValueToNative(reg, stringOf("hello"), stringOf("hello"));
+    expectValueToNative(reg, NullValue, NULL_VALUE);
+    expectValueToNative(reg, NullValue, NullValue);
+    expectValueToNative(reg, newGenericArrayList(reg, new Val[] {NullValue}), new Object[] {null});
+    expectValueToNative(
+        reg, newGenericArrayList(reg, new Val[] {NullValue}), new Val[] {NullValue});
+    expectValueToNative(reg, bytesOf("world"), "world".getBytes(StandardCharsets.UTF_8));
+    expectValueToNative(reg, bytesOf("world"), "world".getBytes(StandardCharsets.UTF_8));
+    expectValueToNative(
+        reg,
         newGenericArrayList(reg, new Val[] {bytesOf("hello")}),
         new Object[] {ByteString.copyFromUtf8("hello")});
     expectValueToNative(
-        newGenericArrayList(reg, new Val[] {bytesOf("hello")}), new Val[] {bytesOf("hello")});
+        reg, newGenericArrayList(reg, new Val[] {bytesOf("hello")}), new Val[] {bytesOf("hello")});
     expectValueToNative(
+        reg,
         newGenericArrayList(reg, new Val[] {intOf(1), intOf(2), intOf(3)}),
         new Object[] {1L, 2L, 3L});
-    expectValueToNative(durationOf(Duration.ofSeconds(500)), Duration.ofSeconds(500));
+    expectValueToNative(reg, durationOf(Duration.ofSeconds(500)), Duration.ofSeconds(500));
     expectValueToNative(
+        reg,
         durationOf(Duration.ofSeconds(500)),
         com.google.protobuf.Duration.newBuilder().setSeconds(500).build());
-    expectValueToNative(durationOf(Duration.ofSeconds(500)), durationOf(Duration.ofSeconds(500)));
     expectValueToNative(
+        reg, durationOf(Duration.ofSeconds(500)), durationOf(Duration.ofSeconds(500)));
+    expectValueToNative(
+        reg,
         timestampOf(Timestamp.newBuilder().setSeconds(12345).build()),
         Instant.ofEpochSecond(12345, 0).atZone(ZoneIdZ));
     expectValueToNative(
+        reg,
         timestampOf(Timestamp.newBuilder().setSeconds(12345).build()),
         timestampOf(Timestamp.newBuilder().setSeconds(12345).build()));
     expectValueToNative(
+        reg,
         timestampOf(Timestamp.newBuilder().setSeconds(12345).build()),
         Timestamp.newBuilder().setSeconds(12345).build());
     expectValueToNative(
-        newMaybeWrappedMap(reg, mapOf(1L, 1L, 2L, 1L, 3L, 1L)), mapOf(1L, 1L, 2L, 1L, 3L, 1L));
+        reg, newMaybeWrappedMap(reg, mapOf(1L, 1L, 2L, 1L, 3L, 1L)), mapOf(1L, 1L, 2L, 1L, 3L, 1L));
 
     // Null conversion tests.
-    expectValueToNative(NullValue, NULL_VALUE);
+    expectValueToNative(reg, NullValue, NULL_VALUE);
 
     // Proto conversion tests.
     ParsedExpr parsedExpr = ParsedExpr.getDefaultInstance();
-    expectValueToNative(reg.nativeToValue(parsedExpr), parsedExpr);
+    expectValueToNative(reg, reg.nativeToValue(parsedExpr), parsedExpr);
   }
 
   @Test
@@ -675,8 +689,8 @@ public class ProviderTest {
 
   static class nonConvertible {}
 
-  static void expectValueToNative(Val in, Object out) {
-    Object val = in.convertToNative(out.getClass());
+  static void expectValueToNative(TypeRegistry registry, Val in, Object out) {
+    Object val = registry.valueToNative(in, out.getClass());
     assertThat(val).isNotNull();
 
     if (val instanceof byte[]) {

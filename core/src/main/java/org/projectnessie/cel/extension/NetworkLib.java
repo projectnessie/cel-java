@@ -348,7 +348,7 @@ public final class NetworkLib implements Library {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"removal", "unchecked"})
     public <T> T convertToNative(Class<T> typeDesc) {
       if (typeDesc == String.class || typeDesc == Object.class) {
         return (T) canonical;
@@ -440,7 +440,7 @@ public final class NetworkLib implements Library {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"removal", "unchecked"})
     public <T> T convertToNative(Class<T> typeDesc) {
       if (typeDesc == String.class || typeDesc == Object.class) {
         return (T) canonical;

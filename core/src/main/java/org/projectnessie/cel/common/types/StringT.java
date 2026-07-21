@@ -90,7 +90,7 @@ public final class StringT extends BaseVal implements Adder, Comparer, Matcher, 
   }
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"removal", "unchecked"})
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
     if (typeDesc == String.class || typeDesc == Object.class) {

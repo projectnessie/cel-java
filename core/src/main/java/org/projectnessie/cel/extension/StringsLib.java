@@ -28,6 +28,7 @@ import org.projectnessie.cel.ProgramOption;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.StringT;
+import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Indexer;
 import org.projectnessie.cel.common.types.traits.Sizer;
@@ -802,7 +803,8 @@ public class StringsLib implements Library {
     return switch (value.type().typeEnum()) {
       case String -> value.value().toString();
       case Bool -> Boolean.toString(value.booleanValue());
-      case Bytes -> new String(value.convertToNative(byte[].class), UTF_8);
+      case Bytes ->
+          new String(DefaultTypeAdapter.Instance.valueToNative(value, byte[].class), UTF_8);
       case Int -> Long.toString(value.intValue());
       case Uint -> Long.toUnsignedString(value.intValue());
       case Double -> renderDouble(value.doubleValue());
@@ -865,7 +867,7 @@ public class StringsLib implements Library {
           case Int -> Long.toHexString(value.intValue());
           case Uint -> Long.toUnsignedString(value.intValue(), 16);
           case String -> bytesToHex(value.value().toString().getBytes(UTF_8));
-          case Bytes -> bytesToHex(value.convertToNative(byte[].class));
+          case Bytes -> bytesToHex(DefaultTypeAdapter.Instance.valueToNative(value, byte[].class));
           default ->
               throw new FormatException(
                   "error during formatting: only integers, byte buffers, and strings can be formatted as hex, was given %s",
