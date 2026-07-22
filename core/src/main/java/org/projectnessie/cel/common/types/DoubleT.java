@@ -19,7 +19,6 @@ import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.Err.rangeError;
-import static org.projectnessie.cel.common.types.IntT.IntZero;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.IntT.intOfCompare;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
@@ -193,18 +192,11 @@ public final class DoubleT extends BaseVal
   public Val compare(Val other) {
     switch (other.type().typeEnum()) {
       case Uint:
+        return intOfCompare(NumericComparison.compareDoubleUint(d, other.intValue()));
       case Int:
+        return intOfCompare(NumericComparison.compareDoubleInt(d, other.intValue()));
       case Double:
-        Val converted = other.convertToType(type());
-        if (converted.type().typeEnum() == TypeEnum.Err) {
-          return converted;
-        }
-        double od = ((DoubleT) converted).d;
-        if (d == od) {
-          // work around for special case of -0.0d == 0.0d (IEEE 754)
-          return IntZero;
-        }
-        return intOfCompare(Double.compare(d, od));
+        return intOfCompare(NumericComparison.compareDouble(d, other.doubleValue()));
       default:
         return noSuchOverload(this, "compare", other);
     }
@@ -215,15 +207,11 @@ public final class DoubleT extends BaseVal
   public Val equal(Val other) {
     switch (other.type().typeEnum()) {
       case Uint:
+        return boolOf(NumericComparison.equalDoubleUint(d, other.intValue()));
       case Int:
+        return boolOf(NumericComparison.equalDoubleInt(d, other.intValue()));
       case Double:
-        Val converted = other.convertToType(type());
-        if (converted.type().typeEnum() == TypeEnum.Err) {
-          return converted;
-        }
-        double o = ((DoubleT) converted).d;
-        // TODO: Handle NaNs properly.
-        return boolOf(d == o);
+        return boolOf(NumericComparison.equalDouble(d, other.doubleValue()));
       case Null:
       case Bool:
       case Bytes:

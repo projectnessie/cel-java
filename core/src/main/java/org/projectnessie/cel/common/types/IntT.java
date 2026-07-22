@@ -16,7 +16,6 @@
 package org.projectnessie.cel.common.types;
 
 import static org.projectnessie.cel.common.types.BoolT.False;
-import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.Err.divideByZero;
 import static org.projectnessie.cel.common.types.Err.errIntOverflow;
@@ -202,60 +201,24 @@ public final class IntT extends BaseVal
   /** Compare implements traits.Comparer.Compare. */
   @Override
   public Val compare(Val other) {
-    switch (other.type().typeEnum()) {
-      case Double:
-        DoubleT cmp = (DoubleT) convertToType(DoubleType);
-        return cmp.compare(other);
-      case Uint:
-        if (i < 0L) {
-          // this int is negative, so it MUST be smaller than any uint
-          return IntNegOne;
-        }
-        if (other.intValue() < 0L) {
-          // the OTHER uint is > Integer.MAX_VALUE, so THIS int MUST be smaller
-          return IntNegOne;
-        }
-        return intOfCompare(Long.compareUnsigned(i, other.intValue()));
-      case Int:
-        Val converted = other.convertToType(type());
-        if (converted.type().typeEnum() == TypeEnum.Err) {
-          return converted;
-        }
-        return intOfCompare(Long.compare(i, converted.intValue()));
-      default:
-        return noSuchOverload(this, "compare", other);
-    }
+    return switch (other.type().typeEnum()) {
+      case Double -> intOfCompare(NumericComparison.compareIntDouble(i, other.doubleValue()));
+      case Uint -> intOfCompare(NumericComparison.compareIntUint(i, other.intValue()));
+      case Int -> intOfCompare(NumericComparison.compareInt(i, other.intValue()));
+      default -> noSuchOverload(this, "compare", other);
+    };
   }
 
   /** Equal implements ref.Val.Equal. */
   @Override
   public Val equal(Val other) {
-    switch (other.type().typeEnum()) {
-      case Double:
-        DoubleT cmp = (DoubleT) convertToType(DoubleType);
-        return cmp.equal(other);
-      case Uint:
-        if (other.intValue() < 0L) {
-          return False;
-        }
-      case Int:
-        Val converted = other.convertToType(type());
-        if (converted.type().typeEnum() == TypeEnum.Err) {
-          return converted;
-        }
-        return boolOf(i == converted.intValue());
-      case Null:
-      case Bool:
-      case Bytes:
-      case List:
-      case Map:
-      case Object:
-      case String:
-      case Type:
-        return False;
-      default:
-        return noSuchOverload(this, "equal", other);
-    }
+    return switch (other.type().typeEnum()) {
+      case Double -> boolOf(NumericComparison.equalIntDouble(i, other.doubleValue()));
+      case Uint -> boolOf(NumericComparison.equalIntUint(i, other.intValue()));
+      case Int -> boolOf(NumericComparison.equalInt(i, other.intValue()));
+      case Null, Bool, Bytes, List, Map, Object, String, Type -> False;
+      default -> noSuchOverload(this, "equal", other);
+    };
   }
 
   /** Divide implements traits.Divider.Divide. */
