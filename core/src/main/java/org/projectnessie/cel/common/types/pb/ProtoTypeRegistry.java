@@ -91,12 +91,15 @@ import org.projectnessie.cel.common.types.TypeT;
 import org.projectnessie.cel.common.types.ref.FieldGetter;
 import org.projectnessie.cel.common.types.ref.FieldTester;
 import org.projectnessie.cel.common.types.ref.FieldType;
+import org.projectnessie.cel.common.types.ref.StandardScalarFieldProvider;
+import org.projectnessie.cel.common.types.ref.StandardScalarTypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeAdapterSupport;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Lister;
 
-public final class ProtoTypeRegistry implements TypeRegistry {
+public final class ProtoTypeRegistry
+    implements TypeRegistry, StandardScalarTypeAdapter, StandardScalarFieldProvider {
   private static final ProtoTypeRegistry DEFAULT_REGISTRY = newDefaultRegistry();
 
   private final Map<String, org.projectnessie.cel.common.types.ref.Type> revTypeMap;
@@ -284,6 +287,36 @@ public final class ProtoTypeRegistry implements TypeRegistry {
           generatedType.isInstance(target)
               ? field.adaptGeneratedValue(generatedGetter.getFrom(target), this)
               : field.getField(target, this);
+    }
+    if (generatedGetter instanceof FieldGetter.Primitive primitiveGetter) {
+      return new FieldGetter.Primitive() {
+        @Override
+        public Class<?> optimizedTargetType() {
+          return primitiveGetter.optimizedTargetType();
+        }
+
+        @Override
+        public Object getFrom(Object target) {
+          return generatedType.isInstance(target)
+              ? primitiveGetter.getFrom(target)
+              : field.getField(target, ProtoTypeRegistry.this);
+        }
+
+        @Override
+        public boolean getBooleanFrom(Object target) {
+          return primitiveGetter.getBooleanFrom(target);
+        }
+
+        @Override
+        public long getLongFrom(Object target) {
+          return primitiveGetter.getLongFrom(target);
+        }
+
+        @Override
+        public double getDoubleFrom(Object target) {
+          return primitiveGetter.getDoubleFrom(target);
+        }
+      };
     }
     return target ->
         generatedType.isInstance(target)

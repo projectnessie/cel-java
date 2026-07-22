@@ -19,8 +19,6 @@ import static org.projectnessie.cel.interpreter.Dispatcher.newDispatcher;
 import static org.projectnessie.cel.interpreter.InterpretableDecorator.decDisableShortcircuits;
 import static org.projectnessie.cel.interpreter.InterpretableDecorator.decObserveEval;
 import static org.projectnessie.cel.interpreter.InterpretableDecorator.decOptimize;
-import static org.projectnessie.cel.interpreter.InterpretablePlanner.newPlanner;
-import static org.projectnessie.cel.interpreter.InterpretablePlanner.newUncheckedPlanner;
 
 import com.google.api.expr.v1alpha1.CheckedExpr;
 import com.google.api.expr.v1alpha1.Expr;
@@ -100,7 +98,31 @@ public interface Interpreter {
       TypeProvider provider,
       TypeAdapter adapter,
       AttributeFactory attrFactory) {
-    return new ExprInterpreter(dispatcher, container, provider, adapter, attrFactory);
+    return new ExprInterpreter(
+        dispatcher, container, provider, adapter, attrFactory, PlanningPolicy.ESTABLISHED_ONLY);
+  }
+
+  /**
+   * NewInterpreter builds an Interpreter with planning-time permission to use native
+   * specializations for eligible checked expressions.
+   *
+   * <p>Native planning remains disabled for unchecked expressions and whenever decorators are
+   * supplied directly to {@link #newInterpretable}.
+   */
+  static Interpreter newInterpreter(
+      Dispatcher dispatcher,
+      Container container,
+      TypeProvider provider,
+      TypeAdapter adapter,
+      AttributeFactory attrFactory,
+      boolean allowNativePlanning) {
+    return new ExprInterpreter(
+        dispatcher,
+        container,
+        provider,
+        adapter,
+        attrFactory,
+        PlanningPolicy.nativeSpecialization(allowNativePlanning));
   }
 
   /**
@@ -112,54 +134,5 @@ public interface Interpreter {
     Dispatcher dispatcher = newDispatcher();
     dispatcher.add(Overload.standardOverloads());
     return newInterpreter(dispatcher, container, provider, adapter, resolver);
-  }
-
-  final class ExprInterpreter implements Interpreter {
-    private final Dispatcher dispatcher;
-    private final Container container;
-    private final TypeProvider provider;
-    private final TypeAdapter adapter;
-    private final AttributeFactory attrFactory;
-
-    ExprInterpreter(
-        Dispatcher dispatcher,
-        Container container,
-        TypeProvider provider,
-        TypeAdapter adapter,
-        AttributeFactory attrFactory) {
-      this.dispatcher = dispatcher;
-      this.container = container;
-      this.provider = provider;
-      this.adapter = adapter;
-      this.attrFactory = attrFactory;
-    }
-
-    @Override
-    public Interpretable newInterpretable(
-        CheckedExpr checked, InterpretableDecorator... decorators) {
-      InterpretablePlanner p =
-          newPlanner(dispatcher, provider, adapter, attrFactory, container, checked, decorators);
-      return p.plan(checked.getExpr());
-    }
-
-    @Override
-    public Interpretable newInterpretable(
-        Expr expr,
-        Map<Long, Reference> refMap,
-        Map<Long, Type> typeMap,
-        InterpretableDecorator... decorators) {
-      InterpretablePlanner p =
-          newPlanner(
-              dispatcher, provider, adapter, attrFactory, container, refMap, typeMap, decorators);
-      return p.plan(expr);
-    }
-
-    @Override
-    public Interpretable newUncheckedInterpretable(
-        Expr expr, InterpretableDecorator... decorators) {
-      InterpretablePlanner p =
-          newUncheckedPlanner(dispatcher, provider, adapter, attrFactory, container, decorators);
-      return p.plan(expr);
-    }
   }
 }
