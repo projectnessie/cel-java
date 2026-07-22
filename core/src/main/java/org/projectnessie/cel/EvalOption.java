@@ -42,7 +42,13 @@ public enum EvalOption {
    * <p>By itself, OptPartialEval does not change evaluation behavior unless the input to the
    * Program Eval is an PartialVars.
    */
-  OptPartialEval(8);
+  OptPartialEval(8),
+
+  /**
+   * OptDisableNativeEval forces checked expressions to use the standard interpreter instead of
+   * native-value planned evaluation.
+   */
+  OptDisableNativeEval(16);
 
   private final int mask;
 

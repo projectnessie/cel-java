@@ -237,6 +237,14 @@ public final class Overload {
 
   /** StandardOverloads returns the definitions of the built-in overloads. */
   public static Overload[] standardOverloads() {
+    return StandardOverloadsHolder.OVERLOADS.clone();
+  }
+
+  private static final class StandardOverloadsHolder {
+    private static final Overload[] OVERLOADS = createStandardOverloads();
+  }
+
+  private static Overload[] createStandardOverloads() {
     return new Overload[] {
       // Logical not (!a)
       unary(

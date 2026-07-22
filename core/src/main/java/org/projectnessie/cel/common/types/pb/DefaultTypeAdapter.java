@@ -26,12 +26,13 @@ import com.google.protobuf.Message;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.Types;
+import org.projectnessie.cel.common.types.ref.StandardScalarTypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeAdapterSupport;
 import org.projectnessie.cel.common.types.ref.Val;
 
 /** defaultTypeAdapter converts go native types to CEL values. */
-public final class DefaultTypeAdapter implements TypeAdapter {
+public final class DefaultTypeAdapter implements StandardScalarTypeAdapter {
   /** DefaultTypeAdapter adapts canonical CEL types from their equivalent Go values. */
   public static final DefaultTypeAdapter Instance = new DefaultTypeAdapter(Db.defaultDb);
 

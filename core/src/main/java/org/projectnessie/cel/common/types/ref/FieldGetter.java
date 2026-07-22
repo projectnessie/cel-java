@@ -19,4 +19,25 @@ package org.projectnessie.cel.common.types.ref;
 @FunctionalInterface
 public interface FieldGetter {
   Object getFrom(Object target);
+
+  /** Optional allocation-free primitive access implemented by trusted generated-field getters. */
+  interface Primitive extends FieldGetter {
+    /** Runtime type for which the primitive accessors are valid. */
+    Class<?> optimizedTargetType();
+
+    /** Reads a CEL boolean without boxing. */
+    default boolean getBooleanFrom(Object target) {
+      throw new UnsupportedOperationException("boolean field access is not supported");
+    }
+
+    /** Reads a CEL signed integer without boxing. */
+    default long getLongFrom(Object target) {
+      throw new UnsupportedOperationException("integer field access is not supported");
+    }
+
+    /** Reads a CEL double without boxing. */
+    default double getDoubleFrom(Object target) {
+      throw new UnsupportedOperationException("double field access is not supported");
+    }
+  }
 }
