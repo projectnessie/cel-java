@@ -33,6 +33,8 @@ import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
+import static org.projectnessie.cel.interpreter.AttributeFactory.newQualifierStatic;
+import static org.projectnessie.cel.interpreter.AttributeFactory.refResolve;
 import static org.projectnessie.cel.interpreter.Coster.costOf;
 
 import com.google.api.expr.v1alpha1.Type;
@@ -52,6 +54,12 @@ import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Indexer;
 import org.projectnessie.cel.common.types.traits.Lister;
 import org.projectnessie.cel.common.types.traits.Mapper;
+import org.projectnessie.cel.interpreter.AttributeFactory.Attribute;
+import org.projectnessie.cel.interpreter.AttributeFactory.ConstantQualifier;
+import org.projectnessie.cel.interpreter.AttributeFactory.ConstantQualifierEquator;
+import org.projectnessie.cel.interpreter.AttributeFactory.NamespacedAttribute;
+import org.projectnessie.cel.interpreter.AttributeFactory.Qualifier;
+import org.projectnessie.cel.interpreter.AttributeFactory.ValQualifier;
 import org.projectnessie.cel.interpreter.AttributePattern.QualifierValueEquator;
 
 /** AttributeFactory provides methods creating Attribute and Qualifier values. */
@@ -178,597 +186,6 @@ public interface AttributeFactory {
     return new AttrFactory(cont, a, p);
   }
 
-  final class AttrFactory implements AttributeFactory {
-    private final Container container;
-    private final TypeAdapter adapter;
-    private final TypeProvider provider;
-
-    AttrFactory(Container container, TypeAdapter adapter, TypeProvider provider) {
-      this.container = container;
-      this.adapter = adapter;
-      this.provider = provider;
-    }
-
-    /**
-     * AbsoluteAttribute refers to a variable value and an optional qualifier path.
-     *
-     * <p>The namespaceNames represent the names the variable could have based on namespace
-     * resolution rules.
-     */
-    @Override
-    public NamespacedAttribute absoluteAttribute(long id, String... names) {
-      return new AbsoluteAttribute(id, names, new ArrayList<>(), adapter, provider, this);
-    }
-
-    /**
-     * ConditionalAttribute supports the case where an attribute selection may occur on a
-     * conditional expression, e.g. (cond ? a : b).c
-     */
-    @Override
-    public AttributeFactory.Attribute conditionalAttribute(
-        long id, Interpretable expr, AttributeFactory.Attribute t, AttributeFactory.Attribute f) {
-      return new ConditionalAttribute(id, expr, t, f, adapter, this);
-    }
-
-    /**
-     * MaybeAttribute collects variants of unchecked AbsoluteAttribute values which could either be
-     * direct variable accesses or some combination of variable access with qualification.
-     */
-    @Override
-    public Attribute maybeAttribute(long id, String name) {
-      List<NamespacedAttribute> attrs = new ArrayList<>();
-      attrs.add(
-          name.startsWith(".")
-              ? absoluteAttribute(id, name)
-              : absoluteAttribute(id, container.resolveCandidateNames(name)));
-      return new MaybeAttribute(id, attrs, adapter, provider, this);
-    }
-
-    /** RelativeAttribute refers to an expression and an optional qualifier path. */
-    @Override
-    public Attribute relativeAttribute(long id, Interpretable operand) {
-      return new RelativeAttribute(id, operand, new ArrayList<>(), adapter, this);
-    }
-
-    /** NewQualifier is an implementation of the AttributeFactory interface. */
-    @Override
-    public AttributeFactory.Qualifier newQualifier(Type objType, long qualID, Object val) {
-      // Before creating a new qualifier check to see if this is a protobuf message field access.
-      // If so, use the precomputed GetFrom qualification method rather than the standard
-      // stringQualifier.
-      if (val instanceof String str) {
-        if (objType != null && !objType.getMessageType().isEmpty()) {
-          FieldType ft = provider.findFieldType(objType.getMessageType(), str);
-          if (ft != null && ft.isSet != null && ft.getFrom != null) {
-            return new FieldQualifier(qualID, str, ft, adapter);
-          }
-        }
-      }
-      return newQualifierStatic(adapter, qualID, val);
-    }
-
-    @Override
-    public String toString() {
-      return "AttrFactory{"
-          + "container="
-          + container
-          + ", adapter="
-          + adapter
-          + ", provider="
-          + provider
-          + '}';
-    }
-  }
-
-  final class AbsoluteAttribute implements Qualifier, NamespacedAttribute, Coster {
-    final long id;
-
-    /**
-     * namespaceNames represent the names the variable could have based on declared container
-     * (package) of the expression.
-     */
-    final String[] namespaceNames;
-
-    final List<Qualifier> qualifiers;
-    final TypeAdapter adapter;
-    final TypeProvider provider;
-    final AttributeFactory fac;
-
-    AbsoluteAttribute(
-        long id,
-        String[] namespaceNames,
-        List<Qualifier> qualifiers,
-        TypeAdapter adapter,
-        TypeProvider provider,
-        AttributeFactory fac) {
-      this.id = id;
-      this.namespaceNames = Objects.requireNonNull(namespaceNames);
-      this.qualifiers = Objects.requireNonNull(qualifiers);
-      this.adapter = Objects.requireNonNull(adapter);
-      this.provider = Objects.requireNonNull(provider);
-      this.fac = Objects.requireNonNull(fac);
-    }
-
-    /** ID implements the Attribute interface method. */
-    @Override
-    public long id() {
-      return id;
-    }
-
-    /** Cost implements the Coster interface method. */
-    @Override
-    public Cost cost() {
-      long min = 0L;
-      long max = 0L;
-      for (Qualifier q : qualifiers) {
-        Cost qc = Cost.estimateCost(q);
-        min += qc.min;
-        max += qc.max;
-      }
-      min++; // For object retrieval.
-      max++;
-      return costOf(min, max);
-    }
-
-    /** AddQualifier implements the Attribute interface method. */
-    @Override
-    public Attribute addQualifier(AttributeFactory.Qualifier q) {
-      qualifiers.add(q);
-      return this;
-    }
-
-    /** CandidateVariableNames implements the NamespaceAttribute interface method. */
-    @Override
-    public String[] candidateVariableNames() {
-      return namespaceNames;
-    }
-
-    /**
-     * Qualifiers returns the list of Qualifier instances associated with the namespaced attribute.
-     */
-    @Override
-    public List<Qualifier> qualifiers() {
-      return qualifiers;
-    }
-
-    /** Qualify is an implementation of the Qualifier interface method. */
-    @Override
-    public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
-      Object val = resolve(vars);
-      if (isUnknown(val)) {
-        return val;
-      }
-      Qualifier qual = fac.newQualifier(null, id, val);
-      return qual.qualify(vars, obj);
-    }
-
-    /**
-     * Resolve returns the resolved Attribute value given the Activation, or error if the Attribute
-     * variable is not found, or if its Qualifiers cannot be applied successfully.
-     */
-    @Override
-    public Object resolve(org.projectnessie.cel.interpreter.Activation vars) {
-      return tryResolve(vars);
-    }
-
-    /**
-     * TryResolve iterates through the namespaced variable names until one is found within the
-     * Activation or TypeProvider.
-     *
-     * <p>If the variable name cannot be found as an Activation variable or in the TypeProvider as a
-     * type, then the result is `nil`, `false`, `nil` per the interface requirement.
-     */
-    @Override
-    public Object tryResolve(org.projectnessie.cel.interpreter.Activation vars) {
-      Object local = tryResolveCurrentVar(vars);
-      if (local != null) {
-        return local;
-      }
-      for (String nm : namespaceNames) {
-        // If the variable is found, process it. Otherwise, wait until the checks to
-        // determine whether the type is unknown before returning.
-        Object obj = vars.resolve(nm);
-        if (Activation.ABSENT != obj) {
-          return resolveQualifiers(vars, obj);
-        }
-        // Attempt to resolve the qualified type name if the name is not a variable identifier.
-        Val typ = provider.findIdent(nm);
-        if (typ != null) {
-          if (qualifiers.isEmpty()) {
-            return typ;
-          }
-          throw noSuchAttributeException(this);
-        }
-      }
-      throw noSuchAttributeException(this);
-    }
-
-    private Object tryResolveCurrentVar(org.projectnessie.cel.interpreter.Activation vars) {
-      if (vars instanceof Activation.VarActivation var
-          && (namespaceNames.length > 1 || !qualifiers.isEmpty())) {
-        String localName = namespaceNames[namespaceNames.length - 1];
-        if (localName.equals(var.name)) {
-          return resolveQualifiers(vars, var.val);
-        }
-      }
-      return null;
-    }
-
-    private Object resolveQualifiers(
-        org.projectnessie.cel.interpreter.Activation vars, Object obj) {
-      Object op = obj;
-      for (int i = 0; i < qualifiers.size(); i++) {
-        Qualifier qual = qualifiers.get(i);
-        Object op2 = qualify(vars, op, qual, i == qualifiers.size() - 1);
-        if (op2 instanceof Err) {
-          return op2;
-        }
-        if (op2 == null) {
-          break;
-        }
-        op = op2;
-      }
-      return op;
-    }
-
-    private Object qualify(
-        org.projectnessie.cel.interpreter.Activation vars,
-        Object obj,
-        Qualifier qualifier,
-        boolean last) {
-      if (last && qualifier instanceof ValQualifier) {
-        return ((ValQualifier) qualifier).qualifyToVal(vars, obj);
-      }
-      return qualifier.qualify(vars, obj);
-    }
-
-    /** String implements the Stringer interface method. */
-    @Override
-    public String toString() {
-      return "id: " + id + ", names: " + Arrays.toString(namespaceNames);
-    }
-  }
-
-  final class ConditionalAttribute implements Qualifier, Attribute, Coster {
-    final long id;
-    final Interpretable expr;
-    final Attribute truthy;
-    final Attribute falsy;
-    final TypeAdapter adapter;
-    final AttributeFactory fac;
-
-    ConditionalAttribute(
-        long id,
-        Interpretable expr,
-        Attribute truthy,
-        Attribute falsy,
-        TypeAdapter adapter,
-        AttributeFactory fac) {
-      this.id = id;
-      this.expr = expr;
-      this.truthy = truthy;
-      this.falsy = falsy;
-      this.adapter = adapter;
-      this.fac = fac;
-    }
-
-    /** ID is an implementation of the Attribute interface method. */
-    @Override
-    public long id() {
-      return id;
-    }
-
-    /**
-     * Cost provides the heuristic cost of a ternary operation {@code &lt;expr&gt; ? &lt;t&gt; :
-     * &lt;f&gt;}. The cost is computed as {@code cost(expr)} plus the min/max costs of evaluating
-     * either `t` or `f`.
-     */
-    @Override
-    public Cost cost() {
-      Cost t = Cost.estimateCost(truthy);
-      Cost f = Cost.estimateCost(falsy);
-      Cost e = Cost.estimateCost(expr);
-      return costOf(e.min + Math.min(t.min, f.min), e.max + Math.max(t.max, f.max));
-    }
-
-    /**
-     * AddQualifier appends the same qualifier to both sides of the conditional, in effect managing
-     * the qualification of alternate attributes.
-     */
-    @Override
-    public Attribute addQualifier(AttributeFactory.Qualifier qual) {
-      truthy.addQualifier(qual); // just do
-      falsy.addQualifier(qual); // just do
-      return this;
-    }
-
-    /** Qualify is an implementation of the Qualifier interface method. */
-    @Override
-    public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
-      Object val = resolve(vars);
-      if (isUnknown(val)) {
-        return val;
-      }
-      Qualifier qual = fac.newQualifier(null, id, val);
-      return qual.qualify(vars, obj);
-    }
-
-    /**
-     * Resolve evaluates the condition, and then resolves the truthy or falsy branch accordingly.
-     */
-    @Override
-    public Object resolve(org.projectnessie.cel.interpreter.Activation vars) {
-      Val val = expr.eval(vars);
-      if (val == null) {
-        throw noSuchAttributeException(this);
-      }
-      if (isError(val)) {
-        throw new ErrException("message: %s", val);
-      }
-      if (val == True) {
-        return truthy.resolve(vars);
-      }
-      if (val == False) {
-        return falsy.resolve(vars);
-      }
-      if (isUnknown(val)) {
-        return val;
-      }
-      return maybeNoSuchOverloadErr(val);
-    }
-
-    /** String is an implementation of the Stringer interface method. */
-    @Override
-    public String toString() {
-      return String.format("id: %d, truthy attribute: %s, falsy attribute: %s", id, truthy, falsy);
-    }
-  }
-
-  final class MaybeAttribute implements Coster, Attribute, Qualifier {
-    final long id;
-    final List<NamespacedAttribute> attrs;
-    final TypeAdapter adapter;
-    final TypeProvider provider;
-    final AttributeFactory fac;
-
-    MaybeAttribute(
-        long id,
-        List<NamespacedAttribute> attrs,
-        TypeAdapter adapter,
-        TypeProvider provider,
-        AttributeFactory fac) {
-      this.id = id;
-      this.attrs = attrs;
-      this.adapter = adapter;
-      this.provider = provider;
-      this.fac = fac;
-    }
-
-    /** ID is an implementation of the Attribute interface method. */
-    @Override
-    public long id() {
-      return id;
-    }
-
-    /**
-     * Cost implements the Coster interface method. The min cost is computed as the minimal cost
-     * among all the possible attributes, the max cost ditto.
-     */
-    @Override
-    public Cost cost() {
-      long min = Long.MAX_VALUE;
-      long max = 0L;
-      for (NamespacedAttribute a : attrs) {
-        Cost ac = Cost.estimateCost(a);
-        min = Long.min(min, ac.min);
-        max = Long.max(max, ac.max);
-      }
-      return costOf(min, max);
-    }
-
-    /**
-     * AddQualifier adds a qualifier to each possible attribute variant, and also creates a new
-     * namespaced variable from the qualified value.
-     *
-     * <p>The algorithm for building the maybe attribute is as follows:
-     *
-     * <ol>
-     *   <li>Create a maybe attribute from a simple identifier when it occurs in a parsed-only
-     *       expression <br>
-     *       <br>
-     *       {@code mb = MaybeAttribute(&lt;id&gt;, "a")} <br>
-     *       <br>
-     *       Initializing the maybe attribute creates an absolute attribute internally which
-     *       includes the possible namespaced names of the attribute. In this example, let's assume
-     *       we are in namespace 'ns', then the maybe is either one of the following variable names:
-     *       <br>
-     *       <br>
-     *       possible variables names -- ns.a, a
-     *   <li>Adding a qualifier to the maybe means that the variable name could be a longer
-     *       qualified name, or a field selection on one of the possible variable names produced
-     *       earlier: <br>
-     *       <br>
-     *       {@code mb.AddQualifier("b")} <br>
-     *       <br>
-     *       possible variables names -- ns.a.b, a.b<br>
-     *       possible field selection -- ns.a['b'], a['b']
-     * </ol>
-     *
-     * If none of the attributes within the maybe resolves a value, the result is an error.
-     */
-    @Override
-    public Attribute addQualifier(AttributeFactory.Qualifier qual) {
-      String str = "";
-      boolean isStr = false;
-      if (qual instanceof ConstantQualifier cq) {
-        Object cqv = cq.value().value();
-        if (cqv instanceof String) {
-          str = (String) cqv;
-          isStr = true;
-        }
-      }
-      String[] augmentedNames = new String[0];
-      // First add the qualifier to all existing attributes in the oneof.
-      for (NamespacedAttribute attr : attrs) {
-        if (isStr && attr.qualifiers().isEmpty()) {
-          String[] candidateVars = attr.candidateVariableNames();
-          augmentedNames = new String[candidateVars.length];
-          for (int i = 0; i < candidateVars.length; i++) {
-            String name = candidateVars[i];
-            augmentedNames[i] = String.format("%s.%s", name, str);
-          }
-        }
-        attr.addQualifier(qual);
-      }
-      // Next, ensure the most specific variable / type reference is searched first.
-      if (attrs.isEmpty()) {
-        attrs.add(fac.absoluteAttribute(qual.id(), augmentedNames));
-      } else {
-        attrs.add(0, fac.absoluteAttribute(qual.id(), augmentedNames));
-      }
-      return this;
-    }
-
-    /** Qualify is an implementation of the Qualifier interface method. */
-    @Override
-    public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
-      Object val = resolve(vars);
-      if (isUnknown(val)) {
-        return val;
-      }
-      Qualifier qual = fac.newQualifier(null, id, val);
-      return qual.qualify(vars, obj);
-    }
-
-    /**
-     * Resolve follows the variable resolution rules to determine whether the attribute is a
-     * variable or a field selection.
-     */
-    @Override
-    public Object resolve(org.projectnessie.cel.interpreter.Activation vars) {
-      for (NamespacedAttribute attr : attrs) {
-        if (attr instanceof AbsoluteAttribute) {
-          Object result = ((AbsoluteAttribute) attr).tryResolveCurrentVar(vars);
-          if (result != null) {
-            return result;
-          }
-        }
-      }
-      for (NamespacedAttribute attr : attrs) {
-        try {
-          return attr.tryResolve(vars);
-        } catch (ErrException ignore) {
-        }
-      }
-      // Else, produce a no such attribute error.
-      throw noSuchAttributeException(this);
-    }
-
-    /** String is an implementation of the Stringer interface method. */
-    @Override
-    public String toString() {
-      return String.format("id: %s, attributes: %s", id, attrs);
-    }
-  }
-
-  final class RelativeAttribute implements Coster, Qualifier, Attribute {
-    final long id;
-    final Interpretable operand;
-    final List<Qualifier> qualifiers;
-    final TypeAdapter adapter;
-    final AttributeFactory fac;
-
-    RelativeAttribute(
-        long id,
-        Interpretable operand,
-        List<Qualifier> qualifiers,
-        TypeAdapter adapter,
-        AttributeFactory fac) {
-      this.id = id;
-      this.operand = operand;
-      this.qualifiers = qualifiers;
-      this.adapter = adapter;
-      this.fac = fac;
-    }
-
-    /** ID is an implementation of the Attribute interface method. */
-    @Override
-    public long id() {
-      return id;
-    }
-
-    /** Cost implements the Coster interface method. */
-    @Override
-    public Cost cost() {
-      Cost c = Cost.estimateCost(operand);
-      long min = c.min;
-      long max = c.max;
-      for (Qualifier qual : qualifiers) {
-        Cost q = Cost.estimateCost(qual);
-        min += q.min;
-        max += q.max;
-      }
-      return costOf(min, max);
-    }
-
-    /** AddQualifier implements the Attribute interface method. */
-    @Override
-    public Attribute addQualifier(AttributeFactory.Qualifier qual) {
-      qualifiers.add(qual);
-      return this;
-    }
-
-    /** Qualify is an implementation of the Qualifier interface method. */
-    @Override
-    public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
-      Object val = resolve(vars);
-      if (isUnknown(val)) {
-        return val;
-      }
-      Qualifier qual = fac.newQualifier(null, id, val);
-      return qual.qualify(vars, obj);
-    }
-
-    /** Resolve expression value and qualifier relative to the expression result. */
-    @Override
-    public Object resolve(org.projectnessie.cel.interpreter.Activation vars) {
-      // First, evaluate the operand.
-      Val v = operand.eval(vars);
-      if (isError(v)) {
-        throw new ErrException("message: %s", v);
-      }
-      if (isUnknown(v)) {
-        return v;
-      }
-      // Next, qualify it. Qualification handles unkonwns as well, so there's no need to recheck.
-      Object obj = v;
-      for (int i = 0; i < qualifiers.size(); i++) {
-        Qualifier qual = qualifiers.get(i);
-        if (obj == null) {
-          throw noSuchAttributeException(this);
-        }
-        if (i == qualifiers.size() - 1 && qual instanceof ValQualifier) {
-          obj = ((ValQualifier) qual).qualifyToVal(vars, obj);
-        } else {
-          obj = qual.qualify(vars, obj);
-        }
-        if (obj instanceof Err) {
-          return obj;
-        }
-      }
-      if (obj == null) {
-        throw noSuchAttributeException(this);
-      }
-      return obj;
-    }
-
-    /** String is an implementation of the Stringer interface method. */
-    @Override
-    public String toString() {
-      return String.format("id: %d, operand: %s", id, operand);
-    }
-  }
-
   static Qualifier newQualifierStatic(TypeAdapter adapter, long id, Object v) {
     if (v instanceof Attribute) {
       return new AttrQualifier(id, (Attribute) v);
@@ -817,603 +234,6 @@ public interface AttributeFactory {
 
     throw new IllegalStateException(
         String.format("invalid qualifier type: %s", v.getClass().getName()));
-  }
-
-  final class AttrQualifier implements Coster, Attribute {
-    final long id;
-    final Attribute attribute;
-
-    AttrQualifier(long id, Attribute attribute) {
-      this.id = id;
-      this.attribute = attribute;
-    }
-
-    @Override
-    public long id() {
-      return id;
-    }
-
-    /** Cost returns zero for constant field qualifiers */
-    @Override
-    public Cost cost() {
-      return Cost.estimateCost(attribute);
-    }
-
-    @Override
-    public Attribute addQualifier(Qualifier q) {
-      return attribute.addQualifier(q);
-    }
-
-    @Override
-    public Object resolve(Activation a) {
-      return attribute.resolve(a);
-    }
-
-    @Override
-    public Object qualify(Activation vars, Object obj) {
-      return attribute.qualify(vars, obj);
-    }
-
-    @Override
-    public String toString() {
-      return "AttrQualifier{" + "id=" + id + ", attribute=" + attribute + '}';
-    }
-  }
-
-  final class StringQualifier implements Coster, ConstantQualifierEquator, QualifierValueEquator {
-    final long id;
-    final String value;
-    final Val celValue;
-    final TypeAdapter adapter;
-
-    StringQualifier(long id, String value, Val celValue, TypeAdapter adapter) {
-      this.id = id;
-      this.value = value;
-      this.celValue = celValue;
-      this.adapter = adapter;
-    }
-
-    /** ID is an implementation of the Qualifier interface method. */
-    @Override
-    public long id() {
-      return id;
-    }
-
-    /** Qualify implements the Qualifier interface method. */
-    @SuppressWarnings("rawtypes")
-    @Override
-    public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
-      String s = value;
-      if (obj instanceof Map m) {
-        obj = m.get(s);
-        if (obj == null) {
-          if (m.containsKey(s)) {
-            return NullValue;
-          }
-          throw noSuchKeyException(s);
-        }
-      } else if (isUnknown(obj)) {
-        return obj;
-      } else {
-        return refResolve(adapter, celValue, obj);
-      }
-      return obj;
-    }
-
-    /** Value implements the ConstantQualifier interface */
-    @Override
-    public Val value() {
-      return celValue;
-    }
-
-    /** Cost returns zero for constant field qualifiers */
-    @Override
-    public Cost cost() {
-      return Cost.None;
-    }
-
-    @Override
-    public boolean qualifierValueEquals(Object value) {
-      if (value instanceof String) {
-        return this.value.equals(value);
-      }
-      return false;
-    }
-
-    @Override
-    public String toString() {
-      return "StringQualifier{"
-          + "id="
-          + id
-          + ", value='"
-          + value
-          + '\''
-          + ", celValue="
-          + celValue
-          + ", adapter="
-          + adapter
-          + '}';
-    }
-  }
-
-  final class DoubleQualifier implements Coster, ConstantQualifierEquator {
-    final long id;
-    final double value;
-    final Val celValue;
-    final TypeAdapter adapter;
-
-    DoubleQualifier(long id, double value, Val celValue, TypeAdapter adapter) {
-      this.id = id;
-      this.value = value;
-      this.celValue = celValue;
-      this.adapter = adapter;
-    }
-
-    /** ID is an implementation of the Qualifier interface method. */
-    @Override
-    public long id() {
-      return id;
-    }
-
-    /** Qualify implements the Qualifier interface method. */
-    @SuppressWarnings("rawtypes")
-    @Override
-    public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
-      double i = value;
-      if (obj instanceof Map m) {
-        obj = m.get(i);
-        if (obj == null) {
-          obj = m.get((int) i);
-        }
-        if (obj == null) {
-          if (m.containsKey(i) || m.containsKey((int) i)) {
-            return null;
-          }
-          throw noSuchKeyException(i);
-        }
-        return obj;
-      }
-      if (obj.getClass().isArray()) {
-        int l = Array.getLength(obj);
-        if (i < 0 || i >= l) {
-          throw indexOutOfBoundsException(i);
-        }
-        obj = Array.get(obj, (int) i);
-        return obj;
-      }
-      if (obj instanceof List list) {
-        int l = list.size();
-        if (i < 0 || i >= l) {
-          throw indexOutOfBoundsException(i);
-        }
-        obj = list.get((int) i);
-        return obj;
-      }
-      if (isUnknown(obj)) {
-        return obj;
-      }
-      return refResolve(adapter, celValue, obj);
-    }
-
-    /** Value implements the ConstantQualifier interface */
-    @Override
-    public Val value() {
-      return celValue;
-    }
-
-    /** Cost returns zero for constant field qualifiers */
-    @Override
-    public Cost cost() {
-      return Cost.None;
-    }
-
-    @Override
-    public boolean qualifierValueEquals(Object value) {
-      if (value instanceof ULong) {
-        return false;
-      }
-      if (value instanceof Number) {
-        return this.value == ((Number) value).doubleValue();
-      }
-      return false;
-    }
-
-    @Override
-    public String toString() {
-      return "DoubleQualifier{"
-          + "id="
-          + id
-          + ", value="
-          + value
-          + ", celValue="
-          + celValue
-          + ", adapter="
-          + adapter
-          + '}';
-    }
-  }
-
-  final class IntQualifier implements Coster, ConstantQualifierEquator {
-    final long id;
-    final long value;
-    final Val celValue;
-    final TypeAdapter adapter;
-
-    IntQualifier(long id, long value, Val celValue, TypeAdapter adapter) {
-      this.id = id;
-      this.value = value;
-      this.celValue = celValue;
-      this.adapter = adapter;
-    }
-
-    /** ID is an implementation of the Qualifier interface method. */
-    @Override
-    public long id() {
-      return id;
-    }
-
-    /** Qualify implements the Qualifier interface method. */
-    @SuppressWarnings("rawtypes")
-    @Override
-    public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
-      long i = value;
-      if (obj instanceof Map m) {
-        obj = m.get(i);
-        if (obj == null) {
-          obj = m.get((int) i);
-        }
-        if (obj == null) {
-          if (m.containsKey(i) || m.containsKey((int) i)) {
-            return null;
-          }
-          throw noSuchKeyException(i);
-        }
-        return obj;
-      }
-      if (obj.getClass().isArray()) {
-        int l = Array.getLength(obj);
-        if (i < 0 || i >= l) {
-          throw indexOutOfBoundsException(i);
-        }
-        obj = Array.get(obj, (int) i);
-        return obj;
-      }
-      if (obj instanceof List list) {
-        int l = list.size();
-        if (i < 0 || i >= l) {
-          throw indexOutOfBoundsException(i);
-        }
-        obj = list.get((int) i);
-        return obj;
-      }
-      if (isUnknown(obj)) {
-        return obj;
-      }
-      return refResolve(adapter, celValue, obj);
-    }
-
-    /** Value implements the ConstantQualifier interface */
-    @Override
-    public Val value() {
-      return celValue;
-    }
-
-    /** Cost returns zero for constant field qualifiers */
-    @Override
-    public Cost cost() {
-      return Cost.None;
-    }
-
-    @Override
-    public boolean qualifierValueEquals(Object value) {
-      if (value instanceof ULong) {
-        return false;
-      }
-      if (value instanceof Number) {
-        return this.value == ((Number) value).longValue();
-      }
-      return false;
-    }
-
-    @Override
-    public String toString() {
-      return "IntQualifier{"
-          + "id="
-          + id
-          + ", value="
-          + value
-          + ", celValue="
-          + celValue
-          + ", adapter="
-          + adapter
-          + '}';
-    }
-  }
-
-  final class UintQualifier implements Coster, ConstantQualifierEquator {
-    final long id;
-    final long value;
-    final Val celValue;
-    final TypeAdapter adapter;
-
-    UintQualifier(long id, long value, Val celValue, TypeAdapter adapter) {
-      this.id = id;
-      this.value = value;
-      this.celValue = celValue;
-      this.adapter = adapter;
-    }
-
-    /** ID is an implementation of the Qualifier interface method. */
-    @Override
-    public long id() {
-      return id;
-    }
-
-    /** Qualify implements the Qualifier interface method. */
-    @SuppressWarnings("rawtypes")
-    @Override
-    public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
-      long i = value;
-      if (obj instanceof Map m) {
-        obj = m.get(ULong.valueOf(i));
-        if (obj == null) {
-          throw noSuchKeyException(i);
-        }
-        return obj;
-      }
-      if (obj.getClass().isArray()) {
-        int l = Array.getLength(obj);
-        if (i < 0 && i >= l) {
-          throw indexOutOfBoundsException(i);
-        }
-        obj = Array.get(obj, (int) i);
-        return obj;
-      }
-      if (isUnknown(obj)) {
-        return obj;
-      }
-      return refResolve(adapter, celValue, obj);
-    }
-
-    /** Value implements the ConstantQualifier interface */
-    @Override
-    public Val value() {
-      return celValue;
-    }
-
-    /** Cost returns zero for constant field qualifiers */
-    @Override
-    public Cost cost() {
-      return Cost.None;
-    }
-
-    @Override
-    public boolean qualifierValueEquals(Object value) {
-      if (value instanceof ULong) {
-        return this.value == ((ULong) value).longValue();
-      }
-      return false;
-    }
-
-    @Override
-    public String toString() {
-      return "UintQualifier{"
-          + "id="
-          + id
-          + ", value="
-          + value
-          + ", celValue="
-          + celValue
-          + ", adapter="
-          + adapter
-          + '}';
-    }
-  }
-
-  final class BoolQualifier implements Coster, ConstantQualifierEquator {
-    final long id;
-    final boolean value;
-    final Val celValue;
-    final TypeAdapter adapter;
-
-    BoolQualifier(long id, boolean value, Val celValue, TypeAdapter adapter) {
-      this.id = id;
-      this.value = value;
-      this.celValue = celValue;
-      this.adapter = adapter;
-    }
-
-    /** ID is an implementation of the Qualifier interface method. */
-    @Override
-    public long id() {
-      return id;
-    }
-
-    /** Qualify implements the Qualifier interface method. */
-    @SuppressWarnings("rawtypes")
-    @Override
-    public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
-      boolean b = value;
-      if (obj instanceof Map m) {
-        obj = m.get(b);
-        if (obj == null) {
-          if (m.containsKey(b)) {
-            return null;
-          }
-          throw noSuchKeyException(b);
-        }
-      } else if (isUnknown(obj)) {
-        return obj;
-      } else {
-        return refResolve(adapter, celValue, obj);
-      }
-      return obj;
-    }
-
-    /** Value implements the ConstantQualifier interface */
-    @Override
-    public Val value() {
-      return celValue;
-    }
-
-    /** Cost returns zero for constant field qualifiers */
-    @Override
-    public Cost cost() {
-      return Cost.None;
-    }
-
-    @Override
-    public boolean qualifierValueEquals(Object value) {
-      if (value instanceof Boolean) {
-        return this.value == (Boolean) value;
-      }
-      return false;
-    }
-
-    @Override
-    public String toString() {
-      return "BoolQualifier{"
-          + "id="
-          + id
-          + ", value="
-          + value
-          + ", celValue="
-          + celValue
-          + ", adapter="
-          + adapter
-          + '}';
-    }
-  }
-
-  /**
-   * Not actually a qualifier, but conformance-tests require this, although it's actually an error
-   * condition.
-   */
-  final class NullQualifier implements Coster, ConstantQualifierEquator {
-    final long id;
-    final Val celValue;
-    final TypeAdapter adapter;
-
-    NullQualifier(long id, Val celValue, TypeAdapter adapter) {
-      this.id = id;
-      this.celValue = celValue;
-      this.adapter = adapter;
-    }
-
-    /** ID is an implementation of the Qualifier interface method. */
-    @Override
-    public long id() {
-      return id;
-    }
-
-    /** Qualify implements the Qualifier interface method. */
-    @Override
-    public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
-      return null;
-    }
-
-    /** Value implements the ConstantQualifier interface */
-    @Override
-    public Val value() {
-      return NullValue;
-    }
-
-    /** Cost returns zero for constant field qualifiers */
-    @Override
-    public Cost cost() {
-      return Cost.None;
-    }
-
-    @Override
-    public boolean qualifierValueEquals(Object value) {
-      return value == null || value == NullValue;
-    }
-
-    @Override
-    public String toString() {
-      return "NullQualifier{"
-          + "id="
-          + id
-          + ", celValue="
-          + celValue
-          + ", adapter="
-          + adapter
-          + '}';
-    }
-  }
-
-  /**
-   * fieldQualifier indicates that the qualification is a well-defined field with a known field
-   * type. When the field type is known this can be used to improve the speed and efficiency of
-   * field resolution.
-   */
-  final class FieldQualifier implements Coster, ConstantQualifierEquator, ValQualifier {
-    final long id;
-    final String name;
-    final FieldType fieldType;
-    final TypeAdapter adapter;
-
-    FieldQualifier(long id, String name, FieldType fieldType, TypeAdapter adapter) {
-      this.id = id;
-      this.name = name;
-      this.fieldType = fieldType;
-      this.adapter = adapter;
-    }
-
-    /** ID is an implementation of the Qualifier interface method. */
-    @Override
-    public long id() {
-      return id;
-    }
-
-    /** Qualify implements the Qualifier interface method. */
-    @Override
-    public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
-      if (obj instanceof Val) {
-        obj = ((Val) obj).value();
-      }
-      return fieldType.getFrom.getFrom(obj);
-    }
-
-    @Override
-    public Val qualifyToVal(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
-      return adapter.nativeToValue(qualify(vars, obj));
-    }
-
-    /** Value implements the ConstantQualifier interface */
-    @Override
-    public Val value() {
-      return stringOf(name);
-    }
-
-    /** Cost returns zero for constant field qualifiers */
-    @Override
-    public Cost cost() {
-      return Cost.None;
-    }
-
-    @Override
-    public boolean qualifierValueEquals(Object value) {
-      if (value instanceof String) {
-        return this.name.equals(value);
-      }
-      return false;
-    }
-
-    @Override
-    public String toString() {
-      return "FieldQualifier{"
-          + "id="
-          + id
-          + ", name='"
-          + name
-          + '\''
-          + ", fieldType="
-          + fieldType
-          + ", adapter="
-          + adapter
-          + '}';
-    }
   }
 
   /**
@@ -1466,5 +286,1160 @@ public interface AttributeFactory {
     //  simple go error types.
     throwErrorAsIllegalStateException(celVal);
     return noSuchOverload(celVal, "ref-resolve", null);
+  }
+}
+
+/** Default {@link AttributeFactory} implementation. */
+final class AttrFactory implements AttributeFactory {
+  private final Container container;
+  private final TypeAdapter adapter;
+  private final TypeProvider provider;
+
+  AttrFactory(Container container, TypeAdapter adapter, TypeProvider provider) {
+    this.container = container;
+    this.adapter = adapter;
+    this.provider = provider;
+  }
+
+  /**
+   * AbsoluteAttribute refers to a variable value and an optional qualifier path.
+   *
+   * <p>The namespaceNames represent the names the variable could have based on namespace resolution
+   * rules.
+   */
+  @Override
+  public NamespacedAttribute absoluteAttribute(long id, String... names) {
+    return new AbsoluteAttribute(id, names, new ArrayList<>(), adapter, provider, this);
+  }
+
+  /**
+   * ConditionalAttribute supports the case where an attribute selection may occur on a conditional
+   * expression, e.g. (cond ? a : b).c
+   */
+  @Override
+  public AttributeFactory.Attribute conditionalAttribute(
+      long id, Interpretable expr, AttributeFactory.Attribute t, AttributeFactory.Attribute f) {
+    return new ConditionalAttribute(id, expr, t, f, adapter, this);
+  }
+
+  /**
+   * MaybeAttribute collects variants of unchecked AbsoluteAttribute values which could either be
+   * direct variable accesses or some combination of variable access with qualification.
+   */
+  @Override
+  public Attribute maybeAttribute(long id, String name) {
+    List<NamespacedAttribute> attrs = new ArrayList<>();
+    attrs.add(
+        name.startsWith(".")
+            ? absoluteAttribute(id, name)
+            : absoluteAttribute(id, container.resolveCandidateNames(name)));
+    return new MaybeAttribute(id, attrs, adapter, provider, this);
+  }
+
+  /** RelativeAttribute refers to an expression and an optional qualifier path. */
+  @Override
+  public Attribute relativeAttribute(long id, Interpretable operand) {
+    return new RelativeAttribute(id, operand, new ArrayList<>(), adapter, this);
+  }
+
+  /** NewQualifier is an implementation of the AttributeFactory interface. */
+  @Override
+  public AttributeFactory.Qualifier newQualifier(Type objType, long qualID, Object val) {
+    // Before creating a new qualifier check to see if this is a protobuf message field access.
+    // If so, use the precomputed GetFrom qualification method rather than the standard
+    // stringQualifier.
+    if (val instanceof String str) {
+      if (objType != null && !objType.getMessageType().isEmpty()) {
+        FieldType ft = provider.findFieldType(objType.getMessageType(), str);
+        if (ft != null && ft.isSet != null && ft.getFrom != null) {
+          return new FieldQualifier(qualID, str, ft, adapter);
+        }
+      }
+    }
+    return newQualifierStatic(adapter, qualID, val);
+  }
+
+  @Override
+  public String toString() {
+    return "AttrFactory{"
+        + "container="
+        + container
+        + ", adapter="
+        + adapter
+        + ", provider="
+        + provider
+        + '}';
+  }
+}
+
+/**
+ * @param namespaceNames namespaceNames represent the names the variable could have based on
+ *     declared container (package) of the expression.
+ */
+record AbsoluteAttribute(
+    long id,
+    String[] namespaceNames,
+    List<Qualifier> qualifiers,
+    TypeAdapter adapter,
+    TypeProvider provider,
+    AttributeFactory fac)
+    implements Qualifier, NamespacedAttribute, Coster {
+  AbsoluteAttribute(
+      long id,
+      String[] namespaceNames,
+      List<Qualifier> qualifiers,
+      TypeAdapter adapter,
+      TypeProvider provider,
+      AttributeFactory fac) {
+    this.id = id;
+    this.namespaceNames = Objects.requireNonNull(namespaceNames);
+    this.qualifiers = Objects.requireNonNull(qualifiers);
+    this.adapter = Objects.requireNonNull(adapter);
+    this.provider = Objects.requireNonNull(provider);
+    this.fac = Objects.requireNonNull(fac);
+  }
+
+  /** ID implements the Attribute interface method. */
+  @Override
+  public long id() {
+    return id;
+  }
+
+  /** Cost implements the Coster interface method. */
+  @Override
+  public Cost cost() {
+    long min = 0L;
+    long max = 0L;
+    for (Qualifier q : qualifiers) {
+      Cost qc = Cost.estimateCost(q);
+      min += qc.min;
+      max += qc.max;
+    }
+    min++; // For object retrieval.
+    max++;
+    return costOf(min, max);
+  }
+
+  /** AddQualifier implements the Attribute interface method. */
+  @Override
+  public Attribute addQualifier(Qualifier q) {
+    qualifiers.add(q);
+    return this;
+  }
+
+  /** CandidateVariableNames implements the NamespaceAttribute interface method. */
+  @Override
+  public String[] candidateVariableNames() {
+    return namespaceNames;
+  }
+
+  /**
+   * Qualifiers returns the list of Qualifier instances associated with the namespaced attribute.
+   */
+  @Override
+  public List<Qualifier> qualifiers() {
+    return qualifiers;
+  }
+
+  /** Qualify is an implementation of the Qualifier interface method. */
+  @Override
+  public Object qualify(Activation vars, Object obj) {
+    Object val = resolve(vars);
+    if (isUnknown(val)) {
+      return val;
+    }
+    Qualifier qual = fac.newQualifier(null, id, val);
+    return qual.qualify(vars, obj);
+  }
+
+  /**
+   * Resolve returns the resolved Attribute value given the Activation, or error if the Attribute
+   * variable is not found, or if its Qualifiers cannot be applied successfully.
+   */
+  @Override
+  public Object resolve(Activation vars) {
+    return tryResolve(vars);
+  }
+
+  /**
+   * TryResolve iterates through the namespaced variable names until one is found within the
+   * Activation or TypeProvider.
+   *
+   * <p>If the variable name cannot be found as an Activation variable or in the TypeProvider as a
+   * type, then the result is `nil`, `false`, `nil` per the interface requirement.
+   */
+  @Override
+  public Object tryResolve(Activation vars) {
+    Object local = tryResolveCurrentVar(vars);
+    if (local != null) {
+      return local;
+    }
+    for (String nm : namespaceNames) {
+      // If the variable is found, process it. Otherwise, wait until the checks to
+      // determine whether the type is unknown before returning.
+      Object obj = vars.resolve(nm);
+      if (Activation.ABSENT != obj) {
+        return resolveQualifiers(vars, obj);
+      }
+      // Attempt to resolve the qualified type name if the name is not a variable identifier.
+      Val typ = provider.findIdent(nm);
+      if (typ != null) {
+        if (qualifiers.isEmpty()) {
+          return typ;
+        }
+        throw noSuchAttributeException(this);
+      }
+    }
+    throw noSuchAttributeException(this);
+  }
+
+  Object tryResolveCurrentVar(Activation vars) {
+    if (vars instanceof VarActivation var && (namespaceNames.length > 1 || !qualifiers.isEmpty())) {
+      String localName = namespaceNames[namespaceNames.length - 1];
+      if (localName.equals(var.name)) {
+        return resolveQualifiers(vars, var.val);
+      }
+    }
+    return null;
+  }
+
+  private Object resolveQualifiers(Activation vars, Object obj) {
+    Object op = obj;
+    for (int i = 0; i < qualifiers.size(); i++) {
+      Qualifier qual = qualifiers.get(i);
+      Object op2 = qualify(vars, op, qual, i == qualifiers.size() - 1);
+      if (op2 instanceof Err) {
+        return op2;
+      }
+      if (op2 == null) {
+        break;
+      }
+      op = op2;
+    }
+    return op;
+  }
+
+  private Object qualify(Activation vars, Object obj, Qualifier qualifier, boolean last) {
+    if (last && qualifier instanceof ValQualifier) {
+      return ((ValQualifier) qualifier).qualifyToVal(vars, obj);
+    }
+    return qualifier.qualify(vars, obj);
+  }
+
+  /** String implements the Stringer interface method. */
+  @Override
+  public String toString() {
+    return "id: " + id + ", names: " + Arrays.toString(namespaceNames);
+  }
+}
+
+record ConditionalAttribute(
+    long id,
+    Interpretable expr,
+    Attribute truthy,
+    Attribute falsy,
+    TypeAdapter adapter,
+    AttributeFactory fac)
+    implements Qualifier, Attribute, Coster {
+
+  /** ID is an implementation of the Attribute interface method. */
+  @Override
+  public long id() {
+    return id;
+  }
+
+  /**
+   * Cost provides the heuristic cost of a ternary operation {@code &lt;expr&gt; ? &lt;t&gt; :
+   * &lt;f&gt;}. The cost is computed as {@code cost(expr)} plus the min/max costs of evaluating
+   * either `t` or `f`.
+   */
+  @Override
+  public Cost cost() {
+    Cost t = Cost.estimateCost(truthy);
+    Cost f = Cost.estimateCost(falsy);
+    Cost e = Cost.estimateCost(expr);
+    return costOf(e.min + Math.min(t.min, f.min), e.max + Math.max(t.max, f.max));
+  }
+
+  /**
+   * AddQualifier appends the same qualifier to both sides of the conditional, in effect managing
+   * the qualification of alternate attributes.
+   */
+  @Override
+  public Attribute addQualifier(Qualifier qual) {
+    truthy.addQualifier(qual); // just do
+    falsy.addQualifier(qual); // just do
+    return this;
+  }
+
+  /** Qualify is an implementation of the Qualifier interface method. */
+  @Override
+  public Object qualify(Activation vars, Object obj) {
+    Object val = resolve(vars);
+    if (isUnknown(val)) {
+      return val;
+    }
+    Qualifier qual = fac.newQualifier(null, id, val);
+    return qual.qualify(vars, obj);
+  }
+
+  /** Resolve evaluates the condition, and then resolves the truthy or falsy branch accordingly. */
+  @Override
+  public Object resolve(Activation vars) {
+    Val val = expr.eval(vars);
+    if (val == null) {
+      throw noSuchAttributeException(this);
+    }
+    if (isError(val)) {
+      throw new ErrException("message: %s", val);
+    }
+    if (val == True) {
+      return truthy.resolve(vars);
+    }
+    if (val == False) {
+      return falsy.resolve(vars);
+    }
+    if (isUnknown(val)) {
+      return val;
+    }
+    return maybeNoSuchOverloadErr(val);
+  }
+
+  /** String is an implementation of the Stringer interface method. */
+  @Override
+  public String toString() {
+    return String.format("id: %d, truthy attribute: %s, falsy attribute: %s", id, truthy, falsy);
+  }
+}
+
+record MaybeAttribute(
+    long id,
+    List<NamespacedAttribute> attrs,
+    TypeAdapter adapter,
+    TypeProvider provider,
+    AttributeFactory fac)
+    implements Coster, Attribute, Qualifier {
+
+  /** ID is an implementation of the Attribute interface method. */
+  @Override
+  public long id() {
+    return id;
+  }
+
+  /**
+   * Cost implements the Coster interface method. The min cost is computed as the minimal cost among
+   * all the possible attributes, the max cost ditto.
+   */
+  @Override
+  public Cost cost() {
+    long min = Long.MAX_VALUE;
+    long max = 0L;
+    for (NamespacedAttribute a : attrs) {
+      Cost ac = Cost.estimateCost(a);
+      min = Long.min(min, ac.min);
+      max = Long.max(max, ac.max);
+    }
+    return costOf(min, max);
+  }
+
+  /**
+   * AddQualifier adds a qualifier to each possible attribute variant, and also creates a new
+   * namespaced variable from the qualified value.
+   *
+   * <p>The algorithm for building the maybe attribute is as follows:
+   *
+   * <ol>
+   *   <li>Create a maybe attribute from a simple identifier when it occurs in a parsed-only
+   *       expression <br>
+   *       <br>
+   *       {@code mb = MaybeAttribute(&lt;id&gt;, "a")} <br>
+   *       <br>
+   *       Initializing the maybe attribute creates an absolute attribute internally which includes
+   *       the possible namespaced names of the attribute. In this example, let's assume we are in
+   *       namespace 'ns', then the maybe is either one of the following variable names: <br>
+   *       <br>
+   *       possible variables names -- ns.a, a
+   *   <li>Adding a qualifier to the maybe means that the variable name could be a longer qualified
+   *       name, or a field selection on one of the possible variable names produced earlier: <br>
+   *       <br>
+   *       {@code mb.AddQualifier("b")} <br>
+   *       <br>
+   *       possible variables names -- ns.a.b, a.b<br>
+   *       possible field selection -- ns.a['b'], a['b']
+   * </ol>
+   *
+   * If none of the attributes within the maybe resolves a value, the result is an error.
+   */
+  @Override
+  public Attribute addQualifier(Qualifier qual) {
+    String str = "";
+    boolean isStr = false;
+    if (qual instanceof ConstantQualifier cq) {
+      Object cqv = cq.value().value();
+      if (cqv instanceof String) {
+        str = (String) cqv;
+        isStr = true;
+      }
+    }
+    String[] augmentedNames = new String[0];
+    // First add the qualifier to all existing attributes in the oneof.
+    for (NamespacedAttribute attr : attrs) {
+      if (isStr && attr.qualifiers().isEmpty()) {
+        String[] candidateVars = attr.candidateVariableNames();
+        augmentedNames = new String[candidateVars.length];
+        for (int i = 0; i < candidateVars.length; i++) {
+          String name = candidateVars[i];
+          augmentedNames[i] = String.format("%s.%s", name, str);
+        }
+      }
+      attr.addQualifier(qual);
+    }
+    // Next, ensure the most specific variable / type reference is searched first.
+    if (attrs.isEmpty()) {
+      attrs.add(fac.absoluteAttribute(qual.id(), augmentedNames));
+    } else {
+      attrs.add(0, fac.absoluteAttribute(qual.id(), augmentedNames));
+    }
+    return this;
+  }
+
+  /** Qualify is an implementation of the Qualifier interface method. */
+  @Override
+  public Object qualify(Activation vars, Object obj) {
+    Object val = resolve(vars);
+    if (isUnknown(val)) {
+      return val;
+    }
+    Qualifier qual = fac.newQualifier(null, id, val);
+    return qual.qualify(vars, obj);
+  }
+
+  /**
+   * Resolve follows the variable resolution rules to determine whether the attribute is a variable
+   * or a field selection.
+   */
+  @Override
+  public Object resolve(Activation vars) {
+    for (NamespacedAttribute attr : attrs) {
+      if (attr instanceof AbsoluteAttribute) {
+        Object result = ((AbsoluteAttribute) attr).tryResolveCurrentVar(vars);
+        if (result != null) {
+          return result;
+        }
+      }
+    }
+    for (NamespacedAttribute attr : attrs) {
+      try {
+        return attr.tryResolve(vars);
+      } catch (ErrException ignore) {
+      }
+    }
+    // Else, produce a no such attribute error.
+    throw noSuchAttributeException(this);
+  }
+
+  /** String is an implementation of the Stringer interface method. */
+  @Override
+  public String toString() {
+    return String.format("id: %s, attributes: %s", id, attrs);
+  }
+}
+
+record RelativeAttribute(
+    long id,
+    Interpretable operand,
+    List<Qualifier> qualifiers,
+    TypeAdapter adapter,
+    AttributeFactory fac)
+    implements Coster, Qualifier, Attribute {
+
+  /** ID is an implementation of the Attribute interface method. */
+  @Override
+  public long id() {
+    return id;
+  }
+
+  /** Cost implements the Coster interface method. */
+  @Override
+  public Cost cost() {
+    Cost c = Cost.estimateCost(operand);
+    long min = c.min;
+    long max = c.max;
+    for (Qualifier qual : qualifiers) {
+      Cost q = Cost.estimateCost(qual);
+      min += q.min;
+      max += q.max;
+    }
+    return costOf(min, max);
+  }
+
+  /** AddQualifier implements the Attribute interface method. */
+  @Override
+  public Attribute addQualifier(Qualifier qual) {
+    qualifiers.add(qual);
+    return this;
+  }
+
+  /** Qualify is an implementation of the Qualifier interface method. */
+  @Override
+  public Object qualify(Activation vars, Object obj) {
+    Object val = resolve(vars);
+    if (isUnknown(val)) {
+      return val;
+    }
+    Qualifier qual = fac.newQualifier(null, id, val);
+    return qual.qualify(vars, obj);
+  }
+
+  /** Resolve expression value and qualifier relative to the expression result. */
+  @Override
+  public Object resolve(Activation vars) {
+    // First, evaluate the operand.
+    Val v = operand.eval(vars);
+    if (isError(v)) {
+      throw new ErrException("message: %s", v);
+    }
+    if (isUnknown(v)) {
+      return v;
+    }
+    // Next, qualify it. Qualification handles unkonwns as well, so there's no need to recheck.
+    Object obj = v;
+    for (int i = 0; i < qualifiers.size(); i++) {
+      Qualifier qual = qualifiers.get(i);
+      if (obj == null) {
+        throw noSuchAttributeException(this);
+      }
+      if (i == qualifiers.size() - 1 && qual instanceof ValQualifier) {
+        obj = ((ValQualifier) qual).qualifyToVal(vars, obj);
+      } else {
+        obj = qual.qualify(vars, obj);
+      }
+      if (obj instanceof Err) {
+        return obj;
+      }
+    }
+    if (obj == null) {
+      throw noSuchAttributeException(this);
+    }
+    return obj;
+  }
+
+  /** String is an implementation of the Stringer interface method. */
+  @Override
+  public String toString() {
+    return String.format("id: %d, operand: %s", id, operand);
+  }
+}
+
+record AttrQualifier(long id, Attribute attribute) implements Coster, Attribute {
+
+  /** Cost returns zero for constant field qualifiers */
+  @Override
+  public Cost cost() {
+    return Cost.estimateCost(attribute);
+  }
+
+  @Override
+  public Attribute addQualifier(Qualifier q) {
+    return attribute.addQualifier(q);
+  }
+
+  @Override
+  public Object resolve(Activation a) {
+    return attribute.resolve(a);
+  }
+
+  @Override
+  public Object qualify(Activation vars, Object obj) {
+    return attribute.qualify(vars, obj);
+  }
+
+  @Override
+  public String toString() {
+    return "AttrQualifier{" + "id=" + id + ", attribute=" + attribute + '}';
+  }
+}
+
+final class StringQualifier implements Coster, ConstantQualifierEquator, QualifierValueEquator {
+  final long id;
+  final String value;
+  final Val celValue;
+  final TypeAdapter adapter;
+
+  StringQualifier(long id, String value, Val celValue, TypeAdapter adapter) {
+    this.id = id;
+    this.value = value;
+    this.celValue = celValue;
+    this.adapter = adapter;
+  }
+
+  /** ID is an implementation of the Qualifier interface method. */
+  @Override
+  public long id() {
+    return id;
+  }
+
+  /** Qualify implements the Qualifier interface method. */
+  @SuppressWarnings("rawtypes")
+  @Override
+  public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
+    String s = value;
+    if (obj instanceof Map m) {
+      obj = m.get(s);
+      if (obj == null) {
+        if (m.containsKey(s)) {
+          return NullValue;
+        }
+        throw noSuchKeyException(s);
+      }
+    } else if (isUnknown(obj)) {
+      return obj;
+    } else {
+      return refResolve(adapter, celValue, obj);
+    }
+    return obj;
+  }
+
+  /** Value implements the ConstantQualifier interface */
+  @Override
+  public Val value() {
+    return celValue;
+  }
+
+  /** Cost returns zero for constant field qualifiers */
+  @Override
+  public Cost cost() {
+    return Cost.None;
+  }
+
+  @Override
+  public boolean qualifierValueEquals(Object value) {
+    if (value instanceof String) {
+      return this.value.equals(value);
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return "StringQualifier{"
+        + "id="
+        + id
+        + ", value='"
+        + value
+        + '\''
+        + ", celValue="
+        + celValue
+        + ", adapter="
+        + adapter
+        + '}';
+  }
+}
+
+final class DoubleQualifier implements Coster, ConstantQualifierEquator {
+  final long id;
+  final double value;
+  final Val celValue;
+  final TypeAdapter adapter;
+
+  DoubleQualifier(long id, double value, Val celValue, TypeAdapter adapter) {
+    this.id = id;
+    this.value = value;
+    this.celValue = celValue;
+    this.adapter = adapter;
+  }
+
+  /** ID is an implementation of the Qualifier interface method. */
+  @Override
+  public long id() {
+    return id;
+  }
+
+  /** Qualify implements the Qualifier interface method. */
+  @SuppressWarnings({"rawtypes", "DuplicatedCode"})
+  @Override
+  public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
+    double i = value;
+    if (obj instanceof Map m) {
+      obj = m.get(i);
+      if (obj == null) {
+        obj = m.get((int) i);
+      }
+      if (obj == null) {
+        if (m.containsKey(i) || m.containsKey((int) i)) {
+          return null;
+        }
+        throw noSuchKeyException(i);
+      }
+      return obj;
+    }
+    if (obj.getClass().isArray()) {
+      int l = Array.getLength(obj);
+      if (i < 0 || i >= l) {
+        throw indexOutOfBoundsException(i);
+      }
+      obj = Array.get(obj, (int) i);
+      return obj;
+    }
+    if (obj instanceof List list) {
+      int l = list.size();
+      if (i < 0 || i >= l) {
+        throw indexOutOfBoundsException(i);
+      }
+      obj = list.get((int) i);
+      return obj;
+    }
+    if (isUnknown(obj)) {
+      return obj;
+    }
+    return refResolve(adapter, celValue, obj);
+  }
+
+  /** Value implements the ConstantQualifier interface */
+  @Override
+  public Val value() {
+    return celValue;
+  }
+
+  /** Cost returns zero for constant field qualifiers */
+  @Override
+  public Cost cost() {
+    return Cost.None;
+  }
+
+  @Override
+  public boolean qualifierValueEquals(Object value) {
+    if (value instanceof ULong) {
+      return false;
+    }
+    if (value instanceof Number) {
+      return this.value == ((Number) value).doubleValue();
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return "DoubleQualifier{"
+        + "id="
+        + id
+        + ", value="
+        + value
+        + ", celValue="
+        + celValue
+        + ", adapter="
+        + adapter
+        + '}';
+  }
+}
+
+final class IntQualifier implements Coster, ConstantQualifierEquator {
+  final long id;
+  final long value;
+  final Val celValue;
+  final TypeAdapter adapter;
+
+  IntQualifier(long id, long value, Val celValue, TypeAdapter adapter) {
+    this.id = id;
+    this.value = value;
+    this.celValue = celValue;
+    this.adapter = adapter;
+  }
+
+  /** ID is an implementation of the Qualifier interface method. */
+  @Override
+  public long id() {
+    return id;
+  }
+
+  /** Qualify implements the Qualifier interface method. */
+  @SuppressWarnings({"rawtypes", "DuplicatedCode"})
+  @Override
+  public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
+    long i = value;
+    if (obj instanceof Map m) {
+      obj = m.get(i);
+      if (obj == null) {
+        obj = m.get((int) i);
+      }
+      if (obj == null) {
+        if (m.containsKey(i) || m.containsKey((int) i)) {
+          return null;
+        }
+        throw noSuchKeyException(i);
+      }
+      return obj;
+    }
+    if (obj.getClass().isArray()) {
+      int l = Array.getLength(obj);
+      if (i < 0 || i >= l) {
+        throw indexOutOfBoundsException(i);
+      }
+      obj = Array.get(obj, (int) i);
+      return obj;
+    }
+    if (obj instanceof List list) {
+      int l = list.size();
+      if (i < 0 || i >= l) {
+        throw indexOutOfBoundsException(i);
+      }
+      obj = list.get((int) i);
+      return obj;
+    }
+    if (isUnknown(obj)) {
+      return obj;
+    }
+    return refResolve(adapter, celValue, obj);
+  }
+
+  /** Value implements the ConstantQualifier interface */
+  @Override
+  public Val value() {
+    return celValue;
+  }
+
+  /** Cost returns zero for constant field qualifiers */
+  @Override
+  public Cost cost() {
+    return Cost.None;
+  }
+
+  @Override
+  public boolean qualifierValueEquals(Object value) {
+    if (value instanceof ULong) {
+      return false;
+    }
+    if (value instanceof Number) {
+      return this.value == ((Number) value).longValue();
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return "IntQualifier{"
+        + "id="
+        + id
+        + ", value="
+        + value
+        + ", celValue="
+        + celValue
+        + ", adapter="
+        + adapter
+        + '}';
+  }
+}
+
+final class UintQualifier implements Coster, ConstantQualifierEquator {
+  final long id;
+  final long value;
+  final Val celValue;
+  final TypeAdapter adapter;
+
+  UintQualifier(long id, long value, Val celValue, TypeAdapter adapter) {
+    this.id = id;
+    this.value = value;
+    this.celValue = celValue;
+    this.adapter = adapter;
+  }
+
+  /** ID is an implementation of the Qualifier interface method. */
+  @Override
+  public long id() {
+    return id;
+  }
+
+  /** Qualify implements the Qualifier interface method. */
+  @SuppressWarnings("rawtypes")
+  @Override
+  public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
+    long i = value;
+    if (obj instanceof Map m) {
+      obj = m.get(ULong.valueOf(i));
+      if (obj == null) {
+        throw noSuchKeyException(i);
+      }
+      return obj;
+    }
+    if (obj.getClass().isArray()) {
+      int l = Array.getLength(obj);
+      if (i < 0 && i >= l) {
+        throw indexOutOfBoundsException(i);
+      }
+      obj = Array.get(obj, (int) i);
+      return obj;
+    }
+    if (isUnknown(obj)) {
+      return obj;
+    }
+    return refResolve(adapter, celValue, obj);
+  }
+
+  /** Value implements the ConstantQualifier interface */
+  @Override
+  public Val value() {
+    return celValue;
+  }
+
+  /** Cost returns zero for constant field qualifiers */
+  @Override
+  public Cost cost() {
+    return Cost.None;
+  }
+
+  @Override
+  public boolean qualifierValueEquals(Object value) {
+    if (value instanceof ULong) {
+      return this.value == ((ULong) value).longValue();
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return "UintQualifier{"
+        + "id="
+        + id
+        + ", value="
+        + value
+        + ", celValue="
+        + celValue
+        + ", adapter="
+        + adapter
+        + '}';
+  }
+}
+
+final class BoolQualifier implements Coster, ConstantQualifierEquator {
+  final long id;
+  final boolean value;
+  final Val celValue;
+  final TypeAdapter adapter;
+
+  BoolQualifier(long id, boolean value, Val celValue, TypeAdapter adapter) {
+    this.id = id;
+    this.value = value;
+    this.celValue = celValue;
+    this.adapter = adapter;
+  }
+
+  /** ID is an implementation of the Qualifier interface method. */
+  @Override
+  public long id() {
+    return id;
+  }
+
+  /** Qualify implements the Qualifier interface method. */
+  @SuppressWarnings("rawtypes")
+  @Override
+  public Object qualify(org.projectnessie.cel.interpreter.Activation vars, Object obj) {
+    boolean b = value;
+    if (obj instanceof Map m) {
+      obj = m.get(b);
+      if (obj == null) {
+        if (m.containsKey(b)) {
+          return null;
+        }
+        throw noSuchKeyException(b);
+      }
+    } else if (isUnknown(obj)) {
+      return obj;
+    } else {
+      return refResolve(adapter, celValue, obj);
+    }
+    return obj;
+  }
+
+  /** Value implements the ConstantQualifier interface */
+  @Override
+  public Val value() {
+    return celValue;
+  }
+
+  /** Cost returns zero for constant field qualifiers */
+  @Override
+  public Cost cost() {
+    return Cost.None;
+  }
+
+  @Override
+  public boolean qualifierValueEquals(Object value) {
+    if (value instanceof Boolean) {
+      return this.value == (Boolean) value;
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return "BoolQualifier{"
+        + "id="
+        + id
+        + ", value="
+        + value
+        + ", celValue="
+        + celValue
+        + ", adapter="
+        + adapter
+        + '}';
+  }
+}
+
+/**
+ * Not actually a qualifier, but conformance-tests require this, although it's actually an error
+ * condition.
+ */
+record NullQualifier(long id, Val celValue, TypeAdapter adapter)
+    implements Coster, ConstantQualifierEquator {
+
+  /** ID is an implementation of the Qualifier interface method. */
+  @Override
+  public long id() {
+    return id;
+  }
+
+  /** Qualify implements the Qualifier interface method. */
+  @Override
+  public Object qualify(Activation vars, Object obj) {
+    return null;
+  }
+
+  /** Value implements the ConstantQualifier interface */
+  @Override
+  public Val value() {
+    return NullValue;
+  }
+
+  /** Cost returns zero for constant field qualifiers */
+  @Override
+  public Cost cost() {
+    return Cost.None;
+  }
+
+  @Override
+  public boolean qualifierValueEquals(Object value) {
+    return value == null || value == NullValue;
+  }
+
+  @Override
+  public String toString() {
+    return "NullQualifier{" + "id=" + id + ", celValue=" + celValue + ", adapter=" + adapter + '}';
+  }
+}
+
+/**
+ * fieldQualifier indicates that the qualification is a well-defined field with a known field type.
+ * When the field type is known this can be used to improve the speed and efficiency of field
+ * resolution.
+ */
+record FieldQualifier(
+    long id,
+    String name,
+    FieldType fieldType,
+    TypeAdapter adapter,
+    CheckedAggregateMaterializer aggregateMaterializer)
+    implements Coster, ConstantQualifierEquator, ValQualifier {
+  FieldQualifier(long id, String name, FieldType fieldType, TypeAdapter adapter) {
+    this(id, name, fieldType, adapter, null);
+  }
+
+  /** ID is an implementation of the Qualifier interface method. */
+  @Override
+  public long id() {
+    return id;
+  }
+
+  /** Qualify implements the Qualifier interface method. */
+  @Override
+  public Object qualify(Activation vars, Object obj) {
+    if (obj instanceof Val) {
+      obj = ((Val) obj).value();
+    }
+    return fieldType.getFrom.getFrom(obj);
+  }
+
+  @Override
+  public Val qualifyToVal(Activation vars, Object obj) {
+    Object value = qualify(vars, obj);
+    return aggregateMaterializer != null
+        ? aggregateMaterializer.materialize(value)
+        : adapter.nativeToValue(value);
+  }
+
+  /** Value implements the ConstantQualifier interface */
+  @Override
+  public Val value() {
+    return stringOf(name);
+  }
+
+  /** Cost returns zero for constant field qualifiers */
+  @Override
+  public Cost cost() {
+    return Cost.None;
+  }
+
+  @Override
+  public boolean qualifierValueEquals(Object value) {
+    if (value instanceof String) {
+      return this.name.equals(value);
+    }
+    return false;
+  }
+
+  @Override
+  public String toString() {
+    return "FieldQualifier{"
+        + "id="
+        + id
+        + ", name='"
+        + name
+        + '\''
+        + ", fieldType="
+        + fieldType
+        + ", adapter="
+        + adapter
+        + '}';
+  }
+}
+
+/**
+ * Exact aggregate field qualifier that deliberately retains the raw host value for a checked
+ * aggregate source node.
+ */
+final class RawExactAggregateFieldQualifier implements Coster, ConstantQualifierEquator {
+  private final FieldQualifier delegate;
+
+  RawExactAggregateFieldQualifier(long id, String name, FieldType fieldType, TypeAdapter adapter) {
+    this.delegate = new FieldQualifier(id, name, fieldType, adapter);
+  }
+
+  @Override
+  public long id() {
+    return delegate.id();
+  }
+
+  @Override
+  public Object qualify(Activation vars, Object obj) {
+    return delegate.qualify(vars, obj);
+  }
+
+  @Override
+  public Val value() {
+    return delegate.value();
+  }
+
+  @Override
+  public Cost cost() {
+    return delegate.cost();
+  }
+
+  @Override
+  public boolean qualifierValueEquals(Object value) {
+    return delegate.qualifierValueEquals(value);
+  }
+
+  @Override
+  public String toString() {
+    return "RawExactAggregateFieldQualifier{" + "delegate=" + delegate + '}';
   }
 }

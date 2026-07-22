@@ -35,6 +35,7 @@ import com.google.protobuf.Value;
 import java.lang.reflect.Array;
 import java.util.Arrays;
 import java.util.List;
+import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
@@ -196,6 +197,14 @@ public abstract class ListT extends BaseVal implements Lister {
           : list.nativeGetAt(index);
     }
 
+    final Object nativeListElement(Val value, Class<?> componentType) {
+      // A Java Long is a CEL int when adapted again. Preserve CEL uint's type while still avoiding
+      // embedded Val instances in raw Object arrays produced by concatenation.
+      return componentType == Object.class && value instanceof UintT
+          ? adapter.valueToNative(value, ULong.class)
+          : adapter.valueToNative(value, componentType);
+    }
+
     @Override
     public Val nativeGetAt(int index) {
       if (index < 0 || index >= size) {
@@ -291,13 +300,14 @@ public abstract class ListT extends BaseVal implements Lister {
           throw new InvalidIndexException(
               valOrErr(index, "unsupported index type '%s' in list", index.type()));
       }
-      int i = (int) index.intValue();
-      if (i < 0 || i >= size) {
+      long longIndex = index.intValue();
+      if (longIndex < 0 || longIndex >= size) {
         // Note: the conformance tests assert on 'invalid_argument'
         throw new InvalidIndexException(
-            newErr("invalid_argument: index '%d' out of range in list of size '%d'", i, size));
+            newErr(
+                "invalid_argument: index '%d' out of range in list of size '%d'", longIndex, size));
       }
-      return i;
+      return (int) longIndex;
     }
 
     private final class ArrayListIteratorT extends BaseVal implements IteratorT {
@@ -381,9 +391,9 @@ public abstract class ListT extends BaseVal implements Lister {
       for (int i = 0; i < otherSize; i++) {
         Val otherValue = elementAt(otherList, i);
         newArray[array.length + i] =
-            componentType.isInstance(otherValue)
+            componentType != Object.class && componentType.isInstance(otherValue)
                 ? otherValue
-                : adapter.valueToNative(otherValue, componentType);
+                : nativeListElement(otherValue, componentType);
       }
       return new GenericListT(adapter, newArray);
     }
@@ -442,7 +452,7 @@ public abstract class ListT extends BaseVal implements Lister {
         newArray[i] = list.get(i);
       }
       for (int i = 0; i < otherSize; i++) {
-        newArray[list.size() + i] = elementAt(otherList, i);
+        newArray[list.size() + i] = nativeListElement(elementAt(otherList, i), Object.class);
       }
       return new GenericListT(adapter, newArray);
     }

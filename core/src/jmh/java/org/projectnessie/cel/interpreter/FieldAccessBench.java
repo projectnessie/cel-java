@@ -45,8 +45,6 @@ import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.interpreter.AttributeFactory.NamespacedAttribute;
-import org.projectnessie.cel.interpreter.Interpretable.EvalAttr;
-import org.projectnessie.cel.interpreter.Interpretable.EvalTestOnly;
 
 @Warmup(iterations = 5, time = 200, timeUnit = TimeUnit.MILLISECONDS)
 @Measurement(iterations = 10, time = 200, timeUnit = TimeUnit.MILLISECONDS)

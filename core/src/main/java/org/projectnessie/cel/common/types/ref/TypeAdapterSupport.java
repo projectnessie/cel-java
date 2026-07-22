@@ -18,6 +18,7 @@ package org.projectnessie.cel.common.types.ref;
 import static org.projectnessie.cel.common.types.BytesT.bytesOf;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.DurationT.durationOf;
+import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.rangeError;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.ListT.newDoubleArrayList;
@@ -28,6 +29,7 @@ import static org.projectnessie.cel.common.types.ListT.newJSONList;
 import static org.projectnessie.cel.common.types.ListT.newLongArrayList;
 import static org.projectnessie.cel.common.types.ListT.newStringArrayList;
 import static org.projectnessie.cel.common.types.ListT.newValArrayList;
+import static org.projectnessie.cel.common.types.MapT.newCheckedMap;
 import static org.projectnessie.cel.common.types.MapT.newJSONStruct;
 import static org.projectnessie.cel.common.types.MapT.newMaybeWrappedMap;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
@@ -36,6 +38,7 @@ import static org.projectnessie.cel.common.types.TimestampT.timestampOf;
 import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 
+import com.google.api.expr.v1alpha1.Type;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.EnumValue;
@@ -155,6 +158,163 @@ public final class TypeAdapterSupport {
     }
 
     return null;
+  }
+
+  static Val nativeAggregateToValue(TypeAdapter adapter, Object value, Type checkedType) {
+    if (checkedType == null) {
+      return newErr("exact aggregate materialization requires a checked CEL type");
+    }
+    return switch (checkedType.getTypeKindCase()) {
+      case LIST_TYPE ->
+          checkedList(adapter, value, checkedType.getListType().getElemType(), checkedType);
+      case MAP_TYPE ->
+          checkedMap(
+              adapter,
+              value,
+              checkedType.getMapType().getKeyType(),
+              checkedType.getMapType().getValueType(),
+              checkedType);
+      default -> checkedScalar(adapter, value, checkedType);
+    };
+  }
+
+  private static Val checkedList(
+      TypeAdapter adapter, Object value, Type elementType, Type checkedType) {
+    if (value == null) {
+      return incompatible(null, checkedType);
+    }
+    if (value instanceof long[] values) {
+      if (elementType.getTypeKindCase() != Type.TypeKindCase.PRIMITIVE) {
+        return incompatible(value, checkedType);
+      }
+      return switch (elementType.getPrimitive()) {
+        case INT64 -> newLongArrayList(adapter, values);
+        case UINT64 -> newGenericArrayList(adapter, unsignedValues(values));
+        default -> incompatible(value, checkedType);
+      };
+    }
+    TypeAdapter elementAdapter = new CheckedTypeAdapter(adapter, elementType);
+    if (value instanceof int[] values
+        && elementType.getTypeKindCase() == Type.TypeKindCase.PRIMITIVE
+        && elementType.getPrimitive() == Type.PrimitiveType.INT64) {
+      return newIntArrayList(adapter, values);
+    }
+    if (value instanceof double[] values
+        && elementType.getTypeKindCase() == Type.TypeKindCase.PRIMITIVE
+        && elementType.getPrimitive() == Type.PrimitiveType.DOUBLE) {
+      return newDoubleArrayList(adapter, values);
+    }
+    if (value instanceof String[] values
+        && elementType.getTypeKindCase() == Type.TypeKindCase.PRIMITIVE
+        && elementType.getPrimitive() == Type.PrimitiveType.STRING) {
+      return newGenericArrayList(elementAdapter, values);
+    }
+    if (value instanceof Val[]) {
+      return incompatible(value, checkedType);
+    }
+    if (value instanceof Object[] values) {
+      return newGenericArrayList(elementAdapter, values);
+    }
+    if (value instanceof List<?> values) {
+      return newGenericList(elementAdapter, values);
+    }
+    if (value instanceof Collection<?> values) {
+      return newGenericArrayList(elementAdapter, values.toArray());
+    }
+    return incompatible(value, checkedType);
+  }
+
+  private static ULong[] unsignedValues(long[] values) {
+    ULong[] unsigned = new ULong[values.length];
+    for (int i = 0; i < values.length; i++) {
+      unsigned[i] = ULong.valueOf(values[i]);
+    }
+    return unsigned;
+  }
+
+  private static Val checkedMap(
+      TypeAdapter adapter, Object value, Type keyType, Type valueType, Type checkedType) {
+    if (value == null) {
+      return incompatible(null, checkedType);
+    }
+    if (!(value instanceof Map<?, ?> values)) {
+      return incompatible(value, checkedType);
+    }
+    return newCheckedMap(
+        new CheckedTypeAdapter(adapter, keyType),
+        new CheckedTypeAdapter(adapter, valueType),
+        values);
+  }
+
+  private static Val checkedScalar(TypeAdapter adapter, Object value, Type checkedType) {
+    if (value instanceof Val) {
+      return incompatible(value, checkedType);
+    }
+    return switch (checkedType.getTypeKindCase()) {
+      case NULL -> value == null ? NullT.NullValue : incompatible(value, checkedType);
+      case DYN -> adapter.nativeToValue(value);
+      case WRAPPER ->
+          value == null
+              ? NullT.NullValue
+              : checkedPrimitive(value, checkedType.getWrapper(), checkedType);
+      case PRIMITIVE -> checkedPrimitive(value, checkedType.getPrimitive(), checkedType);
+      case LIST_TYPE, MAP_TYPE -> throw new IllegalStateException("aggregate handled separately");
+      case WELL_KNOWN, MESSAGE_TYPE, TYPE, ABSTRACT_TYPE ->
+          value != null ? adapter.nativeToValue(value) : incompatible(null, checkedType);
+      case FUNCTION, TYPE_PARAM, ERROR, TYPEKIND_NOT_SET -> incompatible(value, checkedType);
+    };
+  }
+
+  private static Val checkedPrimitive(
+      Object value, Type.PrimitiveType primitive, Type checkedType) {
+    return switch (primitive) {
+      case BOOL -> value instanceof Boolean bool ? boolOf(bool) : incompatible(value, checkedType);
+      case INT64 ->
+          value instanceof Byte
+                  || value instanceof Short
+                  || value instanceof Integer
+                  || value instanceof Long
+              ? intOf(((Number) value).longValue())
+              : incompatible(value, checkedType);
+      case UINT64 ->
+          value instanceof ULong unsigned
+              ? uintOf(unsigned.longValue())
+              : value instanceof Long bits ? uintOf(bits) : incompatible(value, checkedType);
+      case DOUBLE ->
+          value instanceof Float || value instanceof Double
+              ? doubleOf(((Number) value).doubleValue())
+              : incompatible(value, checkedType);
+      case STRING ->
+          value instanceof String string ? stringOf(string) : incompatible(value, checkedType);
+      case BYTES ->
+          value instanceof byte[] bytes
+              ? bytesOf(bytes)
+              : value instanceof ByteString bytes
+                  ? bytesOf(bytes)
+                  : incompatible(value, checkedType);
+      default -> incompatible(value, checkedType);
+    };
+  }
+
+  private static Val incompatible(Object value, Type checkedType) {
+    return newErr(
+        "exact aggregate value of Java type '%s' is incompatible with checked CEL type '%s'",
+        value == null ? "null" : value.getClass().getName(), checkedType);
+  }
+
+  private static final class CheckedTypeAdapter implements TypeAdapter {
+    private final TypeAdapter adapter;
+    private final Type checkedType;
+
+    private CheckedTypeAdapter(TypeAdapter adapter, Type checkedType) {
+      this.adapter = adapter;
+      this.checkedType = checkedType;
+    }
+
+    @Override
+    public Val nativeToValue(Object value) {
+      return nativeAggregateToValue(adapter, value, checkedType);
+    }
   }
 
   public static Val nativeToValue(boolean value) {

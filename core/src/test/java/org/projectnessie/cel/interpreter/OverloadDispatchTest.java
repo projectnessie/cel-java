@@ -64,13 +64,6 @@ import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Receiver;
 import org.projectnessie.cel.common.types.traits.Trait;
-import org.projectnessie.cel.interpreter.Interpretable.EvalBinary;
-import org.projectnessie.cel.interpreter.Interpretable.EvalQuaternary;
-import org.projectnessie.cel.interpreter.Interpretable.EvalQuinary;
-import org.projectnessie.cel.interpreter.Interpretable.EvalReceiverVarArgs;
-import org.projectnessie.cel.interpreter.Interpretable.EvalTernary;
-import org.projectnessie.cel.interpreter.Interpretable.EvalUnary;
-import org.projectnessie.cel.interpreter.Interpretable.EvalVarArgs;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableCall;
 import org.projectnessie.cel.interpreter.functions.Overload;
 import org.projectnessie.cel.parser.Parser;
@@ -708,7 +701,6 @@ class OverloadDispatchTest {
 
   private static Overload operation(String name, int arity, long result) {
     return switch (arity) {
-      case 0 -> Overload.function(name, args -> intOf(result));
       case 1 -> Overload.unary(name, arg -> intOf(result));
       case 2 -> Overload.binary(name, (left, right) -> intOf(result));
       case 3 -> Overload.ternary(name, (first, second, third) -> intOf(result));

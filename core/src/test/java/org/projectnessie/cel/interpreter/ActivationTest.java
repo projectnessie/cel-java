@@ -134,9 +134,9 @@ public class ActivationTest {
     parentMap.put("d", stringOf("child value for d"));
     Activation parent =
         parentFunction
-            ? new Activation.FunctionActivation(
+            ? new FunctionActivation(
                 name -> parentMap.getOrDefault(name, ActivationFunction.ABSENT))
-            : new Activation.MapActivation(parentMap);
+            : new MapActivation(parentMap);
     // compose the child such that it shadows the parent
     Map<String, Object> childMap = new HashMap<>();
     childMap.put("a", True);
@@ -144,9 +144,8 @@ public class ActivationTest {
     childMap.put("d", null);
     Activation child =
         childFunction
-            ? new Activation.FunctionActivation(
-                name -> childMap.getOrDefault(name, ActivationFunction.ABSENT))
-            : new Activation.MapActivation(childMap);
+            ? new FunctionActivation(name -> childMap.getOrDefault(name, ActivationFunction.ABSENT))
+            : new MapActivation(childMap);
 
     Activation combined = newHierarchicalActivation(parent, child);
 

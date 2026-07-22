@@ -31,7 +31,9 @@ import static org.projectnessie.cel.EnvOption.container;
 import static org.projectnessie.cel.EnvOption.declarations;
 import static org.projectnessie.cel.EnvOption.macros;
 import static org.projectnessie.cel.EnvOption.types;
+import static org.projectnessie.cel.EvalOption.OptDisableNativeEval;
 import static org.projectnessie.cel.Library.StdLib;
+import static org.projectnessie.cel.ProgramOption.evalOptions;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.BytesT.bytesOf;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
@@ -193,10 +195,27 @@ class SimpleConformanceTest {
   private static final AtomicInteger passed = new AtomicInteger();
   private static final AtomicInteger skipped = new AtomicInteger();
 
+  private enum EvaluationMode {
+    NATIVE_ENABLED("native evaluation enabled"),
+    NATIVE_DISABLED("native evaluation disabled");
+
+    private final String displayName;
+
+    EvaluationMode(String displayName) {
+      this.displayName = displayName;
+    }
+  }
+
   @TestFactory
   Stream<DynamicNode> simpleConformance() {
     List<DynamicNode> files = new ArrayList<>();
-    TEST_FILES.forEach(fileName -> files.add(dynamicContainer(fileName, fileTests(fileName))));
+    for (EvaluationMode mode : EvaluationMode.values()) {
+      files.add(
+          dynamicContainer(
+              mode.displayName,
+              TEST_FILES.stream()
+                  .map(fileName -> dynamicContainer(fileName, fileTests(fileName, mode)))));
+    }
     files.add(dynamicTest("skip list matches testdata", this::assertAllSkipsMatched));
     return files.stream();
   }
@@ -204,11 +223,11 @@ class SimpleConformanceTest {
   @AfterAll
   static void printSummary() {
     System.out.printf(
-        "Conformance tests: %d total, %d passed, %d skipped%n",
+        "Conformance test executions: %d total, %d passed, %d skipped%n",
         total.get(), passed.get(), skipped.get());
   }
 
-  private Stream<DynamicNode> fileTests(String fileName) {
+  private Stream<DynamicNode> fileTests(String fileName, EvaluationMode mode) {
     SimpleTestFile file;
     try {
       file = parseSimpleFile(TESTDATA_DIR.resolve(fileName));
@@ -217,15 +236,17 @@ class SimpleConformanceTest {
     }
 
     return file.getSectionList().stream()
-        .map(
-            section ->
-                dynamicContainer(
-                    section.getName(),
-                    section.getTestList().stream()
-                        .map(test -> dynamicTest(test.getName(), () -> run(file, section, test)))));
+        .map(section -> dynamicContainer(section.getName(), sectionTests(file, section, mode)));
   }
 
-  private void run(SimpleTestFile file, SimpleTestSection section, SimpleTest test)
+  private Stream<DynamicNode> sectionTests(
+      SimpleTestFile file, SimpleTestSection section, EvaluationMode mode) {
+    return section.getTestList().stream()
+        .map(test -> dynamicTest(test.getName(), () -> run(file, section, test, mode)));
+  }
+
+  private void run(
+      SimpleTestFile file, SimpleTestSection section, SimpleTest test, EvaluationMode mode)
       throws InvalidProtocolBufferException {
     total.incrementAndGet();
     String sectionPath = file.getName() + "/" + section.getName();
@@ -241,7 +262,7 @@ class SimpleConformanceTest {
       abort("Skipped conformance test " + testPath);
     }
 
-    ConformanceCaseRunner.run(testPath, test);
+    ConformanceCaseRunner.run(mode, testPath, test);
     passed.incrementAndGet();
   }
 
@@ -291,7 +312,7 @@ class SimpleConformanceTest {
   private static final class ConformanceCaseRunner {
     private ConformanceCaseRunner() {}
 
-    private static void run(String testPath, SimpleTest test)
+    private static void run(EvaluationMode mode, String testPath, SimpleTest test)
         throws InvalidProtocolBufferException {
       if (test.getName().isEmpty()) {
         throw new IllegalArgumentException("simple test has no name");
@@ -326,9 +347,10 @@ class SimpleConformanceTest {
         return;
       }
 
-      match(testPath, test, ConformanceEvaluator.evalParsed(test, parsedExpr));
+      String evaluationPath = mode.displayName + "/" + testPath;
+      match(evaluationPath, test, ConformanceEvaluator.evalParsed(mode, test, parsedExpr));
       if (checkedExpr != null) {
-        match(testPath, test, ConformanceEvaluator.evalChecked(test, checkedExpr));
+        match(evaluationPath, test, ConformanceEvaluator.evalChecked(mode, test, checkedExpr));
       }
     }
   }
@@ -385,18 +407,23 @@ class SimpleConformanceTest {
       return astToCheckedExpr(astIss.getAst());
     }
 
-    private static ExprValue evalParsed(SimpleTest test, ParsedExpr parsedExpr) {
-      return eval(test, parsedExprToAst(parsedExpr));
+    private static ExprValue evalParsed(
+        EvaluationMode mode, SimpleTest test, ParsedExpr parsedExpr) {
+      return eval(mode, test, parsedExprToAst(parsedExpr));
     }
 
-    private static ExprValue evalChecked(SimpleTest test, CheckedExpr checkedExpr) {
-      return eval(test, checkedExprToAst(checkedExpr));
+    private static ExprValue evalChecked(
+        EvaluationMode mode, SimpleTest test, CheckedExpr checkedExpr) {
+      return eval(mode, test, checkedExprToAst(checkedExpr));
     }
 
-    private static ExprValue eval(SimpleTest test, Ast ast) {
+    private static ExprValue eval(EvaluationMode mode, SimpleTest test, Ast ast) {
       Env env = newEnv(conformanceEnvOptions(test).toArray(new EnvOption[0]));
 
-      Program program = env.program(ast);
+      Program program =
+          mode == EvaluationMode.NATIVE_ENABLED
+              ? env.program(ast)
+              : env.program(ast, evalOptions(OptDisableNativeEval));
       Map<String, Object> args = new HashMap<>();
       test.getBindingsMap()
           .forEach(

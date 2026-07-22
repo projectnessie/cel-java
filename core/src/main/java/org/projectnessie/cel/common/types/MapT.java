@@ -86,6 +86,31 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
     return new NativeMapT(adapter, newMap);
   }
 
+  /**
+   * Creates a checked map whose keys and values use independently checked materialization.
+   *
+   * <p>Keys are adapted eagerly and values remain raw until selected or traversed.
+   */
+  public static Val newCheckedMap(
+      TypeAdapter keyAdapter, TypeAdapter valueAdapter, Map<?, ?> value) {
+    Map<Val, Object> newMap = new HashMap<>(value.size() * 4 / 3 + 1);
+    for (Map.Entry<?, ?> entry : value.entrySet()) {
+      Val key = keyAdapter.nativeToValue(entry.getKey());
+      if (key instanceof Err) {
+        return key;
+      }
+      if (key.type().typeEnum() == TypeEnum.Null) {
+        return newErr("unsupported key type");
+      }
+      int previousSize = newMap.size();
+      newMap.put(key, entry.getValue());
+      if (newMap.size() == previousSize) {
+        return newErr("Failed with repeated key");
+      }
+    }
+    return new NativeMapT(valueAdapter, newMap);
+  }
+
   public static boolean isSupportedLiteralKeyType(Val key) {
     return switch (key.type().typeEnum()) {
       case Bool, Int, String, Uint -> true;

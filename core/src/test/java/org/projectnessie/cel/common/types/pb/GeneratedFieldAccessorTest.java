@@ -83,6 +83,61 @@ class GeneratedFieldAccessorTest {
   }
 
   @Test
+  void exposesPrimitiveGettersOnlyForAllocationFreeScalarFields() {
+    TestAllTypes message =
+        TestAllTypes.newBuilder()
+            .setSingleBool(true)
+            .setSingleInt32(50_021)
+            .setSingleInt64(50_022L)
+            .setStandaloneEnumValue(12_345)
+            .setSingleFloat(-0.0f)
+            .setSingleDouble(Double.NaN)
+            .build();
+    ProtoTypeRegistry registry = ProtoTypeRegistry.newRegistry(TestAllTypes.getDefaultInstance());
+    String typeName = TestAllTypes.getDescriptor().getFullName();
+
+    FieldGetter.Primitive boolGetter = primitiveGetter(registry, typeName, "single_bool");
+    FieldGetter.Primitive int32Getter = primitiveGetter(registry, typeName, "single_int32");
+    FieldGetter.Primitive int64Getter = primitiveGetter(registry, typeName, "single_int64");
+    FieldGetter.Primitive enumGetter = primitiveGetter(registry, typeName, "standalone_enum");
+    FieldGetter.Primitive floatGetter = primitiveGetter(registry, typeName, "single_float");
+    FieldGetter.Primitive doubleGetter = primitiveGetter(registry, typeName, "single_double");
+
+    assertThat(boolGetter.optimizedTargetType()).isEqualTo(TestAllTypes.class);
+    assertThat(boolGetter.getBooleanFrom(message)).isTrue();
+    assertThat(int32Getter.getLongFrom(message)).isEqualTo(50_021L);
+    assertThat(int64Getter.getLongFrom(message)).isEqualTo(50_022L);
+    assertThat(enumGetter.getLongFrom(message)).isEqualTo(12_345L);
+    assertThat(Float.floatToRawIntBits((float) floatGetter.getDoubleFrom(message)))
+        .isEqualTo(Float.floatToRawIntBits(-0.0f));
+    assertThat(doubleGetter.getDoubleFrom(message)).isNaN();
+
+    DynamicMessage dynamic =
+        DynamicMessage.newBuilder(message.getDescriptorForType()).mergeFrom(message).build();
+    assertThat(int64Getter.getFrom(dynamic)).isEqualTo(50_022L);
+
+    for (String fieldName :
+        List.of(
+            "single_uint32",
+            "single_uint64",
+            "single_string",
+            "single_int32_wrapper",
+            "optional_null_value")) {
+      assertThat(registry.findFieldType(typeName, fieldName).getFrom)
+          .as(fieldName)
+          .isNotInstanceOf(FieldGetter.Primitive.class);
+    }
+  }
+
+  private static FieldGetter.Primitive primitiveGetter(
+      ProtoTypeRegistry registry, String typeName, String fieldName) {
+    assertThat(registry.findFieldType(typeName, fieldName).getFrom)
+        .as(fieldName)
+        .isInstanceOf(FieldGetter.Primitive.class);
+    return (FieldGetter.Primitive) registry.findFieldType(typeName, fieldName).getFrom;
+  }
+
+  @Test
   void bindsFieldsWithSpecializedNormalization() {
     Db db = newDb();
     db.registerMessage(TestAllTypes.getDefaultInstance());

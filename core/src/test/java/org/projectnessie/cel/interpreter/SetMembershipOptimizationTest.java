@@ -19,16 +19,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.IntT.intOf;
+import static org.projectnessie.cel.common.types.IteratorT.javaIterator;
 import static org.projectnessie.cel.common.types.ListT.newValArrayList;
 import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
 import static org.projectnessie.cel.interpreter.Activation.emptyActivation;
 import static org.projectnessie.cel.interpreter.Interpretable.newConstValue;
 
+import java.lang.reflect.Proxy;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.common.types.Overloads;
 import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.common.types.traits.Lister;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableCall;
 
 class SetMembershipOptimizationTest {
@@ -52,6 +56,30 @@ class SetMembershipOptimizationTest {
         .isSameAs(error);
     assertThat(optimize(newConstValue(1, unknown), new Val[] {intOf(1)}).eval(emptyActivation()))
         .isSameAs(unknown);
+  }
+
+  @Test
+  void inconsistentListSizeAndIteratorPreserveOriginalEvaluation() {
+    Lister inconsistentList =
+        (Lister)
+            Proxy.newProxyInstance(
+                Lister.class.getClassLoader(),
+                new Class<?>[] {Lister.class},
+                (proxy, method, args) -> {
+                  if (method.getName().equals("size")) {
+                    return intOf(1);
+                  }
+                  if (method.getName().equals("iterator")) {
+                    return javaIterator(DefaultTypeAdapter.Instance, List.of().iterator());
+                  }
+                  throw new UnsupportedOperationException(method.getName());
+                });
+    Interpretable lhs = newConstValue(1, intOf(1));
+    Interpretable rhs = newConstValue(2, inconsistentList);
+    MembershipCall original = new MembershipCall(lhs, rhs);
+
+    assertThat(InterpretableDecorator.maybeOptimizeSetMembership(original, original))
+        .isSameAs(original);
   }
 
   private static Interpretable optimize(Interpretable lhs, Val[] values) {

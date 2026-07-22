@@ -20,6 +20,8 @@ import static org.projectnessie.cel.common.types.Err.newErr;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.projectnessie.cel.common.types.ref.FieldType;
+import org.projectnessie.cel.common.types.ref.StandardScalarFieldProvider;
+import org.projectnessie.cel.common.types.ref.StandardScalarTypeAdapter;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeAdapterSupport;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
@@ -40,7 +42,8 @@ import tools.jackson.databind.type.TypeFactory;
  * therefore returning Jackson objects from CEL expressions is not possible/implemented and results
  * in {@link UnsupportedOperationException}s.
  */
-public final class Jackson3Registry implements TypeRegistry {
+public final class Jackson3Registry
+    implements TypeRegistry, StandardScalarTypeAdapter, StandardScalarFieldProvider {
   final ObjectMapper objectMapper;
   private final SerializationContextExt serializationContextExt;
   private final TypeFactory typeFactory;
@@ -67,6 +70,25 @@ public final class Jackson3Registry implements TypeRegistry {
 
   public static TypeRegistry newRegistry() {
     return new Jackson3Registry();
+  }
+
+  /**
+   * Creates an opt-in registry that certifies checked Java aggregate representations.
+   *
+   * <p>The returned registry accepts the canonical homogeneous representations defined by {@link
+   * org.projectnessie.cel.common.types.ref.ExactAggregateTypeAdapter}, recursively. Checked CEL
+   * types determine signed versus unsigned {@code long} representation. Aggregate-valued {@link
+   * java.util.Optional} fields must be present; an empty optional is a detected contract violation.
+   * Null list elements and map values follow their nested checked type; null map keys,
+   * CEL-equivalent duplicate keys, incompatible boxed values, and traversed cycles are contract
+   * violations. Sources and equality/hash-relevant keys must not be mutated during one evaluation.
+   * The default {@link #newRegistry()} deliberately does not acquire this stricter contract. {@link
+   * TypeRegistry#copy()} preserves exact mode and registered type state.
+   *
+   * @return a distinct registry instance implementing both exact aggregate contracts
+   */
+  public static TypeRegistry newExactAggregateRegistry() {
+    return new ExactJackson3Registry(new Jackson3Registry());
   }
 
   @Override

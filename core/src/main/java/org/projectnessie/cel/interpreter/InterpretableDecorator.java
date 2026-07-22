@@ -29,24 +29,6 @@ import org.projectnessie.cel.common.types.Util;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Lister;
-import org.projectnessie.cel.interpreter.AttributeFactory.ConditionalAttribute;
-import org.projectnessie.cel.interpreter.Interpretable.EvalAnd;
-import org.projectnessie.cel.interpreter.Interpretable.EvalExhaustiveAnd;
-import org.projectnessie.cel.interpreter.Interpretable.EvalExhaustiveConditional;
-import org.projectnessie.cel.interpreter.Interpretable.EvalExhaustiveFold;
-import org.projectnessie.cel.interpreter.Interpretable.EvalExhaustiveListFold;
-import org.projectnessie.cel.interpreter.Interpretable.EvalExhaustiveMapFold;
-import org.projectnessie.cel.interpreter.Interpretable.EvalExhaustiveOr;
-import org.projectnessie.cel.interpreter.Interpretable.EvalFold;
-import org.projectnessie.cel.interpreter.Interpretable.EvalList;
-import org.projectnessie.cel.interpreter.Interpretable.EvalListFold;
-import org.projectnessie.cel.interpreter.Interpretable.EvalMap;
-import org.projectnessie.cel.interpreter.Interpretable.EvalMapFold;
-import org.projectnessie.cel.interpreter.Interpretable.EvalOr;
-import org.projectnessie.cel.interpreter.Interpretable.EvalSetMembership;
-import org.projectnessie.cel.interpreter.Interpretable.EvalWatch;
-import org.projectnessie.cel.interpreter.Interpretable.EvalWatchAttr;
-import org.projectnessie.cel.interpreter.Interpretable.EvalWatchConst;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableAttribute;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableCall;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableConst;
@@ -224,6 +206,11 @@ public interface InterpretableDecorator {
         return i;
       }
       valueSet.add(elem);
+    }
+    if (typ == null) {
+      // A custom Lister can report a non-zero size but still yield no elements. In that case the
+      // optimizer cannot determine the element type and must preserve the original evaluation.
+      return i;
     }
     return new EvalSetMembership(inlist, lhs, typ.typeName(), valueSet);
   }

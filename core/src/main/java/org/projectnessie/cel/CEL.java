@@ -38,6 +38,7 @@ import com.google.api.expr.v1alpha1.Type;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.projectnessie.cel.interpreter.Activation;
 import org.projectnessie.cel.interpreter.Activation.PartialActivation;
 import org.projectnessie.cel.interpreter.AttributePattern;
@@ -86,7 +87,12 @@ public final class CEL {
 
     Interpreter interp =
         newInterpreter(
-            disp, e.getContainer(), e.getTypeProvider(), e.getTypeAdapter(), p.attrFactory);
+            disp,
+            e.getContainer(),
+            e.getTypeProvider(),
+            e.getTypeAdapter(),
+            p.attrFactory,
+            nativePlanningPermitted(p.evalOpts, p.decorators));
     p.interpreter = interp;
 
     // Translate the EvalOption flags into InterpretableDecorator instances.
@@ -156,6 +162,11 @@ public final class CEL {
     p.interpretable = p.interpreter.newInterpretable(ast.getExpr(), ast.refMap, ast.typeMap, decs);
 
     return p;
+  }
+
+  static boolean nativePlanningPermitted(
+      Set<EvalOption> evalOptions, List<InterpretableDecorator> decorators) {
+    return evalOptions.isEmpty() && decorators.isEmpty();
   }
 
   /** CheckedExprToAst converts a checked expression proto message to an Ast. */

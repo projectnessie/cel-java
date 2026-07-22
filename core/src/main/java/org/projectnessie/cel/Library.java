@@ -17,12 +17,12 @@ package org.projectnessie.cel;
 
 import static org.projectnessie.cel.EnvOption.declarations;
 import static org.projectnessie.cel.EnvOption.macros;
-import static org.projectnessie.cel.ProgramOption.functions;
 import static org.projectnessie.cel.checker.Checker.StandardDeclarations;
 import static org.projectnessie.cel.interpreter.functions.Overload.standardOverloads;
 import static org.projectnessie.cel.parser.Macro.AllMacros;
 
 import java.util.List;
+import org.projectnessie.cel.interpreter.functions.Overload;
 
 /**
  * Library provides a collection of EnvOption and ProgramOption values used to confiugre a CEL
@@ -83,7 +83,12 @@ public interface Library {
     /** ProgramOptions returns function implementations for the standard CEL functions. */
     @Override
     public List<ProgramOption> getProgramOptions() {
-      return List.of(functions(standardOverloads()));
+      Overload[] overloads = standardOverloads();
+      return List.of(
+          p -> {
+            p.dispatcher.add(overloads);
+            return p;
+          });
     }
   }
 }
