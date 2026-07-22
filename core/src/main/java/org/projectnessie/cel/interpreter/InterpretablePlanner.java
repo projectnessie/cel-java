@@ -266,7 +266,8 @@ public interface InterpretablePlanner {
 
       Select sel = expr.getSelectExpr();
       // Plan the operand evaluation.
-      Interpretable op = planSelectOperand(sel.getOperand());
+      Interpretable op =
+          decorators.length == 0 ? planSelectOperand(sel.getOperand()) : plan(sel.getOperand());
 
       // Determine the field type if this is a proto message type.
       FieldType fieldType = null;
