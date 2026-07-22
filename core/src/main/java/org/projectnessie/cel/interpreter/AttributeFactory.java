@@ -367,9 +367,9 @@ public interface AttributeFactory {
       for (String nm : namespaceNames) {
         // If the variable is found, process it. Otherwise, wait until the checks to
         // determine whether the type is unknown before returning.
-        ResolvedValue obj = vars.resolveName(nm);
-        if (obj.present()) {
-          return resolveQualifiers(vars, obj.value());
+        Object obj = vars.resolve(nm);
+        if (Activation.ABSENT != obj) {
+          return resolveQualifiers(vars, obj);
         }
         // Attempt to resolve the qualified type name if the name is not a variable identifier.
         Val typ = provider.findIdent(nm);
