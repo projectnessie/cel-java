@@ -739,8 +739,10 @@ public interface InterpretablePlanner {
           return referencesIdent(comprehension.getIterRange(), name)
               || referencesIdent(comprehension.getAccuInit(), name)
               || (!comprehension.getIterVar().equals(name)
+                  && !comprehension.getAccuVar().equals(name)
                   && referencesIdent(comprehension.getLoopCondition(), name))
               || (!comprehension.getIterVar().equals(name)
+                  && !comprehension.getAccuVar().equals(name)
                   && referencesIdent(comprehension.getLoopStep(), name))
               || (!comprehension.getAccuVar().equals(name)
                   && referencesIdent(comprehension.getResult(), name));

@@ -1786,6 +1786,65 @@ public interface Interpretable {
     }
   }
 
+  /** EvalExhaustiveListFold evaluates every filter and transform without short-circuiting. */
+  final class EvalExhaustiveListFold extends AbstractEval implements Coster {
+    private final EvalListFold fold;
+
+    EvalExhaustiveListFold(EvalListFold fold) {
+      super(fold.id);
+      this.fold = fold;
+    }
+
+    @Override
+    public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
+      Val foldRange = fold.iterRange.eval(ctx);
+      if (!foldRange.type().hasTrait(Trait.IterableType)) {
+        return valOrErr(
+            foldRange, "got '%s', expected iterable type", foldRange.getClass().getName());
+      }
+
+      VarActivation iterCtx = new VarActivation();
+      iterCtx.parent = ctx;
+      iterCtx.name = fold.iterVar;
+      List<Val> values = new ArrayList<>(fold.listCapacity(foldRange));
+      Val result = null;
+      IteratorT it = ((IterableT) foldRange).iterator();
+      while (it.hasNext() == True) {
+        iterCtx.val = it.next();
+
+        Val include = fold.filter != null ? fold.filter.eval(iterCtx) : True;
+        Val value = fold.transform.eval(iterCtx);
+        if (include == False) {
+          continue;
+        }
+        if (include != True) {
+          result = noSuchOverload(null, Operator.Conditional.id, include);
+          continue;
+        }
+        if (result == null) {
+          if (isUnknownOrError(value)) {
+            result = value;
+          } else {
+            values.add(value);
+          }
+        }
+      }
+      return result != null
+          ? result
+          : ListT.newValArrayList(fold.adapter, values.toArray(new Val[0]));
+    }
+
+    @Override
+    public Cost cost() {
+      return fold.cost();
+    }
+
+    @Override
+    public String toString() {
+      return "EvalExhaustiveListFold{" + fold + '}';
+    }
+  }
+
   /** evalAttr evaluates an Attribute value. */
   final class EvalAttr extends AbstractEval
       implements InterpretableAttribute, Coster, Qualifier, Attribute {

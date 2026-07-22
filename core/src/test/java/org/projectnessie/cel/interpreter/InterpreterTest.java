@@ -16,6 +16,7 @@
 package org.projectnessie.cel.interpreter;
 
 import static java.lang.String.format;
+import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -83,6 +84,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -111,6 +113,7 @@ import org.projectnessie.cel.interpreter.AttributeFactory.NamespacedAttribute;
 import org.projectnessie.cel.interpreter.AttributeFactory.Qualifier;
 import org.projectnessie.cel.interpreter.AttributesTest.CustAttrFactory;
 import org.projectnessie.cel.interpreter.Coster.Cost;
+import org.projectnessie.cel.interpreter.Interpretable.EvalListFold;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableAttribute;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableConst;
 import org.projectnessie.cel.interpreter.functions.Overload;
@@ -1398,6 +1401,69 @@ class InterpreterTest {
     // "==" should be evaluated in exhaustive mode though unnecessary
     assertThat(ev).withFailMessage("Else expression expected to be true").isSameAs(True);
     assertThat(result).isSameAs(True);
+  }
+
+  @Test
+  void exhaustiveListFoldEvaluatesFilteredTransforms() {
+    AtomicInteger calls = new AtomicInteger();
+    Program program =
+        program(
+            new TestCase(InterpreterTestCase.macro_map)
+                .expr("[1, 2, 3].map(x, false, tap(x))")
+                .unchecked()
+                .funcs(
+                    Overload.unary(
+                        "tap",
+                        value -> {
+                          calls.incrementAndGet();
+                          return value;
+                        })),
+            exhaustiveEval(newEvalState()));
+
+    Val result = program.interpretable.eval(program.activation);
+
+    assertThat(result.equal(DefaultTypeAdapter.Instance.nativeToValue(emptyList()))).isSameAs(True);
+    assertThat(calls.get()).isEqualTo(3);
+  }
+
+  @Test
+  void exhaustiveListFoldContinuesAfterTransformError() {
+    AtomicInteger calls = new AtomicInteger();
+    Program program =
+        program(
+            new TestCase(InterpreterTestCase.macro_map)
+                .expr("[1, 2, 3].map(x, failFirst(x))")
+                .unchecked()
+                .funcs(
+                    Overload.unary(
+                        "failFirst",
+                        value -> {
+                          calls.incrementAndGet();
+                          return value.intValue() == 1 ? Err.newErr("first") : value;
+                        })),
+            exhaustiveEval(newEvalState()));
+
+    Val result = program.interpretable.eval(program.activation);
+
+    assertThat(result).isInstanceOf(Err.class).hasToString("first");
+    assertThat(calls.get()).isEqualTo(3);
+  }
+
+  @Test
+  void nestedMacroAccumulatorDoesNotDisableListFoldSpecialization() {
+    Program program =
+        program(
+            new TestCase(InterpreterTestCase.macro_map).expr("[1, 2].map(x, [x].map(y, y + 1))"));
+
+    assertThat(program.interpretable).isInstanceOf(EvalListFold.class);
+    EvalListFold outer = (EvalListFold) program.interpretable;
+    assertThat(outer.transform).isInstanceOf(EvalListFold.class);
+
+    Val result = program.interpretable.eval(program.activation);
+    Val expected =
+        DefaultTypeAdapter.Instance.nativeToValue(
+            Arrays.asList(singletonList(2L), singletonList(3L)));
+    assertThat(result.equal(expected)).isSameAs(True);
   }
 
   @Test
