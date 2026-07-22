@@ -135,7 +135,7 @@ public interface InterpretablePlanner {
   }
 
   /** planner is an implementatio of the interpretablePlanner interface. */
-  final class Planner implements InterpretablePlanner {
+  static final class Planner implements InterpretablePlanner {
     private final Dispatcher disp;
     private final TypeProvider provider;
     private final TypeAdapter adapter;
@@ -389,7 +389,7 @@ public interface InterpretablePlanner {
     }
 
     /** planCallZero generates a zero-arity callable Interpretable. */
-    Interpretable planCallZero(Expr expr, String function, String overload, Overload impl) {
+    static Interpretable planCallZero(Expr expr, String function, String overload, Overload impl) {
       if (impl == null || impl.function == null) {
         throw new IllegalArgumentException(String.format("no such overload: %s()", function));
       }
@@ -397,7 +397,7 @@ public interface InterpretablePlanner {
     }
 
     /** planCallUnary generates a unary callable Interpretable. */
-    Interpretable planCallUnary(
+    static Interpretable planCallUnary(
         Expr expr, String function, String overload, Overload impl, Interpretable[] args) {
       UnaryOp fn = null;
       Trait trait = null;
@@ -412,7 +412,7 @@ public interface InterpretablePlanner {
     }
 
     /** planCallBinary generates a binary callable Interpretable. */
-    Interpretable planCallBinary(
+    static Interpretable planCallBinary(
         Expr expr, String function, String overload, Overload impl, Interpretable... args) {
       BinaryOp fn = null;
       Trait trait = null;
@@ -428,7 +428,7 @@ public interface InterpretablePlanner {
     }
 
     /** planCallVarArgs generates a variable argument callable Interpretable. */
-    Interpretable planCallVarArgs(
+    static Interpretable planCallVarArgs(
         Expr expr, String function, String overload, Overload impl, Interpretable... args) {
       FunctionOp fn = null;
       Trait trait = null;
@@ -443,22 +443,22 @@ public interface InterpretablePlanner {
     }
 
     /** planCallEqual generates an equals (==) Interpretable. */
-    Interpretable planCallEqual(Expr expr, Interpretable... args) {
+    static Interpretable planCallEqual(Expr expr, Interpretable... args) {
       return new EvalEq(expr.getId(), args[0], args[1]);
     }
 
     /** planCallNotEqual generates a not equals (!=) Interpretable. */
-    Interpretable planCallNotEqual(Expr expr, Interpretable... args) {
+    static Interpretable planCallNotEqual(Expr expr, Interpretable... args) {
       return new EvalNe(expr.getId(), args[0], args[1]);
     }
 
     /** planCallLogicalAnd generates a logical and (&&) Interpretable. */
-    Interpretable planCallLogicalAnd(Expr expr, Interpretable... args) {
+    static Interpretable planCallLogicalAnd(Expr expr, Interpretable... args) {
       return new EvalAnd(expr.getId(), args[0], args[1]);
     }
 
     /** planCallLogicalOr generates a logical or (||) Interpretable. */
-    Interpretable planCallLogicalOr(Expr expr, Interpretable... args) {
+    static Interpretable planCallLogicalOr(Expr expr, Interpretable... args) {
       return new EvalOr(expr.getId(), args[0], args[1]);
     }
 
@@ -637,7 +637,7 @@ public interface InterpretablePlanner {
           expr.getId(), fold.getAccuVar(), accu, fold.getIterVar(), iterRange, cond, step, result);
     }
 
-    private MacroListFold macroListFold(Comprehension fold) {
+    private static MacroListFold macroListFold(Comprehension fold) {
       if (!isEmptyList(fold.getAccuInit())
           || !isBoolConst(fold.getLoopCondition(), true)
           || !isIdent(fold.getResult(), fold.getAccuVar())) {
@@ -664,7 +664,7 @@ public interface InterpretablePlanner {
       return new MacroListFold(filter, transform);
     }
 
-    private Expr appendedValue(String accuVar, Expr step) {
+    private static Expr appendedValue(String accuVar, Expr step) {
       if (!isCall(step, Operator.Add.id, 2)) {
         return null;
       }
@@ -680,30 +680,30 @@ public interface InterpretablePlanner {
       return list.getListExpr().getElements(0);
     }
 
-    private boolean isCall(Expr expr, String function, int argCount) {
+    private static boolean isCall(Expr expr, String function, int argCount) {
       return expr.getExprKindCase() == Expr.ExprKindCase.CALL_EXPR
           && expr.getCallExpr().getFunction().equals(function)
           && expr.getCallExpr().getArgsCount() == argCount
           && !expr.getCallExpr().hasTarget();
     }
 
-    private boolean isIdent(Expr expr, String name) {
+    private static boolean isIdent(Expr expr, String name) {
       return expr.getExprKindCase() == Expr.ExprKindCase.IDENT_EXPR
           && expr.getIdentExpr().getName().equals(name);
     }
 
-    private boolean isEmptyList(Expr expr) {
+    private static boolean isEmptyList(Expr expr) {
       return expr.getExprKindCase() == Expr.ExprKindCase.LIST_EXPR
           && expr.getListExpr().getElementsCount() == 0;
     }
 
-    private boolean isBoolConst(Expr expr, boolean value) {
+    private static boolean isBoolConst(Expr expr, boolean value) {
       return expr.getExprKindCase() == Expr.ExprKindCase.CONST_EXPR
           && expr.getConstExpr().getConstantKindCase() == Constant.ConstantKindCase.BOOL_VALUE
           && expr.getConstExpr().getBoolValue() == value;
     }
 
-    private boolean referencesIdent(Expr expr, String name) {
+    private static boolean referencesIdent(Expr expr, String name) {
       switch (expr.getExprKindCase()) {
         case IDENT_EXPR:
           return expr.getIdentExpr().getName().equals(name);
@@ -749,7 +749,7 @@ public interface InterpretablePlanner {
       }
     }
 
-    private final class MacroListFold {
+    private static final class MacroListFold {
       final Expr filter;
       final Expr transform;
 
@@ -760,7 +760,7 @@ public interface InterpretablePlanner {
     }
 
     /** planConst generates a constant valued Interpretable. */
-    Interpretable planConst(Expr expr) {
+    static Interpretable planConst(Expr expr) {
       Val val = constValue(expr.getConstExpr());
       if (val == null) {
         return null;
@@ -770,7 +770,7 @@ public interface InterpretablePlanner {
 
     /** constValue converts a proto Constant value to a ref.Val. */
     @SuppressWarnings("deprecation")
-    Val constValue(Constant c) {
+    static Val constValue(Constant c) {
       switch (c.getConstantKindCase()) {
         case BOOL_VALUE:
           return boolOf(c.getBoolValue());
