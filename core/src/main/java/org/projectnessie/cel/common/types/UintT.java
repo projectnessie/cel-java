@@ -16,7 +16,6 @@
 package org.projectnessie.cel.common.types;
 
 import static org.projectnessie.cel.common.types.BoolT.False;
-import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.Err.divideByZero;
 import static org.projectnessie.cel.common.types.Err.errUintOverflow;
@@ -24,7 +23,6 @@ import static org.projectnessie.cel.common.types.Err.modulusByZero;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.Err.rangeError;
-import static org.projectnessie.cel.common.types.IntT.IntOne;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.IntT.intOfCompare;
 import static org.projectnessie.cel.common.types.IntT.maxIntJSON;
@@ -174,78 +172,24 @@ public final class UintT extends BaseVal
   /** Compare implements traits.Comparer.Compare. */
   @Override
   public Val compare(Val other) {
-    switch (other.type().typeEnum()) {
-      case Int:
-        if (other.type().typeEnum() == TypeEnum.Err) {
-          return other;
-        }
-        if (other.intValue() < 0L) {
-          // the other int is < 0, so any uint is greater
-          return IntOne;
-        }
-        if (i < 0L) {
-          // this uint is > Long.MAX_VALUE, so it MUST be greater than any signed int
-          return IntOne;
-        }
-        return intOfCompare(Long.compareUnsigned(i, other.intValue()));
-      case Double:
-        if (other.type().typeEnum() == TypeEnum.Err) {
-          return other;
-        }
-        if (other.doubleValue() < 0d) {
-          // the other int is < 0, so any uint is greater
-          return IntOne;
-        }
-        DoubleT cmp = (DoubleT) convertToType(DoubleType);
-        return cmp.compare(other);
-      case Uint:
-        Val converted = other.convertToType(type());
-        if (converted.type().typeEnum() == TypeEnum.Err) {
-          return converted;
-        }
-        return intOfCompare(Long.compareUnsigned(i, ((UintT) converted).i));
-      default:
-        return noSuchOverload(this, "compare", other);
-    }
+    return switch (other.type().typeEnum()) {
+      case Int -> intOfCompare(NumericComparison.compareUintInt(i, other.intValue()));
+      case Double -> intOfCompare(NumericComparison.compareUintDouble(i, other.doubleValue()));
+      case Uint -> intOfCompare(NumericComparison.compareUint(i, other.intValue()));
+      default -> noSuchOverload(this, "compare", other);
+    };
   }
 
   /** Equal implements ref.Val.Equal. */
   @Override
   public Val equal(Val other) {
-    switch (other.type().typeEnum()) {
-      case Int:
-        if (other.type().typeEnum() == TypeEnum.Err) {
-          return other;
-        }
-        if (other.intValue() < 0L) {
-          // the other int is < 0, so no uint can be equal
-          return False;
-        }
-        if (i < 0L) {
-          // this uint is > Long.MAX_VALUE, so it CANNOT be equal
-          return False;
-        }
-        return boolOf(i == other.intValue());
-      case Double:
-        return other.equal(this);
-      case Uint:
-        Val converted = other.convertToType(type());
-        if (converted.type().typeEnum() == TypeEnum.Err) {
-          return converted;
-        }
-        return boolOf(i == converted.intValue());
-      case Null:
-      case Bool:
-      case Bytes:
-      case List:
-      case Map:
-      case Object:
-      case String:
-      case Type:
-        return False;
-      default:
-        return noSuchOverload(this, "equal", other);
-    }
+    return switch (other.type().typeEnum()) {
+      case Int -> boolOf(NumericComparison.equalUintInt(i, other.intValue()));
+      case Double -> boolOf(NumericComparison.equalUintDouble(i, other.doubleValue()));
+      case Uint -> boolOf(NumericComparison.equalUint(i, other.intValue()));
+      case Null, Bool, Bytes, List, Map, Object, String, Type -> False;
+      default -> noSuchOverload(this, "equal", other);
+    };
   }
 
   /** Divide implements traits.Divider.Divide. */

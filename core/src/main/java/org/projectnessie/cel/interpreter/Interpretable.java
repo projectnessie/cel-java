@@ -173,12 +173,12 @@ public interface Interpretable {
         }
       }
 
-      ResolvedValue value = ctx.resolveName(name);
-      if (!value.present()) {
+      Object value = ctx.resolve(name);
+      if (Activation.ABSENT == value) {
         RuntimeException err = noSuchAttributeException("id: " + id + ", names: [" + name + "]");
         return newErr(err, err.toString());
       }
-      return adapter.nativeToValue(value.value());
+      return adapter.nativeToValue(value);
     }
 
     /** Cost implements the Coster interface method. */
