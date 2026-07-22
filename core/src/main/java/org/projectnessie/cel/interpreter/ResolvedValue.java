@@ -17,6 +17,8 @@ package org.projectnessie.cel.interpreter;
 
 import java.util.Objects;
 
+@SuppressWarnings("DeprecatedIsStillUsed")
+@Deprecated(forRemoval = true)
 public final class ResolvedValue {
   public static final ResolvedValue NULL_VALUE = new ResolvedValue(null, true);
   public static final ResolvedValue ABSENT = new ResolvedValue(null, false);
@@ -62,5 +64,26 @@ public final class ResolvedValue {
   @Override
   public String toString() {
     return "ResolvedValue{present=" + present + ", value=" + value + '}';
+  }
+
+  static Object mapLegacy(Object o) {
+    if (o instanceof ResolvedValue resolvedValue) {
+      if (resolvedValue.present()) {
+        return resolvedValue.value();
+      }
+      return ActivationFunction.ABSENT;
+    }
+    return Objects.requireNonNullElse(o, ActivationFunction.ABSENT);
+  }
+
+  static ResolvedValue mapTo(Object result) {
+    if (result instanceof ResolvedValue) {
+      return (ResolvedValue) result;
+    } else if (result == null) {
+      return ResolvedValue.NULL_VALUE;
+    } else if (result == ActivationFunction.ABSENT) {
+      return ResolvedValue.ABSENT;
+    }
+    return ResolvedValue.resolvedValue(result);
   }
 }

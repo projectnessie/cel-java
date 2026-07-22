@@ -16,7 +16,6 @@
 package org.projectnessie.cel.interpreter;
 
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -27,23 +26,38 @@ import org.projectnessie.cel.common.types.ref.Val;
  *
  * <p>An Activation is the primary mechanism by which a caller supplies input into a CEL program.
  */
-public interface Activation {
+public interface Activation extends ActivationFunction {
+  @SuppressWarnings("removal")
+  @Override
+  default Object resolve(String name) {
+    var resolved = resolveName(name);
+    if (resolved != null) {
+      return resolved.present() ? resolved.value() : ABSENT;
+    }
+    return ABSENT;
+  }
+
   /**
-   * ResolveName returns a value from the activation by qualified name, or false if the name could
-   * not be found.
+   * Deprecated for removal.
+   *
+   * <p>Replace with {@link #resolve(String)}.
    */
+  @SuppressWarnings({"DeprecatedIsStillUsed", "removal"})
+  @Deprecated(forRemoval = true)
   ResolvedValue resolveName(String name);
 
   /**
    * Parent returns the parent of the current activation, may be nil. If non-nil, the parent will be
    * searched during resolve calls.
    */
-  Activation parent();
+  default Activation parent() {
+    return null;
+  }
 
   /** EmptyActivation returns a variable free activation. */
   static Activation emptyActivation() {
     // This call cannot fail.
-    return newActivation(new HashMap<String, Object>());
+    return newActivation(Map.of());
   }
 
   /**
@@ -60,18 +74,22 @@ public interface Activation {
    * <p>Values which are not represented as ref.Val types on input may be adapted to a ref.Val using
    * the ref.TypeAdapter configured in the environment.
    */
+  @SuppressWarnings({"rawtypes", "unchecked", "removal"})
   static Activation newActivation(Object bindings) {
     if (bindings == null) {
       throw new NullPointerException("bindings must be non-nil");
     }
-    if (bindings instanceof Activation) {
-      return (Activation) bindings;
+    if (bindings instanceof Activation activation) {
+      return activation;
     }
-    if (bindings instanceof Map) {
-      return new MapActivation((Map<String, Object>) bindings);
+    if (bindings instanceof Map map) {
+      return new MapActivation(map);
     }
-    if (bindings instanceof Function) {
-      return new FunctionActivation((Function<String, Object>) bindings);
+    if (bindings instanceof Function func) {
+      bindings = (ActivationFunction) name -> ResolvedValue.mapLegacy(func.apply(name));
+    }
+    if (bindings instanceof ActivationFunction activationFunction) {
+      return new FunctionActivation(activationFunction);
     }
     throw new IllegalArgumentException(
         String.format(
@@ -100,23 +118,29 @@ public interface Activation {
 
     /** ResolveName implements the Activation interface method. */
     @Override
-    public ResolvedValue resolveName(String name) {
+    public Object resolve(String name) {
       if (name.startsWith(".")) {
         name = name.substring(1);
       }
       Object obj = bindings.get(name);
       if (obj == null) {
         if (!bindings.containsKey(name)) {
-          return ResolvedValue.ABSENT;
+          return ABSENT;
         }
-        return ResolvedValue.NULL_VALUE;
+        return null;
       }
 
       if (obj instanceof Supplier) {
-        obj = ((Supplier) obj).get();
+        obj = ((Supplier<?>) obj).get();
         bindings.put(name, obj);
       }
-      return ResolvedValue.resolvedValue(obj);
+      return obj;
+    }
+
+    @SuppressWarnings("removal")
+    @Override
+    public ResolvedValue resolveName(String name) {
+      return ResolvedValue.mapTo(resolve(name));
     }
 
     @Override
@@ -127,9 +151,9 @@ public interface Activation {
 
   /** functionActivation which implements Activation and a provider of named values. */
   final class FunctionActivation implements Activation {
-    private final Function<String, Object> provider;
+    private final ActivationFunction provider;
 
-    FunctionActivation(Function<String, Object> provider) {
+    FunctionActivation(ActivationFunction provider) {
       this.provider = provider;
     }
 
@@ -139,20 +163,18 @@ public interface Activation {
       return null;
     }
 
-    /** ResolveName implements the Activation interface method. */
     @Override
-    public ResolvedValue resolveName(String name) {
+    public Object resolve(String name) {
       if (name.startsWith(".")) {
         name = name.substring(1);
       }
-      Object result = provider.apply(name);
-      if (result instanceof ResolvedValue) {
-        return (ResolvedValue) result;
-      } else if (result == null) {
-        return ResolvedValue.ABSENT;
-      } else {
-        return ResolvedValue.resolvedValue(result);
-      }
+      return provider.resolve(name);
+    }
+
+    @SuppressWarnings("removal")
+    @Override
+    public ResolvedValue resolveName(String name) {
+      return ResolvedValue.mapTo(resolve(name));
     }
 
     @Override
@@ -181,15 +203,21 @@ public interface Activation {
 
     /** ResolveName implements the Activation interface method. */
     @Override
-    public ResolvedValue resolveName(String name) {
+    public Object resolve(String name) {
       if (name.startsWith(".")) {
-        return parent.resolveName(name.substring(1));
+        return parent.resolve(name.substring(1));
       }
-      ResolvedValue object = child.resolveName(name);
-      if (object.present()) {
-        return object;
+      var resolvedName = child.resolve(name);
+      if (ABSENT != resolvedName) {
+        return resolvedName;
       }
-      return parent.resolveName(name);
+      return parent.resolve(name);
+    }
+
+    @SuppressWarnings("removal")
+    @Override
+    public ResolvedValue resolveName(String name) {
+      return ResolvedValue.mapTo(resolve(name));
     }
 
     @Override
@@ -244,8 +272,14 @@ public interface Activation {
     }
 
     @Override
+    public Object resolve(String name) {
+      return delegate.resolve(name);
+    }
+
+    @SuppressWarnings("removal")
+    @Override
     public ResolvedValue resolveName(String name) {
-      return delegate.resolveName(name);
+      return ResolvedValue.mapTo(resolve(name));
     }
 
     /** UnknownAttributePatterns implements the PartialActivation interface method. */
@@ -286,14 +320,20 @@ public interface Activation {
 
     /** ResolveName implements the Activation interface method. */
     @Override
-    public ResolvedValue resolveName(String name) {
+    public Object resolve(String name) {
       if (name.startsWith(".")) {
-        return parent.resolveName(name.substring(1));
+        return parent.resolve(name.substring(1));
       }
       if (name.equals(this.name)) {
-        return ResolvedValue.resolvedValue(val);
+        return val;
       }
-      return parent.resolveName(name);
+      return parent.resolve(name);
+    }
+
+    @SuppressWarnings("removal")
+    @Override
+    public ResolvedValue resolveName(String name) {
+      return ResolvedValue.mapTo(resolve(name));
     }
 
     @Override
