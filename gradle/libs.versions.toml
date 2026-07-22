@@ -18,7 +18,7 @@ protobuf = "4.35.1"
 protobuf3 = "4.35.1"
 protobufPlugin = "0.10.0"
 quarkus = "3.37.3"
-shadowPlugin = "9.6.0"
+shadowPlugin = "9.6.1"
 slf4j = "1.7.36"
 spotlessPlugin = "8.8.0"
 
