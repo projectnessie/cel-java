@@ -1388,11 +1388,6 @@ public interface Interpretable {
     }
 
     private Val receiveOrNoSuchOverload(Val arg0, Val... tailArgs) {
-      for (Val argVal : tailArgs) {
-        if (isUnknownOrError(argVal)) {
-          return argVal;
-        }
-      }
       if (arg0.type().hasTrait(Trait.ReceiverType)) {
         return ((Receiver) arg0).receive(function, overload, tailArgs);
       }
