@@ -90,6 +90,16 @@ class NativePlumbingPrototypeTest {
   }
 
   @Test
+  void intAdditionHasExpectedRootShape() {
+    Plans plans = plans("x + 1", new Decl[] {X});
+
+    assertThat(plans.enabled()).isInstanceOf(NativeIsland.class);
+    Interpretable root = ((NativeIsland) plans.enabled()).root();
+    assertThat(root).isInstanceOf(NativeIntAdd.class);
+    assertThat(root).isInstanceOf(NativeIntCapability.class);
+  }
+
+  @Test
   void strictFallbackEvaluatesBothOperandsOnceWithoutReplay() {
     Plans plans = plans("x + y", new Decl[] {X, Y});
     Val left = newErr("left");
