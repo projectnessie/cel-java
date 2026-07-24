@@ -15,10 +15,15 @@
  */
 package org.projectnessie.cel.interpreter;
 
+import static org.projectnessie.cel.common.types.Err.errIntOverflow;
 import static org.projectnessie.cel.common.types.Err.newErr;
+import static org.projectnessie.cel.common.types.Overflow.addInt64Checked;
+import static org.projectnessie.cel.common.types.Util.isUnknownOrError;
 import static org.projectnessie.cel.interpreter.ValueSignal.signal;
 
+import java.util.ArrayDeque;
 import org.projectnessie.cel.common.operators.Operator;
+import org.projectnessie.cel.common.types.Overflow.OverflowException;
 import org.projectnessie.cel.common.types.Overloads;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.interpreter.AttributeFactory.Attribute;
@@ -29,8 +34,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  * structural consumer can use its exact sources directly.
  */
 final class NativeListConcat extends EvalBinary {
-  final NativeListSourceCapability leftSource;
-  final NativeListSourceCapability rightSource;
+  final int sourceCount;
 
   NativeListConcat(long id, Interpretable left, Interpretable right, Overload implementation) {
     super(
@@ -41,30 +45,106 @@ final class NativeListConcat extends EvalBinary {
         right,
         implementation.operandTrait,
         implementation.binary);
-    this.leftSource = (NativeListSourceCapability) left;
-    this.rightSource = (NativeListSourceCapability) right;
+    this.sourceCount = Math.addExact(sourceCount(left), sourceCount(right));
+  }
+
+  private static int sourceCount(Interpretable operand) {
+    if (operand instanceof NativeListConcat concat) {
+      return concat.sourceCount;
+    }
+    if (operand instanceof NativeListSourceCapability source && source.exactListSource()) {
+      return 1;
+    }
+    throw new IllegalArgumentException("list concat operand is not an exact list source");
   }
 }
 
-/** Resolves both concat operands before applying structural list operations. */
+/** Flattens and resolves exact concat sources before applying structural list operations. */
 final class NativeListConcatKernel {
+  private static final Object FAILED = new Object();
+
   private NativeListConcatKernel() {}
 
-  static ResolvedConcat resolve(NativeListConcat concat, Activation activation) {
+  static NativeListSourceCapability[] collectSources(NativeListConcat concat) {
+    NativeListSourceCapability[] sources = new NativeListSourceCapability[concat.sourceCount];
+    ArrayDeque<Interpretable> pending = new ArrayDeque<>();
+    pending.push(concat);
+    int sourceIndex = 0;
+    while (!pending.isEmpty()) {
+      Interpretable operand = pending.pop();
+      if (operand instanceof NativeListConcat nested) {
+        pending.push(nested.rhs);
+        pending.push(nested.lhs);
+      } else if (operand instanceof NativeListSourceCapability source && source.exactListSource()) {
+        if (sourceIndex == sources.length) {
+          return null;
+        }
+        sources[sourceIndex++] = source;
+      } else {
+        return null;
+      }
+    }
+    return sourceIndex == sources.length ? sources : null;
+  }
+
+  static long size(NativeListSourceCapability[] sources, Activation activation) {
+    if (sources.length == 2) {
+      ResolvedPair pair = resolvePair(sources, activation);
+      return (long) pair.leftSize + pair.rightSize;
+    }
+    return resolveMany(sources, activation).totalSize;
+  }
+
+  static Selection select(NativeListSourceCapability[] sources, Activation activation, long index) {
+    if (sources.length == 2) {
+      return selectPair(sources, resolvePair(sources, activation), index);
+    }
+    return selectMany(sources, resolveMany(sources, activation), index);
+  }
+
+  static Selection select(
+      NativeListSourceCapability[] sources,
+      Activation activation,
+      NativeIntCapability dynamicIndex) {
+    if (sources.length == 2) {
+      ResolvedPair resolved = resolvePair(sources, activation);
+      return selectPair(sources, resolved, evalIndex(dynamicIndex, activation));
+    }
+    ResolvedSources resolved = resolveMany(sources, activation);
+    return selectMany(sources, resolved, evalIndex(dynamicIndex, activation));
+  }
+
+  private static long evalIndex(NativeIntCapability dynamicIndex, Activation activation) {
+    try {
+      return dynamicIndex.evalInt(activation);
+    } catch (ValueSignal failure) {
+      if (isUnknownOrError(failure.value)) {
+        throw failure;
+      }
+      throw signal(newErr("unsupported index type '%s' in list", failure.value.type()));
+    } catch (Exception failure) {
+      throw signal(newErr(failure, failure.toString()));
+    }
+  }
+
+  private static ResolvedPair resolvePair(
+      NativeListSourceCapability[] sources, Activation activation) {
+    NativeListSourceCapability leftSource = sources[0];
+    NativeListSourceCapability rightSource = sources[1];
     Object leftRaw = null;
     Object rightRaw = null;
     ValueSignal leftFailure = null;
     ValueSignal rightFailure = null;
 
     try {
-      leftRaw = concat.leftSource.evalRaw(activation);
+      leftRaw = leftSource.evalRaw(activation);
     } catch (ValueSignal failure) {
       leftFailure = failure;
     } catch (Exception failure) {
       leftFailure = signal(newErr(failure, failure.toString()));
     }
     try {
-      rightRaw = concat.rightSource.evalRaw(activation);
+      rightRaw = rightSource.evalRaw(activation);
     } catch (ValueSignal failure) {
       rightFailure = failure;
     } catch (Exception failure) {
@@ -75,7 +155,7 @@ final class NativeListConcatKernel {
     int rightSize = 0;
     if (leftFailure == null) {
       try {
-        leftSize = NativeListSources.size(concat.leftSource, leftRaw, true);
+        leftSize = NativeListSources.size(leftSource, leftRaw, true);
       } catch (ValueSignal failure) {
         leftFailure = failure;
       } catch (Exception failure) {
@@ -84,7 +164,7 @@ final class NativeListConcatKernel {
     }
     if (rightFailure == null) {
       try {
-        rightSize = NativeListSources.size(concat.rightSource, rightRaw, true);
+        rightSize = NativeListSources.size(rightSource, rightRaw, true);
       } catch (ValueSignal failure) {
         rightFailure = failure;
       } catch (Exception failure) {
@@ -98,60 +178,174 @@ final class NativeListConcatKernel {
     if (rightFailure != null) {
       throw rightFailure;
     }
-    return new ResolvedConcat(leftRaw, rightRaw, leftSize, rightSize);
+    return new ResolvedPair(leftRaw, rightRaw, leftSize, rightSize);
   }
 
-  static Selection select(NativeListConcat concat, Activation activation, int index) {
-    ResolvedConcat resolved = resolve(concat, activation);
+  private static ResolvedSources resolveMany(
+      NativeListSourceCapability[] sources, Activation activation) {
+    Object[] rawValues = new Object[sources.length];
+    int[] sizes = new int[sources.length];
+    ValueSignal earliestFailure = null;
+    int earliestFailureIndex = Integer.MAX_VALUE;
+
+    for (int i = 0; i < sources.length; i++) {
+      try {
+        rawValues[i] = sources[i].evalRaw(activation);
+      } catch (ValueSignal failure) {
+        rawValues[i] = FAILED;
+        if (i < earliestFailureIndex) {
+          earliestFailure = failure;
+          earliestFailureIndex = i;
+        }
+      } catch (Exception failure) {
+        rawValues[i] = FAILED;
+        if (i < earliestFailureIndex) {
+          earliestFailure = signal(newErr(failure, failure.toString()));
+          earliestFailureIndex = i;
+        }
+      }
+    }
+
+    long totalSize = 0L;
+    boolean overflowed = false;
+    for (int i = 0; i < sources.length; i++) {
+      if (rawValues[i] == FAILED) {
+        continue;
+      }
+      try {
+        sizes[i] = NativeListSources.size(sources[i], rawValues[i], true);
+        if (!overflowed) {
+          totalSize = addInt64Checked(totalSize, sizes[i]);
+        }
+      } catch (ValueSignal failure) {
+        if (i < earliestFailureIndex) {
+          earliestFailure = failure;
+          earliestFailureIndex = i;
+        }
+      } catch (OverflowException failure) {
+        overflowed = true;
+        if (i < earliestFailureIndex) {
+          earliestFailure = signal(errIntOverflow);
+          earliestFailureIndex = i;
+        }
+      } catch (Exception failure) {
+        if (i < earliestFailureIndex) {
+          earliestFailure = signal(newErr(failure, failure.toString()));
+          earliestFailureIndex = i;
+        }
+      }
+    }
+
+    if (earliestFailure != null) {
+      throw earliestFailure;
+    }
+    return new ResolvedSources(rawValues, sizes, totalSize);
+  }
+
+  private static Selection selectPair(
+      NativeListSourceCapability[] sources, ResolvedPair resolved, long index) {
     long size = (long) resolved.leftSize + resolved.rightSize;
     if (index < 0 || index >= size) {
       throw signal(
           newErr("invalid_argument: index '%d' out of range in list of size '%d'", index, size));
     }
     return index < resolved.leftSize
-        ? new Selection(concat.leftSource, resolved.leftRaw, index)
-        : new Selection(concat.rightSource, resolved.rightRaw, index - resolved.leftSize);
+        ? new Selection(sources[0], resolved.leftRaw, Math.toIntExact(index))
+        : new Selection(sources[1], resolved.rightRaw, Math.toIntExact(index - resolved.leftSize));
   }
 
-  record ResolvedConcat(Object leftRaw, Object rightRaw, int leftSize, int rightSize) {}
+  private static Selection selectMany(
+      NativeListSourceCapability[] sources, ResolvedSources resolved, long index) {
+    if (index < 0 || index >= resolved.totalSize) {
+      throw signal(
+          newErr(
+              "invalid_argument: index '%d' out of range in list of size '%d'",
+              index, resolved.totalSize));
+    }
+    long localIndex = index;
+    for (int i = 0; i < sources.length; i++) {
+      int sourceSize = resolved.sizes[i];
+      if (localIndex < sourceSize) {
+        return new Selection(sources[i], resolved.rawValues[i], Math.toIntExact(localIndex));
+      }
+      localIndex -= sourceSize;
+    }
+    throw new IllegalStateException("validated concat index did not select a source");
+  }
+
+  private record ResolvedPair(Object leftRaw, Object rightRaw, int leftSize, int rightSize) {}
+
+  private record ResolvedSources(Object[] rawValues, int[] sizes, long totalSize) {}
 
   record Selection(NativeListSourceCapability source, Object raw, int index) {}
 }
 
 final class NativeListConcatSize extends EvalUnary implements NativeIntCapability {
-  private final NativeListConcat concat;
+  private final NativeListSourceCapability[] sources;
 
   NativeListConcatSize(
-      long id, String function, String overload, NativeListConcat concat, Overload implementation) {
+      long id,
+      String function,
+      String overload,
+      NativeListConcat concat,
+      NativeListSourceCapability[] sources,
+      Overload implementation) {
     super(id, function, overload, concat, implementation.operandTrait, implementation.unary);
-    this.concat = concat;
+    this.sources = sources;
   }
 
   @Override
   public long evalInt(Activation activation) {
-    NativeListConcatKernel.ResolvedConcat resolved =
-        NativeListConcatKernel.resolve(concat, activation);
-    return (long) resolved.leftSize() + resolved.rightSize();
+    return NativeListConcatKernel.size(sources, activation);
+  }
+
+  int sourceCount() {
+    return sources.length;
   }
 }
 
 abstract class NativeListConcatIndex extends NativeScalarAttr {
-  final NativeListConcat concat;
-  final int index;
+  private final NativeListConcat concat;
+  private final NativeListSourceCapability[] sources;
+  private final long constantIndex;
+  private final NativeIntCapability dynamicIndex;
 
   NativeListConcatIndex(
       long id,
       TypeAdapter adapter,
       Attribute establishedAttribute,
       NativeListConcat concat,
-      int index) {
+      NativeListSourceCapability[] sources,
+      long index) {
     super(id, adapter, establishedAttribute, null);
     this.concat = concat;
-    this.index = index;
+    this.sources = sources;
+    this.constantIndex = index;
+    this.dynamicIndex = null;
+  }
+
+  NativeListConcatIndex(
+      long id,
+      TypeAdapter adapter,
+      Attribute establishedAttribute,
+      NativeListConcat concat,
+      NativeListSourceCapability[] sources,
+      NativeIntCapability dynamicIndex) {
+    super(id, adapter, establishedAttribute, null);
+    this.concat = concat;
+    this.sources = sources;
+    this.constantIndex = 0L;
+    this.dynamicIndex = dynamicIndex;
   }
 
   final NativeListConcatKernel.Selection select(Activation activation) {
-    return NativeListConcatKernel.select(concat, activation, index);
+    return dynamicIndex == null
+        ? NativeListConcatKernel.select(sources, activation, constantIndex)
+        : NativeListConcatKernel.select(sources, activation, dynamicIndex);
+  }
+
+  final int sourceCount() {
+    return concat.sourceCount;
   }
 }
 
@@ -162,8 +356,19 @@ final class NativeBooleanListConcatIndex extends NativeListConcatIndex
       TypeAdapter adapter,
       Attribute establishedAttribute,
       NativeListConcat concat,
-      int index) {
-    super(id, adapter, establishedAttribute, concat, index);
+      NativeListSourceCapability[] sources,
+      long index) {
+    super(id, adapter, establishedAttribute, concat, sources, index);
+  }
+
+  NativeBooleanListConcatIndex(
+      long id,
+      TypeAdapter adapter,
+      Attribute establishedAttribute,
+      NativeListConcat concat,
+      NativeListSourceCapability[] sources,
+      NativeIntCapability dynamicIndex) {
+    super(id, adapter, establishedAttribute, concat, sources, dynamicIndex);
   }
 
   @Override
@@ -180,8 +385,19 @@ final class NativeIntListConcatIndex extends NativeListConcatIndex implements Na
       TypeAdapter adapter,
       Attribute establishedAttribute,
       NativeListConcat concat,
-      int index) {
-    super(id, adapter, establishedAttribute, concat, index);
+      NativeListSourceCapability[] sources,
+      long index) {
+    super(id, adapter, establishedAttribute, concat, sources, index);
+  }
+
+  NativeIntListConcatIndex(
+      long id,
+      TypeAdapter adapter,
+      Attribute establishedAttribute,
+      NativeListConcat concat,
+      NativeListSourceCapability[] sources,
+      NativeIntCapability dynamicIndex) {
+    super(id, adapter, establishedAttribute, concat, sources, dynamicIndex);
   }
 
   @Override
@@ -199,8 +415,19 @@ final class NativeUintListConcatIndex extends NativeListConcatIndex
       TypeAdapter adapter,
       Attribute establishedAttribute,
       NativeListConcat concat,
-      int index) {
-    super(id, adapter, establishedAttribute, concat, index);
+      NativeListSourceCapability[] sources,
+      long index) {
+    super(id, adapter, establishedAttribute, concat, sources, index);
+  }
+
+  NativeUintListConcatIndex(
+      long id,
+      TypeAdapter adapter,
+      Attribute establishedAttribute,
+      NativeListConcat concat,
+      NativeListSourceCapability[] sources,
+      NativeIntCapability dynamicIndex) {
+    super(id, adapter, establishedAttribute, concat, sources, dynamicIndex);
   }
 
   @Override
@@ -218,8 +445,19 @@ final class NativeDoubleListConcatIndex extends NativeListConcatIndex
       TypeAdapter adapter,
       Attribute establishedAttribute,
       NativeListConcat concat,
-      int index) {
-    super(id, adapter, establishedAttribute, concat, index);
+      NativeListSourceCapability[] sources,
+      long index) {
+    super(id, adapter, establishedAttribute, concat, sources, index);
+  }
+
+  NativeDoubleListConcatIndex(
+      long id,
+      TypeAdapter adapter,
+      Attribute establishedAttribute,
+      NativeListConcat concat,
+      NativeListSourceCapability[] sources,
+      NativeIntCapability dynamicIndex) {
+    super(id, adapter, establishedAttribute, concat, sources, dynamicIndex);
   }
 
   @Override
@@ -237,8 +475,19 @@ final class NativeStringListConcatIndex extends NativeListConcatIndex
       TypeAdapter adapter,
       Attribute establishedAttribute,
       NativeListConcat concat,
-      int index) {
-    super(id, adapter, establishedAttribute, concat, index);
+      NativeListSourceCapability[] sources,
+      long index) {
+    super(id, adapter, establishedAttribute, concat, sources, index);
+  }
+
+  NativeStringListConcatIndex(
+      long id,
+      TypeAdapter adapter,
+      Attribute establishedAttribute,
+      NativeListConcat concat,
+      NativeListSourceCapability[] sources,
+      NativeIntCapability dynamicIndex) {
+    super(id, adapter, establishedAttribute, concat, sources, dynamicIndex);
   }
 
   @Override
@@ -256,8 +505,19 @@ final class NativeNullListConcatIndex extends NativeListConcatIndex
       TypeAdapter adapter,
       Attribute establishedAttribute,
       NativeListConcat concat,
-      int index) {
-    super(id, adapter, establishedAttribute, concat, index);
+      NativeListSourceCapability[] sources,
+      long index) {
+    super(id, adapter, establishedAttribute, concat, sources, index);
+  }
+
+  NativeNullListConcatIndex(
+      long id,
+      TypeAdapter adapter,
+      Attribute establishedAttribute,
+      NativeListConcat concat,
+      NativeListSourceCapability[] sources,
+      NativeIntCapability dynamicIndex) {
+    super(id, adapter, establishedAttribute, concat, sources, dynamicIndex);
   }
 
   @Override

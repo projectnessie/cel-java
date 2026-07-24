@@ -15,6 +15,8 @@
  */
 package org.projectnessie.cel.common.types.ref;
 
+import com.google.api.expr.v1alpha1.Type;
+
 /**
  * Type provider whose aggregate field accessors return certified exact aggregate representations.
  *
@@ -32,4 +34,19 @@ package org.projectnessie.cel.common.types.ref;
  * adapter instances remain on the general field path. Field presence behavior and accessor
  * invocation order are unchanged.
  */
-public interface ExactAggregateFieldProvider extends TypeProvider {}
+public interface ExactAggregateFieldProvider extends TypeProvider {
+  /**
+   * Returns whether one checked aggregate field has the provider's certified exact representation.
+   *
+   * <p>The default preserves the provider-wide contract of implementations compiled before this
+   * method existed. Selective providers override it and must return {@code false} for scalar and
+   * unsupported aggregate fields.
+   *
+   * @param messageType fully qualified checked CEL message type
+   * @param fieldName protobuf/host field name used by the checked select
+   * @param checkedType checked CEL result type of the field
+   */
+  default boolean isExactAggregateField(String messageType, String fieldName, Type checkedType) {
+    return true;
+  }
+}

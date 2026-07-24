@@ -24,6 +24,7 @@ import static org.projectnessie.cel.EnvOption.types;
 import static org.projectnessie.cel.EvalOption.OptDisableNativeEval;
 import static org.projectnessie.cel.ProgramOption.evalOptions;
 
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +35,7 @@ import org.projectnessie.cel.Env.AstIssuesTuple;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.Err;
+import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.ref.ExactAggregateFieldProvider;
 import org.projectnessie.cel.common.types.ref.ExactAggregateTypeAdapter;
 import org.projectnessie.cel.common.types.ref.StandardScalarFieldProvider;
@@ -150,6 +152,137 @@ class JacksonNativePlanTest {
   }
 
   @Test
+  void exactMapFieldsSupportCheckedDynamicStringLookupForEveryScalarKind() {
+    TypeRegistry registry = JacksonRegistry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            types(DynamicMapInput.class),
+            declarations(
+                Decls.newVar("input", Decls.newObjectType(DynamicMapInput.class.getName())),
+                Decls.newVar("key", Decls.String),
+                Decls.newVar("prefix", Decls.String),
+                Decls.newVar("suffix", Decls.String)));
+    DynamicMapInput input = dynamicMapInput();
+    Map<String, Object> activation =
+        Map.of("input", input, "key", "one", "prefix", "o", "suffix", "ne");
+
+    for (String expression :
+        List.of(
+            "input.booleans[key]",
+            "input.integers[key]",
+            "input.unsigned[key]",
+            "input.doubles[key]",
+            "input.texts[key]",
+            "input.integers[input.lookupKey]",
+            "input.integers[prefix + suffix]")) {
+      Ast ast = compile(env, expression);
+      Prog enabled = (Prog) env.program(ast);
+      Prog disabled = (Prog) env.program(ast, evalOptions(OptDisableNativeEval));
+
+      assertThat(enabled.interpretable.getClass().getSimpleName())
+          .as(expression)
+          .isEqualTo("NativeIsland");
+      assertThat(disabled.interpretable.getClass().getSimpleName())
+          .as(expression)
+          .isNotEqualTo("NativeIsland");
+      Val result = enabled.eval(activation).getVal();
+      assertEquivalent(result, disabled.eval(activation).getVal());
+      assertThat(result).as(expression).isNotInstanceOf(Err.class);
+    }
+  }
+
+  @Test
+  void checkedDynamicNullMapLookupDistinguishesPresentNullFromAbsent() {
+    TypeRegistry registry = JacksonRegistry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            declarations(
+                Decls.newVar("nulls", Decls.newMapType(Decls.String, Decls.Null)),
+                Decls.newVar("key", Decls.String)));
+    Map<String, Object> nulls = new HashMap<>();
+    nulls.put("present", null);
+    Ast lookup = compile(env, "nulls[key]");
+
+    assertThat(((Prog) env.program(lookup)).interpretable.getClass().getSimpleName())
+        .isEqualTo("NativeIsland");
+
+    Val present =
+        assertEnabledDisabledEquivalent(env, lookup, Map.of("nulls", nulls, "key", "present"));
+    Val absent =
+        assertEnabledDisabledEquivalent(env, lookup, Map.of("nulls", nulls, "key", "absent"));
+
+    assertThat(present).isSameAs(NullT.NullValue);
+    assertThat(absent).matches(Err::isError);
+  }
+
+  @Test
+  void repeatedExactListFieldsSupportNativeConcatSizeAndIndex() {
+    TypeRegistry registry = JacksonRegistry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            types(AggregateInput.class),
+            declarations(
+                Decls.newVar("input", Decls.newObjectType(AggregateInput.class.getName()))));
+
+    for (var evaluation :
+        Map.of(
+                "size(input.numbers + input.numbers + input.numbers)", 6L,
+                "(input.numbers + input.numbers + input.numbers)[4]", 1L)
+            .entrySet()) {
+      String expression = evaluation.getKey();
+      Ast ast = compile(env, expression);
+      Prog enabled = (Prog) env.program(ast);
+      Prog disabled = (Prog) env.program(ast, evalOptions(OptDisableNativeEval));
+      AggregateInput enabledInput = aggregateInput();
+      AggregateInput disabledInput = aggregateInput();
+
+      assertThat(enabled.interpretable.getClass().getSimpleName())
+          .as(expression)
+          .isEqualTo("NativeIsland");
+      assertThat(disabled.interpretable.getClass().getSimpleName())
+          .as(expression)
+          .isNotEqualTo("NativeIsland");
+      Val enabledResult = enabled.eval(Map.of("input", enabledInput)).getVal();
+      Val disabledResult = disabled.eval(Map.of("input", disabledInput)).getVal();
+      assertEquivalent(enabledResult, disabledResult);
+      assertThat(enabledResult.intValue()).as(expression).isEqualTo(evaluation.getValue());
+      assertThat(enabledInput.numbersReadCount()).as(expression).isEqualTo(3);
+      assertThat(disabledInput.numbersReadCount()).as(expression).isEqualTo(3);
+    }
+  }
+
+  @Test
+  void repeatedExactNonScalarListFieldsSupportNativeConcatSize() {
+    TypeRegistry registry = JacksonRegistry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            types(NestedAggregateInput.class),
+            declarations(
+                Decls.newVar("input", Decls.newObjectType(NestedAggregateInput.class.getName()))));
+    Ast ast = compile(env, "size(input.entries + input.entries + input.entries)");
+    Prog enabled = (Prog) env.program(ast);
+    Prog disabled = (Prog) env.program(ast, evalOptions(OptDisableNativeEval));
+    NestedAggregateInput enabledInput = nestedAggregateInput();
+    NestedAggregateInput disabledInput = nestedAggregateInput();
+
+    assertThat(enabled.interpretable.getClass().getSimpleName()).isEqualTo("NativeIsland");
+    assertThat(disabled.interpretable.getClass().getSimpleName()).isNotEqualTo("NativeIsland");
+    Val enabledResult = enabled.eval(Map.of("input", enabledInput)).getVal();
+    assertEquivalent(enabledResult, disabled.eval(Map.of("input", disabledInput)).getVal());
+    assertThat(enabledResult.intValue()).isEqualTo(6L);
+    assertThat(enabledInput.entriesReadCount()).isEqualTo(3);
+    assertThat(disabledInput.entriesReadCount()).isEqualTo(3);
+  }
+
+  @Test
   void exactRegistryReportsEmptyOptionalAggregateWithoutReplayingGetter() {
     TypeRegistry registry = JacksonRegistry.newExactAggregateRegistry();
     Env env =
@@ -262,6 +395,19 @@ class JacksonNativePlanTest {
         Optional.of(List.of(5L, 6L)));
   }
 
+  private static NestedAggregateInput nestedAggregateInput() {
+    return new NestedAggregateInput(List.of(Map.of("value", 1L), Map.of("value", 2L)));
+  }
+
+  private static DynamicMapInput dynamicMapInput() {
+    return new DynamicMapInput(
+        Map.of("one", true),
+        Map.of("one", 1L),
+        Map.of("one", ULong.valueOf(-1L)),
+        Map.of("one", -0.0d),
+        Map.of("one", "value"));
+  }
+
   @SuppressWarnings({"unused", "ClassCanBeRecord"})
   public static final class Person {
     private final String email;
@@ -332,6 +478,72 @@ class JacksonNativePlanTest {
 
     int optionalNumbersReadCount() {
       return optionalNumbersReadCount;
+    }
+  }
+
+  @SuppressWarnings("unused")
+  public static final class NestedAggregateInput {
+    private final List<Map<String, Long>> entries;
+    private int entriesReadCount;
+
+    public NestedAggregateInput(List<Map<String, Long>> entries) {
+      this.entries = entries;
+    }
+
+    public List<Map<String, Long>> getEntries() {
+      entriesReadCount++;
+      return entries;
+    }
+
+    int entriesReadCount() {
+      return entriesReadCount;
+    }
+  }
+
+  @SuppressWarnings({"unused", "ClassCanBeRecord"})
+  public static final class DynamicMapInput {
+    private final Map<String, Boolean> booleans;
+    private final Map<String, Long> integers;
+    private final Map<String, ULong> unsigned;
+    private final Map<String, Double> doubles;
+    private final Map<String, String> texts;
+    private final String lookupKey = "one";
+
+    public DynamicMapInput(
+        Map<String, Boolean> booleans,
+        Map<String, Long> integers,
+        Map<String, ULong> unsigned,
+        Map<String, Double> doubles,
+        Map<String, String> texts) {
+      this.booleans = booleans;
+      this.integers = integers;
+      this.unsigned = unsigned;
+      this.doubles = doubles;
+      this.texts = texts;
+    }
+
+    public Map<String, Boolean> getBooleans() {
+      return booleans;
+    }
+
+    public Map<String, Long> getIntegers() {
+      return integers;
+    }
+
+    public Map<String, ULong> getUnsigned() {
+      return unsigned;
+    }
+
+    public Map<String, Double> getDoubles() {
+      return doubles;
+    }
+
+    public Map<String, String> getTexts() {
+      return texts;
+    }
+
+    public String getLookupKey() {
+      return lookupKey;
     }
   }
 }

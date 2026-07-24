@@ -29,6 +29,7 @@ import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
 import org.projectnessie.cel.common.types.ref.ExactAggregateFieldProvider;
 import org.projectnessie.cel.common.types.ref.ExactAggregateTypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
+import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.interpreter.Activation;
 import org.projectnessie.cel.interpreter.Activation.PartialActivation;
@@ -96,6 +97,7 @@ class InterpreterPublicApiCompileTest {
             extended, registry, registry, attributes, container);
     ExactAggregateTypeAdapter exactAdapter = registry::nativeToValue;
     Val exactList = exactAdapter.nativeAggregateToValue(new long[] {1L, 2L}, newListType(Int));
+    TypeRegistry exactProto = ProtoTypeRegistry.newExactAggregateRegistry();
 
     assertThat(partial.unknownAttributePatterns()).hasSize(1);
     assertThat(namespaced.candidateVariableNames()).containsExactly("x");
@@ -108,6 +110,7 @@ class InterpreterPublicApiCompileTest {
     assertThat(checkedMaps).isNotNull();
     assertThat(unchecked).isNotNull();
     assertThat(exactList.value()).isEqualTo(new long[] {1L, 2L});
+    assertThat(exactProto).isInstanceOf(ProtoTypeRegistry.class);
     assertThat(Coster.costOf(1L, 2L).min).isEqualTo(1L);
     assertThat(Coster.costOf(1L, 2L).max).isEqualTo(2L);
     assertThat(Cost.estimateCost(constant)).isEqualTo(Cost.None);
@@ -118,6 +121,9 @@ class InterpreterPublicApiCompileTest {
       ExternalExactAggregateAdapterProvider adapterProvider) {
     ExactAggregateTypeAdapter exactAdapter = adapterProvider;
     TypeProvider publicProvider = adapterProvider;
+    boolean exactField =
+        adapterProvider.isExactAggregateField(
+            "example.Message", "values", com.google.api.expr.v1alpha1.Type.getDefaultInstance());
   }
 
   private abstract static class ExternalExactAggregateAdapterProvider
