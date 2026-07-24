@@ -42,11 +42,11 @@ import static org.projectnessie.cel.interpreter.Interpreter.newStandardInterpret
 import static org.projectnessie.cel.interpreter.Interpreter.optimize;
 import static org.projectnessie.cel.interpreter.Interpreter.trackState;
 
-import com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes;
-import com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes.NestedMessage;
 import com.google.api.expr.v1alpha1.Decl;
 import com.google.api.expr.v1alpha1.Type;
 import com.google.protobuf.Any;
+import dev.cel.expr.conformance.proto3.TestAllTypes;
+import dev.cel.expr.conformance.proto3.TestAllTypes.NestedMessage;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -378,9 +378,9 @@ class AttributesTest {
     AttributeFactory attrs = newAttributeFactory(Container.defaultContainer, reg, reg);
     Activation vars = newActivation(mapOf("msg", msg));
     NamespacedAttribute attr = attrs.absoluteAttribute(1, "msg");
-    Type opType = reg.findType("google.api.expr.test.v1.proto3.TestAllTypes");
+    Type opType = reg.findType("cel.expr.conformance.proto3.TestAllTypes");
     assertThat(opType).isNotNull();
-    Type fieldType = reg.findType("google.api.expr.test.v1.proto3.TestAllTypes.NestedMessage");
+    Type fieldType = reg.findType("cel.expr.conformance.proto3.TestAllTypes.NestedMessage");
     assertThat(fieldType).isNotNull();
     attr.addQualifier(makeQualifier(attrs, opType.getType(), 2, "single_nested_message"));
     attr.addQualifier(makeQualifier(attrs, fieldType.getType(), 3, "bb"));
@@ -398,7 +398,7 @@ class AttributesTest {
     Qualifier qualBB =
         attrs.newQualifier(
             Type.newBuilder()
-                .setMessageType("google.api.expr.test.v1.proto3.TestAllTypes.NestedMessage")
+                .setMessageType("cel.expr.conformance.proto3.TestAllTypes.NestedMessage")
                 .build(),
             2,
             "bb");
@@ -421,7 +421,7 @@ class AttributesTest {
     attr.addQualifier(field);
     assertThatThrownBy(() -> attr.resolve(vars))
         .isInstanceOf(IllegalStateException.class)
-        .hasMessage("unknown type 'google.api.expr.test.v1.proto3.TestAllTypes'");
+        .hasMessage("unknown type 'cel.expr.conformance.proto3.TestAllTypes'");
   }
 
   @Test
@@ -613,7 +613,7 @@ class AttributesTest {
     Qualifier qualBB =
         attrs.newQualifier(
             Type.newBuilder()
-                .setMessageType("google.api.expr.test.v1.proto3.TestAllTypes.NestedMessage")
+                .setMessageType("cel.expr.conformance.proto3.TestAllTypes.NestedMessage")
                 .build(),
             2,
             "bb");
@@ -633,7 +633,7 @@ class AttributesTest {
     public Qualifier newQualifier(Type objType, long qualID, Object val) {
       if (objType
           .getMessageType()
-          .equals("google.api.expr.test.v1.proto3.TestAllTypes.NestedMessage")) {
+          .equals("cel.expr.conformance.proto3.TestAllTypes.NestedMessage")) {
         return new NestedMsgQualifier(qualID, (String) val);
       }
       return af.newQualifier(objType, qualID, val);

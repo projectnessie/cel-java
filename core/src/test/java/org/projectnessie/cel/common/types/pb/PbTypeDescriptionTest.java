@@ -19,8 +19,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.projectnessie.cel.Util.mapOf;
 import static org.projectnessie.cel.common.types.pb.Db.newDb;
 
-import com.google.api.expr.test.v1.proto3.TestAllTypesProto.NestedTestAllTypes;
-import com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes;
 import com.google.api.expr.v1alpha1.Type;
 import com.google.protobuf.Any;
 import com.google.protobuf.BoolValue;
@@ -41,6 +39,8 @@ import com.google.protobuf.Timestamp;
 import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
 import com.google.protobuf.Value;
+import dev.cel.expr.conformance.proto3.NestedTestAllTypes;
+import dev.cel.expr.conformance.proto3.TestAllTypes;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Map;
@@ -232,7 +232,7 @@ public class PbTypeDescriptionTest {
     assertThat(field).isNotNull();
     Type listType =
         Decls.newListType(
-            Decls.newObjectType("google.api.expr.test.v1.proto3.TestAllTypes.NestedMessage"));
+            Decls.newObjectType("cel.expr.conformance.proto3.TestAllTypes.NestedMessage"));
     assertThat(field.checkedType()).isEqualTo(listType);
   }
 

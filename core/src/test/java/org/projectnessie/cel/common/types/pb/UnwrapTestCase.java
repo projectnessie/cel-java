@@ -15,7 +15,6 @@
  */
 package org.projectnessie.cel.common.types.pb;
 
-import com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes;
 import com.google.protobuf.BoolValue;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.BytesValue;
@@ -33,6 +32,7 @@ import com.google.protobuf.Timestamp;
 import com.google.protobuf.UInt32Value;
 import com.google.protobuf.UInt64Value;
 import com.google.protobuf.Value;
+import dev.cel.expr.conformance.proto3.TestAllTypes;
 import java.util.function.Supplier;
 
 /**

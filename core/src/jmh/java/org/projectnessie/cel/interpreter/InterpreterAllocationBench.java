@@ -21,7 +21,7 @@ import static org.projectnessie.cel.EnvOption.types;
 import static org.projectnessie.cel.ProgramOption.evalOptions;
 import static org.projectnessie.cel.Util.mapOf;
 
-import com.google.api.expr.test.v1.proto3.TestAllTypesProto.TestAllTypes;
+import dev.cel.expr.conformance.proto3.TestAllTypes;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -54,7 +54,7 @@ import org.projectnessie.cel.checker.Decls;
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 public class InterpreterAllocationBench {
 
-  private static final String TEST_ALL_TYPES = "google.api.expr.test.v1.proto3.TestAllTypes";
+  private static final String TEST_ALL_TYPES = "cel.expr.conformance.proto3.TestAllTypes";
 
   @State(Scope.Benchmark)
   public static class JavaInputState {
