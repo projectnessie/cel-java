@@ -56,7 +56,15 @@ import org.projectnessie.cel.types.jackson3.Jackson3Registry;
 public class Jackson3ExactAggregateFieldBench {
   @State(Scope.Benchmark)
   public static class FieldState {
-    @Param({"size", "index", "exists", "setMembership", "mapLookup"})
+    @Param({
+      "size",
+      "index",
+      "exists",
+      "setMembership",
+      "mapLookup",
+      "mapLookupDynamic",
+      "mapLookupComputed"
+    })
     public String operation;
 
     @Param({"0", "1", "16", "1024"})
@@ -77,11 +85,24 @@ public class Jackson3ExactAggregateFieldBench {
             case "exists" -> "input.values.exists(value, value == needle)";
             case "setMembership" -> "needle in input.members";
             case "mapLookup" -> "cardinality == 0 ? -1 : input.lookup['last']";
+            case "mapLookupDynamic" -> "cardinality == 0 ? -1 : input.lookup[key]";
+            case "mapLookupComputed" -> "cardinality == 0 ? -1 : input.lookup['key-' + suffix]";
             default -> throw new IllegalArgumentException(operation);
           };
       input = AggregateInput.create(size);
       long needle = size == 0 ? -1L : size - 1L;
-      variables = Map.of("input", input, "cardinality", (long) size, "needle", needle);
+      variables =
+          Map.of(
+              "input",
+              input,
+              "cardinality",
+              (long) size,
+              "needle",
+              needle,
+              "key",
+              "key-" + (size - 1),
+              "suffix",
+              Integer.toString(size - 1));
 
       TypeRegistry exact = Jackson3Registry.newExactAggregateRegistry();
       Env exactEnv = environment(exact);
@@ -117,6 +138,8 @@ public class Jackson3ExactAggregateFieldBench {
       case "index" -> state.size == 0 ? -1L : state.input.values.get(0);
       case "exists", "setMembership" -> state.input.members.contains((long) state.size - 1L);
       case "mapLookup" -> state.size == 0 ? -1L : state.input.lookup.get("last");
+      case "mapLookupDynamic", "mapLookupComputed" ->
+          state.size == 0 ? -1L : state.input.lookup.get("key-" + (state.size - 1));
       default -> throw new IllegalArgumentException(state.operation);
     };
   }
@@ -129,7 +152,9 @@ public class Jackson3ExactAggregateFieldBench {
         declarations(
             Decls.newVar("input", Decls.newObjectType(AggregateInput.class.getName())),
             Decls.newVar("cardinality", Decls.Int),
-            Decls.newVar("needle", Decls.Int)));
+            Decls.newVar("needle", Decls.Int),
+            Decls.newVar("key", Decls.String),
+            Decls.newVar("suffix", Decls.String)));
   }
 
   private static Ast compile(Env env, String expression) {
@@ -159,6 +184,7 @@ public class Jackson3ExactAggregateFieldBench {
       for (long value = 0; value < size; value++) {
         values.add(value);
         members.add(value);
+        lookup.put("key-" + value, value);
       }
       if (size > 0) {
         lookup.put("last", (long) size - 1L);
