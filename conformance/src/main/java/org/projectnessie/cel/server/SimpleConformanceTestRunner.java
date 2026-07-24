@@ -293,22 +293,20 @@ public final class SimpleConformanceTestRunner {
         matchError(testPath, convert(test.getEvalError(), ErrorSet.class), actual);
         return;
       case ANY_EVAL_ERRORS:
-        for (dev.cel.expr.ErrorSet errorSet : test.getAnyEvalErrors().getErrorsList()) {
-          if (actual.getKindCase() == ExprValue.KindCase.ERROR) {
-            return;
-          }
+        if (test.getAnyEvalErrors().getErrorsList().isEmpty()
+            || actual.getKindCase() != ExprValue.KindCase.ERROR) {
+          throw new AssertionError("got " + print(actual) + ", want one of several eval errors");
         }
-        throw new AssertionError("got " + print(actual) + ", want one of several eval errors");
+        return;
       case UNKNOWN:
         matchUnknown(testPath, convert(test.getUnknown(), UnknownSet.class), actual);
         return;
       case ANY_UNKNOWNS:
-        for (dev.cel.expr.UnknownSet unknownSet : test.getAnyUnknowns().getUnknownsList()) {
-          if (actual.getKindCase() == ExprValue.KindCase.UNKNOWN) {
-            return;
-          }
+        if (test.getAnyUnknowns().getUnknownsList().isEmpty()
+            || actual.getKindCase() != ExprValue.KindCase.UNKNOWN) {
+          throw new AssertionError("got " + print(actual) + ", want one of several unknowns");
         }
-        throw new AssertionError("got " + print(actual) + ", want one of several unknowns");
+        return;
       case RESULTMATCHER_NOT_SET:
         matchValue(testPath, Value.newBuilder().setBoolValue(true).build(), actual);
         return;
