@@ -297,7 +297,7 @@ final class Planner implements InterpretablePlanner {
       return new EvalTestOnly(expr.getId(), asEstablished(op), stringOf(sel.getField()), fieldType);
     }
     // Build a qualifier.
-    boolean rawExactAggregateField = exactAggregateField(expr, fieldType);
+    boolean rawExactAggregateField = exactAggregateField(expr, opType, fieldType);
     Qualifier qual =
         fieldType == null
             ? attrFactory.newQualifier(opType, expr.getId(), sel.getField())
@@ -336,21 +336,35 @@ final class Planner implements InterpretablePlanner {
             : partialSelectAttribute(expr, sel, opType));
   }
 
-  private boolean exactAggregateField(Expr expr, FieldType fieldType) {
+  private boolean exactAggregateField(Expr expr, Type operandType, FieldType fieldType) {
+    if (operandType == null
+        || operandType.getMessageType().isEmpty()
+        || expr.getExprKindCase() != Expr.ExprKindCase.SELECT_EXPR) {
+      return false;
+    }
+    Select select = expr.getSelectExpr();
+    Type checkedType = typeMap.get(expr.getId());
     return decorators.length == 0
         && fieldType != null
-        && isAggregateType(typeMap.get(expr.getId()))
+        && isAggregateType(checkedType)
         && provider == adapter
-        && provider instanceof ExactAggregateFieldProvider
+        && provider instanceof ExactAggregateFieldProvider exactProvider
+        && exactProvider.isExactAggregateField(
+            operandType.getMessageType(), select.getField(), checkedType)
         && adapter instanceof ExactAggregateTypeAdapter;
   }
 
   private FieldQualifier fieldQualifier(Expr expr, Select select, FieldType fieldType) {
     Type resultType = typeMap.get(expr.getId());
     CheckedAggregateMaterializer materializer = null;
+    Type operandType = typeMap.get(select.getOperand().getId());
     if (isAggregateType(resultType)
         && provider == adapter
-        && provider instanceof ExactAggregateFieldProvider
+        && operandType != null
+        && !operandType.getMessageType().isEmpty()
+        && provider instanceof ExactAggregateFieldProvider exactProvider
+        && exactProvider.isExactAggregateField(
+            operandType.getMessageType(), select.getField(), resultType)
         && adapter instanceof ExactAggregateTypeAdapter exactAdapter) {
       materializer = new CheckedAggregateMaterializer(exactAdapter, resultType);
     }
@@ -385,7 +399,7 @@ final class Planner implements InterpretablePlanner {
       InterpretableAttribute attribute,
       Attribute partialAttribute) {
     Type resultType = typeMap.get(expr.getId());
-    if (exactAggregateField(expr, fieldType)
+    if (exactAggregateField(expr, operandType, fieldType)
         && resultType != null
         && adapter instanceof ExactAggregateTypeAdapter exactAdapter) {
       CheckedAggregateMaterializer materializer =
@@ -565,10 +579,8 @@ final class Planner implements InterpretablePlanner {
         || resolvedFunction.nativeDescriptor() == null
         || !resolvedFunction.overloadId.equals(Overloads.AddList)
         || arguments.length != 2
-        || !(arguments[0] instanceof NativeListSourceCapability left)
-        || !(arguments[1] instanceof NativeListSourceCapability right)
-        || !left.exactListSource()
-        || !right.exactListSource()) {
+        || !exactListConcatOperand(arguments[0])
+        || !exactListConcatOperand(arguments[1])) {
       return null;
     }
     Call call = expr.getCallExpr();
@@ -585,6 +597,11 @@ final class Planner implements InterpretablePlanner {
         expr.getId(), arguments[0], arguments[1], resolvedFunction.implementation);
   }
 
+  private static boolean exactListConcatOperand(Interpretable operand) {
+    return operand instanceof NativeListConcat
+        || operand instanceof NativeListSourceCapability source && source.exactListSource();
+  }
+
   private Interpretable specializeListConcatSize(
       Expr expr, ResolvedFunction resolvedFunction, Interpretable[] arguments) {
     if (!nativeCertifiedHostAggregatePlanning()
@@ -596,11 +613,16 @@ final class Planner implements InterpretablePlanner {
         || !hasPrimitiveType(expr.getId(), PrimitiveType.INT64)) {
       return null;
     }
+    NativeListSourceCapability[] sources = NativeListConcatKernel.collectSources(concat);
+    if (sources == null) {
+      return null;
+    }
     return new NativeListConcatSize(
         expr.getId(),
         resolvedFunction.fnName,
         resolvedFunction.overloadId,
         concat,
+        sources,
         resolvedFunction.implementation);
   }
 
@@ -1187,7 +1209,7 @@ final class Planner implements InterpretablePlanner {
         return null;
       }
       establishedOp.addQualifier(qual);
-      return establishedOp;
+      return specializeDynamicListConcatIndex(expr, resolvedFunction, op, ind, establishedOp);
     }
     if (ind instanceof InterpretableAttribute indAttr) {
       Qualifier qual = attrFactory.newQualifier(opType, expr.getId(), indAttr);
@@ -1199,7 +1221,12 @@ final class Planner implements InterpretablePlanner {
         return null;
       }
       establishedOp.addQualifier(qual);
-      return establishedOp;
+      Interpretable mapIndex =
+          specializeDynamicExactMapIndex(expr, resolvedFunction, opType, op, ind, establishedOp);
+      if (mapIndex != establishedOp) {
+        return mapIndex;
+      }
+      return specializeDynamicListConcatIndex(expr, resolvedFunction, op, ind, establishedOp);
     }
     InterpretableAttribute indQual = relativeAttr(expr.getId(), asEstablished(ind));
     if (indQual == null) {
@@ -1210,6 +1237,16 @@ final class Planner implements InterpretablePlanner {
       return null;
     }
     establishedOp.addQualifier(indQual);
+    Interpretable mapIndex =
+        specializeDynamicExactMapIndex(expr, resolvedFunction, opType, op, ind, establishedOp);
+    if (mapIndex != establishedOp) {
+      return mapIndex;
+    }
+    Interpretable concatIndex =
+        specializeDynamicListConcatIndex(expr, resolvedFunction, op, ind, establishedOp);
+    if (concatIndex != establishedOp) {
+      return concatIndex;
+    }
     return specializeDynamicTopLevelListIndex(
         expr, resolvedFunction, operandExpr, opType, op, ind, establishedOp);
   }
@@ -1233,33 +1270,79 @@ final class Planner implements InterpretablePlanner {
       return established;
     }
     long indexValue = index.value().intValue();
-    if (indexValue < Integer.MIN_VALUE || indexValue > Integer.MAX_VALUE) {
+    NativeListSourceCapability[] sources = NativeListConcatKernel.collectSources(concat);
+    if (sources == null) {
       return established;
     }
-    int effectiveIndex = Math.toIntExact(indexValue);
     if (hasPrimitiveType(expr.getId(), PrimitiveType.BOOL)) {
       return new NativeBooleanListConcatIndex(
-          expr.getId(), adapter, established.attr(), concat, effectiveIndex);
+          expr.getId(), adapter, established.attr(), concat, sources, indexValue);
     }
     if (hasPrimitiveType(expr.getId(), PrimitiveType.INT64)) {
       return new NativeIntListConcatIndex(
-          expr.getId(), adapter, established.attr(), concat, effectiveIndex);
+          expr.getId(), adapter, established.attr(), concat, sources, indexValue);
     }
     if (hasPrimitiveType(expr.getId(), PrimitiveType.UINT64)) {
       return new NativeUintListConcatIndex(
-          expr.getId(), adapter, established.attr(), concat, effectiveIndex);
+          expr.getId(), adapter, established.attr(), concat, sources, indexValue);
     }
     if (hasPrimitiveType(expr.getId(), PrimitiveType.DOUBLE)) {
       return new NativeDoubleListConcatIndex(
-          expr.getId(), adapter, established.attr(), concat, effectiveIndex);
+          expr.getId(), adapter, established.attr(), concat, sources, indexValue);
     }
     if (hasPrimitiveType(expr.getId(), PrimitiveType.STRING)) {
       return new NativeStringListConcatIndex(
-          expr.getId(), adapter, established.attr(), concat, effectiveIndex);
+          expr.getId(), adapter, established.attr(), concat, sources, indexValue);
     }
     return hasNullType(expr.getId())
         ? new NativeNullListConcatIndex(
-            expr.getId(), adapter, established.attr(), concat, effectiveIndex)
+            expr.getId(), adapter, established.attr(), concat, sources, indexValue)
+        : established;
+  }
+
+  private Interpretable specializeDynamicListConcatIndex(
+      Expr expr,
+      ResolvedFunction resolvedFunction,
+      Interpretable operand,
+      Interpretable index,
+      InterpretableAttribute established) {
+    Call call = expr.getCallExpr();
+    Expr indexExpression = call.hasTarget() ? call.getArgs(0) : call.getArgs(1);
+    if (!nativeCertifiedHostAggregatePlanning()
+        || resolvedFunction.nativeDescriptor() == null
+        || !resolvedFunction.overloadId.equals(Overloads.IndexList)
+        || !(operand instanceof NativeListConcat concat)
+        || !(index instanceof NativeIntCapability nativeIndex)
+        || !hasPrimitiveType(indexExpression.getId(), PrimitiveType.INT64)) {
+      return established;
+    }
+    NativeListSourceCapability[] sources = NativeListConcatKernel.collectSources(concat);
+    if (sources == null) {
+      return established;
+    }
+    if (hasPrimitiveType(expr.getId(), PrimitiveType.BOOL)) {
+      return new NativeBooleanListConcatIndex(
+          expr.getId(), adapter, established.attr(), concat, sources, nativeIndex);
+    }
+    if (hasPrimitiveType(expr.getId(), PrimitiveType.INT64)) {
+      return new NativeIntListConcatIndex(
+          expr.getId(), adapter, established.attr(), concat, sources, nativeIndex);
+    }
+    if (hasPrimitiveType(expr.getId(), PrimitiveType.UINT64)) {
+      return new NativeUintListConcatIndex(
+          expr.getId(), adapter, established.attr(), concat, sources, nativeIndex);
+    }
+    if (hasPrimitiveType(expr.getId(), PrimitiveType.DOUBLE)) {
+      return new NativeDoubleListConcatIndex(
+          expr.getId(), adapter, established.attr(), concat, sources, nativeIndex);
+    }
+    if (hasPrimitiveType(expr.getId(), PrimitiveType.STRING)) {
+      return new NativeStringListConcatIndex(
+          expr.getId(), adapter, established.attr(), concat, sources, nativeIndex);
+    }
+    return hasNullType(expr.getId())
+        ? new NativeNullListConcatIndex(
+            expr.getId(), adapter, established.attr(), concat, sources, nativeIndex)
         : established;
   }
 
@@ -1331,6 +1414,77 @@ final class Planner implements InterpretablePlanner {
           new CheckedAggregateMaterializer(exactAdapter, resultType));
     }
     return established;
+  }
+
+  private Interpretable specializeDynamicExactMapIndex(
+      Expr expr,
+      ResolvedFunction resolvedFunction,
+      Type operandType,
+      Interpretable operand,
+      Interpretable index,
+      InterpretableAttribute established) {
+    if (!nativeCertifiedHostAggregatePlanning()
+        || resolvedFunction.nativeDescriptor() == null
+        || !resolvedFunction.overloadId.equals(Overloads.IndexMap)
+        || !(operand instanceof NativeMapSourceCapability source)
+        || !source.exactMapSource()
+        || operandType == null
+        || operandType.getTypeKindCase() != Type.TypeKindCase.MAP_TYPE
+        || operandType.getMapType().getKeyType().getTypeKindCase() != Type.TypeKindCase.PRIMITIVE
+        || operandType.getMapType().getKeyType().getPrimitive() != PrimitiveType.STRING) {
+      return established;
+    }
+    Call call = expr.getCallExpr();
+    Expr indexExpression = call.hasTarget() ? call.getArgs(0) : call.getArgs(1);
+    NativeStringCapability dynamicKey = dynamicStringKey(indexExpression, index);
+    if (dynamicKey == null) {
+      return established;
+    }
+    Type resultType = typeMap.get(expr.getId());
+    if (resultType == null || !resultType.equals(operandType.getMapType().getValueType())) {
+      return established;
+    }
+    if (hasPrimitiveType(expr.getId(), PrimitiveType.BOOL)) {
+      return new NativeBooleanMapIndex(
+          expr.getId(), adapter, established.attr(), source, dynamicKey);
+    }
+    if (hasPrimitiveType(expr.getId(), PrimitiveType.INT64)) {
+      return new NativeIntMapIndex(expr.getId(), adapter, established.attr(), source, dynamicKey);
+    }
+    if (hasPrimitiveType(expr.getId(), PrimitiveType.UINT64)) {
+      return new NativeUintMapIndex(expr.getId(), adapter, established.attr(), source, dynamicKey);
+    }
+    if (hasPrimitiveType(expr.getId(), PrimitiveType.DOUBLE)) {
+      return new NativeDoubleMapIndex(
+          expr.getId(), adapter, established.attr(), source, dynamicKey);
+    }
+    if (hasPrimitiveType(expr.getId(), PrimitiveType.STRING)) {
+      return new NativeStringMapIndex(
+          expr.getId(), adapter, established.attr(), source, dynamicKey);
+    }
+    return hasNullType(expr.getId())
+        ? new NativeNullMapIndex(expr.getId(), adapter, established.attr(), source, dynamicKey)
+        : established;
+  }
+
+  private NativeStringCapability dynamicStringKey(
+      Expr expression, Interpretable plannedExpression) {
+    if (!hasPrimitiveType(expression.getId(), PrimitiveType.STRING)) {
+      return null;
+    }
+    if (plannedExpression instanceof NativeStringCapability nativeString) {
+      return nativeString;
+    }
+    if (!(plannedExpression instanceof InterpretableAttribute attribute)
+        || expression.getExprKindCase() != Expr.ExprKindCase.SELECT_EXPR) {
+      return null;
+    }
+    Select select = expression.getSelectExpr();
+    Type operandType = typeMap.get(select.getOperand().getId());
+    Attribute partialAttribute = partialSelectAttribute(expression, select, operandType);
+    return partialAttribute != null
+        ? new NativeStringAttr(expression.getId(), adapter, attribute.attr(), partialAttribute)
+        : null;
   }
 
   private ExactMapKey exactMapKey(Expr expression, Interpretable planned) {

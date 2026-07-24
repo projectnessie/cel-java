@@ -84,6 +84,26 @@ final class NativeMapSources {
     return value;
   }
 
+  static Map<?, ?> strictExactMap(Object raw) {
+    if (raw instanceof Val val && (isError(val) || isUnknown(val))) {
+      throw signal(val);
+    }
+    if (raw instanceof Map<?, ?> map) {
+      return map;
+    }
+    throw signal(
+        newErr(
+            "got '%s', expected certified exact map type",
+            raw == null ? "null" : raw.getClass().getName()));
+  }
+
+  static ValueSignal incompatibleSelected(Object value, String expected) {
+    return signal(
+        newErr(
+            "exact map value of Java type '%s' is incompatible with checked CEL %s",
+            value == null ? "null" : value.getClass().getName(), expected));
+  }
+
   private static Mapper materializedMapper(NativeMapSourceCapability source, Object raw) {
     Val materialized = materializedMap(source, raw);
     if (materialized instanceof Mapper mapper) {
@@ -126,6 +146,7 @@ abstract class NativeMapIndex extends NativeScalarAttr {
   final NativeMapSourceCapability source;
   final Object hostKey;
   final Val celKey;
+  final NativeStringCapability dynamicKey;
 
   NativeMapIndex(
       long id,
@@ -138,29 +159,81 @@ abstract class NativeMapIndex extends NativeScalarAttr {
     this.source = source;
     this.hostKey = hostKey;
     this.celKey = celKey;
+    this.dynamicKey = null;
+  }
+
+  NativeMapIndex(
+      long id,
+      TypeAdapter adapter,
+      Attribute establishedAttribute,
+      NativeMapSourceCapability source,
+      NativeStringCapability dynamicKey) {
+    super(id, adapter, establishedAttribute, null);
+    this.source = source;
+    this.hostKey = null;
+    this.celKey = null;
+    this.dynamicKey = dynamicKey;
   }
 
   final Object resolveMap(Activation activation) {
-    Object raw;
     try {
-      raw = source.evalRaw(activation);
+      return source.evalRaw(activation);
     } catch (ValueSignal failure) {
-      raw = failure.value;
+      return failure.value;
+    } catch (Exception failure) {
+      throw signal(newErr(failure, failure.toString()));
     }
-    return raw;
   }
 
-  final Object selectValue(Object raw) {
+  final Selection selectValue(Activation activation) {
+    Object raw = resolveMap(activation);
+    if (dynamicKey != null) {
+      Map<?, ?> map = NativeMapSources.strictExactMap(raw);
+      String key;
+      try {
+        key = dynamicKey.evalString(activation);
+      } catch (ValueSignal failure) {
+        if (isError(failure.value) || isUnknown(failure.value)) {
+          throw failure;
+        }
+        throw signal(
+            newErr(
+                "exact map key of CEL type '%s' is incompatible with checked CEL string",
+                failure.value.type().typeName()));
+      } catch (Exception failure) {
+        throw signal(newErr(failure, failure.toString()));
+      }
+      if (key == null) {
+        throw signal(newErr("null is not a valid CEL string map key"));
+      }
+      Object value;
+      boolean present;
+      try {
+        value = map.get(key);
+        present = value != null || map.containsKey(key);
+      } catch (Exception failure) {
+        throw signal(newErr(failure, failure.toString()));
+      }
+      if (!present) {
+        throw signal(noSuchKey(org.projectnessie.cel.common.types.StringT.stringOf(key)));
+      }
+      return new Selection(raw, value, null);
+    }
     Object value = NativeMapSources.lookup(source, raw, hostKey, celKey);
     if (value == NativeMapSources.ABSENT) {
       throw signal(noSuchKey(celKey));
     }
-    return value;
+    return new Selection(raw, value, celKey);
   }
 
-  final Val checkedValue(Object raw) {
-    return NativeMapSources.checkedValue(source, raw, celKey);
+  final Val checkedValue(Selection selection) {
+    if (selection.celKey == null) {
+      throw NativeMapSources.incompatibleSelected(selection.value, "scalar");
+    }
+    return NativeMapSources.checkedValue(source, selection.raw, selection.celKey);
   }
+
+  record Selection(Object raw, Object value, Val celKey) {}
 }
 
 final class NativeBooleanMapIndex extends NativeMapIndex implements NativeBooleanCapability {
@@ -174,13 +247,21 @@ final class NativeBooleanMapIndex extends NativeMapIndex implements NativeBoolea
     super(id, adapter, establishedAttribute, source, hostKey, celKey);
   }
 
+  NativeBooleanMapIndex(
+      long id,
+      TypeAdapter adapter,
+      Attribute establishedAttribute,
+      NativeMapSourceCapability source,
+      NativeStringCapability dynamicKey) {
+    super(id, adapter, establishedAttribute, source, dynamicKey);
+  }
+
   @Override
   public boolean evalBoolean(Activation activation) {
-    Object raw = resolveMap(activation);
-    Object value = selectValue(raw);
-    return value instanceof Boolean bool
+    Selection selection = selectValue(activation);
+    return selection.value() instanceof Boolean bool
         ? bool
-        : NativeSupport.booleanValue(adapter, checkedValue(raw));
+        : NativeSupport.booleanValue(adapter, checkedValue(selection));
   }
 }
 
@@ -195,17 +276,26 @@ final class NativeIntMapIndex extends NativeMapIndex implements NativeIntCapabil
     super(id, adapter, establishedAttribute, source, hostKey, celKey);
   }
 
+  NativeIntMapIndex(
+      long id,
+      TypeAdapter adapter,
+      Attribute establishedAttribute,
+      NativeMapSourceCapability source,
+      NativeStringCapability dynamicKey) {
+    super(id, adapter, establishedAttribute, source, dynamicKey);
+  }
+
   @Override
   public long evalInt(Activation activation) {
-    Object raw = resolveMap(activation);
-    Object value = selectValue(raw);
+    Selection selection = selectValue(activation);
+    Object value = selection.value();
     if (value instanceof Byte
         || value instanceof Short
         || value instanceof Integer
         || value instanceof Long) {
       return ((Number) value).longValue();
     }
-    return NativeSupport.intValue(adapter, checkedValue(raw));
+    return NativeSupport.intValue(adapter, checkedValue(selection));
   }
 }
 
@@ -220,17 +310,26 @@ final class NativeUintMapIndex extends NativeMapIndex implements NativeUintCapab
     super(id, adapter, establishedAttribute, source, hostKey, celKey);
   }
 
+  NativeUintMapIndex(
+      long id,
+      TypeAdapter adapter,
+      Attribute establishedAttribute,
+      NativeMapSourceCapability source,
+      NativeStringCapability dynamicKey) {
+    super(id, adapter, establishedAttribute, source, dynamicKey);
+  }
+
   @Override
   public long evalUint(Activation activation) {
-    Object raw = resolveMap(activation);
-    Object value = selectValue(raw);
+    Selection selection = selectValue(activation);
+    Object value = selection.value();
     if (value instanceof Long bits) {
       return bits;
     }
     if (value instanceof ULong unsigned) {
       return unsigned.longValue();
     }
-    return NativeSupport.uintValue(adapter, checkedValue(raw));
+    return NativeSupport.uintValue(adapter, checkedValue(selection));
   }
 }
 
@@ -245,14 +344,23 @@ final class NativeDoubleMapIndex extends NativeMapIndex implements NativeDoubleC
     super(id, adapter, establishedAttribute, source, hostKey, celKey);
   }
 
+  NativeDoubleMapIndex(
+      long id,
+      TypeAdapter adapter,
+      Attribute establishedAttribute,
+      NativeMapSourceCapability source,
+      NativeStringCapability dynamicKey) {
+    super(id, adapter, establishedAttribute, source, dynamicKey);
+  }
+
   @Override
   public double evalDouble(Activation activation) {
-    Object raw = resolveMap(activation);
-    Object value = selectValue(raw);
+    Selection selection = selectValue(activation);
+    Object value = selection.value();
     if (value instanceof Float || value instanceof Double) {
       return ((Number) value).doubleValue();
     }
-    return NativeSupport.doubleValue(adapter, checkedValue(raw));
+    return NativeSupport.doubleValue(adapter, checkedValue(selection));
   }
 }
 
@@ -267,13 +375,21 @@ final class NativeStringMapIndex extends NativeMapIndex implements NativeStringC
     super(id, adapter, establishedAttribute, source, hostKey, celKey);
   }
 
+  NativeStringMapIndex(
+      long id,
+      TypeAdapter adapter,
+      Attribute establishedAttribute,
+      NativeMapSourceCapability source,
+      NativeStringCapability dynamicKey) {
+    super(id, adapter, establishedAttribute, source, dynamicKey);
+  }
+
   @Override
   public String evalString(Activation activation) {
-    Object raw = resolveMap(activation);
-    Object value = selectValue(raw);
-    return value instanceof String string
+    Selection selection = selectValue(activation);
+    return selection.value() instanceof String string
         ? string
-        : NativeSupport.stringValue(adapter, checkedValue(raw));
+        : NativeSupport.stringValue(adapter, checkedValue(selection));
   }
 }
 
@@ -288,11 +404,20 @@ final class NativeNullMapIndex extends NativeMapIndex implements NativeNullCapab
     super(id, adapter, establishedAttribute, source, hostKey, celKey);
   }
 
+  NativeNullMapIndex(
+      long id,
+      TypeAdapter adapter,
+      Attribute establishedAttribute,
+      NativeMapSourceCapability source,
+      NativeStringCapability dynamicKey) {
+    super(id, adapter, establishedAttribute, source, dynamicKey);
+  }
+
   @Override
   public void evalNull(Activation activation) {
-    Object raw = resolveMap(activation);
-    if (selectValue(raw) != null) {
-      NativeSupport.nullValue(adapter, checkedValue(raw));
+    Selection selection = selectValue(activation);
+    if (selection.value() != null) {
+      NativeSupport.nullValue(adapter, checkedValue(selection));
     }
   }
 }

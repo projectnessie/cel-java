@@ -202,11 +202,13 @@ class GeneratedFieldAccessorTest {
     TestAllTypes message =
         TestAllTypes.newBuilder()
             .setSingleUint32(-1)
+            .setSingleFixed32(Integer.MIN_VALUE)
             .setSingleUint64(Long.MIN_VALUE)
             .setStandaloneEnumValue(12_345)
             .setSingleNestedMessage(TestAllTypes.NestedMessage.newBuilder().setBb(50_000))
             .setSingleInt32Wrapper(Int32Value.of(50_000))
-            .addRepeatedUint32(-1)
+            .addAllRepeatedUint32(List.of(0, Integer.MAX_VALUE, Integer.MIN_VALUE, -1))
+            .addAllRepeatedFixed32(List.of(0, Integer.MAX_VALUE, Integer.MIN_VALUE, -1))
             .addRepeatedNestedEnumValue(12_345)
             .addRepeatedNullValue(NullValue.NULL_VALUE)
             .putMapStringString("key", "value")
@@ -218,7 +220,9 @@ class GeneratedFieldAccessorTest {
     String typeName = message.getDescriptorForType().getFullName();
 
     assertThat(registry.findFieldType(typeName, "single_uint32").getFrom.getFrom(message))
-        .isEqualTo(ULong.valueOf(-1L));
+        .isEqualTo(ULong.valueOf(0xffff_ffffL));
+    assertThat(registry.findFieldType(typeName, "single_fixed32").getFrom.getFrom(message))
+        .isEqualTo(ULong.valueOf(0x8000_0000L));
     assertThat(registry.findFieldType(typeName, "single_uint64").getFrom.getFrom(message))
         .isEqualTo(ULong.valueOf(Long.MIN_VALUE));
     assertThat(registry.findFieldType(typeName, "standalone_enum").getFrom.getFrom(message))
@@ -234,7 +238,19 @@ class GeneratedFieldAccessorTest {
                 .getFrom(TestAllTypes.getDefaultInstance()))
         .isEqualTo(NullValue.NULL_VALUE);
     assertThat(registry.findFieldType(typeName, "repeated_uint32").getFrom.getFrom(message))
-        .isEqualTo(List.of(ULong.valueOf(-1L)));
+        .isEqualTo(
+            List.of(
+                ULong.valueOf(0L),
+                ULong.valueOf(0x7fff_ffffL),
+                ULong.valueOf(0x8000_0000L),
+                ULong.valueOf(0xffff_ffffL)));
+    assertThat(registry.findFieldType(typeName, "repeated_fixed32").getFrom.getFrom(message))
+        .isEqualTo(
+            List.of(
+                ULong.valueOf(0L),
+                ULong.valueOf(0x7fff_ffffL),
+                ULong.valueOf(0x8000_0000L),
+                ULong.valueOf(0xffff_ffffL)));
     assertThat(registry.findFieldType(typeName, "repeated_nested_enum").getFrom.getFrom(message))
         .isEqualTo(List.of(12_345));
 
@@ -244,7 +260,7 @@ class GeneratedFieldAccessorTest {
     assertThat(((MapT) mapValue).get(stringOf("key"))).isEqualTo(stringOf("value"));
     MapT unsignedMap =
         (MapT) registry.findFieldType(typeName, "map_uint32_uint64").getFrom.getFrom(message);
-    assertThat(unsignedMap.get(uintOf(-1L))).isEqualTo(uintOf(Long.MIN_VALUE));
+    assertThat(unsignedMap.get(uintOf(0xffff_ffffL))).isEqualTo(uintOf(Long.MIN_VALUE));
     MapT enumMap =
         (MapT) registry.findFieldType(typeName, "map_string_enum").getFrom.getFrom(message);
     assertThat(enumMap.get(stringOf("unknown"))).isEqualTo(intOf(12_345));
@@ -253,11 +269,31 @@ class GeneratedFieldAccessorTest {
     assertThat(nullMap.get(True)).isEqualTo(intOf(0));
 
     PbObjectT object = (PbObjectT) registry.nativeToValue(message);
-    assertThat(object.get(stringOf("single_uint32"))).isEqualTo(uintOf(-1L));
+    assertThat(object.get(stringOf("single_uint32"))).isEqualTo(uintOf(0xffff_ffffL));
+    assertThat(object.get(stringOf("single_fixed32"))).isEqualTo(uintOf(0x8000_0000L));
     assertThat(object.get(stringOf("standalone_enum"))).isEqualTo(intOf(12_345));
     assertThat(object.get(stringOf("single_int32_wrapper"))).isEqualTo(intOf(50_000));
     assertThat(((Lister) object.get(stringOf("repeated_null_value"))).get(intOf(0)))
         .isEqualTo(intOf(0));
+
+    DynamicMessage dynamic =
+        DynamicMessage.newBuilder(message.getDescriptorForType()).mergeFrom(message).build();
+    assertThat(registry.findFieldType(typeName, "single_uint32").getFrom.getFrom(dynamic))
+        .isEqualTo(ULong.valueOf(0xffff_ffffL));
+    assertThat(registry.findFieldType(typeName, "single_fixed32").getFrom.getFrom(dynamic))
+        .isEqualTo(ULong.valueOf(0x8000_0000L));
+    assertThat(registry.findFieldType(typeName, "repeated_uint32").getFrom.getFrom(dynamic))
+        .isEqualTo(
+            List.of(
+                ULong.valueOf(0L),
+                ULong.valueOf(0x7fff_ffffL),
+                ULong.valueOf(0x8000_0000L),
+                ULong.valueOf(0xffff_ffffL)));
+    MapT dynamicUnsignedMap =
+        (MapT) registry.findFieldType(typeName, "map_uint32_uint64").getFrom.getFrom(dynamic);
+    assertThat(dynamicUnsignedMap.get(uintOf(0xffff_ffffL))).isEqualTo(uintOf(Long.MIN_VALUE));
+    PbObjectT dynamicObject = (PbObjectT) registry.nativeToValue(dynamic);
+    assertThat(dynamicObject.get(stringOf("single_uint32"))).isEqualTo(uintOf(0xffff_ffffL));
   }
 
   @Test
