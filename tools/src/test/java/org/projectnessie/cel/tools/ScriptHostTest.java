@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.EnvOption;
 import org.projectnessie.cel.Library;
@@ -35,6 +36,7 @@ import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.ListT;
 import org.projectnessie.cel.common.types.MapT;
+import org.projectnessie.cel.common.types.Overloads;
 import org.projectnessie.cel.common.types.StringT;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.interpreter.ActivationFunction;
@@ -122,6 +124,40 @@ class ScriptHostTest {
     Object result = script.executeWithActivation(Object.class, Collections.emptyMap());
 
     assertThat(result).isEqualTo(Arrays.asList(1L, 2L, 3L));
+  }
+
+  @Test
+  void optimizationFoldsConstantConversionAtBuildWhileDisableOptimizeDefersIt() throws Exception {
+    AtomicInteger optimizedCalls = new AtomicInteger();
+    Script optimized =
+        ScriptHost.newBuilder()
+            .build()
+            .buildScript("int(\"ignored\")")
+            .withLibraries(new CountingStringToIntLibrary(optimizedCalls))
+            .build();
+
+    assertThat(optimizedCalls).hasValue(1);
+    assertThat(optimized.executeWithActivation(Integer.class, Collections.emptyMap()))
+        .isEqualTo(42);
+    assertThat(optimized.executeWithActivation(Integer.class, Collections.emptyMap()))
+        .isEqualTo(42);
+    assertThat(optimizedCalls).hasValue(1);
+
+    AtomicInteger unoptimizedCalls = new AtomicInteger();
+    Script unoptimized =
+        ScriptHost.newBuilder()
+            .disableOptimize()
+            .build()
+            .buildScript("int(\"ignored\")")
+            .withLibraries(new CountingStringToIntLibrary(unoptimizedCalls))
+            .build();
+
+    assertThat(unoptimizedCalls).hasValue(0);
+    assertThat(unoptimized.executeWithActivation(Integer.class, Collections.emptyMap()))
+        .isEqualTo(42);
+    assertThat(unoptimized.executeWithActivation(Integer.class, Collections.emptyMap()))
+        .isEqualTo(42);
+    assertThat(unoptimizedCalls).hasValue(2);
   }
 
   @Test
@@ -420,6 +456,31 @@ class ScriptHostTest {
       return Boolean.TRUE.equals(script.executeWithActivation(Boolean.class, arguments));
     } catch (ScriptException | RuntimeException e) {
       return false;
+    }
+  }
+
+  private static final class CountingStringToIntLibrary implements Library {
+    private final AtomicInteger calls;
+
+    private CountingStringToIntLibrary(AtomicInteger calls) {
+      this.calls = calls;
+    }
+
+    @Override
+    public List<EnvOption> getCompileOptions() {
+      return Collections.emptyList();
+    }
+
+    @Override
+    public List<ProgramOption> getProgramOptions() {
+      return Collections.singletonList(
+          ProgramOption.functions(
+              Overload.unary(
+                  Overloads.StringToInt,
+                  ignored -> {
+                    calls.incrementAndGet();
+                    return IntT.intOf(42);
+                  })));
     }
   }
 

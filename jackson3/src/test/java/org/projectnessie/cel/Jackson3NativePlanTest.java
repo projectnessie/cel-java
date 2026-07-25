@@ -236,6 +236,59 @@ class Jackson3NativePlanTest {
   }
 
   @Test
+  void exactMapFieldsSupportConstantAndCheckedDynamicBooleanAndSignedIntegerKeys() {
+    TypeRegistry registry = Jackson3Registry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            types(ExactKeyMapInput.class),
+            declarations(
+                Decls.newVar("input", Decls.newObjectType(ExactKeyMapInput.class.getName())),
+                Decls.newVar("boolKey", Decls.Bool),
+                Decls.newVar("intKey", Decls.Int)));
+    ExactKeyMapInput input =
+        new ExactKeyMapInput(
+            Map.of(false, 10L, true, 11L), Map.of(-1, 20L, 1, 21L, Integer.MAX_VALUE, 22L));
+
+    record KeyEvaluation(String expression, boolean boolKey, long intKey, Object expected) {}
+    for (var evaluation :
+        List.of(
+            new KeyEvaluation("input.byInteger[1]", true, Integer.MAX_VALUE, 21L),
+            new KeyEvaluation("1 in input.byInteger", true, Integer.MAX_VALUE, true),
+            new KeyEvaluation("2 in input.byInteger", true, Integer.MAX_VALUE, false),
+            new KeyEvaluation("input.byInteger[intKey]", true, Integer.MAX_VALUE, 22L),
+            new KeyEvaluation("input.byInteger[intKey]", true, -1L, 20L),
+            new KeyEvaluation("input.byBoolean[boolKey]", true, Integer.MAX_VALUE, 11L),
+            new KeyEvaluation("input.byBoolean[boolKey]", false, Integer.MAX_VALUE, 10L))) {
+      Ast ast = compile(env, evaluation.expression());
+      Prog enabled = (Prog) env.program(ast);
+      Prog disabled = (Prog) env.program(ast, evalOptions(OptDisableNativeEval));
+      Map<String, Object> activation =
+          Map.of(
+              "input", input,
+              "boolKey", evaluation.boolKey(),
+              "intKey", evaluation.intKey());
+
+      assertThat(enabled.interpretable.getClass().getSimpleName())
+          .as(evaluation.expression())
+          .isEqualTo("NativeIsland");
+      assertThat(disabled.interpretable.getClass().getSimpleName())
+          .as(evaluation.expression())
+          .isNotEqualTo("NativeIsland");
+      Val result = enabled.eval(activation).getVal();
+      assertEquivalent(result, disabled.eval(activation).getVal());
+      assertThat(result.value()).as(evaluation.expression()).isEqualTo(evaluation.expected());
+    }
+
+    Ast missing = compile(env, "input.byInteger[intKey]");
+    Val result =
+        assertEnabledDisabledEquivalent(
+            env, missing, Map.of("input", input, "boolKey", false, "intKey", Long.MAX_VALUE));
+    assertThat(result).matches(Err::isError);
+  }
+
+  @Test
   void checkedDynamicNullMapLookupDistinguishesPresentNullFromAbsent() {
     TypeRegistry registry = Jackson3Registry.newExactAggregateRegistry();
     Env env =
@@ -610,6 +663,25 @@ class Jackson3NativePlanTest {
 
     public String getLookupKey() {
       return lookupKey;
+    }
+  }
+
+  @SuppressWarnings({"unused", "ClassCanBeRecord"})
+  public static final class ExactKeyMapInput {
+    private final Map<Boolean, Long> byBoolean;
+    private final Map<Integer, Long> byInteger;
+
+    public ExactKeyMapInput(Map<Boolean, Long> byBoolean, Map<Integer, Long> byInteger) {
+      this.byBoolean = byBoolean;
+      this.byInteger = byInteger;
+    }
+
+    public Map<Boolean, Long> getByBoolean() {
+      return byBoolean;
+    }
+
+    public Map<Integer, Long> getByInteger() {
+      return byInteger;
     }
   }
 }

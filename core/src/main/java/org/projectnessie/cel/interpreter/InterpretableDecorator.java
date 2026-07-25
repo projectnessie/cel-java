@@ -15,22 +15,8 @@
  */
 package org.projectnessie.cel.interpreter;
 
-import static org.projectnessie.cel.common.types.BoolT.True;
-import static org.projectnessie.cel.common.types.Err.throwErrorAsIllegalStateException;
-import static org.projectnessie.cel.common.types.IntT.IntZero;
-import static org.projectnessie.cel.interpreter.Activation.emptyActivation;
-import static org.projectnessie.cel.interpreter.Interpretable.newConstValue;
-
-import java.util.HashSet;
-import java.util.Set;
-import org.projectnessie.cel.common.types.IteratorT;
-import org.projectnessie.cel.common.types.Overloads;
-import org.projectnessie.cel.common.types.Util;
-import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.Val;
-import org.projectnessie.cel.common.types.traits.Lister;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableAttribute;
-import org.projectnessie.cel.interpreter.Interpretable.InterpretableCall;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableConst;
 
 /**
@@ -112,106 +98,11 @@ public interface InterpretableDecorator {
    *
    * <ul>
    *   <li>build list and map values with constant elements.
+   *   <li>evaluate constant type-conversion calls.
    *   <li>convert 'in' operations to set membership tests if possible.
    * </ul>
    */
   static InterpretableDecorator decOptimize() {
-    return i -> {
-      if (i instanceof EvalList) {
-        return maybeBuildListLiteral(i, (EvalList) i);
-      }
-      if (i instanceof EvalMap) {
-        return maybeBuildMapLiteral(i, (EvalMap) i);
-      }
-      if (i instanceof InterpretableCall inst) {
-        if (inst.overloadID().equals(Overloads.InList)) {
-          return maybeOptimizeSetMembership(i, inst);
-        }
-        if (Overloads.isTypeConversionFunction(inst.function())) {
-          return maybeOptimizeConstUnary(i, inst);
-        }
-      }
-      return i;
-    };
-  }
-
-  static Interpretable maybeOptimizeConstUnary(Interpretable i, InterpretableCall call) {
-    Interpretable[] args = call.args();
-    if (args.length != 1) {
-      return i;
-    }
-    if (!(args[0] instanceof InterpretableConst)) {
-      return i;
-    }
-    Val val = call.eval(emptyActivation());
-    throwErrorAsIllegalStateException(val);
-    return newConstValue(call.id(), val);
-  }
-
-  static Interpretable maybeBuildListLiteral(Interpretable i, EvalList l) {
-    for (Interpretable elem : l.elems) {
-      if (!(elem instanceof InterpretableConst)) {
-        return i;
-      }
-    }
-    return newConstValue(l.id(), l.eval(emptyActivation()));
-  }
-
-  static Interpretable maybeBuildMapLiteral(Interpretable i, EvalMap mp) {
-    for (int idx = 0; idx < mp.keys.length; idx++) {
-      if (!(mp.keys[idx] instanceof InterpretableConst)) {
-        return i;
-      }
-      if (!(mp.vals[idx] instanceof InterpretableConst)) {
-        return i;
-      }
-    }
-    return newConstValue(mp.id(), mp.eval(emptyActivation()));
-  }
-
-  /**
-   * maybeOptimizeSetMembership may convert an 'in' operation against a list to map key membership
-   * test if the following conditions are true:
-   *
-   * <ul>
-   *   <li>the list is a constant with homogeneous element types.
-   *   <li>the elements are all of primitive type.
-   * </ul>
-   */
-  static Interpretable maybeOptimizeSetMembership(Interpretable i, InterpretableCall inlist) {
-    Interpretable[] args = inlist.args();
-    Interpretable lhs = args[0];
-    Interpretable rhs = args[1];
-    if (!(rhs instanceof InterpretableConst l)) {
-      return i;
-    }
-    // When the incoming binary call is flagged with as the InList overload, the value will
-    // always be convertible to a `traits.Lister` type.
-    Lister list = (Lister) l.value();
-    if (list.size() == IntZero) {
-      return new EvalSetMembership(inlist, lhs, null, Set.of());
-    }
-    IteratorT it = list.iterator();
-    Type typ = null;
-    Set<Val> valueSet = new HashSet<>();
-    while (it.hasNext() == True) {
-      Val elem = it.next();
-      if (!Util.isPrimitiveType(elem)) {
-        // Note, non-primitive type are not yet supported.
-        return i;
-      }
-      if (typ == null) {
-        typ = elem.type();
-      } else if (!typ.typeName().equals(elem.type().typeName())) {
-        return i;
-      }
-      valueSet.add(elem);
-    }
-    if (typ == null) {
-      // A custom Lister can report a non-zero size but still yield no elements. In that case the
-      // optimizer cannot determine the element type and must preserve the original evaluation.
-      return i;
-    }
-    return new EvalSetMembership(inlist, lhs, typ.typeName(), valueSet);
+    return BuiltInOptimizer.INSTANCE;
   }
 }

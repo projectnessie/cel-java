@@ -42,11 +42,19 @@ import java.util.Objects;
  * null, and distinct Java keys must not be equal under CEL key equality. Exact lookup is permitted
  * only for a planner-certified domain whose Java equality and hashing agree with CEL. Cross-numeric
  * lookup is not inferred; double lookup must preserve CEL NaN inequality and signed-zero equality.
- * Sets advertised through this contract use the canonical homogeneous boxed representation needed
- * by direct CEL membership: {@link Boolean}, {@link String}, {@link Long} for CEL int, either all
- * {@link Long} or all {@link org.projectnessie.cel.common.ULong} for CEL uint, and {@link Double}
- * for CEL double. Other numeric wrappers and mixed boxed representations must be exposed through a
- * general adapter instead. This restriction lets a direct hash miss remain definitive without an
+ * CEL int map keys may use any exactly representable {@link Byte}, {@link Short}, {@link Integer},
+ * or {@link Long}; exact lookup uses a bounded probe of those four representations rather than
+ * requiring one canonical wrapper. A {@link ClassCastException} from a speculative signed-wrapper
+ * probe is treated as a non-match, including when every representation is rejected. Equality-keyed
+ * maps must not contain multiple wrapper representations of the same CEL int; a cheaply detected
+ * duplicate is a contract error. {@link java.util.SortedMap} comparators can make multiple probes
+ * aliases for one entry, so exact lookup does not infer duplicates from those probes and the
+ * provider remains responsible for the distinct-key requirement. Sets advertised through this
+ * contract use the canonical homogeneous boxed representation needed by direct CEL membership:
+ * {@link Boolean}, {@link String}, {@link Long} for CEL int, either all {@link Long} or all {@link
+ * org.projectnessie.cel.common.ULong} for CEL uint, and {@link Double} for CEL double. Other
+ * numeric wrappers and mixed boxed representations must be exposed through a general adapter
+ * instead. This restriction lets a direct hash miss remain definitive without an
  * element-proportional validation scan.
  *
  * <p>List materialization preserves the established encounter-order and snapshot behavior of each
