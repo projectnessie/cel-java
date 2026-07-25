@@ -127,6 +127,41 @@ class DynamicProtoMapViewTest {
     assertThat(view.keySet()).containsExactly("first", "duplicate");
   }
 
+  @Test
+  void nonIntegerValuesPreserveDuplicateAndFloatingPointSemantics() {
+    FieldDescriptor stringField = mapField("map_string_string");
+    DynamicProtoMapView strings =
+        new DynamicProtoMapView(
+            stringField,
+            List.of(
+                entry(stringField, "first", "value"),
+                entry(stringField, "duplicate", "old"),
+                entry(stringField, "duplicate", "")));
+
+    assertThat(strings.get("duplicate")).isEqualTo("");
+    assertThat(strings).hasSize(2);
+    assertThat(strings.keySet()).containsExactly("first", "duplicate");
+    assertThat(strings.get("duplicate")).isEqualTo("");
+
+    FieldDescriptor doubleField = mapField("map_string_double");
+    DynamicProtoMapView doubles =
+        new DynamicProtoMapView(
+            doubleField,
+            List.of(
+                entry(doubleField, "negativeZero", -0.0d),
+                entry(doubleField, "positiveZero", 0.0d),
+                entry(doubleField, "nan", Double.NaN)));
+
+    assertThat(Double.doubleToRawLongBits((double) doubles.get("negativeZero")))
+        .isEqualTo(Double.doubleToRawLongBits(-0.0d));
+    assertThat(Double.doubleToRawLongBits((double) doubles.get("positiveZero")))
+        .isEqualTo(Double.doubleToRawLongBits(0.0d));
+    assertThat((double) doubles.get("nan")).isNaN();
+    assertThat(doubles).hasSize(3);
+    assertThat(Double.doubleToRawLongBits((double) doubles.get("negativeZero")))
+        .isEqualTo(Double.doubleToRawLongBits(-0.0d));
+  }
+
   private static DynamicMessage dynamicMap(DynamicMessage... entries) {
     return DynamicMessage.newBuilder(TestAllTypes.getDescriptor())
         .setField(mapField(), List.of(entries))
@@ -135,6 +170,10 @@ class DynamicProtoMapViewTest {
 
   private static DynamicMessage entry(String key, long value) {
     FieldDescriptor field = mapField();
+    return entry(field, key, value);
+  }
+
+  private static DynamicMessage entry(FieldDescriptor field, String key, Object value) {
     return DynamicMessage.newBuilder(field.getMessageType())
         .setField(field.getMessageType().findFieldByNumber(1), key)
         .setField(field.getMessageType().findFieldByNumber(2), value)
@@ -142,6 +181,10 @@ class DynamicProtoMapViewTest {
   }
 
   private static FieldDescriptor mapField() {
-    return TestAllTypes.getDescriptor().findFieldByName("map_string_int64");
+    return mapField("map_string_int64");
+  }
+
+  private static FieldDescriptor mapField(String name) {
+    return TestAllTypes.getDescriptor().findFieldByName(name);
   }
 }

@@ -210,6 +210,86 @@ public class ExactProtoAggregateBench {
     return state.operation.equals("size") ? state.direct.size() : state.direct.get(state.size - 1);
   }
 
+  @State(Scope.Benchmark)
+  public static class MapValueFamilyState {
+    @Param({"generated", "dynamic"})
+    public String representation;
+
+    @Param({"bool", "string", "int64", "double"})
+    public String family;
+
+    @Param({"constantHit", "dynamicHit"})
+    public String operation;
+
+    @Param({"exactNative", "exactDisabled", "default", "direct"})
+    public String mode;
+
+    @Param({"1", "1024"})
+    public int size;
+
+    Program program;
+    Map<String, Object> input;
+    Map<?, ?> direct;
+    String key;
+
+    @Setup
+    public void setup() throws Exception {
+      TestAllTypes.Builder builder = TestAllTypes.newBuilder();
+      for (int i = 0; i < size; i++) {
+        String entryKey = "key-" + i;
+        switch (family) {
+          case "bool" -> builder.putMapStringBool(entryKey, (i & 1) == 0);
+          case "string" -> builder.putMapStringString(entryKey, "value-" + i);
+          case "int64" -> builder.putMapStringInt64(entryKey, i);
+          case "double" -> builder.putMapStringDouble(entryKey, i + 0.5d);
+          default -> throw new IllegalArgumentException(family);
+        }
+      }
+      TestAllTypes generated = builder.build();
+      Object message =
+          representation.equals("generated")
+              ? generated
+              : DynamicMessage.parseFrom(TestAllTypes.getDescriptor(), generated.toByteString());
+      String fieldName = "map_string_" + family;
+      key = "key-" + (size - 1);
+      input = Map.of("msg", message, "key", key);
+      TypeRegistry registry =
+          mode.equals("default")
+              ? ProtoTypeRegistry.newRegistry(TestAllTypes.getDefaultInstance())
+              : ProtoTypeRegistry.newExactAggregateRegistry(TestAllTypes.getDefaultInstance());
+      if (mode.equals("direct")) {
+        direct = (Map<?, ?>) registry.findFieldType(TYPE, fieldName).getFrom.getFrom(message);
+      } else {
+        Env env =
+            newCustomEnv(
+                registry,
+                List.of(
+                    Library.StdLib(),
+                    declarations(
+                        Decls.newVar("msg", Decls.newObjectType(TYPE)),
+                        Decls.newVar("key", Decls.String))));
+        String expression =
+            "msg."
+                + fieldName
+                + "["
+                + (operation.equals("constantHit") ? "'" + key + "'" : "key")
+                + "]";
+        Ast ast = compile(env, expression);
+        program =
+            mode.equals("exactDisabled")
+                ? env.program(ast, evalOptions(OptDisableNativeEval))
+                : env.program(ast);
+      }
+    }
+  }
+
+  @Benchmark
+  public Object mapValueFamily(MapValueFamilyState state) {
+    return state.mode.equals("direct")
+        ? state.direct.get(state.key)
+        : state.program.eval(state.input);
+  }
+
   private static String expression(String operation) {
     return switch (operation) {
       case "repeatedSize" -> "size(msg.repeated_int64)";

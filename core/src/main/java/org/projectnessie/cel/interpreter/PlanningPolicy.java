@@ -15,15 +15,18 @@
  */
 package org.projectnessie.cel.interpreter;
 
-/** Immutable planning-time permission for native specialization. */
+/** Immutable planning-time permissions for native specialization and built-in optimization. */
 enum PlanningPolicy {
-  ESTABLISHED_ONLY(false),
-  NATIVE_SPECIALIZATION_PERMITTED(true);
+  ESTABLISHED_ONLY(false, false),
+  NATIVE_SPECIALIZATION_PERMITTED(true, false),
+  NATIVE_OPTIMIZED(true, true);
 
   private final boolean nativeSpecializationPermitted;
+  private final boolean builtInOptimizationEnabled;
 
-  PlanningPolicy(boolean nativeSpecializationPermitted) {
+  PlanningPolicy(boolean nativeSpecializationPermitted, boolean builtInOptimizationEnabled) {
     this.nativeSpecializationPermitted = nativeSpecializationPermitted;
+    this.builtInOptimizationEnabled = builtInOptimizationEnabled;
   }
 
   static PlanningPolicy nativeSpecialization(boolean permitted) {
@@ -32,5 +35,9 @@ enum PlanningPolicy {
 
   boolean nativeSpecializationPermitted() {
     return nativeSpecializationPermitted;
+  }
+
+  boolean builtInOptimizationEnabled() {
+    return builtInOptimizationEnabled;
   }
 }

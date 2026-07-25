@@ -33,6 +33,7 @@ import org.projectnessie.cel.common.types.Overloads;
 import org.projectnessie.cel.common.types.StringT;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.common.types.traits.Lister;
 import org.projectnessie.cel.interpreter.AttributeFactory.Attribute;
 import org.projectnessie.cel.interpreter.functions.Overload;
 
@@ -569,6 +570,100 @@ final class NativeExactListInequality extends EvalNe implements NativeBooleanCap
     Val leftValue = leftSlow != null ? leftSlow : leftSource.materializeResolvedList(leftRaw);
     Val rightValue = rightSlow != null ? rightSlow : rightSource.materializeResolvedList(rightRaw);
     return NativeScalarContinuations.booleanResult(evalPrepared(leftValue, rightValue));
+  }
+}
+
+abstract class NativeConstantScalarListLiteral extends EvalConst
+    implements NativeScalarListLiteralCapability {
+  NativeConstantScalarListLiteral(long id, Lister list) {
+    super(id, requireNonNull(list));
+  }
+
+  @Override
+  public final int evalSize(Activation activation) {
+    return list().nativeSize();
+  }
+
+  final Val elementAt(int index) {
+    return list().nativeGetAt(index);
+  }
+
+  final Lister list() {
+    return (Lister) value();
+  }
+}
+
+final class NativeConstantBooleanListLiteral extends NativeConstantScalarListLiteral
+    implements NativeBooleanListLiteralCapability {
+  NativeConstantBooleanListLiteral(long id, Lister list) {
+    super(id, list);
+  }
+
+  @Override
+  public boolean evalBooleanAt(Activation activation, int index) {
+    return NativeScalarContinuations.booleanResult(elementAt(index));
+  }
+}
+
+final class NativeConstantIntListLiteral extends NativeConstantScalarListLiteral
+    implements NativeIntListLiteralCapability {
+  NativeConstantIntListLiteral(long id, Lister list) {
+    super(id, list);
+  }
+
+  @Override
+  public long evalIntAt(Activation activation, int index) {
+    return NativeScalarContinuations.intResult(elementAt(index));
+  }
+}
+
+final class NativeConstantUintListLiteral extends NativeConstantScalarListLiteral
+    implements NativeUintListLiteralCapability {
+  NativeConstantUintListLiteral(long id, Lister list) {
+    super(id, list);
+  }
+
+  @Override
+  public long evalUintAt(Activation activation, int index) {
+    return NativeScalarContinuations.uintResult(elementAt(index));
+  }
+}
+
+final class NativeConstantDoubleListLiteral extends NativeConstantScalarListLiteral
+    implements NativeDoubleListLiteralCapability {
+  NativeConstantDoubleListLiteral(long id, Lister list) {
+    super(id, list);
+  }
+
+  @Override
+  public double evalDoubleAt(Activation activation, int index) {
+    return NativeScalarContinuations.doubleResult(elementAt(index));
+  }
+}
+
+final class NativeConstantStringListLiteral extends NativeConstantScalarListLiteral
+    implements NativeStringListLiteralCapability {
+  NativeConstantStringListLiteral(long id, Lister list) {
+    super(id, list);
+  }
+
+  @Override
+  public String evalStringAt(Activation activation, int index) {
+    return NativeScalarContinuations.stringResult(elementAt(index));
+  }
+
+  @Override
+  public boolean evalContains(Activation activation, NativeStringCapability needle) {
+    Val needleValue;
+    try {
+      needleValue = stringOf(needle.evalString(activation));
+    } catch (ValueSignal valueSignal) {
+      needleValue = valueSignal.value;
+      if (isError(needleValue) || isUnknown(needleValue)) {
+        throw valueSignal;
+      }
+    }
+    return NativeScalarContinuations.booleanResult(list().contains(needleValue));
   }
 }
 

@@ -95,7 +95,12 @@ final class ExactProtoTypeRegistry extends ProtoTypeRegistry
     }
     FieldDescriptor key = field.getMessageType().findFieldByNumber(1);
     FieldDescriptor value = field.getMessageType().findFieldByNumber(2);
-    return key.getType() == FieldDescriptor.Type.STRING
-        && value.getType() == FieldDescriptor.Type.INT64;
+    if (key.getType() != FieldDescriptor.Type.STRING) {
+      return false;
+    }
+    return switch (value.getType()) {
+      case BOOL, STRING, INT64, DOUBLE -> true;
+      default -> false;
+    };
   }
 }

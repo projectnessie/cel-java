@@ -33,6 +33,7 @@ import com.google.api.expr.v1alpha1.Constant;
 import com.google.api.expr.v1alpha1.Expr;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
 
 class PlanningPolicyTest {
@@ -42,7 +43,8 @@ class PlanningPolicyTest {
       newAttributeFactory(defaultContainer, registry, registry);
   private final Expr expression =
       Expr.newBuilder().setId(1L).setConstExpr(Constant.newBuilder().setInt64Value(42L)).build();
-  private final CheckedExpr checked = CheckedExpr.newBuilder().setExpr(expression).build();
+  private final CheckedExpr checked =
+      CheckedExpr.newBuilder().setExpr(expression).putTypeMap(1L, Decls.Int).build();
 
   @Test
   void interpreterFactoriesApplyPermissionOnlyToUndecoratedCheckedPlans() {
@@ -61,6 +63,12 @@ class PlanningPolicyTest {
     assertEstablished(disabled.checkedPlanner(checked));
     assertPermitted(enabled.checkedPlanner(checked));
     assertPermitted(enabled.checkedPlanner(emptyMap(), emptyMap()));
+    assertOptimized(enabled.checkedPlanner(checked, Interpreter.optimize()));
+    assertEstablished(disabled.checkedPlanner(checked, Interpreter.optimize()));
+    InterpretableDecorator wrapped = node -> Interpreter.optimize().decorate(node);
+    assertEstablished(enabled.checkedPlanner(checked, wrapped));
+    assertEstablished(
+        enabled.checkedPlanner(checked, Interpreter.optimize(), Interpreter.optimize()));
     assertEstablished(enabled.checkedPlanner(checked, plan -> plan));
     assertEstablished(enabled.checkedPlanner(emptyMap(), emptyMap(), plan -> plan));
     assertEstablished(enabled.uncheckedPlanner());
@@ -68,6 +76,9 @@ class PlanningPolicyTest {
     assertEstablished(standard.checkedPlanner(checked));
 
     assertThat(enabled.newInterpretable(checked).eval(emptyActivation()).intValue()).isEqualTo(42L);
+    Interpretable optimizedConstant = enabled.newInterpretable(checked, Interpreter.optimize());
+    assertThat(optimizedConstant).isInstanceOf(NativeIntConst.class);
+    assertThat(optimizedConstant).isInstanceOf(Interpretable.InterpretableConst.class);
     assertThat(enabled.newUncheckedInterpretable(expression).eval(emptyActivation()).intValue())
         .isEqualTo(42L);
   }
@@ -112,5 +123,9 @@ class PlanningPolicyTest {
 
   private static void assertPermitted(Planner planner) {
     assertThat(planner.policy()).isSameAs(PlanningPolicy.NATIVE_SPECIALIZATION_PERMITTED);
+  }
+
+  private static void assertOptimized(Planner planner) {
+    assertThat(planner.policy()).isSameAs(PlanningPolicy.NATIVE_OPTIMIZED);
   }
 }
