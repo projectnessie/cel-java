@@ -22,6 +22,7 @@ import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.interpreter.ValueSignal.signal;
 
 import java.util.Map;
+import java.util.SortedMap;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.Overloads;
@@ -35,6 +36,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
 /** Shared exact-map operations over an already-resolved host value. */
 final class NativeMapSources {
   static final Object ABSENT = new Object();
+  private static final Object INCOMPATIBLE_PROBE = new Object();
 
   private NativeMapSources() {}
 
@@ -62,8 +64,7 @@ final class NativeMapSources {
   static Object lookup(NativeMapSourceCapability source, Object raw, Object hostKey, Val celKey) {
     try {
       if (source.exactMapSource() && raw instanceof Map<?, ?> map) {
-        Object value = map.get(hostKey);
-        return value != null || map.containsKey(hostKey) ? value : ABSENT;
+        return exactLookup(map, hostKey, celKey);
       }
       Mapper materialized = materializedMapper(source, raw);
       Val value = materialized.find(celKey);
@@ -72,6 +73,92 @@ final class NativeMapSources {
       throw failure;
     } catch (Exception failure) {
       throw signal(newErr(failure, failure.toString()));
+    }
+  }
+
+  static Object exactLookup(Map<?, ?> map, Object hostKey, Val celKey) {
+    return switch (celKey.type().typeEnum()) {
+      case Int -> exactIntLookup(map, celKey.intValue());
+      case Uint -> exactUintLookup(map, celKey.intValue());
+      default -> exactSingleLookup(map, hostKey);
+    };
+  }
+
+  static Object exactIntLookup(Map<?, ?> map, long key) {
+    boolean inferDuplicates = !(map instanceof SortedMap<?, ?>);
+    Object found = ABSENT;
+    Object candidate = exactIntProbe(map, key);
+    if (candidate != INCOMPATIBLE_PROBE) {
+      found = candidate;
+    }
+    if (key >= Integer.MIN_VALUE && key <= Integer.MAX_VALUE) {
+      candidate = exactIntProbe(map, (int) key);
+      if (candidate != ABSENT && candidate != INCOMPATIBLE_PROBE) {
+        if (found != ABSENT && inferDuplicates) {
+          throw signal(newErr("Failed with repeated key"));
+        }
+        if (found == ABSENT) {
+          found = candidate;
+        }
+      }
+    }
+    if (key >= Short.MIN_VALUE && key <= Short.MAX_VALUE) {
+      candidate = exactIntProbe(map, (short) key);
+      if (candidate != ABSENT && candidate != INCOMPATIBLE_PROBE) {
+        if (found != ABSENT && inferDuplicates) {
+          throw signal(newErr("Failed with repeated key"));
+        }
+        if (found == ABSENT) {
+          found = candidate;
+        }
+      }
+    }
+    if (key >= Byte.MIN_VALUE && key <= Byte.MAX_VALUE) {
+      candidate = exactIntProbe(map, (byte) key);
+      if (candidate != ABSENT && candidate != INCOMPATIBLE_PROBE) {
+        if (found != ABSENT && inferDuplicates) {
+          throw signal(newErr("Failed with repeated key"));
+        }
+        if (found == ABSENT) {
+          found = candidate;
+        }
+      }
+    }
+    // A sorted map may use a comparator that makes several wrapper probes aliases for one entry.
+    // It therefore cannot support bounded duplicate inference without an O(n) entry scan.
+    return found;
+  }
+
+  static Object exactSingleLookup(Map<?, ?> map, Object hostKey) {
+    Object value = map.get(hostKey);
+    return value != null || map.containsKey(hostKey) ? value : ABSENT;
+  }
+
+  static Object exactUintLookup(Map<?, ?> map, long key) {
+    boolean inferDuplicates = !(map instanceof SortedMap<?, ?>);
+    Object found = ABSENT;
+    Object candidate = exactIntProbe(map, key);
+    if (candidate != INCOMPATIBLE_PROBE) {
+      found = candidate;
+    }
+    candidate = exactIntProbe(map, ULong.valueOf(key));
+    if (candidate != ABSENT && candidate != INCOMPATIBLE_PROBE) {
+      if (found != ABSENT && inferDuplicates) {
+        throw signal(newErr("Failed with repeated key"));
+      }
+      if (found == ABSENT) {
+        found = candidate;
+      }
+    }
+    // A sorted map may use a comparator that makes both uint probes aliases for one entry.
+    return found;
+  }
+
+  private static Object exactIntProbe(Map<?, ?> map, Object hostKey) {
+    try {
+      return exactSingleLookup(map, hostKey);
+    } catch (ClassCastException incompatibleProbe) {
+      return INCOMPATIBLE_PROBE;
     }
   }
 
@@ -121,6 +208,89 @@ final class NativeMapSources {
   }
 }
 
+final class NativeMapDynamicKey {
+  enum Kind {
+    STRING("string"),
+    BOOLEAN("bool"),
+    INT("int");
+
+    private final String celName;
+
+    Kind(String celName) {
+      this.celName = celName;
+    }
+  }
+
+  private final Kind kind;
+  private final Object capability;
+
+  private NativeMapDynamicKey(Kind kind, Object capability) {
+    this.kind = kind;
+    this.capability = capability;
+  }
+
+  static NativeMapDynamicKey string(NativeStringCapability capability) {
+    return new NativeMapDynamicKey(Kind.STRING, capability);
+  }
+
+  static NativeMapDynamicKey bool(NativeBooleanCapability capability) {
+    return new NativeMapDynamicKey(Kind.BOOLEAN, capability);
+  }
+
+  static NativeMapDynamicKey integer(NativeIntCapability capability) {
+    return new NativeMapDynamicKey(Kind.INT, capability);
+  }
+
+  Object lookup(Map<?, ?> map, Activation activation) {
+    return switch (kind) {
+      case STRING -> {
+        String key = ((NativeStringCapability) capability).evalString(activation);
+        if (key == null) {
+          throw signal(newErr("null is not a valid CEL string map key"));
+        }
+        Object value = NativeMapSources.exactSingleLookup(map, key);
+        if (value == NativeMapSources.ABSENT) {
+          throw signal(noSuchKey(org.projectnessie.cel.common.types.StringT.stringOf(key)));
+        }
+        yield value;
+      }
+      case BOOLEAN -> {
+        boolean key = ((NativeBooleanCapability) capability).evalBoolean(activation);
+        Object value = NativeMapSources.exactSingleLookup(map, key);
+        if (value == NativeMapSources.ABSENT) {
+          throw signal(
+              noSuchKey(
+                  key
+                      ? org.projectnessie.cel.common.types.BoolT.True
+                      : org.projectnessie.cel.common.types.BoolT.False));
+        }
+        yield value;
+      }
+      case INT -> {
+        long key = ((NativeIntCapability) capability).evalInt(activation);
+        Object value;
+        try {
+          value = NativeMapSources.exactIntLookup(map, key);
+        } catch (ValueSignal failure) {
+          throw NativeSupport.propagatedError(failure.value);
+        }
+        if (value == NativeMapSources.ABSENT) {
+          throw signal(noSuchKey(org.projectnessie.cel.common.types.IntT.intOf(key)));
+        }
+        yield value;
+      }
+    };
+  }
+
+  String celName() {
+    return kind.celName;
+  }
+
+  Object capability() {
+    return capability;
+  }
+}
+
 final class NativeMapSize extends EvalUnary implements NativeIntCapability {
   private final NativeMapSourceCapability source;
 
@@ -146,7 +316,7 @@ abstract class NativeMapIndex extends NativeScalarAttr {
   final NativeMapSourceCapability source;
   final Object hostKey;
   final Val celKey;
-  final NativeStringCapability dynamicKey;
+  final NativeMapDynamicKey dynamicKey;
 
   NativeMapIndex(
       long id,
@@ -167,7 +337,7 @@ abstract class NativeMapIndex extends NativeScalarAttr {
       TypeAdapter adapter,
       Attribute establishedAttribute,
       NativeMapSourceCapability source,
-      NativeStringCapability dynamicKey) {
+      NativeMapDynamicKey dynamicKey) {
     super(id, adapter, establishedAttribute, null);
     this.source = source;
     this.hostKey = null;
@@ -189,37 +359,28 @@ abstract class NativeMapIndex extends NativeScalarAttr {
     Object raw = resolveMap(activation);
     if (dynamicKey != null) {
       Map<?, ?> map = NativeMapSources.strictExactMap(raw);
-      String key;
+      Object value;
       try {
-        key = dynamicKey.evalString(activation);
+        value = dynamicKey.lookup(map, activation);
       } catch (ValueSignal failure) {
         if (isError(failure.value) || isUnknown(failure.value)) {
           throw failure;
         }
         throw signal(
             newErr(
-                "exact map key of CEL type '%s' is incompatible with checked CEL string",
-                failure.value.type().typeName()));
+                "exact map key of CEL type '%s' is incompatible with checked CEL %s",
+                failure.value.type().typeName(), dynamicKey.celName()));
       } catch (Exception failure) {
         throw signal(newErr(failure, failure.toString()));
-      }
-      if (key == null) {
-        throw signal(newErr("null is not a valid CEL string map key"));
-      }
-      Object value;
-      boolean present;
-      try {
-        value = map.get(key);
-        present = value != null || map.containsKey(key);
-      } catch (Exception failure) {
-        throw signal(newErr(failure, failure.toString()));
-      }
-      if (!present) {
-        throw signal(noSuchKey(org.projectnessie.cel.common.types.StringT.stringOf(key)));
       }
       return new Selection(raw, value, null);
     }
-    Object value = NativeMapSources.lookup(source, raw, hostKey, celKey);
+    Object value;
+    try {
+      value = NativeMapSources.lookup(source, raw, hostKey, celKey);
+    } catch (ValueSignal failure) {
+      throw NativeSupport.propagatedError(failure.value);
+    }
     if (value == NativeMapSources.ABSENT) {
       throw signal(noSuchKey(celKey));
     }
@@ -252,7 +413,7 @@ final class NativeBooleanMapIndex extends NativeMapIndex implements NativeBoolea
       TypeAdapter adapter,
       Attribute establishedAttribute,
       NativeMapSourceCapability source,
-      NativeStringCapability dynamicKey) {
+      NativeMapDynamicKey dynamicKey) {
     super(id, adapter, establishedAttribute, source, dynamicKey);
   }
 
@@ -281,7 +442,7 @@ final class NativeIntMapIndex extends NativeMapIndex implements NativeIntCapabil
       TypeAdapter adapter,
       Attribute establishedAttribute,
       NativeMapSourceCapability source,
-      NativeStringCapability dynamicKey) {
+      NativeMapDynamicKey dynamicKey) {
     super(id, adapter, establishedAttribute, source, dynamicKey);
   }
 
@@ -315,7 +476,7 @@ final class NativeUintMapIndex extends NativeMapIndex implements NativeUintCapab
       TypeAdapter adapter,
       Attribute establishedAttribute,
       NativeMapSourceCapability source,
-      NativeStringCapability dynamicKey) {
+      NativeMapDynamicKey dynamicKey) {
     super(id, adapter, establishedAttribute, source, dynamicKey);
   }
 
@@ -349,7 +510,7 @@ final class NativeDoubleMapIndex extends NativeMapIndex implements NativeDoubleC
       TypeAdapter adapter,
       Attribute establishedAttribute,
       NativeMapSourceCapability source,
-      NativeStringCapability dynamicKey) {
+      NativeMapDynamicKey dynamicKey) {
     super(id, adapter, establishedAttribute, source, dynamicKey);
   }
 
@@ -380,7 +541,7 @@ final class NativeStringMapIndex extends NativeMapIndex implements NativeStringC
       TypeAdapter adapter,
       Attribute establishedAttribute,
       NativeMapSourceCapability source,
-      NativeStringCapability dynamicKey) {
+      NativeMapDynamicKey dynamicKey) {
     super(id, adapter, establishedAttribute, source, dynamicKey);
   }
 
@@ -409,7 +570,7 @@ final class NativeNullMapIndex extends NativeMapIndex implements NativeNullCapab
       TypeAdapter adapter,
       Attribute establishedAttribute,
       NativeMapSourceCapability source,
-      NativeStringCapability dynamicKey) {
+      NativeMapDynamicKey dynamicKey) {
     super(id, adapter, establishedAttribute, source, dynamicKey);
   }
 

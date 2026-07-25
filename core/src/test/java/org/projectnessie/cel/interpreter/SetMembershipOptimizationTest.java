@@ -78,13 +78,12 @@ class SetMembershipOptimizationTest {
     Interpretable rhs = newConstValue(2, inconsistentList);
     MembershipCall original = new MembershipCall(lhs, rhs);
 
-    assertThat(InterpretableDecorator.maybeOptimizeSetMembership(original, original))
-        .isSameAs(original);
+    assertThat(BuiltInOptimizer.maybeOptimizeSetMembership(original, original)).isSameAs(original);
   }
 
   private static Interpretable optimize(Interpretable lhs, Val[] values) {
     Interpretable rhs = newConstValue(2, newValArrayList(DefaultTypeAdapter.Instance, values));
-    return InterpretableDecorator.maybeOptimizeSetMembership(
+    return BuiltInOptimizer.maybeOptimizeSetMembership(
         new MembershipCall(lhs, rhs), new MembershipCall(lhs, rhs));
   }
 

@@ -54,34 +54,128 @@ interface NativeScalarLoopConsumer {
   boolean test(NativeLoopBinding binding);
 }
 
+/**
+ * Resolves a list-valued range separately from traversing its elements.
+ *
+ * <p>The separation lets strict binary consumers resolve both operands and apply CEL failure
+ * precedence before any element is visited. A resolved traversal is immutable evaluation-local
+ * state and must not replay its source expressions.
+ */
+interface NativeListTraversalPlan {
+  NativeResolvedListTraversal resolve(Activation activation);
+
+  int sourceCount();
+
+  static NativeListTraversalPlan singleSource(NativeListSourceCapability source) {
+    return new NativeSingleListTraversalPlan(source);
+  }
+
+  /**
+   * Returns a traversal plan for every exact leaf in {@code concat}, or {@code null} when the tree
+   * cannot be flattened to exact sources.
+   */
+  static NativeListTraversalPlan concat(NativeListConcat concat) {
+    NativeListSourceCapability[] sources = NativeListConcatKernel.collectSources(concat);
+    return sources != null ? new NativeConcatListTraversalPlan(sources) : null;
+  }
+}
+
+interface NativeResolvedListTraversal {
+  boolean traverse(
+      NativeScalarKind elementKind, NativeLoopBinding binding, NativeScalarLoopConsumer consumer);
+}
+
+record NativeSingleListTraversalPlan(NativeListSourceCapability source)
+    implements NativeListTraversalPlan {
+  NativeSingleListTraversalPlan {
+    requireNonNull(source, "source");
+  }
+
+  @Override
+  public NativeResolvedListTraversal resolve(Activation activation) {
+    Object raw;
+    try {
+      raw = source.evalRaw(activation);
+    } catch (ValueSignal valueSignal) {
+      raw = valueSignal.value;
+    }
+    return new NativeResolvedSingleListTraversal(source, raw);
+  }
+
+  @Override
+  public int sourceCount() {
+    return 1;
+  }
+}
+
+record NativeResolvedSingleListTraversal(NativeListSourceCapability source, Object raw)
+    implements NativeResolvedListTraversal {
+  NativeResolvedSingleListTraversal {
+    requireNonNull(source, "source");
+  }
+
+  @Override
+  public boolean traverse(
+      NativeScalarKind elementKind, NativeLoopBinding binding, NativeScalarLoopConsumer consumer) {
+    return NativeListSources.traverseResolved(source, raw, elementKind, binding, consumer);
+  }
+}
+
+record NativeConcatListTraversalPlan(NativeListSourceCapability[] sources)
+    implements NativeListTraversalPlan {
+  NativeConcatListTraversalPlan {
+    requireNonNull(sources, "sources");
+    if (sources.length < 2) {
+      throw new IllegalArgumentException("concat traversal requires at least two sources");
+    }
+    sources = sources.clone();
+  }
+
+  @Override
+  public NativeListSourceCapability[] sources() {
+    return sources.clone();
+  }
+
+  @Override
+  public NativeResolvedListTraversal resolve(Activation activation) {
+    return NativeListConcatKernel.resolveTraversal(sources, activation);
+  }
+
+  @Override
+  public int sourceCount() {
+    return sources.length;
+  }
+}
+
 final class NativeScalarLoopKernel {
   private NativeScalarLoopKernel() {}
 
   static boolean evaluate(
-      NativeListSourceCapability range,
+      NativeListTraversalPlan range,
       NativeScalarKind elementKind,
       Activation activation,
       NativeLoopBinding binding,
       NativeScalarLoopConsumer consumer) {
-    Object target;
-    try {
-      target = range.evalRaw(activation);
-    } catch (ValueSignal valueSignal) {
-      target = valueSignal.value;
-    }
-
-    return NativeListSources.traverseResolved(range, target, elementKind, binding, consumer);
+    return range.resolve(activation).traverse(elementKind, binding, consumer);
   }
 
   static boolean evaluateMaterialized(
       Val foldRange, NativeLoopBinding binding, NativeScalarLoopConsumer consumer) {
+    return evaluateMaterialized(foldRange, binding, consumer, true);
+  }
+
+  static boolean evaluateMaterialized(
+      Val foldRange,
+      NativeLoopBinding binding,
+      NativeScalarLoopConsumer consumer,
+      boolean prepareCapacity) {
     if (isError(foldRange) || isUnknown(foldRange)) {
       throw signal(foldRange);
     }
     if (!foldRange.type().hasTrait(Trait.IterableType)) {
       throw signal(newErr("got '%s', expected iterable type", foldRange.getClass().getName()));
     }
-    if (foldRange instanceof Sizer sizer) {
+    if (prepareCapacity && foldRange instanceof Sizer sizer) {
       consumer.prepareCapacity(sizer.nativeSize());
     }
     IteratorT iterator = ((IterableT) foldRange).iterator();
@@ -97,7 +191,7 @@ final class NativeScalarLoopKernel {
 
 abstract class NativeScalarLoopFold extends EvalFold
     implements NativeBooleanCapability, NativeScalarLoopConsumer {
-  private final NativeListSourceCapability range;
+  private final NativeListTraversalPlan traversal;
   private final NativeScalarKind elementKind;
   final NativeBooleanCapability predicate;
   final TypeAdapter adapter;
@@ -109,6 +203,7 @@ abstract class NativeScalarLoopFold extends EvalFold
       Interpretable accumulatorInitial,
       String variable,
       Interpretable range,
+      NativeListTraversalPlan traversal,
       Interpretable condition,
       Interpretable step,
       Interpretable result,
@@ -116,7 +211,7 @@ abstract class NativeScalarLoopFold extends EvalFold
       NativeBooleanCapability predicate,
       TypeAdapter adapter) {
     super(id, accumulator, accumulatorInitial, variable, "", range, condition, step, result);
-    this.range = (NativeListSourceCapability) range;
+    this.traversal = requireNonNull(traversal, "traversal");
     this.elementKind = requireNonNull(elementKind, "elementKind");
     this.predicate = requireNonNull(predicate, "predicate");
     this.adapter = requireNonNull(adapter, "adapter");
@@ -124,7 +219,7 @@ abstract class NativeScalarLoopFold extends EvalFold
   }
 
   final boolean evaluate(Activation activation, NativeLoopBinding binding) {
-    return NativeScalarLoopKernel.evaluate(range, elementKind, activation, binding, this);
+    return NativeScalarLoopKernel.evaluate(traversal, elementKind, activation, binding, this);
   }
 
   @Override
@@ -140,6 +235,7 @@ final class NativeQuantifierFold extends NativeScalarLoopFold {
       Interpretable accumulatorInitial,
       String variable,
       Interpretable range,
+      NativeListTraversalPlan traversal,
       Interpretable condition,
       Interpretable step,
       Interpretable result,
@@ -153,6 +249,7 @@ final class NativeQuantifierFold extends NativeScalarLoopFold {
         accumulatorInitial,
         variable,
         range,
+        traversal,
         condition,
         step,
         result,
@@ -189,6 +286,7 @@ final class NativeExistsOneFold extends NativeScalarLoopFold {
       Interpretable accumulatorInitial,
       String variable,
       Interpretable range,
+      NativeListTraversalPlan traversal,
       Interpretable condition,
       Interpretable step,
       Interpretable result,
@@ -201,6 +299,7 @@ final class NativeExistsOneFold extends NativeScalarLoopFold {
         accumulatorInitial,
         variable,
         range,
+        traversal,
         condition,
         step,
         result,
@@ -327,6 +426,8 @@ class NativeLoopBinding implements Activation {
   private final Activation parent;
   private final String variable;
   private NativeScalarKind valueKind;
+  private CheckedValueMaterializer checkedMaterializer;
+  private Val materializedValue;
   private Object objectValue;
   private long intValue;
   private double doubleValue;
@@ -343,58 +444,97 @@ class NativeLoopBinding implements Activation {
     return !name.startsWith(".") && variable.equals(name);
   }
 
+  static NativeLoopBinding find(Activation activation, String name) {
+    Activation current = activation;
+    while (current instanceof NativeLoopBinding binding) {
+      if (binding.matches(name)) {
+        return binding;
+      }
+      current = binding.parent;
+    }
+    return null;
+  }
+
   void setInt(long value) {
+    clearCheckedValue();
     valueKind = NativeScalarKind.INT;
     intValue = value;
     objectValue = null;
   }
 
   void setUint(long value) {
+    clearCheckedValue();
     valueKind = NativeScalarKind.UINT;
     intValue = value;
     objectValue = null;
   }
 
   void setDouble(double value) {
+    clearCheckedValue();
     valueKind = NativeScalarKind.DOUBLE;
     doubleValue = value;
     objectValue = null;
   }
 
   void setString(String value) {
+    clearCheckedValue();
     valueKind = NativeScalarKind.STRING;
     stringValue = value;
     objectValue = value;
   }
 
   void setObject(Object value) {
+    clearCheckedValue();
     valueKind = null;
     objectValue = value;
   }
 
+  void setCheckedObject(
+      Object value, NativeScalarKind kind, CheckedValueMaterializer materializer) {
+    checkedMaterializer = requireNonNull(materializer, "materializer");
+    materializedValue = null;
+    valueKind = requireNonNull(kind, "kind");
+    objectValue = value;
+  }
+
   boolean booleanValue(TypeAdapter adapter) {
+    if (checkedMaterializer != null) {
+      return checkedMaterializer.booleanValue(objectValue);
+    }
     return NativeSupport.booleanValue(adapter, objectValue);
   }
 
   long intValue(TypeAdapter adapter) {
+    if (checkedMaterializer != null) {
+      return checkedMaterializer.intValue(objectValue);
+    }
     return valueKind == NativeScalarKind.INT
         ? intValue
         : NativeSupport.intValue(adapter, objectValue);
   }
 
   long uintValue(TypeAdapter adapter) {
+    if (checkedMaterializer != null) {
+      return checkedMaterializer.uintValue(objectValue);
+    }
     return valueKind == NativeScalarKind.UINT
         ? intValue
         : NativeSupport.uintValue(adapter, objectValue);
   }
 
   double doubleValue(TypeAdapter adapter) {
+    if (checkedMaterializer != null) {
+      return checkedMaterializer.doubleValue(objectValue);
+    }
     return valueKind == NativeScalarKind.DOUBLE
         ? doubleValue
         : NativeSupport.doubleValue(adapter, objectValue);
   }
 
   String stringValue(TypeAdapter adapter) {
+    if (checkedMaterializer != null) {
+      return checkedMaterializer.stringValue(objectValue);
+    }
     if (valueKind != NativeScalarKind.STRING) {
       return NativeSupport.stringValue(adapter, objectValue);
     }
@@ -402,6 +542,14 @@ class NativeLoopBinding implements Activation {
       throw signal(stringOf(null));
     }
     return stringValue;
+  }
+
+  void nullValue(TypeAdapter adapter) {
+    if (checkedMaterializer != null) {
+      checkedMaterializer.nullValue(objectValue);
+    } else {
+      NativeSupport.nullValue(adapter, objectValue);
+    }
   }
 
   void record(Val value, NativeQuantifier quantifier) {
@@ -451,7 +599,20 @@ class NativeLoopBinding implements Activation {
 
   @Override
   public Object resolve(String name) {
+    if (name.startsWith(".")) {
+      Activation root = parent;
+      while (root instanceof NativeLoopBinding binding) {
+        root = binding.parent;
+      }
+      return root.resolve(name.substring(1));
+    }
     if (matches(name)) {
+      if (checkedMaterializer != null) {
+        if (materializedValue == null) {
+          materializedValue = checkedMaterializer.materialize(objectValue);
+        }
+        return materializedValue;
+      }
       if (valueKind == null) {
         return objectValue;
       }
@@ -463,7 +624,12 @@ class NativeLoopBinding implements Activation {
         case BOOLEAN, NULL -> objectValue;
       };
     }
-    return parent.resolve(name.startsWith(".") ? name.substring(1) : name);
+    return parent.resolve(name);
+  }
+
+  private void clearCheckedValue() {
+    checkedMaterializer = null;
+    materializedValue = null;
   }
 
   @SuppressWarnings("removal")
@@ -506,7 +672,8 @@ final class NativeBooleanLocalIdent extends EvalIdent implements NativeBooleanCa
 
   @Override
   public boolean evalBoolean(Activation activation) {
-    return activation instanceof NativeLoopBinding binding
+    NativeLoopBinding binding = NativeLoopBinding.find(activation, name);
+    return binding != null
         ? binding.booleanValue(adapter)
         : NativeSupport.booleanValue(adapter, resolveRaw(activation));
   }
@@ -519,7 +686,8 @@ final class NativeIntLocalIdent extends EvalIdent implements NativeIntCapability
 
   @Override
   public long evalInt(Activation activation) {
-    return activation instanceof NativeLoopBinding binding
+    NativeLoopBinding binding = NativeLoopBinding.find(activation, name);
+    return binding != null
         ? binding.intValue(adapter)
         : NativeSupport.intValue(adapter, resolveRaw(activation));
   }
@@ -532,7 +700,8 @@ final class NativeUintLocalIdent extends EvalIdent implements NativeUintCapabili
 
   @Override
   public long evalUint(Activation activation) {
-    return activation instanceof NativeLoopBinding binding
+    NativeLoopBinding binding = NativeLoopBinding.find(activation, name);
+    return binding != null
         ? binding.uintValue(adapter)
         : NativeSupport.uintValue(adapter, resolveRaw(activation));
   }
@@ -545,7 +714,8 @@ final class NativeDoubleLocalIdent extends EvalIdent implements NativeDoubleCapa
 
   @Override
   public double evalDouble(Activation activation) {
-    return activation instanceof NativeLoopBinding binding
+    NativeLoopBinding binding = NativeLoopBinding.find(activation, name);
+    return binding != null
         ? binding.doubleValue(adapter)
         : NativeSupport.doubleValue(adapter, resolveRaw(activation));
   }
@@ -558,8 +728,25 @@ final class NativeStringLocalIdent extends EvalIdent implements NativeStringCapa
 
   @Override
   public String evalString(Activation activation) {
-    return activation instanceof NativeLoopBinding binding
+    NativeLoopBinding binding = NativeLoopBinding.find(activation, name);
+    return binding != null
         ? binding.stringValue(adapter)
         : NativeSupport.stringValue(adapter, resolveRaw(activation));
+  }
+}
+
+final class NativeNullLocalIdent extends EvalIdent implements NativeNullCapability {
+  NativeNullLocalIdent(long id, String name, TypeAdapter adapter) {
+    super(id, name, adapter);
+  }
+
+  @Override
+  public void evalNull(Activation activation) {
+    NativeLoopBinding binding = NativeLoopBinding.find(activation, name);
+    if (binding != null) {
+      binding.nullValue(adapter);
+    } else {
+      NativeSupport.nullValue(adapter, resolveRaw(activation));
+    }
   }
 }

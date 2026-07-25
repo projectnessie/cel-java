@@ -3819,7 +3819,7 @@ class NativePlanTest {
   }
 
   @Test
-  void fallsBackWhenAnyProgramFeatureOrExpressionIsUnsupported() {
+  void fallsBackWhenAnyUnsupportedProgramFeatureOrExpressionIsPresent() {
     Ast supported = compile("x + 1");
     Prog decorated = (Prog) env.program(supported, customDecorator(interpretable -> interpretable));
     Prog nativeDisabled = (Prog) env.program(supported, evalOptions(OptDisableNativeEval));
@@ -3829,7 +3829,7 @@ class NativePlanTest {
 
     assertCurrentPlan(decorated);
     assertCurrentPlan(nativeDisabled);
-    assertCurrentPlan(optimized);
+    assertIntegratedPlan(optimized, "x + 1 with OptOptimize");
     assertCurrentPlan(unsupported);
     assertCurrentPlan(unchecked);
   }

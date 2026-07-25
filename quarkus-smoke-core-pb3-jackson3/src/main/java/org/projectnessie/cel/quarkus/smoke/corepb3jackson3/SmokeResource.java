@@ -53,7 +53,11 @@ public class SmokeResource {
       "input.name == \"reports\" && request.time < timestamp(\"2026-08-01T00:00:00Z\")";
   private static final String JACKSON_LIST_EXPRESSION = "size(input.numbers)";
   private static final String PROTO_EXPRESSION =
-      "proto.repeated_int64[index] == 2 && proto.map_string_int64[map_key] == 42";
+      "proto.repeated_int64[index] == 2"
+          + " && proto.map_string_int64[map_key] == 42"
+          + " && proto.map_string_bool[map_key]"
+          + " && proto.map_string_string[map_key] == 'value'"
+          + " && proto.map_string_double[map_key] == 1.5";
 
   @GET
   @Produces(MediaType.APPLICATION_JSON)
@@ -151,11 +155,17 @@ public class SmokeResource {
         TestAllTypes.newBuilder()
             .addAllRepeatedInt64(List.of(1L, 2L, 3L))
             .putMapStringInt64("answer", 42L)
+            .putMapStringBool("answer", true)
+            .putMapStringString("answer", "value")
+            .putMapStringDouble("answer", 1.5d)
             .build();
     TestAllTypes establishedValue =
         TestAllTypes.newBuilder()
             .addAllRepeatedInt64(List.of(1L, 2L, 3L))
             .putMapStringInt64("answer", 42L)
+            .putMapStringBool("answer", true)
+            .putMapStringString("answer", "value")
+            .putMapStringDouble("answer", 1.5d)
             .build();
     CountingActivation enabledInput =
         new CountingActivation(Map.of("proto", enabledValue, "index", 1L, "map_key", "answer"));

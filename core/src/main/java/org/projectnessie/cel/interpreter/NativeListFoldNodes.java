@@ -34,7 +34,8 @@ import org.projectnessie.cel.interpreter.AttributeFactory.Attribute;
 import org.projectnessie.cel.interpreter.functions.Overload;
 
 final class NativeScalarListFold extends EvalListFold implements NativeScalarListFoldCapability {
-  final NativeListSourceCapability range;
+  final Interpretable range;
+  private final NativeListTraversalPlan traversal;
   private final NativeScalarKind inputKind;
   final NativeBooleanCapability predicate;
   final Interpretable nativeTransform;
@@ -46,6 +47,7 @@ final class NativeScalarListFold extends EvalListFold implements NativeScalarLis
       long id,
       String variable,
       Interpretable range,
+      NativeListTraversalPlan traversal,
       Interpretable establishedFilter,
       Interpretable establishedTransform,
       NativeScalarKind inputKind,
@@ -54,7 +56,8 @@ final class NativeScalarListFold extends EvalListFold implements NativeScalarLis
       NativeScalarKind outputKind,
       TypeAdapter adapter) {
     super(id, variable, "", range, establishedFilter, establishedTransform, adapter);
-    this.range = (NativeListSourceCapability) range;
+    this.range = requireNonNull(range, "range");
+    this.traversal = requireNonNull(traversal, "traversal");
     this.inputKind = requireNonNull(inputKind, "inputKind");
     this.predicate = predicate;
     this.nativeTransform = requireNonNull(nativeTransform, "nativeTransform");
@@ -72,7 +75,7 @@ final class NativeScalarListFold extends EvalListFold implements NativeScalarLis
   public long evalSize(Activation activation) {
     NativeListFoldEvaluation evaluation =
         new NativeListFoldEvaluation(activation, variable, this, -1);
-    NativeScalarLoopKernel.evaluate(range, inputKind, activation, evaluation, evaluation);
+    NativeScalarLoopKernel.evaluate(traversal, inputKind, activation, evaluation, evaluation);
     return evaluation.position;
   }
 
@@ -120,7 +123,7 @@ final class NativeScalarListFold extends EvalListFold implements NativeScalarLis
     NativeStringMembershipEvaluation evaluation =
         new NativeStringMembershipEvaluation(activation, variable, this, needleValue, slowNeedle);
     try {
-      NativeScalarLoopKernel.evaluate(range, inputKind, activation, evaluation, evaluation);
+      NativeScalarLoopKernel.evaluate(traversal, inputKind, activation, evaluation, evaluation);
     } catch (ValueSignal valueSignal) {
       if (evaluation.exceptionalNeedle()) {
         throw signal(evaluation.slowNeedle());
@@ -137,7 +140,7 @@ final class NativeScalarListFold extends EvalListFold implements NativeScalarLis
     }
     NativeIntListFoldEvaluation evaluation =
         new NativeIntListFoldEvaluation(activation, variable, this);
-    NativeScalarLoopKernel.evaluate(range, inputKind, activation, evaluation, evaluation);
+    NativeScalarLoopKernel.evaluate(traversal, inputKind, activation, evaluation, evaluation);
     return evaluation.values();
   }
 
@@ -145,7 +148,7 @@ final class NativeScalarListFold extends EvalListFold implements NativeScalarLis
     NativeListFoldEvaluation evaluation =
         new NativeListFoldEvaluation(activation, variable, this, index);
     try {
-      NativeScalarLoopKernel.evaluate(range, inputKind, activation, evaluation, evaluation);
+      NativeScalarLoopKernel.evaluate(traversal, inputKind, activation, evaluation, evaluation);
     } catch (ValueSignal valueSignal) {
       throw isError(valueSignal.value) ? propagatedError(valueSignal.value) : valueSignal;
     }

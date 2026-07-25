@@ -75,6 +75,11 @@ final class ExprInterpreter implements Interpreter {
 
   Planner checkedPlanner(
       Map<Long, Reference> refMap, Map<Long, Type> typeMap, InterpretableDecorator... decorators) {
+    PlanningPolicy effectivePolicy = effectiveCheckedPolicy(decorators);
+    InterpretableDecorator[] effectiveDecorators =
+        effectivePolicy == PlanningPolicy.NATIVE_OPTIMIZED
+            ? new InterpretableDecorator[0]
+            : decorators;
     return new Planner(
         dispatcher,
         provider,
@@ -83,8 +88,8 @@ final class ExprInterpreter implements Interpreter {
         container,
         refMap,
         typeMap,
-        effectiveCheckedPolicy(decorators),
-        decorators);
+        effectivePolicy,
+        effectiveDecorators);
   }
 
   Planner uncheckedPlanner(InterpretableDecorator... decorators) {
@@ -101,6 +106,14 @@ final class ExprInterpreter implements Interpreter {
   }
 
   private PlanningPolicy effectiveCheckedPolicy(InterpretableDecorator[] decorators) {
-    return decorators.length == 0 ? planningPolicy : PlanningPolicy.ESTABLISHED_ONLY;
+    if (!planningPolicy.nativeSpecializationPermitted()) {
+      return PlanningPolicy.ESTABLISHED_ONLY;
+    }
+    if (decorators.length == 0) {
+      return planningPolicy;
+    }
+    return decorators.length == 1 && decorators[0] == BuiltInOptimizer.INSTANCE
+        ? PlanningPolicy.NATIVE_OPTIMIZED
+        : PlanningPolicy.ESTABLISHED_ONLY;
   }
 }

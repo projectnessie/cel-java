@@ -44,8 +44,13 @@ import java.util.Map;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.operators.Operator;
+import org.projectnessie.cel.common.types.BoolT;
+import org.projectnessie.cel.common.types.DoubleT;
+import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.Overloads;
+import org.projectnessie.cel.common.types.StringT;
+import org.projectnessie.cel.common.types.UintT;
 import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
 import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
 import org.projectnessie.cel.common.types.ref.ExactAggregateFieldProvider;
@@ -56,10 +61,12 @@ import org.projectnessie.cel.common.types.ref.StandardScalarTypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
 import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.common.types.traits.Lister;
 import org.projectnessie.cel.common.types.traits.Trait;
 import org.projectnessie.cel.interpreter.AttributeFactory.Attribute;
 import org.projectnessie.cel.interpreter.AttributeFactory.Qualifier;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableAttribute;
+import org.projectnessie.cel.interpreter.Interpretable.InterpretableCall;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableConst;
 import org.projectnessie.cel.interpreter.functions.BinaryOp;
 import org.projectnessie.cel.interpreter.functions.FunctionOp;
@@ -136,7 +143,10 @@ final class Planner implements InterpretablePlanner {
                     String.format(
                         "unsupported expr of kind %s: '%s'", expr.getExprKindCase(), expr));
           };
-      if (root && policy.nativeSpecializationPermitted() && NativeIsland.supports(result)) {
+      if (root
+          && policy.nativeSpecializationPermitted()
+          && NativeIsland.supports(result)
+          && !(policy.builtInOptimizationEnabled() && result instanceof InterpretableConst)) {
         result = new NativeIsland(result, adapter);
       }
       return decorate(result);
@@ -208,16 +218,15 @@ final class Planner implements InterpretablePlanner {
         return new EvalExactAggregateIdent(id, identName, adapter, materializer);
       }
       if (nativeScalarPlanning()) {
-        if (nativeLocalVariable != null
-            && nativeLocalVariable.name.equals(identName)
-            && nativeLocalVariable.kind == nativeKind(id)) {
-          return switch (nativeLocalVariable.kind) {
+        NativeLocalVariable local = nativeLocalVariable(identName);
+        if (local != null && local.kind == nativeKind(id)) {
+          return switch (local.kind) {
             case BOOLEAN -> new NativeBooleanLocalIdent(id, identName, adapter);
             case INT -> new NativeIntLocalIdent(id, identName, adapter);
             case UINT -> new NativeUintLocalIdent(id, identName, adapter);
             case DOUBLE -> new NativeDoubleLocalIdent(id, identName, adapter);
             case STRING -> new NativeStringLocalIdent(id, identName, adapter);
-            case NULL -> new EvalIdent(id, identName, adapter);
+            case NULL -> new NativeNullLocalIdent(id, identName, adapter);
           };
         }
         if (hasPrimitiveType(id, PrimitiveType.INT64)) {
@@ -482,6 +491,11 @@ final class Planner implements InterpretablePlanner {
       args[i + offset] = arg;
     }
 
+    Interpretable foldedConversion = foldConstantConversion(expr, resolvedFunc, args);
+    if (foldedConversion != null) {
+      return foldedConversion;
+    }
+
     // Generate specialized Interpretable operators by function name if possible.
     if (resolvedFunc.fnName.equals(Operator.LogicalAnd.id))
       return planCallLogicalAnd(expr, resolvedFunc, args);
@@ -502,6 +516,10 @@ final class Planner implements InterpretablePlanner {
     if (resolvedFunc.fnName.equals(Operator.Index.id))
       return planCallIndex(expr, resolvedFunc, args);
     if (resolvedFunc.fnName.equals(Operator.In.id)) {
+      Interpretable constantSetMembership = foldConstantSetMembership(expr, resolvedFunc, args);
+      if (constantSetMembership != null) {
+        return constantSetMembership;
+      }
       Interpretable mapMembership = specializeExactMapMembership(expr, resolvedFunc, args);
       if (mapMembership != null) {
         return mapMembership;
@@ -510,6 +528,11 @@ final class Planner implements InterpretablePlanner {
           specializeExactScalarSetMembership(expr, resolvedFunc, args);
       if (exactSetMembership != null) {
         return exactSetMembership;
+      }
+      Interpretable concatMembership =
+          specializeScalarListConcatMembership(expr, resolvedFunc, args);
+      if (concatMembership != null) {
+        return concatMembership;
       }
       Interpretable literalMembership =
           specializeStringListLiteralMembership(expr, resolvedFunc, args);
@@ -573,14 +596,91 @@ final class Planner implements InterpretablePlanner {
     };
   }
 
+  private Interpretable foldConstantConversion(
+      Expr expr, ResolvedFunction resolvedFunction, Interpretable[] arguments) {
+    if (!policy.builtInOptimizationEnabled()
+        || !Overloads.isTypeConversionFunction(resolvedFunction.fnName)
+        || arguments.length != 1
+        || !(arguments[0] instanceof InterpretableConst)) {
+      return null;
+    }
+
+    Interpretable call =
+        planCallUnary(
+            expr,
+            resolvedFunction.fnName,
+            resolvedFunction.overloadId,
+            resolvedFunction.implementation,
+            arguments);
+    EvalConst folded = BuiltInOptimizer.foldConstantUnary((InterpretableCall) call);
+    if (folded == null
+        || !nativeScalarPlanning()
+        || !StandardOverloadProvenance.isExactStandard(disp, refMap, expr)) {
+      return folded;
+    }
+
+    Val value = folded.value();
+    if (value == null) {
+      return folded;
+    }
+    NativeScalarKind kind = nativeKind(expr.getId());
+    if (kind == NativeScalarKind.BOOLEAN && value.getClass() == BoolT.class) {
+      return new NativeBooleanConst(expr.getId(), (BoolT) value);
+    }
+    if (kind == NativeScalarKind.INT && value.getClass() == IntT.class) {
+      return new NativeIntConst(expr.getId(), (IntT) value);
+    }
+    if (kind == NativeScalarKind.UINT && value.getClass() == UintT.class) {
+      return new NativeUintConst(expr.getId(), (UintT) value);
+    }
+    if (kind == NativeScalarKind.DOUBLE && value.getClass() == DoubleT.class) {
+      return new NativeDoubleConst(expr.getId(), (DoubleT) value);
+    }
+    if (kind == NativeScalarKind.STRING
+        && value.getClass() == StringT.class
+        && value.value() instanceof String) {
+      return new NativeStringConst(expr.getId(), (StringT) value);
+    }
+    return folded;
+  }
+
+  private Interpretable foldConstantSetMembership(
+      Expr expr, ResolvedFunction resolvedFunction, Interpretable[] arguments) {
+    Call call = expr.getCallExpr();
+    if (!policy.builtInOptimizationEnabled()
+        || !resolvedFunction.overloadId.equals(Overloads.InList)
+        || call.hasTarget()
+        || call.getArgsCount() != 2
+        || arguments.length != 2
+        || !(arguments[1] instanceof InterpretableConst)) {
+      return null;
+    }
+
+    BuiltInOptimizer.ConstantSet constantSet = BuiltInOptimizer.constantSet(arguments[1]);
+    if (constantSet == null) {
+      return null;
+    }
+
+    Interpretable[] established = asEstablished(arguments.clone());
+    Interpretable original =
+        planCallBinary(
+            expr,
+            resolvedFunction.fnName,
+            resolvedFunction.overloadId,
+            resolvedFunction.implementation,
+            established);
+    return new EvalSetMembership(
+        original, established[0], constantSet.typeName(), constantSet.values());
+  }
+
   private Interpretable specializeListConcat(
       Expr expr, ResolvedFunction resolvedFunction, Interpretable[] arguments) {
     if (!nativeCertifiedHostAggregatePlanning()
         || resolvedFunction.nativeDescriptor() == null
         || !resolvedFunction.overloadId.equals(Overloads.AddList)
         || arguments.length != 2
-        || !exactListConcatOperand(arguments[0])
-        || !exactListConcatOperand(arguments[1])) {
+        || inexactListConcatOperand(arguments[0])
+        || inexactListConcatOperand(arguments[1])) {
       return null;
     }
     Call call = expr.getCallExpr();
@@ -597,9 +697,9 @@ final class Planner implements InterpretablePlanner {
         expr.getId(), arguments[0], arguments[1], resolvedFunction.implementation);
   }
 
-  private static boolean exactListConcatOperand(Interpretable operand) {
-    return operand instanceof NativeListConcat
-        || operand instanceof NativeListSourceCapability source && source.exactListSource();
+  private static boolean inexactListConcatOperand(Interpretable operand) {
+    return !(operand instanceof NativeListConcat)
+        && (!(operand instanceof NativeListSourceCapability source) || !source.exactListSource());
   }
 
   private Interpretable specializeListConcatSize(
@@ -660,7 +760,11 @@ final class Planner implements InterpretablePlanner {
         || !hasPrimitiveType(expr.getId(), PrimitiveType.BOOL)) {
       return null;
     }
-    ExactMapKey key = exactMapKey(call.getArgs(0), arguments[0]);
+    Type mapType = typeMap.get(call.getArgs(1).getId());
+    if (mapType == null || mapType.getTypeKindCase() != Type.TypeKindCase.MAP_TYPE) {
+      return null;
+    }
+    ExactMapKey key = exactMapKey(call.getArgs(0), arguments[0], mapType.getMapType().getKeyType());
     return key != null
         ? new NativeMapMembership(
             expr.getId(),
@@ -946,6 +1050,16 @@ final class Planner implements InterpretablePlanner {
 
   /** planCallEqual generates an equals (==) Interpretable. */
   Interpretable planCallEqual(Expr expr, ResolvedFunction resolvedFunction, Interpretable... args) {
+    Interpretable exactMapEquality =
+        specializeExactMapEquality(expr, resolvedFunction, args, false);
+    if (exactMapEquality != null) {
+      return exactMapEquality;
+    }
+    Interpretable concatEquality =
+        specializeListConcatEquality(expr, resolvedFunction, args, false);
+    if (concatEquality != null) {
+      return concatEquality;
+    }
     Interpretable exactListEquality =
         specializeExactScalarListEquality(expr, resolvedFunction, args);
     if (exactListEquality != null) {
@@ -1016,6 +1130,16 @@ final class Planner implements InterpretablePlanner {
   /** planCallNotEqual generates a not equals (!=) Interpretable. */
   Interpretable planCallNotEqual(
       Expr expr, ResolvedFunction resolvedFunction, Interpretable... args) {
+    Interpretable exactMapInequality =
+        specializeExactMapEquality(expr, resolvedFunction, args, true);
+    if (exactMapInequality != null) {
+      return exactMapInequality;
+    }
+    Interpretable concatInequality =
+        specializeListConcatEquality(expr, resolvedFunction, args, true);
+    if (concatInequality != null) {
+      return concatInequality;
+    }
     Interpretable exactListInequality =
         specializeExactScalarListInequality(expr, resolvedFunction, args);
     if (exactListInequality != null) {
@@ -1032,6 +1156,81 @@ final class Planner implements InterpretablePlanner {
     }
     Interpretable[] established = asEstablished(args);
     return new EvalNe(expr.getId(), established[0], established[1]);
+  }
+
+  private Interpretable specializeExactMapEquality(
+      Expr expr, ResolvedFunction resolvedFunction, Interpretable[] arguments, boolean inequality) {
+    String requiredOverload = inequality ? Overloads.NotEquals : Overloads.Equals;
+    Call call = expr.getCallExpr();
+    if (!nativeCertifiedHostAggregatePlanning()
+        || !resolvedFunction.overloadId.equals(requiredOverload)
+        || !exactStandardImplementation(expr)
+        || call.hasTarget()
+        || call.getArgsCount() != 2
+        || arguments.length != 2
+        || !(arguments[0] instanceof NativeMapSourceCapability left)
+        || !(arguments[1] instanceof NativeMapSourceCapability right)
+        || !left.exactMapSource()
+        || !right.exactMapSource()
+        || !hasPrimitiveType(expr.getId(), PrimitiveType.BOOL)) {
+      return null;
+    }
+    Type leftType = typeMap.get(call.getArgs(0).getId());
+    Type rightType = typeMap.get(call.getArgs(1).getId());
+    if (leftType == null
+        || leftType.getTypeKindCase() != Type.TypeKindCase.MAP_TYPE
+        || !leftType.equals(rightType)) {
+      return null;
+    }
+    NativeScalarKind keyKind = nativeKind(leftType.getMapType().getKeyType());
+    if (keyKind == null || keyKind == NativeScalarKind.DOUBLE || keyKind == NativeScalarKind.NULL) {
+      return null;
+    }
+    ExactAggregateTypeAdapter exactAdapter = (ExactAggregateTypeAdapter) adapter;
+    CheckedValueMaterializer keyMaterializer =
+        new CheckedValueMaterializer(exactAdapter, leftType.getMapType().getKeyType());
+    CheckedValueMaterializer valueMaterializer =
+        new CheckedValueMaterializer(exactAdapter, leftType.getMapType().getValueType());
+    return inequality
+        ? new NativeExactMapInequality(
+            expr.getId(), arguments[0], arguments[1], keyMaterializer, valueMaterializer)
+        : new NativeExactMapEquality(
+            expr.getId(), arguments[0], arguments[1], keyMaterializer, valueMaterializer);
+  }
+
+  private Interpretable specializeListConcatEquality(
+      Expr expr, ResolvedFunction resolvedFunction, Interpretable[] arguments, boolean inequality) {
+    String requiredOverload = inequality ? Overloads.NotEquals : Overloads.Equals;
+    if (!nativeCertifiedHostAggregatePlanning()
+        || !resolvedFunction.overloadId.equals(requiredOverload)
+        || !exactStandardImplementation(expr)
+        || arguments.length != 2
+        || !hasPrimitiveType(expr.getId(), PrimitiveType.BOOL)) {
+      return null;
+    }
+    NativeListConcatEqualityOperand left = NativeListConcatEqualityOperand.from(arguments[0]);
+    NativeListConcatEqualityOperand right = NativeListConcatEqualityOperand.from(arguments[1]);
+    if (left == null || right == null || (!left.concatenated() && !right.concatenated())) {
+      return null;
+    }
+    Call call = expr.getCallExpr();
+    if (call.hasTarget() || call.getArgsCount() != 2) {
+      return null;
+    }
+    Type leftType = typeMap.get(call.getArgs(0).getId());
+    Type rightType = typeMap.get(call.getArgs(1).getId());
+    if (leftType == null
+        || leftType.getTypeKindCase() != Type.TypeKindCase.LIST_TYPE
+        || !leftType.equals(rightType)) {
+      return null;
+    }
+    NativeScalarKind kind = nativeKind(leftType.getListType().getElemType());
+    if (kind == null || kind == NativeScalarKind.NULL) {
+      return null;
+    }
+    return inequality
+        ? new NativeListConcatInequality(expr.getId(), left, right, kind, adapter)
+        : new NativeListConcatEquality(expr.getId(), left, right, kind, adapter);
   }
 
   /** planCallLogicalAnd generates a logical and (&&) Interpretable. */
@@ -1294,9 +1493,13 @@ final class Planner implements InterpretablePlanner {
       return new NativeStringListConcatIndex(
           expr.getId(), adapter, established.attr(), concat, sources, indexValue);
     }
-    return hasNullType(expr.getId())
-        ? new NativeNullListConcatIndex(
-            expr.getId(), adapter, established.attr(), concat, sources, indexValue)
+    if (hasNullType(expr.getId())) {
+      return new NativeNullListConcatIndex(
+          expr.getId(), adapter, established.attr(), concat, sources, indexValue);
+    }
+    return supportsMaterializedListConcatIndex(expr)
+        ? new NativeValueListConcatIndex(
+            expr.getId(), established.attr(), concat, sources, indexValue)
         : established;
   }
 
@@ -1340,10 +1543,32 @@ final class Planner implements InterpretablePlanner {
       return new NativeStringListConcatIndex(
           expr.getId(), adapter, established.attr(), concat, sources, nativeIndex);
     }
-    return hasNullType(expr.getId())
-        ? new NativeNullListConcatIndex(
-            expr.getId(), adapter, established.attr(), concat, sources, nativeIndex)
+    if (hasNullType(expr.getId())) {
+      return new NativeNullListConcatIndex(
+          expr.getId(), adapter, established.attr(), concat, sources, nativeIndex);
+    }
+    return supportsMaterializedListConcatIndex(expr)
+        ? new NativeValueListConcatIndex(
+            expr.getId(), established.attr(), concat, sources, nativeIndex)
         : established;
+  }
+
+  private boolean supportsMaterializedListConcatIndex(Expr expr) {
+    Call call = expr.getCallExpr();
+    Expr operandExpression = call.hasTarget() ? call.getTarget() : call.getArgs(0);
+    Type listType = typeMap.get(operandExpression.getId());
+    Type resultType = typeMap.get(expr.getId());
+    if (listType == null
+        || listType.getTypeKindCase() != Type.TypeKindCase.LIST_TYPE
+        || resultType == null
+        || !listType.getListType().getElemType().equals(resultType)) {
+      return false;
+    }
+    return switch (resultType.getTypeKindCase()) {
+      case PRIMITIVE -> resultType.getPrimitive() == PrimitiveType.BYTES;
+      case WRAPPER, WELL_KNOWN, MESSAGE_TYPE, DYN, LIST_TYPE, MAP_TYPE -> true;
+      default -> false;
+    };
   }
 
   private Interpretable specializeExactMapIndex(
@@ -1364,7 +1589,7 @@ final class Planner implements InterpretablePlanner {
     }
     Call call = expr.getCallExpr();
     Expr indexExpression = call.hasTarget() ? call.getArgs(0) : call.getArgs(1);
-    ExactMapKey key = exactMapKey(indexExpression, index);
+    ExactMapKey key = exactMapKey(indexExpression, index, operandType.getMapType().getKeyType());
     Type resultType = typeMap.get(expr.getId());
     if (key == null
         || resultType == null
@@ -1429,14 +1654,13 @@ final class Planner implements InterpretablePlanner {
         || !(operand instanceof NativeMapSourceCapability source)
         || !source.exactMapSource()
         || operandType == null
-        || operandType.getTypeKindCase() != Type.TypeKindCase.MAP_TYPE
-        || operandType.getMapType().getKeyType().getTypeKindCase() != Type.TypeKindCase.PRIMITIVE
-        || operandType.getMapType().getKeyType().getPrimitive() != PrimitiveType.STRING) {
+        || operandType.getTypeKindCase() != Type.TypeKindCase.MAP_TYPE) {
       return established;
     }
     Call call = expr.getCallExpr();
     Expr indexExpression = call.hasTarget() ? call.getArgs(0) : call.getArgs(1);
-    NativeStringCapability dynamicKey = dynamicStringKey(indexExpression, index);
+    NativeMapDynamicKey dynamicKey =
+        dynamicMapKey(indexExpression, index, operandType.getMapType().getKeyType());
     if (dynamicKey == null) {
       return established;
     }
@@ -1487,13 +1711,73 @@ final class Planner implements InterpretablePlanner {
         : null;
   }
 
-  private ExactMapKey exactMapKey(Expr expression, Interpretable planned) {
+  private NativeMapDynamicKey dynamicMapKey(
+      Expr expression, Interpretable plannedExpression, Type declaredKeyType) {
+    Type expressionType = typeMap.get(expression.getId());
+    if (expressionType == null
+        || !expressionType.equals(declaredKeyType)
+        || declaredKeyType.getTypeKindCase() != Type.TypeKindCase.PRIMITIVE) {
+      return null;
+    }
+    return switch (declaredKeyType.getPrimitive()) {
+      case STRING -> {
+        NativeStringCapability capability = dynamicStringKey(expression, plannedExpression);
+        yield capability != null ? NativeMapDynamicKey.string(capability) : null;
+      }
+      case BOOL -> {
+        NativeBooleanCapability capability = dynamicBooleanKey(expression, plannedExpression);
+        yield capability != null ? NativeMapDynamicKey.bool(capability) : null;
+      }
+      case INT64 -> {
+        NativeIntCapability capability = dynamicIntKey(expression, plannedExpression);
+        yield capability != null ? NativeMapDynamicKey.integer(capability) : null;
+      }
+      default -> null;
+    };
+  }
+
+  private NativeBooleanCapability dynamicBooleanKey(
+      Expr expression, Interpretable plannedExpression) {
+    if (plannedExpression instanceof NativeBooleanCapability nativeBoolean) {
+      return nativeBoolean;
+    }
+    if (!(plannedExpression instanceof InterpretableAttribute attribute)
+        || expression.getExprKindCase() != Expr.ExprKindCase.SELECT_EXPR) {
+      return null;
+    }
+    Select select = expression.getSelectExpr();
+    Type operandType = typeMap.get(select.getOperand().getId());
+    Attribute partialAttribute = partialSelectAttribute(expression, select, operandType);
+    return partialAttribute != null
+        ? new NativeBooleanAttr(expression.getId(), adapter, attribute.attr(), partialAttribute)
+        : null;
+  }
+
+  private NativeIntCapability dynamicIntKey(Expr expression, Interpretable plannedExpression) {
+    if (plannedExpression instanceof NativeIntCapability nativeInt) {
+      return nativeInt;
+    }
+    if (!(plannedExpression instanceof InterpretableAttribute attribute)
+        || expression.getExprKindCase() != Expr.ExprKindCase.SELECT_EXPR) {
+      return null;
+    }
+    Select select = expression.getSelectExpr();
+    Type operandType = typeMap.get(select.getOperand().getId());
+    Attribute partialAttribute = partialSelectAttribute(expression, select, operandType);
+    return partialAttribute != null
+        ? new NativeIntAttr(expression.getId(), adapter, attribute.attr(), partialAttribute)
+        : null;
+  }
+
+  private ExactMapKey exactMapKey(Expr expression, Interpretable planned, Type declaredKeyType) {
     if (!(planned instanceof InterpretableConst constant)
         || expression.getExprKindCase() != Expr.ExprKindCase.CONST_EXPR) {
       return null;
     }
     Type keyType = typeMap.get(expression.getId());
-    if (keyType == null || keyType.getTypeKindCase() != Type.TypeKindCase.PRIMITIVE) {
+    if (keyType == null
+        || !keyType.equals(declaredKeyType)
+        || keyType.getTypeKindCase() != Type.TypeKindCase.PRIMITIVE) {
       return null;
     }
     return switch (keyType.getPrimitive()) {
@@ -1504,6 +1788,10 @@ final class Planner implements InterpretablePlanner {
       case BOOL ->
           expression.getConstExpr().getConstantKindCase() == Constant.ConstantKindCase.BOOL_VALUE
               ? new ExactMapKey(expression.getConstExpr().getBoolValue(), constant.value())
+              : null;
+      case INT64 ->
+          expression.getConstExpr().getConstantKindCase() == Constant.ConstantKindCase.INT64_VALUE
+              ? new ExactMapKey(expression.getConstExpr().getInt64Value(), constant.value())
               : null;
       default -> null;
     };
@@ -1901,6 +2189,44 @@ final class Planner implements InterpretablePlanner {
         expr.getId(), arguments[0], arguments[1], resolvedFunction.implementation);
   }
 
+  private Interpretable specializeScalarListConcatMembership(
+      Expr expr, ResolvedFunction resolvedFunction, Interpretable[] arguments) {
+    Call call = expr.getCallExpr();
+    if (!nativeCertifiedHostAggregatePlanning()
+        || resolvedFunction.nativeDescriptor() == null
+        || !resolvedFunction.overloadId.equals(Overloads.InList)
+        || call.hasTarget()
+        || call.getArgsCount() != 2
+        || arguments.length != 2
+        || !(arguments[1] instanceof NativeListConcat concat)
+        || !hasPrimitiveType(expr.getId(), PrimitiveType.BOOL)) {
+      return null;
+    }
+    Type needleType = typeMap.get(call.getArgs(0).getId());
+    Type listType = typeMap.get(call.getArgs(1).getId());
+    if (listType == null
+        || listType.getTypeKindCase() != Type.TypeKindCase.LIST_TYPE
+        || needleType == null
+        || !needleType.equals(listType.getListType().getElemType())) {
+      return null;
+    }
+    NativeScalarKind kind = nativeKind(needleType);
+    NativeListTraversalPlan traversal = NativeListTraversalPlan.concat(concat);
+    return kind != null
+            && kind != NativeScalarKind.NULL
+            && supportsNativeKind(kind, arguments[0])
+            && traversal != null
+        ? new NativeScalarListConcatMembership(
+            expr.getId(),
+            arguments[0],
+            concat,
+            traversal,
+            resolvedFunction.implementation,
+            kind,
+            adapter)
+        : null;
+  }
+
   private Interpretable specializeTopLevelStringListMembership(
       Expr expr, ResolvedFunction resolvedFunction, Interpretable[] arguments) {
     Call call = expr.getCallExpr();
@@ -2014,10 +2340,81 @@ final class Planner implements InterpretablePlanner {
       }
       elems[i] = elemVal;
     }
+    Interpretable folded = foldConstantList(expr, elems, optionalIndices);
+    if (folded != null) {
+      return folded;
+    }
     Interpretable nativeLiteral = specializeScalarListLiteral(expr, elems, optionalIndices);
     return nativeLiteral != null
         ? nativeLiteral
         : new EvalList(expr.getId(), asEstablished(elems), optionalIndices, adapter);
+  }
+
+  private Interpretable foldConstantList(
+      Expr expr, Interpretable[] elements, boolean[] optionalIndices) {
+    if (!policy.builtInOptimizationEnabled()) {
+      return null;
+    }
+    EvalConst folded =
+        BuiltInOptimizer.foldList(
+            new EvalList(expr.getId(), elements.clone(), optionalIndices.clone(), adapter));
+    if (folded == null) {
+      return null;
+    }
+    for (boolean optional : optionalIndices) {
+      if (optional) {
+        return folded;
+      }
+    }
+    if (!nativePlannerOwnedAggregatePlanning() || !(folded.value() instanceof Lister list)) {
+      return folded;
+    }
+    Type listType = typeMap.get(expr.getId());
+    if (listType == null || listType.getTypeKindCase() != Type.TypeKindCase.LIST_TYPE) {
+      return folded;
+    }
+    NativeScalarKind kind = nativeKind(listType.getListType().getElemType());
+    if (kind == null
+        || kind == NativeScalarKind.NULL
+        || !constantListValuesMatch(list, kind, elements.length)) {
+      return folded;
+    }
+    return switch (kind) {
+      case BOOLEAN -> new NativeConstantBooleanListLiteral(expr.getId(), list);
+      case INT -> new NativeConstantIntListLiteral(expr.getId(), list);
+      case UINT -> new NativeConstantUintListLiteral(expr.getId(), list);
+      case DOUBLE -> new NativeConstantDoubleListLiteral(expr.getId(), list);
+      case STRING -> new NativeConstantStringListLiteral(expr.getId(), list);
+      //noinspection DataFlowIssue
+      case NULL -> folded;
+    };
+  }
+
+  private static boolean constantListValuesMatch(
+      Lister list, NativeScalarKind kind, int expectedSize) {
+    try {
+      if (list.nativeSize() != expectedSize) {
+        return false;
+      }
+      for (int index = 0; index < expectedSize; index++) {
+        Val value = list.nativeGetAt(index);
+        boolean matches =
+            switch (kind) {
+              case BOOLEAN -> value.getClass() == BoolT.class;
+              case INT -> value.getClass() == IntT.class;
+              case UINT -> value.getClass() == UintT.class;
+              case DOUBLE -> value.getClass() == DoubleT.class;
+              case STRING -> value.getClass() == StringT.class && value.value() instanceof String;
+              case NULL -> false;
+            };
+        if (!matches) {
+          return false;
+        }
+      }
+      return true;
+    } catch (RuntimeException failure) {
+      return false;
+    }
   }
 
   private Interpretable specializeScalarListLiteral(
@@ -2130,8 +2527,21 @@ final class Planner implements InterpretablePlanner {
       }
       vals[i] = valVal;
     }
+    if (policy.builtInOptimizationEnabled()) {
+      EvalConst folded =
+          BuiltInOptimizer.foldMap(
+              new EvalMap(
+                  expr.getId(), keys.clone(), vals.clone(), optionalEntries.clone(), adapter));
+      if (folded != null) {
+        return folded;
+      }
+    }
     return new EvalMap(
-        expr.getId(), asEstablished(keys), asEstablished(vals), optionalEntries, adapter);
+        expr.getId(),
+        asEstablished(keys.clone()),
+        asEstablished(vals.clone()),
+        optionalEntries,
+        adapter);
   }
 
   /** planCreateObj generates an object construction Interpretable. */
@@ -2248,18 +2658,20 @@ final class Planner implements InterpretablePlanner {
         resultType != null && resultType.getTypeKindCase() == Type.TypeKindCase.LIST_TYPE
             ? nativeKind(resultType.getListType().getElemType())
             : null;
+    NativeListTraversalPlan traversal = retainedListTraversal(rangeExpression, range);
     boolean candidate =
         nativeListTraversalPlanning()
             && fold.getIterVar2().isEmpty()
-            && range instanceof NativeListSourceCapability
-            && retainedListSource(rangeExpression, (NativeListSourceCapability) range)
+            && traversal != null
+            && macroListFoldGlueIsExact(fold)
             && inputKind != null
             && inputKind != NativeScalarKind.NULL
             && outputKind != null;
 
     NativeLocalVariable previousLocal = nativeLocalVariable;
     if (candidate) {
-      nativeLocalVariable = new NativeLocalVariable(fold.getIterVar(), inputKind);
+      nativeLocalVariable =
+          new NativeLocalVariable(fold.getIterVar(), inputKind, nativeLocalVariable);
     }
     Interpretable filter;
     Interpretable transform;
@@ -2283,6 +2695,7 @@ final class Planner implements InterpretablePlanner {
           expr.getId(),
           fold.getIterVar(),
           establishedRange,
+          traversal,
           establishedFilter,
           establishedTransform,
           inputKind,
@@ -2313,9 +2726,7 @@ final class Planner implements InterpretablePlanner {
   }
 
   private Interpretable planDirectQuantifier(Expr expr, Comprehension fold) {
-    if (!nativeListTraversalPlanning()
-        || !hasPrimitiveType(expr.getId(), PrimitiveType.BOOL)
-        || !fold.getIterVar2().isEmpty()) {
+    if (!nativeListTraversalPlanning() || !hasPrimitiveType(expr.getId(), PrimitiveType.BOOL)) {
       return null;
     }
     DirectQuantifierPattern pattern = directQuantifierPattern(fold);
@@ -2326,31 +2737,65 @@ final class Planner implements InterpretablePlanner {
     }
     Expr rangeExpression = fold.getIterRange();
     Type rangeType = typeMap.get(rangeExpression.getId());
-    if (rangeType == null || rangeType.getTypeKindCase() != Type.TypeKindCase.LIST_TYPE) {
+    if (rangeType == null) {
       return null;
     }
-    NativeScalarKind elementKind = nativeKind(rangeType.getListType().getElemType());
-    if (elementKind == null || elementKind == NativeScalarKind.NULL) {
+
+    boolean mapRange = rangeType.getTypeKindCase() == Type.TypeKindCase.MAP_TYPE;
+    NativeScalarKind elementKind;
+    NativeScalarKind valueKind = null;
+    if (rangeType.getTypeKindCase() == Type.TypeKindCase.LIST_TYPE) {
+      if (!fold.getIterVar2().isEmpty()) {
+        return null;
+      }
+      elementKind = nativeKind(rangeType.getListType().getElemType());
+      if (elementKind == null || elementKind == NativeScalarKind.NULL) {
+        return null;
+      }
+    } else if (mapRange && nativeCertifiedHostAggregatePlanning()) {
+      elementKind = nativeKind(rangeType.getMapType().getKeyType());
+      if (elementKind == null
+          || elementKind == NativeScalarKind.DOUBLE
+          || elementKind == NativeScalarKind.NULL) {
+        return null;
+      }
+      if (!fold.getIterVar2().isEmpty()) {
+        valueKind = nativeKind(rangeType.getMapType().getValueType());
+        if (valueKind == null) {
+          return null;
+        }
+      }
+    } else {
+      return null;
+    }
+
+    Interpretable accumulatorInitial = plan(fold.getAccuInit());
+    Interpretable range = plan(rangeExpression);
+    if (accumulatorInitial == null || range == null) {
+      return null;
+    }
+    if (mapRange
+        && (!(range instanceof NativeMapSourceCapability source) || !source.exactMapSource())) {
       return null;
     }
 
     NativeLocalVariable previousLocal = nativeLocalVariable;
-    nativeLocalVariable = new NativeLocalVariable(fold.getIterVar(), elementKind);
-    Interpretable accumulatorInitial;
-    Interpretable range;
+    nativeLocalVariable =
+        new NativeLocalVariable(fold.getIterVar(), elementKind, nativeLocalVariable);
+    if (mapRange && !fold.getIterVar2().isEmpty()) {
+      nativeLocalVariable =
+          new NativeLocalVariable(fold.getIterVar2(), valueKind, nativeLocalVariable);
+    }
     Interpretable condition;
     Interpretable step;
-    Interpretable result;
     try {
-      accumulatorInitial = plan(fold.getAccuInit());
-      range = plan(rangeExpression);
       condition = plan(fold.getLoopCondition());
       step = plan(fold.getLoopStep());
-      result = plan(fold.getResult());
     } finally {
       nativeLocalVariable = previousLocal;
     }
-    if (accumulatorInitial == null || condition == null || step == null || result == null) {
+    Interpretable result = plan(fold.getResult());
+    if (condition == null || step == null || result == null) {
       return null;
     }
 
@@ -2371,6 +2816,33 @@ final class Planner implements InterpretablePlanner {
           establishedCondition,
           establishedStep,
           establishedResult);
+    }
+    if (mapRange) {
+      NativeMapSourceCapability source = (NativeMapSourceCapability) range;
+      ExactAggregateTypeAdapter exactAdapter = (ExactAggregateTypeAdapter) adapter;
+      CheckedValueMaterializer keyMaterializer =
+          new CheckedValueMaterializer(exactAdapter, rangeType.getMapType().getKeyType());
+      CheckedValueMaterializer valueMaterializer =
+          fold.getIterVar2().isEmpty()
+              ? null
+              : new CheckedValueMaterializer(exactAdapter, rangeType.getMapType().getValueType());
+      NativeMapTraversalPlan traversal =
+          new NativeMapTraversalPlan(
+              source, elementKind, valueKind, keyMaterializer, valueMaterializer);
+      return new NativeMapQuantifierFold(
+          expr.getId(),
+          fold.getAccuVar(),
+          establishedAccumulator,
+          fold.getIterVar(),
+          fold.getIterVar2(),
+          establishedRange,
+          traversal,
+          establishedCondition,
+          establishedStep,
+          establishedResult,
+          predicate,
+          pattern.quantifier,
+          pattern.existsOne);
     }
     if (range instanceof NativeScalarListFoldCapability mappedSource
         && mappedSource.elementKind() == NativeScalarKind.INT) {
@@ -2398,8 +2870,8 @@ final class Planner implements InterpretablePlanner {
           predicate,
           pattern.quantifier);
     }
-    if (!(range instanceof NativeListSourceCapability source)
-        || !retainedListSource(rangeExpression, source)) {
+    NativeListTraversalPlan traversal = retainedListTraversal(rangeExpression, range);
+    if (traversal == null) {
       return new EvalFold(
           expr.getId(),
           fold.getAccuVar(),
@@ -2418,6 +2890,7 @@ final class Planner implements InterpretablePlanner {
           establishedAccumulator,
           fold.getIterVar(),
           establishedRange,
+          traversal,
           establishedCondition,
           establishedStep,
           establishedResult,
@@ -2431,6 +2904,7 @@ final class Planner implements InterpretablePlanner {
         establishedAccumulator,
         fold.getIterVar(),
         establishedRange,
+        traversal,
         establishedCondition,
         establishedStep,
         establishedResult,
@@ -2455,8 +2929,12 @@ final class Planner implements InterpretablePlanner {
   }
 
   private boolean directQuantifierGlueIsExact(DirectQuantifierPattern pattern, Comprehension fold) {
+    if (!exactStandardImplementation(fold.getLoopStep())) {
+      return false;
+    }
     if (pattern.existsOne) {
-      return true;
+      return exactStandardImplementation(fold.getResult())
+          && exactStandardImplementation(fold.getLoopStep().getCallExpr().getArgs(1));
     }
     Expr condition = fold.getLoopCondition();
     if (!exactStandardImplementation(condition)) {
@@ -2466,28 +2944,19 @@ final class Planner implements InterpretablePlanner {
         || exactStandardImplementation(condition.getCallExpr().getArgs(0));
   }
 
-  private boolean exactStandardImplementation(Expr expression) {
-    if (expression.getExprKindCase() != Expr.ExprKindCase.CALL_EXPR) {
-      return false;
-    }
-    Reference reference = refMap.get(expression.getId());
-    if (reference == null || reference.getOverloadIdCount() != 1) {
-      return false;
-    }
-    String function = expression.getCallExpr().getFunction();
-    Overload implementation = disp.findOverload(reference.getOverloadId(0));
-    if (implementation == null) {
-      implementation = disp.findOverload(function);
-    }
-    if (implementation == null) {
-      return false;
-    }
-    for (Overload standard : Overload.standardOverloads()) {
-      if (standard == implementation && standard.operator.equals(function)) {
-        return true;
+  private boolean macroListFoldGlueIsExact(Comprehension fold) {
+    Expr step = fold.getLoopStep();
+    if (isCall(step, Operator.Conditional.id, 3)) {
+      if (!exactStandardImplementation(step)) {
+        return false;
       }
+      step = step.getCallExpr().getArgs(1);
     }
-    return false;
+    return exactStandardImplementation(step);
+  }
+
+  private boolean exactStandardImplementation(Expr expression) {
+    return StandardOverloadProvenance.isExactStandard(disp, refMap, expression);
   }
 
   private DirectQuantifierPattern directQuantifierPattern(Comprehension fold) {
@@ -2621,6 +3090,17 @@ final class Planner implements InterpretablePlanner {
     return topLevelReference(expression) != null
         || source instanceof NativeMapListIndex
         || source instanceof NativeExactListFieldAttr;
+  }
+
+  private NativeListTraversalPlan retainedListTraversal(Expr expression, Interpretable range) {
+    if (range instanceof NativeListConcat concat) {
+      return NativeListTraversalPlan.concat(concat);
+    }
+    if (range instanceof NativeListSourceCapability source
+        && retainedListSource(expression, source)) {
+      return NativeListTraversalPlan.singleSource(source);
+    }
+    return null;
   }
 
   private static boolean isCall(Expr expr, String function, int argCount) {
@@ -2948,7 +3428,8 @@ final class Planner implements InterpretablePlanner {
     }
     for (int i = 0; i < arguments.length; i++) {
       Interpretable argument = arguments[i];
-      if (NativeIsland.supports(argument)) {
+      if (NativeIsland.supports(argument)
+          && !(policy.builtInOptimizationEnabled() && argument instanceof InterpretableConst)) {
         arguments[i] = new NativeIsland(argument, adapter);
       }
     }
@@ -2956,7 +3437,9 @@ final class Planner implements InterpretablePlanner {
   }
 
   private Interpretable asEstablished(Interpretable argument) {
-    if (policy.nativeSpecializationPermitted() && NativeIsland.supports(argument)) {
+    if (policy.nativeSpecializationPermitted()
+        && NativeIsland.supports(argument)
+        && !(policy.builtInOptimizationEnabled() && argument instanceof InterpretableConst)) {
       return new NativeIsland(argument, adapter);
     }
     return argument;
@@ -3066,7 +3549,20 @@ final class Planner implements InterpretablePlanner {
     return name.startsWith(".") ? name.substring(1) : name;
   }
 
-  private record NativeLocalVariable(String name, NativeScalarKind kind) {}
+  private NativeLocalVariable nativeLocalVariable(String name) {
+    if (name.startsWith(".")) {
+      return null;
+    }
+    for (NativeLocalVariable local = nativeLocalVariable; local != null; local = local.parent) {
+      if (local.name.equals(name)) {
+        return local;
+      }
+    }
+    return null;
+  }
+
+  private record NativeLocalVariable(
+      String name, NativeScalarKind kind, NativeLocalVariable parent) {}
 
   private record DirectQuantifierPattern(
       NativeQuantifier quantifier, boolean existsOne, Expr predicate) {}

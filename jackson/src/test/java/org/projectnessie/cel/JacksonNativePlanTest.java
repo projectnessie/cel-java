@@ -194,6 +194,81 @@ class JacksonNativePlanTest {
   }
 
   @Test
+  void exactMapFieldsSupportConstantAndCheckedDynamicBooleanAndSignedIntegerKeys() {
+    TypeRegistry registry = JacksonRegistry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            types(ExactKeyMapInput.class),
+            declarations(
+                Decls.newVar("input", Decls.newObjectType(ExactKeyMapInput.class.getName())),
+                Decls.newVar("boolKey", Decls.Bool),
+                Decls.newVar("intKey", Decls.Int)));
+    ExactKeyMapInput input =
+        new ExactKeyMapInput(
+            Map.of((byte) 1, 11L),
+            Map.of((short) 1, 12L),
+            Map.of(1, 13L),
+            Map.of(1L, 14L),
+            Map.of(true, 15L));
+    Map<String, Object> activation = Map.of("input", input, "boolKey", true, "intKey", 1L);
+
+    for (String expression :
+        List.of(
+            "input.byteKeys[1]",
+            "1 in input.byteKeys",
+            "input.byteKeys[intKey]",
+            "input.shortKeys[1]",
+            "1 in input.shortKeys",
+            "input.shortKeys[intKey]",
+            "input.integerKeys[1]",
+            "1 in input.integerKeys",
+            "input.integerKeys[intKey]",
+            "input.integerKeys[input.lookupInteger]",
+            "input.integerKeys[intKey + 0]",
+            "input.longKeys[1]",
+            "1 in input.longKeys",
+            "input.longKeys[intKey]",
+            "input.booleanKeys[true]",
+            "true in input.booleanKeys",
+            "input.booleanKeys[boolKey]",
+            "input.booleanKeys[input.lookupBoolean]",
+            "input.booleanKeys[!false]")) {
+      Ast ast = compile(env, expression);
+      Prog enabled = (Prog) env.program(ast);
+      Prog disabled = (Prog) env.program(ast, evalOptions(OptDisableNativeEval));
+
+      assertThat(enabled.interpretable.getClass().getSimpleName())
+          .as(expression)
+          .isEqualTo("NativeIsland");
+      assertThat(disabled.interpretable.getClass().getSimpleName())
+          .as(expression)
+          .isNotEqualTo("NativeIsland");
+      Val result = enabled.eval(activation).getVal();
+      assertEquivalent(result, disabled.eval(activation).getVal());
+      assertThat(result).as(expression).isNotInstanceOf(Err.class);
+    }
+
+    for (String expression : List.of("input.integerKeys[2]", "input.integerKeys[intKey]")) {
+      Ast ast = compile(env, expression);
+      Val result =
+          assertEnabledDisabledEquivalent(
+              env, ast, Map.of("input", input, "boolKey", true, "intKey", 2L));
+      assertThat(result).as(expression).matches(Err::isError);
+    }
+    Ast missingBoolean = compile(env, "input.booleanKeys[boolKey]");
+    Val missingBooleanResult =
+        assertEnabledDisabledEquivalent(
+            env, missingBoolean, Map.of("input", input, "boolKey", false, "intKey", 1L));
+    assertThat(missingBooleanResult).matches(Err::isError);
+
+    Val missingMembership =
+        assertEnabledDisabledEquivalent(env, compile(env, "2 in input.integerKeys"), activation);
+    assertThat(missingMembership.booleanValue()).isFalse();
+  }
+
+  @Test
   void checkedDynamicNullMapLookupDistinguishesPresentNullFromAbsent() {
     TypeRegistry registry = JacksonRegistry.newExactAggregateRegistry();
     Env env =
@@ -355,7 +430,10 @@ class JacksonNativePlanTest {
 
   private static Ast compile(Env env, String expression) {
     AstIssuesTuple result = env.compile(expression);
-    assertThat(result.hasIssues()).as(expression).isFalse();
+    assertThat(result.hasIssues())
+        .as(expression)
+        .withFailMessage(result.getIssues()::toString)
+        .isFalse();
     return result.getAst();
   }
 
@@ -544,6 +622,58 @@ class JacksonNativePlanTest {
 
     public String getLookupKey() {
       return lookupKey;
+    }
+  }
+
+  @SuppressWarnings({"unused", "ClassCanBeRecord"})
+  public static final class ExactKeyMapInput {
+    private final Map<Byte, Long> byteKeys;
+    private final Map<Short, Long> shortKeys;
+    private final Map<Integer, Long> integerKeys;
+    private final Map<Long, Long> longKeys;
+    private final Map<Boolean, Long> booleanKeys;
+    private final int lookupInteger = 1;
+    private final boolean lookupBoolean = true;
+
+    public ExactKeyMapInput(
+        Map<Byte, Long> byteKeys,
+        Map<Short, Long> shortKeys,
+        Map<Integer, Long> integerKeys,
+        Map<Long, Long> longKeys,
+        Map<Boolean, Long> booleanKeys) {
+      this.byteKeys = byteKeys;
+      this.shortKeys = shortKeys;
+      this.integerKeys = integerKeys;
+      this.longKeys = longKeys;
+      this.booleanKeys = booleanKeys;
+    }
+
+    public Map<Byte, Long> getByteKeys() {
+      return byteKeys;
+    }
+
+    public Map<Short, Long> getShortKeys() {
+      return shortKeys;
+    }
+
+    public Map<Integer, Long> getIntegerKeys() {
+      return integerKeys;
+    }
+
+    public Map<Long, Long> getLongKeys() {
+      return longKeys;
+    }
+
+    public Map<Boolean, Long> getBooleanKeys() {
+      return booleanKeys;
+    }
+
+    public int getLookupInteger() {
+      return lookupInteger;
+    }
+
+    public boolean isLookupBoolean() {
+      return lookupBoolean;
     }
   }
 }

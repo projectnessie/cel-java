@@ -59,8 +59,8 @@ class SmokeResourceTest {
         .body("protobuf.established.value", equalTo(true))
         .body("protobuf.enabled.type", equalTo("bool"))
         .body("protobuf.established.type", equalTo("bool"))
-        .body("protobuf.enabled.activationLookups", equalTo(4))
-        .body("protobuf.established.activationLookups", equalTo(4))
+        .body("protobuf.enabled.activationLookups", equalTo(10))
+        .body("protobuf.established.activationLookups", equalTo(10))
         .body("protobuf.enabled.fieldReads", equalTo(0))
         .body("protobuf.established.fieldReads", equalTo(0));
   }

@@ -166,7 +166,9 @@ public final class CEL {
 
   static boolean nativePlanningPermitted(
       Set<EvalOption> evalOptions, List<InterpretableDecorator> decorators) {
-    return evalOptions.isEmpty() && decorators.isEmpty();
+    return decorators.isEmpty()
+        && (evalOptions.isEmpty()
+            || evalOptions.size() == 1 && evalOptions.contains(EvalOption.OptOptimize));
   }
 
   /** CheckedExprToAst converts a checked expression proto message to an Ast. */

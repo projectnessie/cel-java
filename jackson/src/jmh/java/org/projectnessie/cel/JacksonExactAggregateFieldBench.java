@@ -63,7 +63,10 @@ public class JacksonExactAggregateFieldBench {
       "setMembership",
       "mapLookup",
       "mapLookupDynamic",
-      "mapLookupComputed"
+      "mapLookupComputed",
+      "signedIntMapLookup",
+      "signedIntMapMembership",
+      "signedIntMapLookupDynamic"
     })
     public String operation;
 
@@ -87,6 +90,10 @@ public class JacksonExactAggregateFieldBench {
             case "mapLookup" -> "cardinality == 0 ? -1 : input.lookup['last']";
             case "mapLookupDynamic" -> "cardinality == 0 ? -1 : input.lookup[key]";
             case "mapLookupComputed" -> "cardinality == 0 ? -1 : input.lookup['key-' + suffix]";
+            case "signedIntMapLookup" -> "cardinality == 0 ? -1 : input.signedLookup[0]";
+            case "signedIntMapMembership" -> "cardinality != 0 && 0 in input.signedLookup";
+            case "signedIntMapLookupDynamic" ->
+                "cardinality == 0 ? -1 : input.signedLookup[intKey]";
             default -> throw new IllegalArgumentException(operation);
           };
       input = AggregateInput.create(size);
@@ -98,6 +105,8 @@ public class JacksonExactAggregateFieldBench {
               "cardinality",
               (long) size,
               "needle",
+              needle,
+              "intKey",
               needle,
               "key",
               "key-" + (size - 1),
@@ -140,6 +149,10 @@ public class JacksonExactAggregateFieldBench {
       case "mapLookup" -> state.size == 0 ? -1L : state.input.lookup.get("last");
       case "mapLookupDynamic", "mapLookupComputed" ->
           state.size == 0 ? -1L : state.input.lookup.get("key-" + (state.size - 1));
+      case "signedIntMapLookup" -> state.size == 0 ? -1L : state.input.signedLookup.get(0);
+      case "signedIntMapMembership" -> state.size != 0 && state.input.signedLookup.containsKey(0);
+      case "signedIntMapLookupDynamic" ->
+          state.size == 0 ? -1L : state.input.signedLookup.get(state.size - 1);
       default -> throw new IllegalArgumentException(state.operation);
     };
   }
@@ -153,6 +166,7 @@ public class JacksonExactAggregateFieldBench {
             Decls.newVar("input", Decls.newObjectType(AggregateInput.class.getName())),
             Decls.newVar("cardinality", Decls.Int),
             Decls.newVar("needle", Decls.Int),
+            Decls.newVar("intKey", Decls.Int),
             Decls.newVar("key", Decls.String),
             Decls.newVar("suffix", Decls.String)));
   }
@@ -170,26 +184,35 @@ public class JacksonExactAggregateFieldBench {
     private final List<Long> values;
     private final Set<Long> members;
     private final Map<String, Long> lookup;
+    private final Map<Integer, Long> signedLookup;
 
-    private AggregateInput(List<Long> values, Set<Long> members, Map<String, Long> lookup) {
+    private AggregateInput(
+        List<Long> values,
+        Set<Long> members,
+        Map<String, Long> lookup,
+        Map<Integer, Long> signedLookup) {
       this.values = values;
       this.members = members;
       this.lookup = lookup;
+      this.signedLookup = signedLookup;
     }
 
     static AggregateInput create(int size) {
       List<Long> values = new ArrayList<>(size);
       Set<Long> members = new LinkedHashSet<>();
       Map<String, Long> lookup = new LinkedHashMap<>();
-      for (long value = 0; value < size; value++) {
+      Map<Integer, Long> signedLookup = new LinkedHashMap<>();
+      for (int key = 0; key < size; key++) {
+        long value = key;
         values.add(value);
         members.add(value);
         lookup.put("key-" + value, value);
+        signedLookup.put(key, value);
       }
       if (size > 0) {
         lookup.put("last", (long) size - 1L);
       }
-      return new AggregateInput(values, members, lookup);
+      return new AggregateInput(values, members, lookup, signedLookup);
     }
 
     public List<Long> getValues() {
@@ -202,6 +225,10 @@ public class JacksonExactAggregateFieldBench {
 
     public Map<String, Long> getLookup() {
       return lookup;
+    }
+
+    public Map<Integer, Long> getSignedLookup() {
+      return signedLookup;
     }
   }
 }

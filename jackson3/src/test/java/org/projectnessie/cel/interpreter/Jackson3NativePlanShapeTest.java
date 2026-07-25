@@ -113,8 +113,55 @@ class Jackson3NativePlanShapeTest {
     assertDynamicMapPlanShape("input.numbersByName[prefix + suffix]", NativeStringConcat.class);
   }
 
+  @Test
+  void plansConstantAndCheckedDynamicExactMapKeysByDeclaredKind() {
+    PlanPair constantLookup = planExactMapExpression("input.numbersByInteger[1]");
+    assertThat(constantLookup.enabled()).isExactlyInstanceOf(NativeIsland.class);
+    NativeIntMapIndex constantLookupRoot =
+        (NativeIntMapIndex) ((NativeIsland) constantLookup.enabled()).root();
+    assertThat(constantLookupRoot.source).isExactlyInstanceOf(NativeExactMapFieldAttr.class);
+    assertThat(constantLookupRoot.dynamicKey).isNull();
+    assertThat(constantLookupRoot.celKey.intValue()).isEqualTo(1L);
+    assertThat(constantLookup.established()).isNotInstanceOf(NativeIsland.class);
+
+    PlanPair constantMembership = planExactMapExpression("1 in input.numbersByInteger");
+    assertThat(constantMembership.enabled()).isExactlyInstanceOf(NativeIsland.class);
+    assertThat(((NativeIsland) constantMembership.enabled()).root())
+        .isExactlyInstanceOf(NativeMapMembership.class);
+    assertThat(constantMembership.established()).isNotInstanceOf(NativeIsland.class);
+
+    assertDynamicMapPlanShape("input.numbersByInteger[intKey]", "int", NativeIntIdent.class);
+    assertDynamicMapPlanShape("input.numbersByBoolean[boolKey]", "bool", NativeBooleanIdent.class);
+  }
+
+  @Test
+  void doesNotSpecializeCheckedDynamicKeyAgainstMapWithDynamicDeclaredKey() {
+    PlanPair plan = planExactMapExpression("dynamicMap[intKey]");
+
+    assertThat(plan.enabled()).isNotInstanceOf(NativeIsland.class);
+    assertThat(plan.established()).isNotInstanceOf(NativeIsland.class);
+  }
+
   private static void assertDynamicMapPlanShape(
       String expression, Class<? extends NativeStringCapability> keyShape) {
+    assertDynamicMapPlanShape(expression, "string", keyShape);
+  }
+
+  private static void assertDynamicMapPlanShape(
+      String expression, String celKeyKind, Class<?> keyShape) {
+    PlanPair plan = planExactMapExpression(expression);
+
+    assertThat(plan.enabled()).as(expression).isExactlyInstanceOf(NativeIsland.class);
+    assertThat(((NativeIsland) plan.enabled()).root()).isExactlyInstanceOf(NativeIntMapIndex.class);
+    NativeIntMapIndex enabledRoot = (NativeIntMapIndex) ((NativeIsland) plan.enabled()).root();
+    assertThat(enabledRoot.source).isExactlyInstanceOf(NativeExactMapFieldAttr.class);
+    assertThat(enabledRoot.dynamicKey).isNotNull();
+    assertThat(enabledRoot.dynamicKey.celName()).isEqualTo(celKeyKind);
+    assertThat(enabledRoot.dynamicKey.capability()).isExactlyInstanceOf(keyShape);
+    assertThat(plan.established()).isNotInstanceOf(NativeIsland.class);
+  }
+
+  private static PlanPair planExactMapExpression(String expression) {
     TypeRegistry registry = Jackson3Registry.newExactAggregateRegistry();
     var env =
         newEnv(
@@ -125,7 +172,10 @@ class Jackson3NativePlanShapeTest {
                 Decls.newVar("input", Decls.newObjectType(Input.class.getName())),
                 Decls.newVar("key", Decls.String),
                 Decls.newVar("prefix", Decls.String),
-                Decls.newVar("suffix", Decls.String)));
+                Decls.newVar("suffix", Decls.String),
+                Decls.newVar("boolKey", Decls.Bool),
+                Decls.newVar("intKey", Decls.Int),
+                Decls.newVar("dynamicMap", Decls.newMapType(Decls.Dyn, Decls.Int))));
     AstIssuesTuple result = env.compile(expression);
     assertThat(result.hasIssues()).withFailMessage(result.getIssues()::toString).isFalse();
     var checked = astToCheckedExpr(result.getAst());
@@ -142,18 +192,17 @@ class Jackson3NativePlanShapeTest {
         ((ExprInterpreter) enabledInterpreter).checkedPlanner(checked).plan(checked.getExpr());
     Interpretable established = establishedInterpreter.newInterpretable(checked);
 
-    assertThat(enabled).as(expression).isExactlyInstanceOf(NativeIsland.class);
-    assertThat(((NativeIsland) enabled).root()).isExactlyInstanceOf(NativeIntMapIndex.class);
-    NativeIntMapIndex enabledRoot = (NativeIntMapIndex) ((NativeIsland) enabled).root();
-    assertThat(enabledRoot.source).isExactlyInstanceOf(NativeExactMapFieldAttr.class);
-    assertThat(enabledRoot.dynamicKey).isExactlyInstanceOf(keyShape);
-    assertThat(established).isNotInstanceOf(NativeIsland.class);
+    return new PlanPair(enabled, established);
   }
+
+  private record PlanPair(Interpretable enabled, Interpretable established) {}
 
   @SuppressWarnings("unused")
   public static final class Input {
     private final List<Long> numbers = List.of(1L, 2L);
     private final Map<String, Long> numbersByName = Map.of("one", 1L);
+    private final Map<Boolean, Long> numbersByBoolean = Map.of(false, 0L, true, 1L);
+    private final Map<Integer, Long> numbersByInteger = Map.of(-1, -1L, 1, 1L);
     private final String lookupKey = "one";
 
     public List<Long> getNumbers() {
@@ -162,6 +211,14 @@ class Jackson3NativePlanShapeTest {
 
     public Map<String, Long> getNumbersByName() {
       return numbersByName;
+    }
+
+    public Map<Boolean, Long> getNumbersByBoolean() {
+      return numbersByBoolean;
+    }
+
+    public Map<Integer, Long> getNumbersByInteger() {
+      return numbersByInteger;
     }
 
     public String getLookupKey() {

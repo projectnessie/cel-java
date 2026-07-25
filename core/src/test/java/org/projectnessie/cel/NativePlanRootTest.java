@@ -538,7 +538,7 @@ class NativePlanRootTest {
   }
 
   @Test
-  void onlyTheEmptyEvalOptionSubsetPermitsNativePlanning() {
+  void onlyEmptyOrOptimizeOnlyEvalOptionSubsetsPermitNativePlanning() {
     EvalOption[] values = EvalOption.values();
     assertThat(values).hasSize(5);
     Env env =
@@ -557,9 +557,11 @@ class NativePlanRootTest {
         }
       }
 
+      boolean nativePermitted =
+          subset.isEmpty() || subset.equals(EnumSet.of(EvalOption.OptOptimize));
       assertThat(CEL.nativePlanningPermitted(subset, List.of()))
           .as(subset.toString())
-          .isEqualTo(subset.isEmpty());
+          .isEqualTo(nativePermitted);
 
       Program program =
           env.program(ast, functions(opaque), evalOptions(subset.toArray(EvalOption[]::new)));
@@ -570,7 +572,7 @@ class NativePlanRootTest {
       if (program instanceof Prog prog) {
         assertThat(containsNativeNode(prog.interpretable))
             .as(subset.toString())
-            .isEqualTo(subset.isEmpty());
+            .isEqualTo(nativePermitted);
       }
     }
   }

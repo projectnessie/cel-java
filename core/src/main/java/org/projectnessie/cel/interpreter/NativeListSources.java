@@ -139,6 +139,39 @@ final class NativeListSources {
         return size;
       }
     }
+    return materializedSize(source, raw);
+  }
+
+  /**
+   * Returns the structural size of a source whose checked element type uses materialized {@link
+   * Val} results.
+   *
+   * <p>Primitive arrays and {@code Val[]} are not valid exact source representations for these
+   * element kinds. Validate them through the exact adapter before index evaluation or bounds
+   * checking so a source contract failure retains established precedence.
+   */
+  static int materializedElementSize(NativeListSourceCapability source, Object raw) {
+    try {
+      if (source.exactListSource()) {
+        if (raw instanceof Object[] values && !(raw instanceof Val[])) {
+          return values.length;
+        }
+        if (raw instanceof Collection<?> values) {
+          return values.size();
+        }
+      }
+      return materializedSize(source, raw);
+    } catch (ValueSignal failure) {
+      if (isError(failure.value)) {
+        throw NativeSupport.propagatedError(failure.value);
+      }
+      throw failure;
+    } catch (Exception failure) {
+      throw NativeSupport.propagatedError(newErr(failure, failure.toString()));
+    }
+  }
+
+  private static int materializedSize(NativeListSourceCapability source, Object raw) {
     Val materialized = materializedList(source, raw);
     if (materialized instanceof Sizer sizer) {
       return sizer.nativeSize();
@@ -258,14 +291,67 @@ final class NativeListSources {
     NativeSupport.nullValue(adapter, selected);
   }
 
+  static Val materializedElementAt(NativeListSourceCapability source, Object raw, int index) {
+    try {
+      if (source.exactListSource()) {
+        Object selected;
+        if (raw instanceof Object[] values && !(raw instanceof Val[])) {
+          checkIndex(index, values.length);
+          selected = values[index];
+        } else if (raw instanceof List<?> values) {
+          checkIndex(index, values.size());
+          selected = values.get(index);
+        } else if (raw instanceof Collection<?> values) {
+          checkIndex(index, values.size());
+          Iterator<?> iterator = values.iterator();
+          for (int current = 0; iterator.hasNext(); current++) {
+            selected = iterator.next();
+            if (current == index) {
+              return source.materializeResolvedElement(selected);
+            }
+          }
+          throw signal(newErr("collection size changed during exact aggregate evaluation"));
+        } else {
+          Val materialized = materializedList(source, raw);
+          if (materialized instanceof Lister list) {
+            return list.nativeGetAt(index);
+          }
+          throw signal(newErr("got '%s', expected list type", materialized.getClass().getName()));
+        }
+        return source.materializeResolvedElement(selected);
+      }
+      Val materialized = materializedList(source, raw);
+      if (materialized instanceof Lister list) {
+        return list.nativeGetAt(index);
+      }
+      throw signal(newErr("got '%s', expected list type", materialized.getClass().getName()));
+    } catch (ValueSignal failure) {
+      throw failure;
+    } catch (Exception failure) {
+      throw signal(newErr(failure, failure.toString()));
+    }
+  }
+
   static boolean traverseResolved(
       NativeListSourceCapability source,
       Object raw,
       NativeScalarKind elementKind,
       NativeLoopBinding binding,
       NativeScalarLoopConsumer consumer) {
+    return traverseResolved(source, raw, elementKind, binding, consumer, true);
+  }
+
+  static boolean traverseResolved(
+      NativeListSourceCapability source,
+      Object raw,
+      NativeScalarKind elementKind,
+      NativeLoopBinding binding,
+      NativeScalarLoopConsumer consumer,
+      boolean prepareCapacity) {
     if (elementKind == NativeScalarKind.INT && raw instanceof int[] values) {
-      consumer.prepareCapacity(values.length);
+      if (prepareCapacity) {
+        consumer.prepareCapacity(values.length);
+      }
       for (int value : values) {
         binding.setInt(value);
         if (consumer.test(binding)) {
@@ -275,7 +361,9 @@ final class NativeListSources {
       return false;
     }
     if (elementKind == NativeScalarKind.INT && raw instanceof long[] values) {
-      consumer.prepareCapacity(values.length);
+      if (prepareCapacity) {
+        consumer.prepareCapacity(values.length);
+      }
       for (long value : values) {
         binding.setInt(value);
         if (consumer.test(binding)) {
@@ -287,7 +375,9 @@ final class NativeListSources {
     if (source.exactListSource()
         && elementKind == NativeScalarKind.UINT
         && raw instanceof long[] values) {
-      consumer.prepareCapacity(values.length);
+      if (prepareCapacity) {
+        consumer.prepareCapacity(values.length);
+      }
       for (long value : values) {
         binding.setUint(value);
         if (consumer.test(binding)) {
@@ -297,7 +387,9 @@ final class NativeListSources {
       return false;
     }
     if (elementKind == NativeScalarKind.DOUBLE && raw instanceof double[] values) {
-      consumer.prepareCapacity(values.length);
+      if (prepareCapacity) {
+        consumer.prepareCapacity(values.length);
+      }
       for (double value : values) {
         binding.setDouble(value);
         if (consumer.test(binding)) {
@@ -307,7 +399,9 @@ final class NativeListSources {
       return false;
     }
     if (elementKind == NativeScalarKind.STRING && raw instanceof String[] values) {
-      consumer.prepareCapacity(values.length);
+      if (prepareCapacity) {
+        consumer.prepareCapacity(values.length);
+      }
       for (String value : values) {
         if (value != null || !source.exactListSource()) {
           binding.setString(value);
@@ -321,7 +415,9 @@ final class NativeListSources {
       return false;
     }
     if (raw instanceof Object[] values) {
-      consumer.prepareCapacity(values.length);
+      if (prepareCapacity) {
+        consumer.prepareCapacity(values.length);
+      }
       for (Object value : values) {
         setBindingValue(binding, elementKind, value, source);
         if (consumer.test(binding)) {
@@ -331,7 +427,9 @@ final class NativeListSources {
       return false;
     }
     if (source.exactListSource() && raw instanceof Collection<?> values) {
-      consumer.prepareCapacity(values.size());
+      if (prepareCapacity) {
+        consumer.prepareCapacity(values.size());
+      }
       for (Object value : values) {
         setBindingValue(binding, elementKind, value, source);
         if (consumer.test(binding)) {
@@ -341,7 +439,7 @@ final class NativeListSources {
       return false;
     }
     return NativeScalarLoopKernel.evaluateMaterialized(
-        materializedList(source, raw), binding, consumer);
+        materializedList(source, raw), binding, consumer, prepareCapacity);
   }
 
   private static Object selected(

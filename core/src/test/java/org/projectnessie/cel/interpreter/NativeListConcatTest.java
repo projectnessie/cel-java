@@ -26,15 +26,19 @@ import static org.projectnessie.cel.ProgramOption.evalOptions;
 import static org.projectnessie.cel.ProgramOption.functions;
 import static org.projectnessie.cel.common.containers.Container.defaultContainer;
 import static org.projectnessie.cel.common.types.Err.newErr;
+import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
 import static org.projectnessie.cel.interpreter.Activation.newPartialActivation;
 import static org.projectnessie.cel.interpreter.AttributeFactory.newAttributeFactory;
 import static org.projectnessie.cel.interpreter.AttributePattern.newAttributePattern;
+import static org.projectnessie.cel.interpreter.Coster.Cost.estimateCost;
 import static org.projectnessie.cel.interpreter.Dispatcher.newDispatcher;
 import static org.projectnessie.cel.interpreter.Interpreter.newInterpreter;
 import static org.projectnessie.cel.interpreter.functions.Overload.standardOverloads;
 
+import com.google.protobuf.Duration;
 import com.google.protobuf.Struct;
+import com.google.protobuf.Timestamp;
 import java.util.AbstractCollection;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -80,6 +84,12 @@ class NativeListConcatTest {
               Decls.newVar("rightNulls", Decls.newListType(Decls.Null)),
               Decls.newVar("leftBytes", Decls.newListType(Decls.Bytes)),
               Decls.newVar("rightBytes", Decls.newListType(Decls.Bytes)),
+              Decls.newVar("leftWrapperInts", Decls.newListType(Decls.newWrapperType(Decls.Int))),
+              Decls.newVar("rightWrapperInts", Decls.newListType(Decls.newWrapperType(Decls.Int))),
+              Decls.newVar("leftDurations", Decls.newListType(Decls.Duration)),
+              Decls.newVar("rightDurations", Decls.newListType(Decls.Duration)),
+              Decls.newVar("leftTimestamps", Decls.newListType(Decls.Timestamp)),
+              Decls.newVar("rightTimestamps", Decls.newListType(Decls.Timestamp)),
               Decls.newVar("leftDyn", Decls.newListType(Decls.Dyn)),
               Decls.newVar("rightDyn", Decls.newListType(Decls.Dyn)),
               Decls.newVar("leftNested", Decls.newListType(Decls.newListType(Decls.Int))),
@@ -94,6 +104,9 @@ class NativeListConcatTest {
                   "rightStructs", Decls.newListType(Decls.newObjectType("google.protobuf.Struct"))),
               Decls.newVar("leftStrings", Decls.newListType(Decls.String)),
               Decls.newVar("rightStrings", Decls.newListType(Decls.String)),
+              Decls.newVar("thirdStrings", Decls.newListType(Decls.String)),
+              Decls.newVar("fourthStrings", Decls.newListType(Decls.String)),
+              Decls.newVar("needle", Decls.String),
               Decls.newVar("index", Decls.Int),
               Decls.newVar("indexHolder", Decls.newMapType(Decls.String, Decls.Int))));
 
@@ -200,6 +213,155 @@ class NativeListConcatTest {
     assertEquivalent("leftInts + rightInts", input);
     assertEquivalent("(leftInts + rightInts) + leftInts", input);
     assertEquivalent("(leftInts + rightInts)[0 + 1]", input);
+  }
+
+  @Test
+  void constantStringMembershipConsumesFlattenedConcatWithoutBuildingTheList() {
+    Map<String, Object> input =
+        Map.of(
+            "leftStrings",
+            new String[] {"first"},
+            "rightStrings",
+            List.of("second"),
+            "thirdStrings",
+            new ArrayDeque<>(List.of("third")),
+            "fourthStrings",
+            new LinkedHashSet<>(List.of("fourth")));
+    for (String concat :
+        List.of(
+            "((leftStrings + rightStrings) + thirdStrings) + fourthStrings",
+            "leftStrings + (rightStrings + (thirdStrings + fourthStrings))",
+            "(leftStrings + rightStrings) + (thirdStrings + fourthStrings)")) {
+      for (String needle : List.of("first", "second", "third", "fourth", "missing")) {
+        String expression = "'" + needle + "' in (" + concat + ")";
+        assertEquivalent(expression, input);
+        Plans plans = plans(expression, true);
+        assertThat(plans.enabled()).isInstanceOf(NativeIsland.class);
+        NativeScalarListConcatMembership root =
+            (NativeScalarListConcatMembership) ((NativeIsland) plans.enabled()).root();
+        assertThat(root.sourceCount()).isEqualTo(4);
+        assertThat(containsNode(plans.established(), NativeListConcat.class)).isFalse();
+      }
+    }
+
+    assertThat(
+            assertEquivalent(
+                    "'missing' in (leftStrings + rightStrings + thirdStrings)",
+                    Map.of(
+                        "leftStrings", List.of(),
+                        "rightStrings", List.of(),
+                        "thirdStrings", List.of()))
+                .booleanValue())
+        .isFalse();
+    assertThat(
+            assertEquivalent(
+                    "'first' in (leftStrings + rightStrings)",
+                    Map.of(
+                        "leftStrings", new Object[] {"first"}, "rightStrings", List.of("second")))
+                .booleanValue())
+        .isTrue();
+  }
+
+  @Test
+  void concatMembershipResolvesAndSizesEverySourceBeforeShortCircuitingTraversal() {
+    CountingIterationCollection first =
+        new CountingIterationCollection(List.of("needle", "unvisited"));
+    CountingIterationCollection second =
+        new CountingIterationCollection(List.of("must-not-be-traversed"));
+    List<String> resolutions = new ArrayList<>();
+
+    Val value =
+        program("'needle' in (leftStrings + rightStrings)", false)
+            .eval(
+                (ActivationFunction)
+                    name -> {
+                      resolutions.add(name);
+                      return switch (name) {
+                        case "leftStrings" -> first;
+                        case "rightStrings" -> second;
+                        default -> ActivationFunction.ABSENT;
+                      };
+                    })
+            .getVal();
+
+    assertThat(value.booleanValue()).isTrue();
+    assertThat(resolutions).containsExactly("leftStrings", "rightStrings");
+    assertThat(first.sizeCalls).hasValue(1);
+    assertThat(second.sizeCalls).hasValue(1);
+    assertThat(first.iteratorCalls).hasValue(1);
+    assertThat(second.iteratorCalls).hasValue(0);
+  }
+
+  @Test
+  void concatMembershipDoesNotLetAnEarlyHitSuppressALaterSourceFailure() {
+    Programs programs = programs("'needle' in (leftStrings + rightStrings)");
+    CountingIterationCollection enabledFirst =
+        new CountingIterationCollection(List.of("needle", "must-not-be-traversed"));
+    CountingIterationCollection establishedFirst =
+        new CountingIterationCollection(List.of("needle", "must-not-be-traversed"));
+    List<String> enabledResolutions = new ArrayList<>();
+    List<String> establishedResolutions = new ArrayList<>();
+
+    Val enabled =
+        programs
+            .enabled()
+            .eval(membershipFailureActivation(enabledFirst, enabledResolutions, "later failed"))
+            .getVal();
+    Val established =
+        programs
+            .established()
+            .eval(
+                membershipFailureActivation(
+                    establishedFirst, establishedResolutions, "later failed"))
+            .getVal();
+
+    assertEquivalent(enabled, established);
+    assertThat(enabled).isInstanceOf(Err.class).hasToString("later failed");
+    assertThat(enabledResolutions).containsExactly("leftStrings", "rightStrings");
+    assertThat(establishedResolutions).containsExactly("leftStrings", "rightStrings");
+    assertThat(enabledFirst.sizeCalls).hasValue(1);
+    assertThat(enabledFirst.iteratorCalls).hasValue(0);
+  }
+
+  @Test
+  void concatMembershipKeepsEarliestSourceFailureAndNeverTraversesAfterFailure() {
+    CountingIterationCollection third =
+        new CountingIterationCollection(List.of("must-not-be-traversed"));
+    List<String> resolutions = new ArrayList<>();
+
+    Val value =
+        program("'needle' in (leftStrings + rightStrings + thirdStrings)", false)
+            .eval(
+                (ActivationFunction)
+                    name -> {
+                      resolutions.add(name);
+                      return switch (name) {
+                        case "leftStrings" -> newErr("first failed");
+                        case "rightStrings" -> newErr("second failed");
+                        case "thirdStrings" -> third;
+                        default -> ActivationFunction.ABSENT;
+                      };
+                    })
+            .getVal();
+
+    assertThat(value).isInstanceOf(Err.class).hasToString("first failed");
+    assertThat(resolutions).containsExactly("leftStrings", "rightStrings", "thirdStrings");
+    assertThat(third.sizeCalls).hasValue(1);
+    assertThat(third.iteratorCalls).hasValue(0);
+  }
+
+  @Test
+  void variableStringMembershipUsesTheScalarConcatConsumer() {
+    Plans plans = plans("needle in (leftStrings + rightStrings)", true);
+    assertThat(plans.enabled()).isInstanceOf(NativeIsland.class);
+    assertThat(((NativeIsland) plans.enabled()).root())
+        .isInstanceOf(NativeScalarListConcatMembership.class);
+    assertEquivalent(
+        "needle in (leftStrings + rightStrings)",
+        Map.of(
+            "needle", "right",
+            "leftStrings", List.of("left"),
+            "rightStrings", List.of("right")));
   }
 
   @Test
@@ -314,6 +476,19 @@ class NativeListConcatTest {
                     "(" + concat + ")[index]", Map.of("leftInts", List.of(7L), "index", 15L))
                 .intValue())
         .isEqualTo(7L);
+
+    String stringConcat = String.join(" + ", java.util.Collections.nCopies(16, "leftStrings"));
+    Plans membership = plans("'missing' in (" + stringConcat + ")", true);
+    assertThat(membership.enabled()).isInstanceOf(NativeIsland.class);
+    assertThat(
+            ((NativeScalarListConcatMembership) ((NativeIsland) membership.enabled()).root())
+                .sourceCount())
+        .isEqualTo(16);
+    assertThat(
+            assertEquivalent(
+                    "'missing' in (" + stringConcat + ")", Map.of("leftStrings", List.of("value")))
+                .booleanValue())
+        .isFalse();
   }
 
   @Test
@@ -759,7 +934,7 @@ class NativeListConcatTest {
   }
 
   @Test
-  void nonTypedElementIndexesKeepTheOriginalEstablishedConcatPath() {
+  void nonTypedElementIndexesUseTheNativeConcatConsumer() {
     Map<String, Object> input =
         new java.util.HashMap<>(
             Map.of(
@@ -783,11 +958,23 @@ class NativeListConcatTest {
                 List.of(Struct.getDefaultInstance()),
                 "rightStructs",
                 List.of(Struct.getDefaultInstance())));
+    input.put("leftWrapperInts", Arrays.asList((Object) null));
+    input.put("rightWrapperInts", List.of(2L));
+    input.put("leftDurations", List.of(Duration.newBuilder().setSeconds(1L).build()));
+    input.put("rightDurations", List.of(Duration.newBuilder().setSeconds(2L).build()));
+    input.put("leftTimestamps", List.of(Timestamp.newBuilder().setSeconds(1L).build()));
+    input.put("rightTimestamps", List.of(Timestamp.newBuilder().setSeconds(2L).build()));
     input.put("index", 1L);
     for (String expression :
         List.of(
             "(leftBytes + rightBytes + leftBytes)[1]",
             "(leftBytes + rightBytes + leftBytes)[index]",
+            "(leftWrapperInts + rightWrapperInts + leftWrapperInts)[0]",
+            "(leftWrapperInts + rightWrapperInts + leftWrapperInts)[index]",
+            "(leftDurations + rightDurations + leftDurations)[1]",
+            "(leftDurations + rightDurations + leftDurations)[index]",
+            "(leftTimestamps + rightTimestamps + leftTimestamps)[1]",
+            "(leftTimestamps + rightTimestamps + leftTimestamps)[index]",
             "(leftDyn + rightDyn + leftDyn)[1]",
             "(leftDyn + rightDyn + leftDyn)[index]",
             "(leftNested + rightNested + leftNested)[1]",
@@ -797,9 +984,148 @@ class NativeListConcatTest {
             "(leftStructs + rightStructs + leftStructs)[1]",
             "(leftStructs + rightStructs + leftStructs)[index]")) {
       Plans plans = plans(expression, true);
-      assertThat(plans.enabled()).isNotInstanceOf(NativeIsland.class);
-      assertThat(containsNode(plans.enabled(), NativeListConcatIndex.class)).isFalse();
+      assertThat(plans.enabled())
+          .as(expression)
+          .isExactlyInstanceOf(NativeValueListConcatIndex.class);
+      assertThat(((NativeValueListConcatIndex) plans.enabled()).sourceCount()).isEqualTo(3);
       assertEquivalent(expression, input);
+    }
+
+    assertEquivalent("size((leftNested + rightNested)[index])", input);
+    assertThat(assertEquivalent("(leftNested + rightNested)[index][0]", input).intValue())
+        .isEqualTo(2L);
+  }
+
+  @Test
+  void nonTypedIndexValidatesSourceContainersBeforeIndexAndBounds() {
+    String expression = "(leftDyn + rightDyn)[index]";
+    List<String> resolutions = new ArrayList<>();
+    AtomicInteger indexResolutions = new AtomicInteger();
+    ActivationFunction invalidPrimitiveArray =
+        name -> {
+          resolutions.add(name);
+          return switch (name) {
+            case "leftDyn" -> new long[] {1L};
+            case "rightDyn" -> List.of("right");
+            case "index" -> {
+              indexResolutions.incrementAndGet();
+              yield 99L;
+            }
+            default -> ActivationFunction.ABSENT;
+          };
+        };
+
+    Val value = program(expression, false).eval(invalidPrimitiveArray).getVal();
+
+    assertThat(value).isInstanceOf(Err.class);
+    assertThat(value.toString()).contains("incompatible with checked CEL type");
+    assertThat(resolutions).containsExactly("leftDyn", "rightDyn");
+    assertThat(indexResolutions).hasValue(0);
+
+    Val[] invalidValues = {unknownOf(91L)};
+    Map<String, Object> invalidValArray =
+        Map.of("leftDyn", invalidValues, "rightDyn", List.of("right"), "index", 99L);
+    assertThat(assertEquivalent(expression, invalidValArray))
+        .isInstanceOf(Err.class)
+        .asString()
+        .contains("[Lorg.projectnessie.cel.common.types.ref.Val;", "incompatible");
+
+    assertThat(
+            assertEquivalent(
+                "(leftBytes + rightBytes)[index]",
+                Map.of(
+                    "leftBytes",
+                    new byte[] {1, 2},
+                    "rightBytes",
+                    List.of(new byte[] {3}),
+                    "index",
+                    99L)))
+        .isInstanceOf(Err.class);
+  }
+
+  @Test
+  void nonTypedIndexOnlyMaterializesTheSelectedElement() {
+    Map<String, Object> bytes =
+        Map.of(
+            "leftBytes", List.of("invalid"),
+            "rightBytes", List.of(new byte[] {2}),
+            "index", 1L);
+
+    assertThat((byte[]) assertEquivalent("(leftBytes + rightBytes)[index]", bytes).value())
+        .containsExactly(2);
+
+    Map<String, Object> selectedInvalid =
+        Map.of(
+            "leftMaps", List.of("invalid"),
+            "rightMaps", List.of(Map.of("two", 2L)),
+            "index", 0L);
+    assertThat(assertEquivalent("(leftMaps + rightMaps)[index]", selectedInvalid))
+        .isInstanceOf(Err.class);
+  }
+
+  @Test
+  void nonTypedIndexPreservesCostFallbackPartialEvaluationAndConcurrentReuse() throws Exception {
+    String expression = "(leftDyn + rightDyn + leftDyn)[index]";
+    Plans plans = plans(expression, true);
+    NativeValueListConcatIndex nativeRoot = (NativeValueListConcatIndex) plans.enabled();
+    var expressionAst = env.compile(expression);
+    assertThat(expressionAst.hasIssues()).as(expressionAst.getIssues().toString()).isFalse();
+    assertThat(nativeRoot.id())
+        .isEqualTo(astToCheckedExpr(expressionAst.getAst()).getExpr().getId());
+    assertThat(estimateCost(nativeRoot)).isEqualTo(estimateCost(plans.established()));
+
+    Plans general = plans(expression, false);
+    assertThat(general.enabled()).isNotInstanceOf(NativeValueListConcatIndex.class);
+
+    Map<String, Object> input =
+        Map.of(
+            "leftDyn", List.of("left"),
+            "rightDyn", List.of("right"),
+            "index", 1L);
+    Activation partial = newPartialActivation(input, newAttributePattern("index"));
+    Programs partialPrograms = programs(expression);
+    assertEquivalent(
+        partialPrograms.enabled().eval(partial).getVal(),
+        partialPrograms.established().eval(partial).getVal());
+
+    var compiled = env.compile("(leftDyn + rightDyn)[0]");
+    assertThat(compiled.hasIssues()).as(compiled.getIssues().toString()).isFalse();
+    Program replacedAddition =
+        env.program(
+            compiled.getAst(),
+            functions(Overload.binary(Overloads.AddList, (left, right) -> right)));
+    assertThat(
+            replacedAddition
+                .eval(Map.of("leftDyn", List.of("left"), "rightDyn", List.of("right")))
+                .getVal())
+        .isEqualTo(stringOf("right"));
+
+    Program reusable = program(expression, false);
+    @SuppressWarnings("resource")
+    ExecutorService executor = Executors.newFixedThreadPool(4);
+    try {
+      List<Future<String>> results = new ArrayList<>();
+      for (int i = 0; i < 50; i++) {
+        String expected = "value-" + i;
+        results.add(
+            executor.submit(
+                () ->
+                    reusable
+                        .eval(
+                            Map.of(
+                                "leftDyn", List.of(expected),
+                                "rightDyn", List.of("right"),
+                                "index", 0L))
+                        .getVal()
+                        .value()
+                        .toString()));
+      }
+      for (int i = 0; i < results.size(); i++) {
+        assertThat(results.get(i).get(5, SECONDS)).isEqualTo("value-" + i);
+      }
+    } finally {
+      executor.shutdownNow();
+      assertThat(executor.awaitTermination(5, SECONDS)).isTrue();
     }
   }
 
@@ -810,6 +1136,18 @@ class NativeListConcatTest {
     assertThat(plans.enabled()).isInstanceOf(NativeIsland.class);
     assertThat(((NativeIsland) plans.enabled()).root()).isInstanceOf(NativeListConcatSize.class);
     assertThat(program(expression, false).eval(input).getVal().intValue()).isEqualTo(expected);
+  }
+
+  private static ActivationFunction membershipFailureActivation(
+      CountingIterationCollection first, List<String> resolutions, String failure) {
+    return name -> {
+      resolutions.add(name);
+      return switch (name) {
+        case "leftStrings" -> first;
+        case "rightStrings" -> newErr(failure);
+        default -> ActivationFunction.ABSENT;
+      };
+    };
   }
 
   private Val assertEquivalent(String expression, Object input) {
@@ -927,6 +1265,28 @@ class NativeListConcatTest {
     public int size() {
       sizeCalls.incrementAndGet();
       return 1;
+    }
+  }
+
+  private static final class CountingIterationCollection extends AbstractCollection<String> {
+    private final List<String> values;
+    private final AtomicInteger sizeCalls = new AtomicInteger();
+    private final AtomicInteger iteratorCalls = new AtomicInteger();
+
+    private CountingIterationCollection(List<String> values) {
+      this.values = values;
+    }
+
+    @Override
+    public Iterator<String> iterator() {
+      iteratorCalls.incrementAndGet();
+      return values.iterator();
+    }
+
+    @Override
+    public int size() {
+      sizeCalls.incrementAndGet();
+      return values.size();
     }
   }
 

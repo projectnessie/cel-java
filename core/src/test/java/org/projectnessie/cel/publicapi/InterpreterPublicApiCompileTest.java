@@ -48,6 +48,7 @@ import org.projectnessie.cel.interpreter.Interpretable;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableAttribute;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableCall;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableConst;
+import org.projectnessie.cel.interpreter.InterpretableDecorator;
 import org.projectnessie.cel.interpreter.InterpretablePlanner;
 import org.projectnessie.cel.interpreter.Interpreter;
 
@@ -86,6 +87,7 @@ class InterpreterPublicApiCompileTest {
         Interpreter.newInterpreter(extended, container, registry, registry, attributes);
     Interpreter configuredNative =
         Interpreter.newInterpreter(extended, container, registry, registry, attributes, true);
+    InterpretableDecorator optimizer = Interpreter.optimize();
     InterpretablePlanner checked =
         InterpretablePlanner.newPlanner(
             extended, registry, registry, attributes, container, CheckedExpr.getDefaultInstance());
@@ -106,6 +108,7 @@ class InterpreterPublicApiCompileTest {
     assertThat(standard).isNotNull();
     assertThat(configured).isNotNull();
     assertThat(configuredNative).isNotNull();
+    assertThat(optimizer).isNotNull();
     assertThat(checked).isNotNull();
     assertThat(checkedMaps).isNotNull();
     assertThat(unchecked).isNotNull();

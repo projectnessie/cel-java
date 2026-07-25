@@ -21,7 +21,6 @@ import static org.projectnessie.cel.common.types.Err.isError;
 import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
-import static org.projectnessie.cel.common.types.Util.isUnknownOrError;
 import static org.projectnessie.cel.interpreter.Coster.Cost.estimateCost;
 import static org.projectnessie.cel.interpreter.Interpretable.calExhaustiveBinaryOpsCost;
 
@@ -56,17 +55,7 @@ final class EvalSetMembership extends AbstractEval implements Coster {
   /** Eval implements the Interpretable interface method. */
   @Override
   public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
-    Val val = arg.eval(ctx);
-    if (isUnknownOrError(val)) {
-      return val;
-    }
-    if (valueSet.isEmpty()) {
-      return False;
-    }
-    if (!val.type().typeName().equals(argTypeName)) {
-      return noSuchOverload(null, Operator.In.id, val);
-    }
-    return valueSet.contains(val) ? True : False;
+    return ConstantSetMembershipSupport.evaluate(arg.eval(ctx), argTypeName, valueSet);
   }
 
   /** Cost implements the Coster interface method. */

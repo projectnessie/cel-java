@@ -21,11 +21,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-final class DynamicProtoMapView extends AbstractMap<String, Long> {
+final class DynamicProtoMapView extends AbstractMap<String, Object> {
   private final List<?> entries;
   private final FieldDescriptor keyDescriptor;
   private final FieldDescriptor valueDescriptor;
-  private volatile Map<String, Long> canonical;
+  private volatile Map<String, Object> canonical;
 
   DynamicProtoMapView(FieldDescriptor field, List<?> entries) {
     this.entries = entries;
@@ -34,18 +34,18 @@ final class DynamicProtoMapView extends AbstractMap<String, Long> {
   }
 
   @Override
-  public Long get(Object key) {
+  public Object get(Object key) {
     if (!(key instanceof String)) {
       return null;
     }
-    Map<String, Long> materialized = canonical;
+    Map<String, Object> materialized = canonical;
     if (materialized != null) {
       return materialized.get(key);
     }
     for (int i = entries.size() - 1; i >= 0; i--) {
       Object entry = entries.get(i);
       if (key.equals(ProtoMapSupport.key(entry, keyDescriptor))) {
-        return (Long) ProtoMapSupport.value(entry, valueDescriptor);
+        return ProtoMapSupport.value(entry, valueDescriptor);
       }
     }
     return null;
@@ -56,7 +56,7 @@ final class DynamicProtoMapView extends AbstractMap<String, Long> {
     if (!(key instanceof String)) {
       return false;
     }
-    Map<String, Long> materialized = canonical;
+    Map<String, Object> materialized = canonical;
     if (materialized != null) {
       return materialized.containsKey(key);
     }
@@ -69,13 +69,13 @@ final class DynamicProtoMapView extends AbstractMap<String, Long> {
   }
 
   @Override
-  public Set<Entry<String, Long>> entrySet() {
+  public Set<Entry<String, Object>> entrySet() {
     return canonical().entrySet();
   }
 
   @SuppressWarnings("unchecked")
-  private Map<String, Long> canonical() {
-    Map<String, Long> result = canonical;
+  private Map<String, Object> canonical() {
+    Map<String, Object> result = canonical;
     if (result != null) {
       return result;
     }
@@ -83,7 +83,7 @@ final class DynamicProtoMapView extends AbstractMap<String, Long> {
       result = canonical;
       if (result == null) {
         result =
-            (Map<String, Long>)
+            (Map<String, Object>)
                 (Map<?, ?>) ProtoMapSupport.canonicalMap(entries, keyDescriptor, valueDescriptor);
         canonical = result;
       }

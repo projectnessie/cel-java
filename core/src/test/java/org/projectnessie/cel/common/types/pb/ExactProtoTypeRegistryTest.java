@@ -83,18 +83,28 @@ class ExactProtoTypeRegistryTest {
           .as(field)
           .isTrue();
     }
-    assertThat(
-            exact.isExactAggregateField(
-                TYPE, "map_string_int64", registry.findFieldType(TYPE, "map_string_int64").type))
-        .isTrue();
+    for (String field :
+        List.of("map_string_bool", "map_string_string", "map_string_int64", "map_string_double")) {
+      assertThat(exact.isExactAggregateField(TYPE, field, registry.findFieldType(TYPE, field).type))
+          .as(field)
+          .isTrue();
+    }
     assertThat(
             exact.isExactAggregateField(
                 TYPE, "repeated_bytes", registry.findFieldType(TYPE, "repeated_bytes").type))
         .isFalse();
-    assertThat(
-            exact.isExactAggregateField(
-                TYPE, "map_string_uint64", registry.findFieldType(TYPE, "map_string_uint64").type))
-        .isFalse();
+    for (String field :
+        List.of(
+            "map_string_uint64",
+            "map_string_float",
+            "map_string_int32",
+            "map_string_enum",
+            "map_string_message",
+            "map_bool_int32")) {
+      assertThat(exact.isExactAggregateField(TYPE, field, registry.findFieldType(TYPE, field).type))
+          .as(field)
+          .isFalse();
+    }
     assertThat(
             exact.isExactAggregateField(
                 TYPE, "single_int64", registry.findFieldType(TYPE, "single_int64").type))
@@ -113,7 +123,14 @@ class ExactProtoTypeRegistryTest {
             .addRepeatedFloat(1.5f)
             .addRepeatedDouble(-0.0d)
             .addRepeatedString("value")
+            .putMapStringBool("answer", true)
+            .putMapStringBool("default", false)
+            .putMapStringString("answer", "value")
+            .putMapStringString("default", "")
             .putMapStringInt64("answer", 42L)
+            .putMapStringDouble("answer", -0.0d)
+            .putMapStringDouble("positiveZero", 0.0d)
+            .putMapStringDouble("nan", Double.NaN)
             .build();
     DynamicMessage dynamic =
         DynamicMessage.parseFrom(TestAllTypes.getDescriptor(), generated.toByteString());
@@ -140,12 +157,26 @@ class ExactProtoTypeRegistryTest {
       assertThat(value(registry, message, "repeated_float")).isEqualTo(List.of(1.5f));
       assertThat(value(registry, message, "repeated_double")).isEqualTo(List.of(-0.0d));
       assertThat(value(registry, message, "repeated_string")).isEqualTo(List.of("value"));
+      assertThat(value(registry, message, "map_string_bool"))
+          .isEqualTo(Map.of("answer", true, "default", false));
+      assertThat(value(registry, message, "map_string_string"))
+          .isEqualTo(Map.of("answer", "value", "default", ""));
       assertThat(value(registry, message, "map_string_int64")).isEqualTo(Map.of("answer", 42L));
+      @SuppressWarnings("unchecked")
+      Map<String, Double> doubles =
+          (Map<String, Double>) value(registry, message, "map_string_double");
+      assertThat(Double.doubleToRawLongBits(doubles.get("answer")))
+          .isEqualTo(Double.doubleToRawLongBits(-0.0d));
+      assertThat(Double.doubleToRawLongBits(doubles.get("positiveZero")))
+          .isEqualTo(Double.doubleToRawLongBits(0.0d));
+      assertThat(doubles.get("nan")).isNaN();
     }
 
-    assertThat(value(registry, generated, "map_string_int64")).isInstanceOf(Map.class);
-    assertThat(value(registry, dynamic, "map_string_int64"))
-        .isInstanceOf(DynamicProtoMapView.class);
+    for (String field :
+        List.of("map_string_bool", "map_string_string", "map_string_int64", "map_string_double")) {
+      assertThat(value(registry, generated, field)).as(field).isInstanceOf(Map.class);
+      assertThat(value(registry, dynamic, field)).as(field).isInstanceOf(DynamicProtoMapView.class);
+    }
     assertThat(
             ((PbObjectT) registry.nativeToValue(generated))
                 .get(stringOf("single_uint32"))
