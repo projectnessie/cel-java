@@ -19,6 +19,7 @@ import static org.projectnessie.cel.common.types.Err.errIntOverflow;
 import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Overflow.addInt64Checked;
 import static org.projectnessie.cel.common.types.Util.isUnknownOrError;
+import static org.projectnessie.cel.interpreter.Coster.Cost.estimateCost;
 import static org.projectnessie.cel.interpreter.ValueSignal.signal;
 
 import java.util.ArrayDeque;
@@ -26,6 +27,7 @@ import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.Overflow.OverflowException;
 import org.projectnessie.cel.common.types.Overloads;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
+import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.interpreter.AttributeFactory.Attribute;
 import org.projectnessie.cel.interpreter.functions.Overload;
 
@@ -95,6 +97,21 @@ final class NativeListConcatKernel {
     return resolveMany(sources, activation).totalSize;
   }
 
+  /**
+   * Resolves and sizes every concat source without visiting an element.
+   *
+   * <p>The returned state can subsequently traverse the resolved sources without replaying any
+   * source expression. Resolution preserves the same earliest-source failure precedence as the
+   * existing structural concat consumers.
+   */
+  static NativeResolvedListTraversal resolveTraversal(
+      NativeListSourceCapability[] sources, Activation activation) {
+    if (sources.length == 2) {
+      return new ResolvedPairTraversal(sources, resolvePair(sources, activation));
+    }
+    return new ResolvedSourcesTraversal(sources, resolveMany(sources, activation));
+  }
+
   static Selection select(NativeListSourceCapability[] sources, Activation activation, long index) {
     if (sources.length == 2) {
       return selectPair(sources, resolvePair(sources, activation), index);
@@ -114,6 +131,26 @@ final class NativeListConcatKernel {
     return selectMany(sources, resolved, evalIndex(dynamicIndex, activation));
   }
 
+  static Selection selectMaterializedElement(
+      NativeListSourceCapability[] sources, Activation activation, long index) {
+    if (sources.length == 2) {
+      return selectPair(sources, resolvePair(sources, activation, true), index);
+    }
+    return selectMany(sources, resolveMany(sources, activation, true), index);
+  }
+
+  static Selection selectMaterializedElement(
+      NativeListSourceCapability[] sources,
+      Activation activation,
+      NativeIntCapability dynamicIndex) {
+    if (sources.length == 2) {
+      ResolvedPair resolved = resolvePair(sources, activation, true);
+      return selectPair(sources, resolved, evalIndex(dynamicIndex, activation));
+    }
+    ResolvedSources resolved = resolveMany(sources, activation, true);
+    return selectMany(sources, resolved, evalIndex(dynamicIndex, activation));
+  }
+
   private static long evalIndex(NativeIntCapability dynamicIndex, Activation activation) {
     try {
       return dynamicIndex.evalInt(activation);
@@ -129,6 +166,11 @@ final class NativeListConcatKernel {
 
   private static ResolvedPair resolvePair(
       NativeListSourceCapability[] sources, Activation activation) {
+    return resolvePair(sources, activation, false);
+  }
+
+  private static ResolvedPair resolvePair(
+      NativeListSourceCapability[] sources, Activation activation, boolean materializedElement) {
     NativeListSourceCapability leftSource = sources[0];
     NativeListSourceCapability rightSource = sources[1];
     Object leftRaw = null;
@@ -155,7 +197,10 @@ final class NativeListConcatKernel {
     int rightSize = 0;
     if (leftFailure == null) {
       try {
-        leftSize = NativeListSources.size(leftSource, leftRaw, true);
+        leftSize =
+            materializedElement
+                ? NativeListSources.materializedElementSize(leftSource, leftRaw)
+                : NativeListSources.size(leftSource, leftRaw, true);
       } catch (ValueSignal failure) {
         leftFailure = failure;
       } catch (Exception failure) {
@@ -164,7 +209,10 @@ final class NativeListConcatKernel {
     }
     if (rightFailure == null) {
       try {
-        rightSize = NativeListSources.size(rightSource, rightRaw, true);
+        rightSize =
+            materializedElement
+                ? NativeListSources.materializedElementSize(rightSource, rightRaw)
+                : NativeListSources.size(rightSource, rightRaw, true);
       } catch (ValueSignal failure) {
         rightFailure = failure;
       } catch (Exception failure) {
@@ -183,6 +231,11 @@ final class NativeListConcatKernel {
 
   private static ResolvedSources resolveMany(
       NativeListSourceCapability[] sources, Activation activation) {
+    return resolveMany(sources, activation, false);
+  }
+
+  private static ResolvedSources resolveMany(
+      NativeListSourceCapability[] sources, Activation activation, boolean materializedElement) {
     Object[] rawValues = new Object[sources.length];
     int[] sizes = new int[sources.length];
     ValueSignal earliestFailure = null;
@@ -213,7 +266,10 @@ final class NativeListConcatKernel {
         continue;
       }
       try {
-        sizes[i] = NativeListSources.size(sources[i], rawValues[i], true);
+        sizes[i] =
+            materializedElement
+                ? NativeListSources.materializedElementSize(sources[i], rawValues[i])
+                : NativeListSources.size(sources[i], rawValues[i], true);
         if (!overflowed) {
           totalSize = addInt64Checked(totalSize, sizes[i]);
         }
@@ -273,9 +329,61 @@ final class NativeListConcatKernel {
     throw new IllegalStateException("validated concat index did not select a source");
   }
 
+  private static boolean traverseSource(
+      NativeListSourceCapability source,
+      Object raw,
+      NativeScalarKind elementKind,
+      NativeLoopBinding binding,
+      NativeScalarLoopConsumer consumer) {
+    try {
+      return NativeListSources.traverseResolved(source, raw, elementKind, binding, consumer, false);
+    } catch (ValueSignal failure) {
+      throw failure;
+    } catch (Exception failure) {
+      throw signal(newErr(failure, failure.toString()));
+    }
+  }
+
+  private static void prepareTotalCapacity(NativeScalarLoopConsumer consumer, long totalSize) {
+    if (totalSize <= Integer.MAX_VALUE) {
+      consumer.prepareCapacity((int) totalSize);
+    }
+  }
+
   private record ResolvedPair(Object leftRaw, Object rightRaw, int leftSize, int rightSize) {}
 
   private record ResolvedSources(Object[] rawValues, int[] sizes, long totalSize) {}
+
+  private record ResolvedPairTraversal(NativeListSourceCapability[] sources, ResolvedPair resolved)
+      implements NativeResolvedListTraversal {
+    @Override
+    public boolean traverse(
+        NativeScalarKind elementKind,
+        NativeLoopBinding binding,
+        NativeScalarLoopConsumer consumer) {
+      prepareTotalCapacity(consumer, (long) resolved.leftSize + resolved.rightSize);
+      return traverseSource(sources[0], resolved.leftRaw, elementKind, binding, consumer)
+          || traverseSource(sources[1], resolved.rightRaw, elementKind, binding, consumer);
+    }
+  }
+
+  private record ResolvedSourcesTraversal(
+      NativeListSourceCapability[] sources, ResolvedSources resolved)
+      implements NativeResolvedListTraversal {
+    @Override
+    public boolean traverse(
+        NativeScalarKind elementKind,
+        NativeLoopBinding binding,
+        NativeScalarLoopConsumer consumer) {
+      prepareTotalCapacity(consumer, resolved.totalSize);
+      for (int i = 0; i < sources.length; i++) {
+        if (traverseSource(sources[i], resolved.rawValues[i], elementKind, binding, consumer)) {
+          return true;
+        }
+      }
+      return false;
+    }
+  }
 
   record Selection(NativeListSourceCapability source, Object raw, int index) {}
 }
@@ -346,6 +454,67 @@ abstract class NativeListConcatIndex extends NativeScalarAttr {
 
   final int sourceCount() {
     return concat.sourceCount;
+  }
+}
+
+final class NativeValueListConcatIndex extends AbstractEval implements Coster {
+  private final Attribute establishedAttribute;
+  private final NativeListSourceCapability[] sources;
+  private final long constantIndex;
+  private final NativeIntCapability dynamicIndex;
+  private final int sourceCount;
+
+  NativeValueListConcatIndex(
+      long id,
+      Attribute establishedAttribute,
+      NativeListConcat concat,
+      NativeListSourceCapability[] sources,
+      long index) {
+    super(id);
+    this.establishedAttribute = establishedAttribute;
+    this.sources = sources;
+    this.constantIndex = index;
+    this.dynamicIndex = null;
+    this.sourceCount = concat.sourceCount;
+  }
+
+  NativeValueListConcatIndex(
+      long id,
+      Attribute establishedAttribute,
+      NativeListConcat concat,
+      NativeListSourceCapability[] sources,
+      NativeIntCapability dynamicIndex) {
+    super(id);
+    this.establishedAttribute = establishedAttribute;
+    this.sources = sources;
+    this.constantIndex = 0L;
+    this.dynamicIndex = dynamicIndex;
+    this.sourceCount = concat.sourceCount;
+  }
+
+  @Override
+  public Val eval(Activation activation) {
+    try {
+      NativeListConcatKernel.Selection selected =
+          dynamicIndex == null
+              ? NativeListConcatKernel.selectMaterializedElement(sources, activation, constantIndex)
+              : NativeListConcatKernel.selectMaterializedElement(sources, activation, dynamicIndex);
+      return NativeListSources.materializedElementAt(
+          selected.source(), selected.raw(), selected.index());
+    } catch (ValueSignal failure) {
+      return failure.value;
+    } catch (Exception failure) {
+      return newErr(failure, failure.toString());
+    }
+  }
+
+  @Override
+  public Cost cost() {
+    return estimateCost(establishedAttribute);
+  }
+
+  int sourceCount() {
+    return sourceCount;
   }
 }
 

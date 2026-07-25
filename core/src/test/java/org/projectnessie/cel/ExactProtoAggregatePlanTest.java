@@ -118,6 +118,13 @@ class ExactProtoAggregatePlanTest {
         TestAllTypes.newBuilder()
             .putMapStringInt64("first", 1L)
             .putMapStringInt64("answer", 42L)
+            .putMapStringBool("answer", true)
+            .putMapStringBool("default", false)
+            .putMapStringString("answer", "value")
+            .putMapStringString("default", "")
+            .putMapStringDouble("answer", -0.0d)
+            .putMapStringDouble("positiveZero", 0.0d)
+            .putMapStringDouble("nan", Double.NaN)
             .build();
     DynamicMessage dynamic =
         DynamicMessage.parseFrom(TestAllTypes.getDescriptor(), generated.toByteString());
@@ -129,7 +136,18 @@ class ExactProtoAggregatePlanTest {
             "msg.map_string_int64[key]",
             "msg.map_string_int64['ans' + suffix]",
             "size(msg.map_string_int64)",
-            "'answer' in msg.map_string_int64")) {
+            "'answer' in msg.map_string_int64",
+            "msg.map_string_bool['answer']",
+            "msg.map_string_bool['default']",
+            "msg.map_string_bool[key]",
+            "msg.map_string_string['answer']",
+            "msg.map_string_string['default']",
+            "msg.map_string_string[key]",
+            "msg.map_string_double['answer']",
+            "msg.map_string_double['positiveZero']",
+            "msg.map_string_double['nan']",
+            "msg.map_string_double[key]",
+            "msg.map_string_bool['missing']")) {
       Ast ast = compile(env, expression);
       Prog nativeProgram = (Prog) env.program(ast);
       Prog disabledProgram = (Prog) env.program(ast, evalOptions(OptDisableNativeEval));
@@ -138,6 +156,34 @@ class ExactProtoAggregatePlanTest {
           .isEqualTo("NativeIsland");
       for (Object message : List.of(generated, dynamic)) {
         Map<String, Object> input = Map.of("msg", message, "key", "answer", "suffix", "wer");
+        assertEquivalent(nativeProgram.eval(input).getVal(), disabledProgram.eval(input).getVal());
+      }
+    }
+  }
+
+  @Test
+  void exactProtobufMapTerminalMaterializationAndEqualityRemainEstablishedCompatible()
+      throws Exception {
+    TestAllTypes generated =
+        TestAllTypes.newBuilder()
+            .putMapStringBool("answer", true)
+            .putMapStringString("answer", "value")
+            .putMapStringDouble("answer", -0.0d)
+            .build();
+    DynamicMessage dynamic =
+        DynamicMessage.parseFrom(TestAllTypes.getDescriptor(), generated.toByteString());
+    Env env = exactEnv();
+
+    for (String expression :
+        List.of(
+            "msg.map_string_bool == {'answer': true}",
+            "msg.map_string_string == {'answer': 'value'}",
+            "msg.map_string_double == {'answer': -0.0}")) {
+      Ast ast = compile(env, expression);
+      Program nativeProgram = env.program(ast);
+      Program disabledProgram = env.program(ast, evalOptions(OptDisableNativeEval));
+      for (Object message : List.of(generated, dynamic)) {
+        Map<String, Object> input = Map.of("msg", message);
         assertEquivalent(nativeProgram.eval(input).getVal(), disabledProgram.eval(input).getVal());
       }
     }

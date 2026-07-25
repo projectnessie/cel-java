@@ -57,6 +57,11 @@ final class NativeIntConst extends EvalConst implements NativeIntCapability {
     this.value = value;
   }
 
+  NativeIntConst(long id, IntT value) {
+    super(id, value);
+    this.value = value.intValue();
+  }
+
   @Override
   public long evalInt(Activation activation) {
     return value;
@@ -69,6 +74,11 @@ final class NativeUintConst extends EvalConst implements NativeUintCapability {
   NativeUintConst(long id, long value) {
     super(id, uintOf(value));
     this.value = value;
+  }
+
+  NativeUintConst(long id, UintT value) {
+    super(id, value);
+    this.value = value.intValue();
   }
 
   @Override
@@ -85,6 +95,11 @@ final class NativeDoubleConst extends EvalConst implements NativeDoubleCapabilit
     this.value = value;
   }
 
+  NativeDoubleConst(long id, DoubleT value) {
+    super(id, value);
+    this.value = value.doubleValue();
+  }
+
   @Override
   public double evalDouble(Activation activation) {
     return value;
@@ -99,6 +114,11 @@ final class NativeBooleanConst extends EvalConst implements NativeBooleanCapabil
     this.value = value;
   }
 
+  NativeBooleanConst(long id, BoolT value) {
+    super(id, value);
+    this.value = value.booleanValue();
+  }
+
   @Override
   public boolean evalBoolean(Activation activation) {
     return value;
@@ -111,6 +131,11 @@ final class NativeStringConst extends EvalConst implements NativeStringCapabilit
   NativeStringConst(long id, String value) {
     super(id, stringOf(value));
     this.value = value;
+  }
+
+  NativeStringConst(long id, StringT value) {
+    super(id, value);
+    this.value = requireNonNull((String) value.value());
   }
 
   @Override
