@@ -29,7 +29,9 @@ import com.google.protobuf.FieldMask;
 import com.google.protobuf.Message;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -224,31 +226,16 @@ public final class Db {
    * message is declared.
    */
   public static Set<FileDescriptor> collectFileDescriptorSet(Message message) {
-    Set<FileDescriptor> fdMap = new LinkedHashSet<>();
-    Descriptor messageDesc = message.getDescriptorForType();
-    FileDescriptor messageFile = messageDesc.getFile();
-    fdMap.add(messageFile);
-    fdMap.addAll(messageFile.getPublicDependencies());
-
-    //    parentFile = message.ProtoReflect().Descriptor().ParentFile()
-    //    fdMap[parentFile.Path()] = parentFile
-    //    // Initialize list of dependencies
-    //    deps := make([]protoreflect.FileImport, parentFile.Imports().Len())
-    //    for i := 0; i < parentFile.Imports().Len(); i++ {
-    //      deps[i] = parentFile.Imports().Get(i)
-    //    }
-    //    // Expand list for new dependencies
-    //    for i := 0; i < len(deps); i++ {
-    //      dep := deps[i]
-    //      if _, found := fdMap[dep.Path()]; found {
-    //        continue
-    //      }
-    //      fdMap[dep.Path()] = dep.FileDescriptor
-    //      for j := 0; j < dep.FileDescriptor.Imports().Len(); j++ {
-    //        deps = append(deps, dep.FileDescriptor.Imports().Get(j))
-    //      }
-    //    }
-    return fdMap;
+    Set<FileDescriptor> descriptors = new LinkedHashSet<>();
+    Deque<FileDescriptor> pending = new ArrayDeque<>();
+    pending.add(message.getDescriptorForType().getFile());
+    while (!pending.isEmpty()) {
+      FileDescriptor descriptor = pending.removeFirst();
+      if (descriptors.add(descriptor)) {
+        pending.addAll(descriptor.getDependencies());
+      }
+    }
+    return descriptors;
   }
 
   @Override

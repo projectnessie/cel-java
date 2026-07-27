@@ -22,8 +22,10 @@ import static org.projectnessie.cel.common.types.IntT.IntZero;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.TypeT.TypeType;
+import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newEmptyRegistry;
 import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newRegistry;
 
+import com.google.api.expr.v1alpha1.CheckedExpr;
 import com.google.api.expr.v1alpha1.Expr;
 import com.google.api.expr.v1alpha1.ParsedExpr;
 import com.google.api.expr.v1alpha1.SourceInfo;
@@ -64,6 +66,19 @@ public class PbObjectTest {
     Indexer expr = (Indexer) obj.get(stringOf("expr"));
     Indexer call = (Indexer) expr.get(stringOf("call_expr"));
     assertThat(call.get(stringOf("function")).equal(stringOf(""))).isSameAs(True);
+  }
+
+  @Test
+  void registerMessageIncludesDirectAndTransitiveDependencies() {
+    ProtoTypeRegistry registry = newEmptyRegistry();
+
+    registry.registerMessage(CheckedExpr.getDefaultInstance());
+
+    assertThat(registry.findType(CheckedExpr.getDescriptor().getFullName())).isNotNull();
+    assertThat(registry.findType(Expr.getDescriptor().getFullName())).isNotNull();
+    assertThat(registry.findType(com.google.protobuf.Duration.getDescriptor().getFullName()))
+        .isNotNull();
+    assertThat(registry.findType(Timestamp.getDescriptor().getFullName())).isNotNull();
   }
 
   @Test
