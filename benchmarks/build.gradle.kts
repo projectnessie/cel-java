@@ -29,7 +29,7 @@ dependencies {
   implementation(project(":cel-jackson3"))
   implementation(project(":cel-generated-pb3"))
   implementation(testFixtures(project(":cel-generated-pb3")))
-  implementation(libs.protobuf.java) { version { strictly(libs.versions.protobuf3.get()) } }
+  implementation(libs.protobuf.java3)
 
   testImplementation(platform(libs.junit.bom))
   testImplementation(libs.bundles.junit.testing)
