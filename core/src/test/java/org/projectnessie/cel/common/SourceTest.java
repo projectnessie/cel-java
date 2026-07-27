@@ -16,7 +16,9 @@
 package org.projectnessie.cel.common;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Disabled;
@@ -106,6 +108,18 @@ class SourceTest {
     assertThat(source.locationOffset(Location.newLocation(4, 0)))
         .withFailMessage("Character offset was out of range of source, but still found.")
         .isEqualTo(-1);
+  }
+
+  @Test
+  void lineOffsetsAreImmutable() {
+    List<Integer> offsets = new ArrayList<>(List.of(3, 7));
+    Source source = new SourceImpl("ab\ndef", "immutable-offsets", offsets);
+
+    offsets.set(0, 4);
+
+    assertThat(source.lineOffsets()).containsExactly(3, 7);
+    assertThatThrownBy(() -> source.lineOffsets().set(0, 4))
+        .isInstanceOf(UnsupportedOperationException.class);
   }
 
   /**
