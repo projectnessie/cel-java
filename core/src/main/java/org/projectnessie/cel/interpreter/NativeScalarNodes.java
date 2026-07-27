@@ -37,7 +37,7 @@ import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.interpreter.ValueSignal.signal;
 
-import java.util.regex.Pattern;
+import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.BoolT;
 import org.projectnessie.cel.common.types.DoubleT;
@@ -153,7 +153,7 @@ final class NativeStringConst extends EvalConst implements NativeStringCapabilit
  * call and successfully evaluates the left operand.
  */
 final class NativeConstantRegex extends EvalBinary implements NativeBooleanCapability {
-  private final Pattern pattern;
+  private final RegexSupport.CompiledRegex pattern;
   private final Val patternError;
 
   NativeConstantRegex(
@@ -163,6 +163,7 @@ final class NativeConstantRegex extends EvalBinary implements NativeBooleanCapab
       Interpretable input,
       Interpretable patternExpression,
       String pattern,
+      RegexEngine regexEngine,
       Overload implementation) {
     super(
         id,
@@ -172,10 +173,10 @@ final class NativeConstantRegex extends EvalBinary implements NativeBooleanCapab
         patternExpression,
         implementation.operandTrait,
         implementation.binary);
-    Pattern compiled = null;
+    RegexSupport.CompiledRegex compiled = null;
     Val error = null;
     try {
-      compiled = Pattern.compile(pattern);
+      compiled = RegexSupport.compile(regexEngine, pattern);
     } catch (Exception failure) {
       error = newErr(failure, "%s", failure.getMessage());
     }
@@ -195,7 +196,7 @@ final class NativeConstantRegex extends EvalBinary implements NativeBooleanCapab
     if (patternError != null) {
       throw signal(patternError);
     }
-    return pattern.matcher(input).find();
+    return pattern.find(input);
   }
 }
 

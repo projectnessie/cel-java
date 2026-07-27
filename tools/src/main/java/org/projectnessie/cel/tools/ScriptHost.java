@@ -23,6 +23,7 @@ import static org.projectnessie.cel.EnvOption.types;
 import static org.projectnessie.cel.EvalOption.OptOptimize;
 import static org.projectnessie.cel.Library.StdLib;
 import static org.projectnessie.cel.ProgramOption.evalOptions;
+import static org.projectnessie.cel.ProgramOption.regexEngine;
 
 import com.google.api.expr.v1alpha1.Decl;
 import java.util.ArrayList;
@@ -35,6 +36,7 @@ import org.projectnessie.cel.EvalOption;
 import org.projectnessie.cel.Library;
 import org.projectnessie.cel.Program;
 import org.projectnessie.cel.ProgramOption;
+import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 
@@ -48,10 +50,12 @@ public final class ScriptHost {
 
   private final boolean disableOptimize;
   private final TypeRegistry registry;
+  private final RegexEngine regexEngine;
 
-  private ScriptHost(boolean disableOptimize, TypeRegistry registry) {
+  private ScriptHost(boolean disableOptimize, TypeRegistry registry, RegexEngine regexEngine) {
     this.disableOptimize = disableOptimize;
     this.registry = registry;
+    this.regexEngine = regexEngine;
   }
 
   /** Use {@link #buildScript(String)}. */
@@ -136,6 +140,7 @@ public final class ScriptHost {
       ast = astIss.getAst();
 
       List<ProgramOption> programOptions = new ArrayList<>();
+      programOptions.add(regexEngine(regexEngine));
       if (!disableOptimize) {
         programOptions.add(evalOptions(OptOptimize));
       }
@@ -156,6 +161,7 @@ public final class ScriptHost {
     private boolean disableOptimize;
 
     private TypeRegistry registry;
+    private RegexEngine regexEngine = RegexEngine.JAVA;
 
     /**
      * Call to instruct the built {@link ScriptHost} to disable script optimizations.
@@ -178,12 +184,25 @@ public final class ScriptHost {
       return this;
     }
 
+    /**
+     * Selects the regular-expression engine used by the standard CEL {@code matches} function.
+     *
+     * <p>The default is {@link RegexEngine#JAVA}. The selection applies to all scripts built by the
+     * resulting host.
+     *
+     * @throws NullPointerException if {@code regexEngine} is {@code null}
+     */
+    public Builder regexEngine(RegexEngine regexEngine) {
+      this.regexEngine = java.util.Objects.requireNonNull(regexEngine, "regexEngine");
+      return this;
+    }
+
     public ScriptHost build() {
       TypeRegistry r = registry;
       if (r == null) {
         r = ProtoTypeRegistry.newRegistry();
       }
-      return new ScriptHost(disableOptimize, r);
+      return new ScriptHost(disableOptimize, r, regexEngine);
     }
   }
 }

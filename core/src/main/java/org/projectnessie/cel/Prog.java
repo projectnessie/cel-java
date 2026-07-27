@@ -43,6 +43,7 @@ final class Prog implements Program, Coster {
   final Env e;
   final Set<EvalOption> evalOpts = EnumSet.noneOf(EvalOption.class);
   final List<InterpretableDecorator> decorators = new ArrayList<>();
+  RegexEngine regexEngine = RegexEngine.JAVA;
   Activation defaultVars;
   final Dispatcher dispatcher;
   Interpreter interpreter;
@@ -59,12 +60,14 @@ final class Prog implements Program, Coster {
   Prog(
       Env e,
       Set<EvalOption> evalOpts,
+      RegexEngine regexEngine,
       Activation defaultVars,
       Dispatcher dispatcher,
       Interpreter interpreter,
       EvalState state) {
     this.e = e;
     this.evalOpts.addAll(evalOpts);
+    this.regexEngine = regexEngine;
     this.defaultVars = defaultVars;
     this.dispatcher = dispatcher;
     this.interpreter = interpreter;

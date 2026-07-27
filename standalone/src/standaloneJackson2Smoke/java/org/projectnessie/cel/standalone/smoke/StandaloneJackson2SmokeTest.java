@@ -20,7 +20,9 @@ import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.tools.Script;
 import org.projectnessie.cel.tools.ScriptHost;
@@ -42,6 +44,14 @@ class StandaloneJackson2SmokeTest {
             .build();
 
     assertThat(script.execute(Boolean.class, singletonMap("input", new Input("reports")))).isTrue();
+
+    Script re2 =
+        ScriptHost.newBuilder()
+            .regexEngine(RegexEngine.RE2)
+            .build()
+            .buildScript("'abc'.matches('b')")
+            .build();
+    assertThat(re2.execute(Boolean.class, Map.of())).isTrue();
   }
 
   public static final class Input {

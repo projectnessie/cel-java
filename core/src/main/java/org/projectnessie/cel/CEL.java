@@ -92,7 +92,8 @@ public final class CEL {
             e.getTypeProvider(),
             e.getTypeAdapter(),
             p.attrFactory,
-            nativePlanningPermitted(p.evalOpts, p.decorators));
+            nativePlanningPermitted(p.evalOpts, p.decorators),
+            p.regexEngine);
     p.interpreter = interp;
 
     // Translate the EvalOption flags into InterpretableDecorator instances.
@@ -113,7 +114,8 @@ public final class CEL {
           state -> {
             List<InterpretableDecorator> decs = new ArrayList<>(decorators);
             decs.add(exhaustiveEval(state));
-            Prog clone = new Prog(e, pp.evalOpts, pp.defaultVars, disp, interp, state);
+            Prog clone =
+                new Prog(e, pp.evalOpts, pp.regexEngine, pp.defaultVars, disp, interp, state);
             return initInterpretable(clone, ast, decs);
           };
       return initProgGen(factory);
@@ -124,7 +126,8 @@ public final class CEL {
           state -> {
             List<InterpretableDecorator> decs = new ArrayList<>(decorators);
             decs.add(trackState(state));
-            Prog clone = new Prog(e, pp.evalOpts, pp.defaultVars, disp, interp, state);
+            Prog clone =
+                new Prog(e, pp.evalOpts, pp.regexEngine, pp.defaultVars, disp, interp, state);
             return initInterpretable(clone, ast, decs);
           };
       return initProgGen(factory);

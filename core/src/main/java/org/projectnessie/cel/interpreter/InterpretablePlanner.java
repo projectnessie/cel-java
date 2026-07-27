@@ -21,6 +21,7 @@ import com.google.api.expr.v1alpha1.Reference;
 import com.google.api.expr.v1alpha1.Type;
 import java.util.HashMap;
 import java.util.Map;
+import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
@@ -44,6 +45,25 @@ public interface InterpretablePlanner {
       Container cont,
       CheckedExpr checked,
       InterpretableDecorator... decorators) {
+    return newPlanner(
+        disp, provider, adapter, attrFactory, cont, checked, RegexEngine.JAVA, decorators);
+  }
+
+  /**
+   * Creates a checked planner that uses {@code regexEngine} for the built-in CEL {@code matches}
+   * function.
+   *
+   * @throws NullPointerException if {@code regexEngine} is {@code null}
+   */
+  static InterpretablePlanner newPlanner(
+      Dispatcher disp,
+      TypeProvider provider,
+      TypeAdapter adapter,
+      AttributeFactory attrFactory,
+      Container cont,
+      CheckedExpr checked,
+      RegexEngine regexEngine,
+      InterpretableDecorator... decorators) {
     return new Planner(
         disp,
         provider,
@@ -53,6 +73,7 @@ public interface InterpretablePlanner {
         checked.getReferenceMapMap(),
         checked.getTypeMapMap(),
         PlanningPolicy.ESTABLISHED_ONLY,
+        regexEngine,
         decorators);
   }
 
@@ -69,6 +90,26 @@ public interface InterpretablePlanner {
       Map<Long, Reference> refMap,
       Map<Long, Type> typeMap,
       InterpretableDecorator... decorators) {
+    return newPlanner(
+        disp, provider, adapter, attrFactory, cont, refMap, typeMap, RegexEngine.JAVA, decorators);
+  }
+
+  /**
+   * Creates a checked planner from metadata that uses {@code regexEngine} for the built-in CEL
+   * {@code matches} function.
+   *
+   * @throws NullPointerException if {@code regexEngine} is {@code null}
+   */
+  static InterpretablePlanner newPlanner(
+      Dispatcher disp,
+      TypeProvider provider,
+      TypeAdapter adapter,
+      AttributeFactory attrFactory,
+      Container cont,
+      Map<Long, Reference> refMap,
+      Map<Long, Type> typeMap,
+      RegexEngine regexEngine,
+      InterpretableDecorator... decorators) {
     return new Planner(
         disp,
         provider,
@@ -78,6 +119,7 @@ public interface InterpretablePlanner {
         refMap,
         typeMap,
         PlanningPolicy.ESTABLISHED_ONLY,
+        regexEngine,
         decorators);
   }
 
@@ -93,6 +135,24 @@ public interface InterpretablePlanner {
       AttributeFactory attrFactory,
       Container cont,
       InterpretableDecorator... decorators) {
+    return newUncheckedPlanner(
+        disp, provider, adapter, attrFactory, cont, RegexEngine.JAVA, decorators);
+  }
+
+  /**
+   * Creates an unchecked planner that uses {@code regexEngine} for the built-in CEL {@code matches}
+   * function.
+   *
+   * @throws NullPointerException if {@code regexEngine} is {@code null}
+   */
+  static InterpretablePlanner newUncheckedPlanner(
+      Dispatcher disp,
+      TypeProvider provider,
+      TypeAdapter adapter,
+      AttributeFactory attrFactory,
+      Container cont,
+      RegexEngine regexEngine,
+      InterpretableDecorator... decorators) {
     return new Planner(
         disp,
         provider,
@@ -102,6 +162,7 @@ public interface InterpretablePlanner {
         new HashMap<>(),
         new HashMap<>(),
         PlanningPolicy.ESTABLISHED_ONLY,
+        regexEngine,
         decorators);
   }
 }

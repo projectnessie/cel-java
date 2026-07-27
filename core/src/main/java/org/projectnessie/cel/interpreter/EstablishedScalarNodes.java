@@ -18,14 +18,17 @@ package org.projectnessie.cel.interpreter;
 import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.noSuchAttributeException;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
+import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
 import static org.projectnessie.cel.common.types.Util.isUnknownOrError;
 import static org.projectnessie.cel.interpreter.Coster.Cost.OneOne;
 import static org.projectnessie.cel.interpreter.Coster.Cost.estimateCost;
 
 import java.util.Objects;
+import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.Overloads;
+import org.projectnessie.cel.common.types.StringT;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Negater;
@@ -435,6 +438,39 @@ class EvalBinary extends AbstractEvalLhsRhs implements InterpretableCall {
         + ", impl="
         + impl
         + '}';
+  }
+}
+
+/** Exact built-in string {@code matches} call using the program's selected regex engine. */
+final class EvalRegex extends EvalBinary {
+  private final RegexEngine regexEngine;
+
+  EvalRegex(
+      long id,
+      String function,
+      String overload,
+      Interpretable lhs,
+      Interpretable rhs,
+      RegexEngine regexEngine,
+      BinaryOp implementation,
+      Trait trait) {
+    super(id, function, overload, lhs, rhs, trait, implementation);
+    this.regexEngine = Objects.requireNonNull(regexEngine);
+  }
+
+  @Override
+  public Val eval(Activation ctx) {
+    Val left = lhs.eval(ctx);
+    Val right = rhs.eval(ctx);
+    if (left instanceof StringT input && right instanceof StringT expression) {
+      try {
+        return boolOf(
+            RegexSupport.find(regexEngine, (String) expression.value(), (String) input.value()));
+      } catch (Exception failure) {
+        return newErr(failure, "%s", failure.getMessage());
+      }
+    }
+    return evalPrepared(left, right);
   }
 }
 
