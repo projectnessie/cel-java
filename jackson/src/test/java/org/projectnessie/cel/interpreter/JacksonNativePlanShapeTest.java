@@ -65,6 +65,21 @@ class JacksonNativePlanShapeTest {
   }
 
   @Test
+  void plansConstantExactObjectMapIndexWithoutMaterializingSourceMap() {
+    Interpretable enabled = plan("input.objects['one']");
+
+    assertThat(enabled).isExactlyInstanceOf(NativeMapObjectIndex.class);
+    NativeMapObjectIndex root = (NativeMapObjectIndex) enabled;
+    assertThat(root.source).isExactlyInstanceOf(NativeExactMapFieldAttr.class);
+    assertThat(root.hostKey).isEqualTo("one");
+    assertThat(root.celKey.value()).isEqualTo("one");
+
+    Interpretable dynamic = plan("input.objects[stringKey]");
+    assertThat(dynamic).isNotInstanceOf(NativeMapObjectIndex.class);
+    assertThat(dynamic).isNotInstanceOf(NativeIsland.class);
+  }
+
+  @Test
   void doesNotSpecializeSignedIntegerConstantAgainstDynamicKeyMap() {
     Interpretable enabled = plan("dynamicNumbers[1]");
 
@@ -90,7 +105,7 @@ class JacksonNativePlanShapeTest {
         newEnv(
             customTypeAdapter(registry),
             customTypeProvider(registry),
-            types(Input.class),
+            types(Input.class, Nested.class),
             declarations(
                 Decls.newVar("input", Decls.newObjectType(Input.class.getName())),
                 Decls.newVar("stringKey", Decls.String),
@@ -124,6 +139,7 @@ class JacksonNativePlanShapeTest {
     private final Map<String, Long> stringNumbers = Map.of("one", 1L);
     private final Map<Boolean, Long> booleanNumbers = Map.of(true, 1L);
     private final Map<Integer, Long> integerNumbers = Map.of(1, 1L);
+    private final Map<String, Nested> objects = Map.of("one", new Nested("value"));
     private final String lookupString = "one";
     private final boolean lookupBoolean = true;
     private final int lookupInteger = 1;
@@ -140,6 +156,10 @@ class JacksonNativePlanShapeTest {
       return integerNumbers;
     }
 
+    public Map<String, Nested> getObjects() {
+      return objects;
+    }
+
     public String getLookupString() {
       return lookupString;
     }
@@ -150,6 +170,19 @@ class JacksonNativePlanShapeTest {
 
     public int getLookupInteger() {
       return lookupInteger;
+    }
+  }
+
+  @SuppressWarnings({"unused", "ClassCanBeRecord"})
+  public static final class Nested {
+    private final String value;
+
+    public Nested(String value) {
+      this.value = value;
+    }
+
+    public String getValue() {
+      return value;
     }
   }
 }

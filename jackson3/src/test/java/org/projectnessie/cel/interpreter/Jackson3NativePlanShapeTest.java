@@ -135,6 +135,28 @@ class Jackson3NativePlanShapeTest {
   }
 
   @Test
+  void plansConstantExactObjectMapIndexWithoutMaterializingSourceMap() {
+    PlanPair plan = planExactMapExpression("input.objects['one']");
+
+    assertThat(plan.enabled()).isExactlyInstanceOf(NativeMapObjectIndex.class);
+    NativeMapObjectIndex root = (NativeMapObjectIndex) plan.enabled();
+    assertThat(root.source).isExactlyInstanceOf(NativeExactMapFieldAttr.class);
+    assertThat(root.hostKey).isEqualTo("one");
+    assertThat(root.celKey.value()).isEqualTo("one");
+    assertThat(plan.established()).isNotInstanceOf(NativeMapObjectIndex.class);
+
+    PlanPair field = planExactMapExpression("input.objects['one'].value");
+    assertThat(field.enabled()).isExactlyInstanceOf(NativeIsland.class);
+    assertThat(((NativeIsland) field.enabled()).root())
+        .isExactlyInstanceOf(NativeStringMapObjectField.class);
+    assertThat(field.established()).isNotInstanceOf(NativeIsland.class);
+
+    PlanPair dynamic = planExactMapExpression("input.objects[key]");
+    assertThat(dynamic.enabled()).isNotInstanceOf(NativeMapObjectIndex.class);
+    assertThat(dynamic.enabled()).isNotInstanceOf(NativeIsland.class);
+  }
+
+  @Test
   void doesNotSpecializeCheckedDynamicKeyAgainstMapWithDynamicDeclaredKey() {
     PlanPair plan = planExactMapExpression("dynamicMap[intKey]");
 
@@ -167,7 +189,7 @@ class Jackson3NativePlanShapeTest {
         newEnv(
             customTypeAdapter(registry),
             customTypeProvider(registry),
-            types(Input.class),
+            types(Input.class, Nested.class),
             declarations(
                 Decls.newVar("input", Decls.newObjectType(Input.class.getName())),
                 Decls.newVar("key", Decls.String),
@@ -203,6 +225,7 @@ class Jackson3NativePlanShapeTest {
     private final Map<String, Long> numbersByName = Map.of("one", 1L);
     private final Map<Boolean, Long> numbersByBoolean = Map.of(false, 0L, true, 1L);
     private final Map<Integer, Long> numbersByInteger = Map.of(-1, -1L, 1, 1L);
+    private final Map<String, Nested> objects = Map.of("one", new Nested("value"));
     private final String lookupKey = "one";
 
     public List<Long> getNumbers() {
@@ -221,8 +244,25 @@ class Jackson3NativePlanShapeTest {
       return numbersByInteger;
     }
 
+    public Map<String, Nested> getObjects() {
+      return objects;
+    }
+
     public String getLookupKey() {
       return lookupKey;
+    }
+  }
+
+  @SuppressWarnings({"unused", "ClassCanBeRecord"})
+  public static final class Nested {
+    private final String value;
+
+    public Nested(String value) {
+      this.value = value;
+    }
+
+    public String getValue() {
+      return value;
     }
   }
 }

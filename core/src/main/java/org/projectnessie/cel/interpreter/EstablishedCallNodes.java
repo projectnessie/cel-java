@@ -68,6 +68,9 @@ final class EvalTestOnly implements Interpretable, Coster {
       if (op instanceof InterpretableAttribute opAttr) {
         Object opVal = opAttr.resolve(ctx);
         if (opVal instanceof Val refVal) {
+          if (isUnknownOrError(refVal)) {
+            return refVal;
+          }
           opVal = refVal.value();
         }
         if (fieldType.isSet.isSet(opVal)) {

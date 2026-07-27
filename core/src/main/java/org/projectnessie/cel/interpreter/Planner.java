@@ -386,7 +386,18 @@ final class Planner implements InterpretablePlanner {
       FieldType fieldType,
       InterpretableAttribute attribute,
       Attribute partialAttribute) {
-    if (!nativeScalarPlanning() || operandType == null || partialAttribute == null) {
+    if (!nativeScalarPlanning() || operandType == null) {
+      return attribute;
+    }
+    if (attribute instanceof NativeMapObjectIndex source
+        && fieldType != null
+        && provider == adapter
+        && provider instanceof StandardScalarFieldProvider
+        && hasPrimitiveType(expr.getId(), PrimitiveType.STRING)) {
+      return new NativeStringMapObjectField(
+          expr.getId(), adapter, attribute.attr(), partialAttribute, source, fieldType);
+    }
+    if (partialAttribute == null) {
       return attribute;
     }
     boolean exactMap = exactStringMapResult(expr, operandType);
@@ -1637,6 +1648,18 @@ final class Planner implements InterpretablePlanner {
           key.hostValue,
           key.celValue,
           new CheckedAggregateMaterializer(exactAdapter, resultType));
+    }
+    if (resultType.getTypeKindCase() == Type.TypeKindCase.MESSAGE_TYPE
+        && adapter instanceof ExactAggregateTypeAdapter exactAdapter) {
+      return new NativeMapObjectIndex(
+          expr.getId(),
+          adapter,
+          established.attr(),
+          attrFactory,
+          source,
+          key.hostValue,
+          key.celValue,
+          new CheckedValueMaterializer(exactAdapter, resultType));
     }
     return established;
   }
