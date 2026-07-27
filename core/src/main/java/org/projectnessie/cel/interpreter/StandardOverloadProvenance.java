@@ -22,7 +22,7 @@ import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.Overloads;
 import org.projectnessie.cel.interpreter.functions.Overload;
 
-/** Exact identity checks for checked calls resolved to the built-in overload objects. */
+/** Exact identity checks for calls resolved to the built-in overload objects. */
 final class StandardOverloadProvenance {
   private StandardOverloadProvenance() {}
 
@@ -42,6 +42,13 @@ final class StandardOverloadProvenance {
     }
     if (implementation == null) {
       return isIntrinsicStandard(function, reference.getOverloadId(0));
+    }
+    return isExactStandardImplementation(implementation, function);
+  }
+
+  static boolean isExactStandardImplementation(Overload implementation, String function) {
+    if (implementation == null) {
+      return false;
     }
     for (Overload standard : Overload.standardOverloads()) {
       if (standard == implementation && standard.operator.equals(function)) {

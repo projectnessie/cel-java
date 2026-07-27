@@ -49,6 +49,7 @@ dependencies {
   standaloneShadow(project(":cel-generated-pb"))
   standaloneShadow(libs.protobuf.java)
   standaloneShadow(libs.agrona)
+  standaloneShadow(libs.re2j)
 }
 
 val shadowJar = tasks.named<ShadowJar>("shadowJar")

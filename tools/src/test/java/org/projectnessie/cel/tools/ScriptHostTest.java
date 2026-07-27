@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.EnvOption;
 import org.projectnessie.cel.Library;
 import org.projectnessie.cel.ProgramOption;
+import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.ListT;
@@ -158,6 +159,28 @@ class ScriptHostTest {
     assertThat(unoptimized.executeWithActivation(Integer.class, Collections.emptyMap()))
         .isEqualTo(42);
     assertThat(unoptimizedCalls).hasValue(2);
+  }
+
+  @Test
+  void selectsRegexEngineForAllScripts() throws Exception {
+    Script javaScript =
+        ScriptHost.newBuilder().build().buildScript("'ab'.matches('a(?=b)')").build();
+    assertThat(javaScript.execute(Boolean.class, Map.of())).isTrue();
+
+    ScriptHost re2Host = ScriptHost.newBuilder().regexEngine(RegexEngine.RE2).build();
+    Script portable = re2Host.buildScript("'abc'.matches('b')").build();
+    Script javaOnly = re2Host.buildScript("'ab'.matches('a(?=b)')").build();
+
+    assertThat(portable.execute(Boolean.class, Map.of())).isTrue();
+    assertThatThrownBy(() -> javaOnly.execute(Boolean.class, Map.of()))
+        .isInstanceOf(ScriptExecutionException.class);
+  }
+
+  @Test
+  void rejectsNullRegexEngine() {
+    assertThatThrownBy(() -> ScriptHost.newBuilder().regexEngine(null))
+        .isInstanceOf(NullPointerException.class)
+        .hasMessage("regexEngine");
   }
 
   @Test
