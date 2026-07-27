@@ -58,13 +58,13 @@ public final class RealWorldProgramSet {
   public record ProgramModes(Program exactNative, Program exactDisabled, Program general) {}
 
   /**
-   * Reusable environment and fixture for measuring checking, planning, and the first evaluation of
-   * a newly constructed program.
+   * Reusable environment and fixture for measuring compilation, planning, and the first evaluation
+   * of a newly constructed program.
    *
-   * <p>The checking and planning methods retain an environment because applications normally
-   * compile multiple expressions against one configured environment. The {@code cold*()} methods
-   * create a fresh environment, checked AST, and program before evaluating it once; they do not
-   * represent whole-JVM startup.
+   * <p>The compilation methods include parsing and checking. Compilation and planning retain an
+   * environment because applications normally compile multiple expressions against one configured
+   * environment. The {@code cold*()} methods create a fresh environment, checked AST, and program
+   * before evaluating it once; they do not represent whole-JVM startup.
    */
   public static final class Lifecycle {
     private final Supplier<Env> exactEnvFactory;
@@ -100,11 +100,11 @@ public final class RealWorldProgramSet {
       verify();
     }
 
-    public List<Ast> checkExact() {
+    public List<Ast> compileExact() {
       return compile(exactEnv, expressions);
     }
 
-    public List<Ast> checkGeneral() {
+    public List<Ast> compileGeneral() {
       return compile(generalEnv, expressions);
     }
 
@@ -121,12 +121,12 @@ public final class RealWorldProgramSet {
     }
 
     public Boolean coldExactNative() {
-      return checkPlanEvaluate(
+      return compilePlanEvaluate(
           exactEnvFactory.get(), expressions, activation, resultClass, OptOptimize);
     }
 
     public Boolean coldExactDisabled() {
-      return checkPlanEvaluate(
+      return compilePlanEvaluate(
           exactEnvFactory.get(),
           expressions,
           activation,
@@ -136,7 +136,7 @@ public final class RealWorldProgramSet {
     }
 
     public Boolean coldGeneral() {
-      return checkPlanEvaluate(
+      return compilePlanEvaluate(
           generalEnvFactory.get(), expressions, activation, resultClass, OptOptimize);
     }
 
@@ -401,7 +401,7 @@ public final class RealWorldProgramSet {
     return programs;
   }
 
-  private static Boolean checkPlanEvaluate(
+  private static Boolean compilePlanEvaluate(
       Env env,
       List<String> expressions,
       Map<String, Object> activation,
