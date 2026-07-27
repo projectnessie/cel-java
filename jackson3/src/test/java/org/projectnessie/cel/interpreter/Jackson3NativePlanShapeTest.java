@@ -23,6 +23,7 @@ import static org.projectnessie.cel.EnvOption.customTypeProvider;
 import static org.projectnessie.cel.EnvOption.declarations;
 import static org.projectnessie.cel.EnvOption.types;
 import static org.projectnessie.cel.common.containers.Container.defaultContainer;
+import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.interpreter.AttributeFactory.newAttributeFactory;
 import static org.projectnessie.cel.interpreter.Dispatcher.newDispatcher;
 import static org.projectnessie.cel.interpreter.Interpreter.newInterpreter;
@@ -33,7 +34,9 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.Env.AstIssuesTuple;
 import org.projectnessie.cel.checker.Decls;
+import org.projectnessie.cel.common.types.Overloads;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
+import org.projectnessie.cel.interpreter.functions.Overload;
 import org.projectnessie.cel.types.jackson3.Jackson3Registry;
 
 class Jackson3NativePlanShapeTest {
@@ -157,6 +160,83 @@ class Jackson3NativePlanShapeTest {
   }
 
   @Test
+  void plansExactObjectListQuantifiersAndRawFields() {
+    PlanPair all = planExactMapExpression("input.objectList.all(a, a.value == 'value')");
+    assertThat(all.enabled()).isExactlyInstanceOf(NativeIsland.class);
+    NativeObjectAllFold allFold = (NativeObjectAllFold) ((NativeIsland) all.enabled()).root();
+    assertThat(allFold.predicate).isExactlyInstanceOf(NativeScalarEq.class);
+    NativeScalarEq equality = (NativeScalarEq) allFold.predicate;
+    assertThat(equality.lhs).isExactlyInstanceOf(NativeStringObjectField.class);
+    assertThat(all.established()).isExactlyInstanceOf(EvalFold.class);
+
+    PlanPair presence = planExactMapExpression("input.objectList.exists_one(a, has(a.value))");
+    assertThat(presence.enabled()).isExactlyInstanceOf(NativeIsland.class);
+    NativeObjectExistsOneFold presenceFold =
+        (NativeObjectExistsOneFold) ((NativeIsland) presence.enabled()).root();
+    assertThat(presenceFold.predicate).isExactlyInstanceOf(NativeObjectFieldPresence.class);
+    assertThat(presence.established()).isExactlyInstanceOf(EvalFold.class);
+
+    PlanPair nested =
+        planExactMapExpression(
+            "input.objectList.all(a1, " + "input.objectList.exists_one(a2, a2.value == a1.value))");
+    assertThat(nested.enabled()).isExactlyInstanceOf(NativeIsland.class);
+    NativeObjectAllFold outer = (NativeObjectAllFold) ((NativeIsland) nested.enabled()).root();
+    assertThat(outer.predicate).isExactlyInstanceOf(NativeObjectExistsOneFold.class);
+    NativeObjectExistsOneFold inner = (NativeObjectExistsOneFold) outer.predicate;
+    NativeScalarEq innerEquality = (NativeScalarEq) inner.predicate;
+    assertThat(innerEquality.lhs).isExactlyInstanceOf(NativeStringObjectField.class);
+    assertThat(innerEquality.rhs).isExactlyInstanceOf(NativeStringObjectField.class);
+
+    PlanPair sameName =
+        planExactMapExpression(
+            "input.objectList.all(a, " + "input.objectList.exists_one(a, a.value == 'value'))");
+    NativeObjectAllFold sameNameOuter =
+        (NativeObjectAllFold) ((NativeIsland) sameName.enabled()).root();
+    NativeObjectExistsOneFold sameNameInner = (NativeObjectExistsOneFold) sameNameOuter.predicate;
+    NativeStringObjectField sameNameField =
+        (NativeStringObjectField) ((NativeScalarEq) sameNameInner.predicate).lhs;
+    assertThat(sameNameField.variable).isEqualTo("a");
+  }
+
+  @Test
+  void keepsUnsupportedObjectListShapesEstablished() {
+    for (String expression :
+        List.of(
+            "input.objectList.exists(a, a.value == 'value')",
+            "input.objectList.all(a1, " + "input.objectList.exists(a2, a2.value == a1.value))",
+            "input.objectList.all(a, [1].all(a, a == 1) && a.value == 'value')",
+            "(input.objectList + input.objectList).all(a, a.value == 'value')",
+            "input.objectList.all(a, a.number == 1)")) {
+      PlanPair plan = planExactMapExpression(expression);
+      assertThat(plan.enabled()).as(expression).isExactlyInstanceOf(EvalFold.class);
+      assertThat(plan.established()).as(expression).isExactlyInstanceOf(EvalFold.class);
+    }
+  }
+
+  @Test
+  void keepsObjectListQuantifiersEstablishedWhenProviderAndAdapterDiffer() {
+    TypeRegistry adapter = Jackson3Registry.newExactAggregateRegistry();
+    TypeRegistry provider = Jackson3Registry.newExactAggregateRegistry();
+    PlanPair plan =
+        planExactMapExpression("input.objectList.all(a, a.value == 'value')", adapter, provider);
+
+    assertThat(plan.enabled()).isExactlyInstanceOf(EvalFold.class);
+    assertThat(plan.established()).isExactlyInstanceOf(EvalFold.class);
+  }
+
+  @Test
+  void keepsObjectListQuantifiersEstablishedForReplacementEquality() {
+    TypeRegistry registry = Jackson3Registry.newExactAggregateRegistry();
+    Overload replacement = Overload.binary(Overloads.Equals, (left, right) -> False);
+    PlanPair plan =
+        planExactMapExpression(
+            "input.objectList.all(a, a.value == 'value')", registry, registry, replacement);
+
+    assertThat(plan.enabled()).isExactlyInstanceOf(EvalFold.class);
+    assertThat(plan.established()).isExactlyInstanceOf(EvalFold.class);
+  }
+
+  @Test
   void doesNotSpecializeCheckedDynamicKeyAgainstMapWithDynamicDeclaredKey() {
     PlanPair plan = planExactMapExpression("dynamicMap[intKey]");
 
@@ -185,10 +265,15 @@ class Jackson3NativePlanShapeTest {
 
   private static PlanPair planExactMapExpression(String expression) {
     TypeRegistry registry = Jackson3Registry.newExactAggregateRegistry();
+    return planExactMapExpression(expression, registry, registry);
+  }
+
+  private static PlanPair planExactMapExpression(
+      String expression, TypeRegistry adapter, TypeRegistry provider, Overload... replacements) {
     var env =
         newEnv(
-            customTypeAdapter(registry),
-            customTypeProvider(registry),
+            customTypeAdapter(adapter),
+            customTypeProvider(provider),
             types(Input.class, Nested.class),
             declarations(
                 Decls.newVar("input", Decls.newObjectType(Input.class.getName())),
@@ -204,11 +289,12 @@ class Jackson3NativePlanShapeTest {
 
     Dispatcher dispatcher = newDispatcher();
     dispatcher.add(standardOverloads());
-    AttributeFactory attributes = newAttributeFactory(defaultContainer, registry, registry);
+    dispatcher.add(replacements);
+    AttributeFactory attributes = newAttributeFactory(defaultContainer, adapter, provider);
     Interpreter establishedInterpreter =
-        newInterpreter(dispatcher, defaultContainer, registry, registry, attributes, false);
+        newInterpreter(dispatcher, defaultContainer, provider, adapter, attributes, false);
     Interpreter enabledInterpreter =
-        newInterpreter(dispatcher, defaultContainer, registry, registry, attributes, true);
+        newInterpreter(dispatcher, defaultContainer, provider, adapter, attributes, true);
 
     Interpretable enabled =
         ((ExprInterpreter) enabledInterpreter).checkedPlanner(checked).plan(checked.getExpr());
@@ -226,7 +312,7 @@ class Jackson3NativePlanShapeTest {
     private final Map<Boolean, Long> numbersByBoolean = Map.of(false, 0L, true, 1L);
     private final Map<Integer, Long> numbersByInteger = Map.of(-1, -1L, 1, 1L);
     private final Map<String, Nested> objects = Map.of("one", new Nested("value"));
-    private final String lookupKey = "one";
+    private final List<Nested> objectList = List.of(new Nested("value"));
 
     public List<Long> getNumbers() {
       return numbers;
@@ -248,21 +334,31 @@ class Jackson3NativePlanShapeTest {
       return objects;
     }
 
+    public List<Nested> getObjectList() {
+      return objectList;
+    }
+
     public String getLookupKey() {
-      return lookupKey;
+      return "one";
     }
   }
 
-  @SuppressWarnings({"unused", "ClassCanBeRecord"})
+  @SuppressWarnings("unused")
   public static final class Nested {
     private final String value;
+    private final int number;
 
     public Nested(String value) {
       this.value = value;
+      this.number = 1;
     }
 
     public String getValue() {
       return value;
+    }
+
+    public int getNumber() {
+      return number;
     }
   }
 }

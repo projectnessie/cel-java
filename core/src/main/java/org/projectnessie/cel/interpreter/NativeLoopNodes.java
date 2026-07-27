@@ -160,11 +160,6 @@ final class NativeScalarLoopKernel {
   }
 
   static boolean evaluateMaterialized(
-      Val foldRange, NativeLoopBinding binding, NativeScalarLoopConsumer consumer) {
-    return evaluateMaterialized(foldRange, binding, consumer, true);
-  }
-
-  static boolean evaluateMaterialized(
       Val foldRange,
       NativeLoopBinding binding,
       NativeScalarLoopConsumer consumer,
@@ -428,6 +423,7 @@ class NativeLoopBinding implements Activation {
   private NativeScalarKind valueKind;
   private CheckedValueMaterializer checkedMaterializer;
   private Val materializedValue;
+  private boolean exactObject;
   private Object objectValue;
   private long intValue;
   private double doubleValue;
@@ -453,6 +449,30 @@ class NativeLoopBinding implements Activation {
       current = binding.parent;
     }
     return null;
+  }
+
+  static NativeLoopBinding findExactObject(Activation activation, String name) {
+    Activation current = activation;
+    while (current instanceof NativeLoopBinding binding) {
+      if (binding.matches(name)) {
+        return binding.exactObject ? binding : null;
+      }
+      current = binding.parent;
+    }
+    return null;
+  }
+
+  static boolean hasPartialActivation(Activation activation) {
+    for (Activation current = activation; current != null; current = current.parent()) {
+      if (current instanceof Activation.PartialActivation) {
+        return true;
+      }
+      if (current instanceof HierarchicalActivation hierarchical
+          && hasPartialActivation(hierarchical.child())) {
+        return true;
+      }
+    }
+    return false;
   }
 
   void setInt(long value) {
@@ -491,10 +511,37 @@ class NativeLoopBinding implements Activation {
 
   void setCheckedObject(
       Object value, NativeScalarKind kind, CheckedValueMaterializer materializer) {
+    exactObject = false;
     checkedMaterializer = requireNonNull(materializer, "materializer");
     materializedValue = null;
     valueKind = requireNonNull(kind, "kind");
     objectValue = value;
+  }
+
+  void setExactObject(Object value, CheckedValueMaterializer materializer) {
+    exactObject = true;
+    checkedMaterializer = requireNonNull(materializer, "materializer");
+    materializedValue = null;
+    valueKind = null;
+    objectValue = value;
+    stringValue = null;
+    if (value == null || value instanceof Val) {
+      materializeCheckedValue();
+    }
+  }
+
+  Object exactObjectValue() {
+    if (!exactObject) {
+      throw new IllegalStateException("binding does not contain an exact object");
+    }
+    if (objectValue == null || objectValue instanceof Val) {
+      Val value = materializeCheckedValue();
+      if (isError(value) || isUnknown(value)) {
+        throw signal(value);
+      }
+      return value.value();
+    }
+    return objectValue;
   }
 
   boolean booleanValue(TypeAdapter adapter) {
@@ -608,10 +655,7 @@ class NativeLoopBinding implements Activation {
     }
     if (matches(name)) {
       if (checkedMaterializer != null) {
-        if (materializedValue == null) {
-          materializedValue = checkedMaterializer.materialize(objectValue);
-        }
-        return materializedValue;
+        return materializeCheckedValue();
       }
       if (valueKind == null) {
         return objectValue;
@@ -628,8 +672,16 @@ class NativeLoopBinding implements Activation {
   }
 
   private void clearCheckedValue() {
+    exactObject = false;
     checkedMaterializer = null;
     materializedValue = null;
+  }
+
+  private Val materializeCheckedValue() {
+    if (materializedValue == null) {
+      materializedValue = checkedMaterializer.materialize(objectValue);
+    }
+    return materializedValue;
   }
 
   @SuppressWarnings("removal")

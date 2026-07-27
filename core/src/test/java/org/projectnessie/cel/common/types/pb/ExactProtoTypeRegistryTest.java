@@ -16,22 +16,29 @@
 package org.projectnessie.cel.common.types.pb;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 
 import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.Message;
 import dev.cel.expr.conformance.proto3.TestAllTypes;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.ref.ExactAggregateFieldProvider;
 import org.projectnessie.cel.common.types.ref.ExactAggregateTypeAdapter;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
+import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.common.types.traits.Lister;
 import org.projectnessie.cel.proto.tests.ProtoTestTypes;
 
 class ExactProtoTypeRegistryTest {
   private static final String TYPE = TestAllTypes.getDescriptor().getFullName();
+  private static final String PROTO2_TYPE =
+      dev.cel.expr.conformance.proto2.TestAllTypes.getDescriptor().getFullName();
 
   @Test
   void exactFactoryAndCopyPreserveProtoIdentityAndMode() {
@@ -112,6 +119,61 @@ class ExactProtoTypeRegistryTest {
   }
 
   @Test
+  void ordinaryRepeatedMessagesRemainUncertifiedForProto2AndProto3() {
+    TypeRegistry proto3 =
+        ProtoTypeRegistry.newExactAggregateRegistry(TestAllTypes.getDefaultInstance());
+    TypeRegistry proto2 =
+        ProtoTypeRegistry.newExactAggregateRegistry(
+            dev.cel.expr.conformance.proto2.TestAllTypes.getDefaultInstance());
+
+    for (String field : List.of("repeated_nested_message", "repeated_lazy_message")) {
+      assertExactAggregateField(proto3, TYPE, field, false);
+      assertExactAggregateField(proto2, PROTO2_TYPE, field, false);
+    }
+  }
+
+  @Test
+  void unsupportedAndGoogleProtobufFieldsRemainUncertified() {
+    TypeRegistry registry =
+        ProtoTypeRegistry.newExactAggregateRegistry(TestAllTypes.getDefaultInstance());
+    ExactAggregateFieldProvider exact = (ExactAggregateFieldProvider) registry;
+
+    for (String field :
+        List.of(
+            "repeated_any",
+            "repeated_duration",
+            "repeated_timestamp",
+            "repeated_struct",
+            "repeated_value",
+            "repeated_int64_wrapper",
+            "repeated_int32_wrapper",
+            "repeated_double_wrapper",
+            "repeated_float_wrapper",
+            "repeated_uint64_wrapper",
+            "repeated_uint32_wrapper",
+            "repeated_string_wrapper",
+            "repeated_bool_wrapper",
+            "repeated_bytes_wrapper",
+            "repeated_list_value",
+            "repeated_null_value",
+            "repeated_bytes",
+            "repeated_nested_enum",
+            "map_string_message",
+            "map_bool_int32",
+            "single_nested_message",
+            "standalone_message",
+            "single_int64")) {
+      assertExactAggregateField(registry, TYPE, field, false);
+    }
+
+    assertThat(exact.isExactAggregateField(TYPE, "missing_field", Decls.Int)).isFalse();
+    assertThat(
+            exact.isExactAggregateField(
+                TYPE, "repeated_nested_message", Decls.newListType(Decls.String)))
+        .isFalse();
+  }
+
+  @Test
   void generatedAndDynamicAggregatesUseExactRepresentations() throws Exception {
     TestAllTypes generated =
         TestAllTypes.newBuilder()
@@ -182,6 +244,136 @@ class ExactProtoTypeRegistryTest {
                 .get(stringOf("single_uint32"))
                 .intValue())
         .isZero();
+  }
+
+  @Test
+  void proto3GeneratedAndDynamicRepeatedMessagesPreserveOrderAndMaterialization() throws Exception {
+    TestAllTypes generated =
+        TestAllTypes.newBuilder()
+            .addRepeatedNestedMessage(TestAllTypes.NestedMessage.newBuilder().setBb(11))
+            .addRepeatedNestedMessage(TestAllTypes.NestedMessage.newBuilder().setBb(22))
+            .addRepeatedLazyMessage(TestAllTypes.NestedMessage.newBuilder().setBb(31))
+            .addRepeatedLazyMessage(TestAllTypes.NestedMessage.newBuilder().setBb(42))
+            .build();
+    DynamicMessage dynamic =
+        DynamicMessage.parseFrom(TestAllTypes.getDescriptor(), generated.toByteString());
+    TypeRegistry registry = ProtoTypeRegistry.newExactAggregateRegistry(generated);
+
+    assertRepeatedMessageRepresentations(
+        registry,
+        TYPE,
+        generated,
+        dynamic,
+        TestAllTypes.NestedMessage.class,
+        "repeated_nested_message",
+        11,
+        22);
+    assertRepeatedMessageRepresentations(
+        registry,
+        TYPE,
+        generated,
+        dynamic,
+        TestAllTypes.NestedMessage.class,
+        "repeated_lazy_message",
+        31,
+        42);
+  }
+
+  @Test
+  void proto2GeneratedAndDynamicRepeatedMessagesPreserveOrderAndMaterialization() throws Exception {
+    dev.cel.expr.conformance.proto2.TestAllTypes generated =
+        dev.cel.expr.conformance.proto2.TestAllTypes.newBuilder()
+            .addRepeatedNestedMessage(
+                dev.cel.expr.conformance.proto2.TestAllTypes.NestedMessage.newBuilder().setBb(11))
+            .addRepeatedNestedMessage(
+                dev.cel.expr.conformance.proto2.TestAllTypes.NestedMessage.newBuilder().setBb(22))
+            .addRepeatedLazyMessage(
+                dev.cel.expr.conformance.proto2.TestAllTypes.NestedMessage.newBuilder().setBb(31))
+            .addRepeatedLazyMessage(
+                dev.cel.expr.conformance.proto2.TestAllTypes.NestedMessage.newBuilder().setBb(42))
+            .build();
+    DynamicMessage dynamic =
+        DynamicMessage.parseFrom(generated.getDescriptorForType(), generated.toByteString());
+    TypeRegistry registry = ProtoTypeRegistry.newExactAggregateRegistry(generated);
+
+    assertRepeatedMessageRepresentations(
+        registry,
+        PROTO2_TYPE,
+        generated,
+        dynamic,
+        dev.cel.expr.conformance.proto2.TestAllTypes.NestedMessage.class,
+        "repeated_nested_message",
+        11,
+        22);
+    assertRepeatedMessageRepresentations(
+        registry,
+        PROTO2_TYPE,
+        generated,
+        dynamic,
+        dev.cel.expr.conformance.proto2.TestAllTypes.NestedMessage.class,
+        "repeated_lazy_message",
+        31,
+        42);
+  }
+
+  private static void assertExactAggregateField(
+      TypeRegistry registry, String typeName, String fieldName, boolean expected) {
+    FieldType field = registry.findFieldType(typeName, fieldName);
+    assertThat(field).as("%s.%s", typeName, fieldName).isNotNull();
+    assertThat(
+            ((ExactAggregateFieldProvider) registry)
+                .isExactAggregateField(typeName, fieldName, field.type))
+        .as("%s.%s", typeName, fieldName)
+        .isEqualTo(expected);
+  }
+
+  private static void assertRepeatedMessageRepresentations(
+      TypeRegistry registry,
+      String typeName,
+      Message generated,
+      DynamicMessage dynamic,
+      Class<?> generatedElementType,
+      String fieldName,
+      int first,
+      int second) {
+    FieldType field = registry.findFieldType(typeName, fieldName);
+    assertThat(field).as("%s.%s", typeName, fieldName).isNotNull();
+
+    for (Message root : List.of(generated, dynamic)) {
+      Object fieldValue = field.getFrom.getFrom(root);
+      assertThat(fieldValue).as("%s value", fieldName).isInstanceOf(List.class);
+      List<?> values = (List<?>) fieldValue;
+      assertThat(values).hasSize(2);
+      if (root == generated) {
+        assertThat(values).allMatch(generatedElementType::isInstance);
+      } else {
+        assertThat(values).allMatch(DynamicMessage.class::isInstance);
+      }
+      assertThat(messageIntField(values.get(0), "bb")).isEqualTo(first);
+      assertThat(messageIntField(values.get(1), "bb")).isEqualTo(second);
+
+      Val exactValue =
+          ((ExactAggregateTypeAdapter) registry).nativeAggregateToValue(values, field.type);
+      assertThat(exactValue).isInstanceOf(Lister.class);
+      Lister exactList = (Lister) exactValue;
+      assertThat(exactList.nativeSize()).isEqualTo(2);
+      assertThat(exactList.nativeGetAt(0)).isInstanceOf(PbObjectT.class);
+      assertThat(exactList.nativeGetAt(0).type().typeName())
+          .isEqualTo(((Message) values.get(0)).getDescriptorForType().getFullName());
+      assertThat(((PbObjectT) exactList.nativeGetAt(0)).get(stringOf("bb")).intValue())
+          .isEqualTo(first);
+      assertThat(((PbObjectT) exactList.nativeGetAt(1)).get(stringOf("bb")).intValue())
+          .isEqualTo(second);
+
+      Val establishedValue = registry.nativeToValue(values);
+      assertThat(establishedValue).isInstanceOf(Lister.class);
+      assertThat(exactList.equal(establishedValue)).isSameAs(True);
+    }
+  }
+
+  private static int messageIntField(Object value, String fieldName) {
+    Message message = (Message) value;
+    return (Integer) message.getField(message.getDescriptorForType().findFieldByName(fieldName));
   }
 
   private static Object value(TypeRegistry registry, Object message, String fieldName) {
