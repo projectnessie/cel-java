@@ -24,6 +24,7 @@ import static org.projectnessie.cel.EnvOption.types;
 import static org.projectnessie.cel.EvalOption.OptDisableNativeEval;
 import static org.projectnessie.cel.ProgramOption.evalOptions;
 
+import java.util.AbstractMap;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -61,6 +62,63 @@ class JacksonNativePlanTest {
     Prog scalarProgram = (Prog) scalarEnv.program(compile(scalarEnv, "x + 1"));
     assertThat(scalarProgram.interpretable.getClass().getSimpleName()).isEqualTo("NativeIsland");
     assertThat(scalarProgram.eval(Map.of("x", 50_021L)).getVal().intValue()).isEqualTo(50_022L);
+  }
+
+  @Test
+  void exactObjectMapIndexConvertsOnlyTheSelectedMessage() {
+    TypeRegistry registry = JacksonRegistry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            types(ObjectMapInput.class, NestedObject.class),
+            declarations(
+                Decls.newVar("input", Decls.newObjectType(ObjectMapInput.class.getName()))));
+    Ast selection = compile(env, "input.objects['target'].value");
+    Ast presence = compile(env, "has(input.objects['target'].value)");
+
+    Val value =
+        assertEnabledDisabledEquivalent(
+            env,
+            selection,
+            Map.of("input", new ObjectMapInput(Map.of("target", new NestedObject("selected")))));
+    assertThat(value.value()).isEqualTo("selected");
+    Val present =
+        assertEnabledDisabledEquivalent(
+            env,
+            presence,
+            Map.of("input", new ObjectMapInput(Map.of("target", new NestedObject("selected")))));
+    assertThat(present.booleanValue()).isTrue();
+
+    Val missing =
+        assertEnabledDisabledEquivalent(
+            env, selection, Map.of("input", new ObjectMapInput(Map.of())));
+    assertThat(missing).matches(Err::isError);
+    Val missingPresence =
+        assertEnabledDisabledEquivalent(
+            env, presence, Map.of("input", new ObjectMapInput(Map.of())));
+    assertThat(missingPresence).matches(Err::isError);
+
+    Map<String, NestedObject> nullable = new HashMap<>();
+    nullable.put("target", null);
+    Val nullValue =
+        assertEnabledDisabledEquivalent(
+            env, selection, Map.of("input", new ObjectMapInput(nullable)));
+    assertThat(nullValue).matches(Err::isError);
+
+    Val incompatible =
+        assertEnabledDisabledEquivalent(
+            env, selection, Map.of("input", new ObjectMapInput(incompatibleObjectMap())));
+    assertThat(incompatible).matches(Err::isError);
+
+    Program enabled = env.program(selection);
+    NestedObject selectedObject = new NestedObject("selected");
+    ObjectMapInput lookupOnlyInput =
+        new ObjectMapInput(new LookupOnlyMap<>("target", selectedObject));
+    Val selected = enabled.eval(Map.of("input", lookupOnlyInput)).getVal();
+    assertThat(selected.value()).isEqualTo("selected");
+    assertThat(lookupOnlyInput.objectsReadCount()).isEqualTo(1);
+    assertThat(selectedObject.valueReadCount()).isEqualTo(1);
   }
 
   @Test
@@ -486,6 +544,11 @@ class JacksonNativePlanTest {
         Map.of("one", "value"));
   }
 
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private static Map<String, NestedObject> incompatibleObjectMap() {
+    return (Map) Map.of("target", "not a nested object");
+  }
+
   @SuppressWarnings({"unused", "ClassCanBeRecord"})
   public static final class Person {
     private final String email;
@@ -502,6 +565,64 @@ class JacksonNativePlanTest {
 
     public long getPriority() {
       return priority;
+    }
+  }
+
+  @SuppressWarnings({"unused", "ClassCanBeRecord"})
+  public static final class ObjectMapInput {
+    private final Map<String, NestedObject> objects;
+    private int objectsReadCount;
+
+    public ObjectMapInput(Map<String, NestedObject> objects) {
+      this.objects = objects;
+    }
+
+    public Map<String, NestedObject> getObjects() {
+      objectsReadCount++;
+      return objects;
+    }
+
+    int objectsReadCount() {
+      return objectsReadCount;
+    }
+  }
+
+  @SuppressWarnings({"unused", "ClassCanBeRecord"})
+  public static final class NestedObject {
+    private final String value;
+    private int valueReadCount;
+
+    public NestedObject(String value) {
+      this.value = value;
+    }
+
+    public String getValue() {
+      valueReadCount++;
+      return value;
+    }
+
+    int valueReadCount() {
+      return valueReadCount;
+    }
+  }
+
+  private static final class LookupOnlyMap<K, V> extends AbstractMap<K, V> {
+    private final K key;
+    private final V value;
+
+    private LookupOnlyMap(K key, V value) {
+      this.key = key;
+      this.value = value;
+    }
+
+    @Override
+    public V get(Object requestedKey) {
+      return key.equals(requestedKey) ? value : null;
+    }
+
+    @Override
+    public Set<Entry<K, V>> entrySet() {
+      throw new AssertionError("constant exact lookup must not traverse the source map");
     }
   }
 

@@ -17,20 +17,29 @@ package org.projectnessie.cel.interpreter;
 
 import static org.projectnessie.cel.common.types.Err.isError;
 import static org.projectnessie.cel.common.types.Err.newErr;
+import static org.projectnessie.cel.common.types.Err.noSuchAttributeException;
 import static org.projectnessie.cel.common.types.Err.noSuchKey;
 import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
+import static org.projectnessie.cel.interpreter.Coster.Cost.estimateCost;
+import static org.projectnessie.cel.interpreter.Coster.costOf;
 import static org.projectnessie.cel.interpreter.ValueSignal.signal;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.operators.Operator;
+import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.Overloads;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Mapper;
 import org.projectnessie.cel.common.types.traits.Sizer;
 import org.projectnessie.cel.interpreter.AttributeFactory.Attribute;
+import org.projectnessie.cel.interpreter.AttributeFactory.Qualifier;
+import org.projectnessie.cel.interpreter.AttributeFactory.ValQualifier;
+import org.projectnessie.cel.interpreter.Coster.Cost;
 import org.projectnessie.cel.interpreter.functions.Overload;
 
 /** Shared exact-map operations over an already-resolved host value. */
@@ -132,6 +141,21 @@ final class NativeMapSources {
   static Object exactSingleLookup(Map<?, ?> map, Object hostKey) {
     Object value = map.get(hostKey);
     return value != null || map.containsKey(hostKey) ? value : ABSENT;
+  }
+
+  static Object selectConstant(
+      NativeMapSourceCapability source, Activation activation, Object hostKey, Val celKey) {
+    Object raw;
+    try {
+      raw = source.evalRaw(activation);
+    } catch (ValueSignal failure) {
+      raw = failure.value;
+    }
+    Object value = lookup(source, raw, hostKey, celKey);
+    if (value == ABSENT) {
+      throw signal(noSuchKey(celKey));
+    }
+    return value;
   }
 
   static Object exactUintLookup(Map<?, ?> map, long key) {
@@ -620,10 +644,24 @@ final class NativeMapMembership extends EvalBinary implements NativeBooleanCapab
   }
 }
 
-abstract class NativeMapAggregateIndex extends AbstractEval {
+abstract class NativeMapSelectedIndex extends AbstractEval {
   final NativeMapSourceCapability source;
   final Object hostKey;
   final Val celKey;
+
+  NativeMapSelectedIndex(long id, NativeMapSourceCapability source, Object hostKey, Val celKey) {
+    super(id);
+    this.source = source;
+    this.hostKey = hostKey;
+    this.celKey = celKey;
+  }
+
+  final Object selectRaw(Activation activation) {
+    return NativeMapSources.selectConstant(source, activation, hostKey, celKey);
+  }
+}
+
+abstract class NativeMapAggregateIndex extends NativeMapSelectedIndex {
   final CheckedAggregateMaterializer materializer;
 
   NativeMapAggregateIndex(
@@ -632,25 +670,8 @@ abstract class NativeMapAggregateIndex extends AbstractEval {
       Object hostKey,
       Val celKey,
       CheckedAggregateMaterializer materializer) {
-    super(id);
-    this.source = source;
-    this.hostKey = hostKey;
-    this.celKey = celKey;
+    super(id, source, hostKey, celKey);
     this.materializer = materializer;
-  }
-
-  final Object selectRaw(Activation activation) {
-    Object raw;
-    try {
-      raw = source.evalRaw(activation);
-    } catch (ValueSignal failure) {
-      raw = failure.value;
-    }
-    Object value = NativeMapSources.lookup(source, raw, hostKey, celKey);
-    if (value == NativeMapSources.ABSENT) {
-      throw signal(noSuchKey(celKey));
-    }
-    return value;
   }
 
   @Override
@@ -663,6 +684,122 @@ abstract class NativeMapAggregateIndex extends AbstractEval {
     } catch (ValueSignal failure) {
       return failure.value;
     }
+  }
+}
+
+final class NativeMapObjectIndex extends EvalAttr {
+  private final long semanticId;
+  final NativeMapSourceCapability source;
+  final Object hostKey;
+  final Val celKey;
+  private final CheckedValueMaterializer materializer;
+  private final AttributeFactory attributeFactory;
+  private final List<Qualifier> qualifiers = new ArrayList<>();
+
+  NativeMapObjectIndex(
+      long id,
+      TypeAdapter adapter,
+      Attribute establishedAttribute,
+      AttributeFactory attributeFactory,
+      NativeMapSourceCapability source,
+      Object hostKey,
+      Val celKey,
+      CheckedValueMaterializer materializer) {
+    super(adapter, establishedAttribute);
+    this.semanticId = id;
+    this.attributeFactory = attributeFactory;
+    this.source = source;
+    this.hostKey = hostKey;
+    this.celKey = celKey;
+    this.materializer = materializer;
+  }
+
+  @Override
+  public long id() {
+    return semanticId;
+  }
+
+  @Override
+  public Attribute attr() {
+    return this;
+  }
+
+  @Override
+  public Attribute addQualifier(Qualifier qualifier) {
+    qualifiers.add(qualifier);
+    return this;
+  }
+
+  @Override
+  public Cost cost() {
+    Cost cost = estimateCost(attr);
+    long min = cost.min;
+    long max = cost.max;
+    for (Qualifier qualifier : qualifiers) {
+      Cost qualifierCost = estimateCost(qualifier);
+      min += qualifierCost.min;
+      max += qualifierCost.max;
+    }
+    return costOf(min, max);
+  }
+
+  @Override
+  public Val eval(Activation activation) {
+    try {
+      return adapter.nativeToValue(resolve(activation));
+    } catch (Exception failure) {
+      return newErr(failure, failure.toString());
+    }
+  }
+
+  @Override
+  public Object resolve(Activation activation) {
+    Object value;
+    try {
+      value =
+          materializer.materialize(
+              NativeMapSources.selectConstant(source, activation, hostKey, celKey));
+    } catch (ValueSignal failure) {
+      return failure.value;
+    }
+    if (value instanceof Val val && (isError(val) || isUnknown(val))) {
+      return value;
+    }
+    for (int i = 0; i < qualifiers.size(); i++) {
+      Qualifier qualifier = qualifiers.get(i);
+      if (value == null) {
+        throw noSuchAttributeException(this);
+      }
+      value =
+          i == qualifiers.size() - 1 && qualifier instanceof ValQualifier valQualifier
+              ? valQualifier.qualifyToVal(activation, value)
+              : qualifier.qualify(activation, value);
+      if (value instanceof Err) {
+        return value;
+      }
+    }
+    if (value == null) {
+      throw noSuchAttributeException(this);
+    }
+    return value;
+  }
+
+  Object selectRaw(Activation activation) {
+    return NativeMapSources.selectConstant(source, activation, hostKey, celKey);
+  }
+
+  Val materializeSelected(Object value) {
+    return materializer.materialize(value);
+  }
+
+  @Override
+  public Object qualify(Activation activation, Object object) {
+    Object value = resolve(activation);
+    if (value instanceof Val val && (isError(val) || isUnknown(val))) {
+      return value;
+    }
+    Qualifier qualifier = attributeFactory.newQualifier(null, id(), value);
+    return qualifier.qualify(activation, object);
   }
 }
 
