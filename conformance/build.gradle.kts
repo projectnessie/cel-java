@@ -22,7 +22,6 @@ import org.gradle.api.tasks.compile.JavaCompile
 
 plugins {
   `java-library`
-  id("com.gradleup.shadow")
   id("cel-conventions")
 }
 
@@ -33,10 +32,6 @@ val mainProtoResourcesDir = layout.buildDirectory.dir("generated/proto-resources
 val syncMainProtoSources =
   tasks.register<Sync>("syncMainProtoSources") {
     into(syncedMainProtoDir)
-    from(layout.settingsDirectory.dir("submodules/googleapis/google/rpc")) { into("google/rpc") }
-    from(layout.settingsDirectory.dir("submodules/googleapis/google/api/expr/conformance")) {
-      into("google/api/expr/conformance")
-    }
     from(layout.settingsDirectory.dir("submodules/cel-spec/proto/cel/expr")) {
       include("checked.proto", "eval.proto", "syntax.proto", "value.proto")
       into("cel/expr")
@@ -50,13 +45,7 @@ val syncMainProtoSources =
 val emptyTestProtoDir = layout.buildDirectory.dir("pb-src/test/proto")
 
 sourceSets.main {
-  java.setSrcDirs(
-    listOf(
-      layout.projectDirectory.dir("src/main/java"),
-      layout.buildDirectory.dir("generated/sources/proto/main/java"),
-      layout.buildDirectory.dir("generated/sources/proto/main/grpc"),
-    )
-  )
+  java.setSrcDirs(listOf(layout.buildDirectory.dir("generated/sources/proto/main/java")))
   resources.setSrcDirs(listOf(mainProtoResourcesDir))
   extensions.configure<SourceDirectorySet>("proto") {
     setSrcDirs(listOf(syncedMainProtoDir))
@@ -76,24 +65,16 @@ configurations.all { exclude(group = "org.projectnessie.cel", module = "cel-gene
 dependencies {
   implementation(project(":cel-core"))
   implementation(project(":cel-generated-pb3"))
-  implementation(testFixtures(project(":cel-core")))
   implementation(testFixtures(project(":cel-generated-pb3")))
 
   implementation(libs.protobuf.java) { version { strictly(libs.versions.protobuf3.get()) } }
 
-  implementation(libs.grpc.protobuf)
-  implementation(libs.grpc.stub)
-  runtimeOnly(libs.grpc.netty.shaded)
-  compileOnly(libs.tomcat.annotations.api)
+  testImplementation(testFixtures(project(":cel-core")))
 
   testImplementation(platform(libs.junit.bom))
   testImplementation(libs.bundles.junit.testing)
   testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine")
   testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-}
-
-tasks.named<Jar>("shadowJar") {
-  manifest { attributes("Main-Class" to "org.projectnessie.cel.server.ConformanceServer") }
 }
 
 // *.proto files taken from https://github.com/google/cel-spec/ repo, available as a git submodule
@@ -103,10 +84,6 @@ configure<ProtobufExtension> {
     // Download from repositories
     artifact = "com.google.protobuf:protoc:${libs.versions.protobuf3.get()}"
   }
-  plugins {
-    this.create("grpc") { artifact = "io.grpc:protoc-gen-grpc-java:${libs.versions.grpc.get()}" }
-  }
-  generateProtoTasks { all().configureEach { this.plugins.create("grpc") {} } }
 }
 
 tasks.named("generateProto") { dependsOn(syncMainProtoSources) }

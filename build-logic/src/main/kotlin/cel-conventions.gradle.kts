@@ -20,8 +20,7 @@ nessieConfigureJava()
 
 val nonPublishedProjects =
   setOf(
-    "conformance",
-    "jacoco",
+    "cel-conformance",
     "cel-quarkus-smoke-standalone",
     "cel-quarkus-smoke-core-pb3-jackson3",
   )
