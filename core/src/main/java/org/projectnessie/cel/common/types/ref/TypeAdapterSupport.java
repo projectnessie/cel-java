@@ -127,6 +127,9 @@ public final class TypeAdapterSupport {
     if (value instanceof Object[]) {
       return newGenericArrayList(a, (Object[]) value);
     }
+    if (value.getClass().isArray()) {
+      return newErr("unsupported Java array type '%s'", value.getClass().getTypeName());
+    }
     if (value instanceof List) {
       return newGenericList(a, (List<?>) value);
     }

@@ -27,7 +27,9 @@ import static org.projectnessie.cel.EnvOption.types;
 import static org.projectnessie.cel.EvalOption.OptDisableNativeEval;
 import static org.projectnessie.cel.EvalOption.OptPartialEval;
 import static org.projectnessie.cel.ProgramOption.evalOptions;
+import static org.projectnessie.cel.common.types.StringT.stringOf;
 
+import java.nio.charset.StandardCharsets;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -53,6 +55,9 @@ import org.projectnessie.cel.common.types.ref.StandardScalarTypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.types.jackson3.Jackson3Registry;
+import org.projectnessie.cel.types.jackson3.types.AnEnum;
+import org.projectnessie.cel.types.jackson3.types.ArrayObject;
+import org.projectnessie.cel.types.jackson3.types.InnerType;
 
 class Jackson3NativePlanTest {
   @Test
@@ -243,6 +248,58 @@ class Jackson3NativePlanTest {
     assertThat(result.booleanValue()).isTrue();
     assertThat(input.numbersReadCount()).isEqualTo(2);
     assertThat(input.optionalNumbersReadCount()).isEqualTo(2);
+  }
+
+  @Test
+  void exactRegistryMaterializesCanonicalArrayFieldsInBothModes() {
+    TypeRegistry registry = Jackson3Registry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            types(ArrayObject.class),
+            declarations(Decls.newVar("input", Decls.newObjectType(ArrayObject.class.getName()))));
+    Ast ast =
+        compile(
+            env,
+            "input.ints == [1, 2]"
+                + " && input.longs[0] == 3"
+                + " && input.doubles[0] == 4.5"
+                + " && input.strings[0] == 'string'"
+                + " && input.boxedInts[0] == 5"
+                + " && input.uints[0] == 6u"
+                + " && input.objects[0].intProp == 7"
+                + " && input.dynamic[0] == 'dynamic'"
+                + " && input.nestedInts[0][1] == 9"
+                + " && input.nestedBytes[0] == b'bytes'");
+
+    Val result = assertEnabledDisabledEquivalent(env, ast, Map.of("input", arrayObject()));
+
+    assertThat(result.booleanValue()).isTrue();
+  }
+
+  @Test
+  void exactRegistryRejectsNoncanonicalArrayFieldsInBothModes() {
+    TypeRegistry registry = Jackson3Registry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            types(ArrayObject.class),
+            declarations(Decls.newVar("input", Decls.newObjectType(ArrayObject.class.getName()))));
+    ArrayObject input = arrayObject();
+    input.values = new Val[] {stringOf("embedded")};
+    input.enums = new AnEnum[] {AnEnum.ENUM_VALUE_2};
+
+    Val embeddedValue =
+        assertEnabledDisabledEquivalent(
+            env, compile(env, "input.values[0]"), Map.of("input", input));
+    Val enumValue =
+        assertEnabledDisabledEquivalent(
+            env, compile(env, "input.enums[0]"), Map.of("input", input));
+
+    assertThat(embeddedValue).matches(Err::isError);
+    assertThat(enumValue).matches(Err::isError);
   }
 
   @Test
@@ -690,6 +747,24 @@ class Jackson3NativePlanTest {
         Map.of("bits", List.of(3L, 4L)),
         new LinkedHashSet<>(List.of("first", "second")),
         Optional.of(List.of(5L, 6L)));
+  }
+
+  private static ArrayObject arrayObject() {
+    ArrayObject value = new ArrayObject();
+    value.bytes = "root".getBytes(StandardCharsets.UTF_8);
+    value.ints = new int[] {1, 2};
+    value.longs = new long[] {3};
+    value.doubles = new double[] {4.5d};
+    value.strings = new String[] {"string"};
+    value.boxedInts = new Integer[] {5};
+    value.uints = new ULong[] {ULong.valueOf(6)};
+    InnerType object = new InnerType();
+    object.intProp = 7;
+    value.objects = new InnerType[] {object};
+    value.dynamic = new Object[] {"dynamic"};
+    value.nestedInts = new int[][] {{8, 9}};
+    value.nestedBytes = new byte[][] {"bytes".getBytes(StandardCharsets.UTF_8)};
+    return value;
   }
 
   private static NestedAggregateInput nestedAggregateInput() {
