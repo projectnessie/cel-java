@@ -55,12 +55,12 @@ import org.projectnessie.cel.benchmark.RealWorldProtoFixtures;
 import org.projectnessie.cel.benchmark.RealWorldWorkloads;
 
 /**
- * Measures checking, planning, and the first evaluation of a fresh program for representative
+ * Measures compilation, planning, and the first evaluation of a fresh program for representative
  * real-world expression shapes.
  *
- * <p>The checking and planning methods retain a configured environment. The {@code cold*} methods
- * include environment and registry construction, parsing, checking, program construction, and one
- * complete evaluation, but not whole-JVM startup.
+ * <p>The compilation methods include parsing and checking. Compilation and planning retain a
+ * configured environment. The {@code cold*} methods include environment and registry construction,
+ * parsing, checking, program construction, and one complete evaluation, but not whole-JVM startup.
  */
 @Warmup(iterations = 3, time = 500, timeUnit = TimeUnit.MILLISECONDS)
 @Measurement(iterations = 5, time = 500, timeUnit = TimeUnit.MILLISECONDS)
@@ -139,13 +139,13 @@ public class RealWorldLifecycleBench {
   }
 
   @Benchmark
-  public List<Ast> hostCheckExact(HostState state) {
-    return state.lifecycle.checkExact();
+  public List<Ast> hostCompileExact(HostState state) {
+    return state.lifecycle.compileExact();
   }
 
   @Benchmark
-  public List<Ast> hostCheckGeneral(HostState state) {
-    return state.lifecycle.checkGeneral();
+  public List<Ast> hostCompileGeneral(HostState state) {
+    return state.lifecycle.compileGeneral();
   }
 
   @Benchmark
@@ -179,13 +179,13 @@ public class RealWorldLifecycleBench {
   }
 
   @Benchmark
-  public List<Ast> protoCheckExact(ProtoState state) {
-    return state.lifecycle.checkExact();
+  public List<Ast> protoCompileExact(ProtoState state) {
+    return state.lifecycle.compileExact();
   }
 
   @Benchmark
-  public List<Ast> protoCheckGeneral(ProtoState state) {
-    return state.lifecycle.checkGeneral();
+  public List<Ast> protoCompileGeneral(ProtoState state) {
+    return state.lifecycle.compileGeneral();
   }
 
   @Benchmark
@@ -219,13 +219,13 @@ public class RealWorldLifecycleBench {
   }
 
   @Benchmark
-  public List<Ast> jackson3CheckExact(Jackson3State state) {
-    return state.lifecycle.checkExact();
+  public List<Ast> jackson3CompileExact(Jackson3State state) {
+    return state.lifecycle.compileExact();
   }
 
   @Benchmark
-  public List<Ast> jackson3CheckGeneral(Jackson3State state) {
-    return state.lifecycle.checkGeneral();
+  public List<Ast> jackson3CompileGeneral(Jackson3State state) {
+    return state.lifecycle.compileGeneral();
   }
 
   @Benchmark
