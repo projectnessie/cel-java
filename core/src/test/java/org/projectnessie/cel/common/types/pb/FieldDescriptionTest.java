@@ -40,6 +40,7 @@ import dev.cel.expr.conformance.proto3.TestAllTypes.NestedMessage;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -109,6 +110,12 @@ public class FieldDescriptionTest {
       new GetFromTestCase()
           .field("single_nested_message")
           .want(NestedMessage.newBuilder().setBb(123).build()),
+      new GetFromTestCase()
+          .field("repeated_nested_message")
+          .want(
+              Arrays.asList(
+                  NestedMessage.newBuilder().setBb(456).build(),
+                  NestedMessage.newBuilder().setBb(789).build())),
       new GetFromTestCase().field("standalone_enum").want(NestedEnum.BAR.getValueDescriptor()),
       new GetFromTestCase().field("single_value").want("hello world"),
       new GetFromTestCase()
@@ -135,6 +142,8 @@ public class FieldDescriptionTest {
     builder.setSingleInt32Wrapper(Int32Value.of(42));
     builder.setStandaloneEnum(NestedEnum.BAR);
     builder.setSingleNestedMessage(NestedMessage.newBuilder().setBb(123));
+    builder.addRepeatedNestedMessage(NestedMessage.newBuilder().setBb(456));
+    builder.addRepeatedNestedMessage(NestedMessage.newBuilder().setBb(789));
     builder.setSingleValue(Value.newBuilder().setStringValue("hello world"));
     builder.setSingleStruct(
         Struct.newBuilder()
@@ -152,6 +161,27 @@ public class FieldDescriptionTest {
     assertThat(f).isNotNull();
     Object got = f.getFrom(pbdb, msg);
     assertThat(got).isEqualTo(tc.want);
+  }
+
+  @Test
+  void getFromRepeatedMessageFieldOnDynamicMessage() {
+    Db pbdb = newDb();
+    TestAllTypes generated =
+        TestAllTypes.newBuilder()
+            .addRepeatedNestedMessage(NestedMessage.newBuilder().setBb(456))
+            .addRepeatedNestedMessage(NestedMessage.newBuilder().setBb(789))
+            .build();
+    pbdb.registerMessage(generated);
+    PbTypeDescription type = pbdb.describeType(generated.getDescriptorForType().getFullName());
+    FieldDescription field = type.fieldByName("repeated_nested_message");
+    DynamicMessage dynamic =
+        DynamicMessage.newBuilder(generated.getDescriptorForType()).mergeFrom(generated).build();
+
+    List<?> values = (List<?>) field.getFrom(pbdb, dynamic);
+
+    assertThat(values).hasSize(2).allMatch(Message.class::isInstance);
+    Message first = (Message) values.get(0);
+    assertThat(first.getField(first.getDescriptorForType().findFieldByName("bb"))).isEqualTo(456);
   }
 
   @Test
