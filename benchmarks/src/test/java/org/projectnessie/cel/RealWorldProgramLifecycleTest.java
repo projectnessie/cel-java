@@ -33,8 +33,8 @@ class RealWorldProgramLifecycleTest {
     Lifecycle lifecycle =
         RealWorldProgramSet.hostLifecycle(scenario, RealWorldHostFixtures.prepare(scenario));
 
-    assertThat(lifecycle.checkExact()).hasSize(11);
-    assertThat(lifecycle.checkGeneral()).hasSize(11);
+    assertThat(lifecycle.compileExact()).hasSize(11);
+    assertThat(lifecycle.compileGeneral()).hasSize(11);
     assertThat(lifecycle.planExactNative()).hasSize(11);
     assertThat(lifecycle.planExactDisabled()).hasSize(11);
     assertThat(lifecycle.planGeneral()).hasSize(11);
