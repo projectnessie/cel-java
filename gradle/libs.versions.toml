@@ -1,5 +1,6 @@
 [versions]
 checkstyle = "10.3.4"
+celExprJava = "0.13.1"
 errorprone = "2.15.0"
 errorpronePlugin = "5.1.0"
 errorproneSlf4j = "0.1.29"
@@ -35,6 +36,7 @@ junit-testing = ["assertj-core", "junit-jupiter-api", "junit-jupiter-params"]
 [libraries]
 agrona = { module = "org.agrona:agrona", version = "2.6.0" }
 assertj-core = { module = "org.assertj:assertj-core", version = "3.27.7" }
+cel-expr-java = { module = "dev.cel:cel", version.ref = "celExprJava" }
 congocc = { module = "org.congocc:org.congocc.parser.generator", version = "2.1.0" }
 errorprone-plugin = { module = "net.ltgt.gradle:gradle-errorprone-plugin", version.ref = "errorpronePlugin" }
 errorprone-slf4j = { module = "jp.skypencil.errorprone.slf4j:errorprone-slf4j", version.ref = "errorproneSlf4j" }

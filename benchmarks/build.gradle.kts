@@ -38,6 +38,7 @@ dependencies {
 
   jmhImplementation(libs.jmh.core)
   jmhAnnotationProcessor(libs.jmh.generator.annprocess)
+  jmhImplementation(libs.cel.expr.java)
 }
 
 jmh { jmhVersion.set(libs.versions.jmh.get()) }
