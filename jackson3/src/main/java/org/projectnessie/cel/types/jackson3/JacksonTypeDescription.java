@@ -110,6 +110,10 @@ final class JacksonTypeDescription implements TypeDescription {
     } else if (Map.class.isAssignableFrom(rawClass)) {
       com.google.api.expr.v1alpha1.Type keyType =
           findTypeForJacksonType(type.getKeyType(), typeQuery);
+      if (!isSupportedMapKeyType(keyType)) {
+        throw new IllegalArgumentException(
+            String.format("Unsupported CEL map key type for Java type '%s'", type.getKeyType()));
+      }
       com.google.api.expr.v1alpha1.Type valueType =
           findTypeForJacksonType(type.getContentType(), typeQuery);
       return Decls.newMapType(keyType, valueType);
@@ -126,6 +130,16 @@ final class JacksonTypeDescription implements TypeDescription {
       }
       return t;
     }
+  }
+
+  private static boolean isSupportedMapKeyType(com.google.api.expr.v1alpha1.Type type) {
+    if (type.getTypeKindCase() != com.google.api.expr.v1alpha1.Type.TypeKindCase.PRIMITIVE) {
+      return false;
+    }
+    return switch (type.getPrimitive()) {
+      case BOOL, INT64, UINT64, STRING -> true;
+      default -> false;
+    };
   }
 
   private JavaType elementType(JavaType type) {
