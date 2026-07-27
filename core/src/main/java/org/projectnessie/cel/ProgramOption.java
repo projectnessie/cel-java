@@ -18,6 +18,7 @@ package org.projectnessie.cel;
 import static org.projectnessie.cel.interpreter.Activation.newActivation;
 
 import java.util.Collections;
+import java.util.Objects;
 import org.projectnessie.cel.interpreter.InterpretableDecorator;
 import org.projectnessie.cel.interpreter.functions.Overload;
 
@@ -63,6 +64,24 @@ public interface ProgramOption {
   static ProgramOption evalOptions(EvalOption... opts) {
     return p -> {
       Collections.addAll(p.evalOpts, opts);
+      return p;
+    };
+  }
+
+  /**
+   * Selects the regular-expression engine used by the standard CEL {@code matches} function.
+   *
+   * <p>The default is {@link RegexEngine#JAVA} for compatibility with earlier CEL-Java releases.
+   * Use {@link RegexEngine#RE2} for the RE2 dialect and non-backtracking execution.
+   *
+   * @param engine the engine to use for this program
+   * @return a program option that selects {@code engine}
+   * @throws NullPointerException if {@code engine} is {@code null}
+   */
+  static ProgramOption regexEngine(RegexEngine engine) {
+    Objects.requireNonNull(engine, "engine");
+    return p -> {
+      p.regexEngine = engine;
       return p;
     };
   }
