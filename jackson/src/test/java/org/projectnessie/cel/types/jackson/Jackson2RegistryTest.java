@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
+import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.MapT.newMaybeWrappedMap;
 import static org.projectnessie.cel.common.types.NullT.NullValue;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
@@ -45,6 +46,7 @@ import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.types.jackson.types.AnEnum;
 import org.projectnessie.cel.types.jackson.types.CollectionsObject;
+import org.projectnessie.cel.types.jackson.types.EnumWithConstantBody;
 import org.projectnessie.cel.types.jackson.types.MetaTest;
 import org.projectnessie.cel.types.jackson.types.RefVariantB;
 
@@ -180,7 +182,7 @@ class Jackson2RegistryTest {
   void copy() {
     JacksonRegistry reg = (JacksonRegistry) JacksonRegistry.newRegistry();
     reg.register(CollectionsObject.class);
-    reg.enumDescription(AnEnum.class);
+    reg.register(AnEnum.class);
 
     JacksonRegistry copy = (JacksonRegistry) reg.copy();
     assertThat(copy).isNotSameAs(reg);
@@ -196,6 +198,27 @@ class Jackson2RegistryTest {
     reg.nativeToValue(refVariantB);
     assertThat(reg.findType(refVariantB.getClass().getName())).isNotNull();
     assertThat(copy.findType(refVariantB.getClass().getName())).isNull();
+  }
+
+  @Test
+  void registerStandaloneEnum() {
+    TypeRegistry registry = JacksonRegistry.newRegistry();
+    registry.register(AnEnum.class);
+
+    String enumValueName = AnEnum.class.getName() + "." + AnEnum.ENUM_VALUE_2.name();
+    assertThat(registry.findIdent(enumValueName)).isEqualTo(intOf(AnEnum.ENUM_VALUE_2.ordinal()));
+    assertThat(registry.enumValue(enumValueName)).isEqualTo(intOf(AnEnum.ENUM_VALUE_2.ordinal()));
+    assertThat(registry.nativeToValue(AnEnum.ENUM_VALUE_2))
+        .isEqualTo(intOf(AnEnum.ENUM_VALUE_2.ordinal()));
+
+    TypeRegistry exactRegistry = JacksonRegistry.newExactAggregateRegistry();
+    exactRegistry.register(EnumWithConstantBody.SPECIAL);
+    String constantBodyValueName =
+        EnumWithConstantBody.class.getName() + "." + EnumWithConstantBody.SPECIAL.name();
+    assertThat(exactRegistry.findIdent(constantBodyValueName))
+        .isEqualTo(intOf(EnumWithConstantBody.SPECIAL.ordinal()));
+    assertThat(exactRegistry.nativeToValue(EnumWithConstantBody.SPECIAL))
+        .isEqualTo(intOf(EnumWithConstantBody.SPECIAL.ordinal()));
   }
 
   @Test
