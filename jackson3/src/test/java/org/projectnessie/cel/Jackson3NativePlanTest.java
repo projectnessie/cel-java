@@ -15,6 +15,7 @@
  */
 package org.projectnessie.cel;
 
+import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.projectnessie.cel.CEL.attributePattern;
 import static org.projectnessie.cel.CEL.partialVars;
@@ -28,18 +29,23 @@ import static org.projectnessie.cel.EvalOption.OptPartialEval;
 import static org.projectnessie.cel.ProgramOption.evalOptions;
 
 import java.util.AbstractMap;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.Env.AstIssuesTuple;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.NullT;
+import org.projectnessie.cel.common.types.UnknownT;
 import org.projectnessie.cel.common.types.ref.ExactAggregateFieldProvider;
 import org.projectnessie.cel.common.types.ref.ExactAggregateTypeAdapter;
 import org.projectnessie.cel.common.types.ref.StandardScalarFieldProvider;
@@ -237,6 +243,96 @@ class Jackson3NativePlanTest {
     assertThat(result.booleanValue()).isTrue();
     assertThat(input.numbersReadCount()).isEqualTo(2);
     assertThat(input.optionalNumbersReadCount()).isEqualTo(2);
+  }
+
+  @Test
+  @SuppressWarnings("resource")
+  void exactObjectListNestedQuantifiersPreserveAccessOrderPartialAndConcurrentEvaluation()
+      throws Exception {
+    TypeRegistry registry = Jackson3Registry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            types(ObservedAddress.class),
+            declarations(
+                Decls.newVar(
+                    "self",
+                    Decls.newListType(Decls.newObjectType(ObservedAddress.class.getName())))));
+    Ast ast =
+        compile(
+            env,
+            "self.all(a1, a1.type == 'IPAddress' && has(a1.value)"
+                + " ? self.exists_one(a2, a2.type == a1.type"
+                + " && has(a2.value) && a2.value == a1.value) : true)");
+    Prog enabled = (Prog) env.program(ast);
+    Prog disabled = (Prog) env.program(ast, evalOptions(OptDisableNativeEval));
+    List<String> enabledEvents = new ArrayList<>();
+    List<String> disabledEvents = new ArrayList<>();
+
+    Val enabledResult = enabled.eval(Map.of("self", observedAddresses(enabledEvents))).getVal();
+    Val disabledResult = disabled.eval(Map.of("self", observedAddresses(disabledEvents))).getVal();
+
+    assertThat(enabled.interpretable.getClass().getSimpleName()).isEqualTo("NativeIsland");
+    assertThat(disabled.interpretable.getClass().getSimpleName()).isNotEqualTo("NativeIsland");
+    assertEquivalent(enabledResult, disabledResult);
+    assertThat(enabledResult.booleanValue()).isTrue();
+    assertThat(enabledEvents).hasSize(29).containsExactlyElementsOf(disabledEvents);
+
+    Prog partialEnabled = (Prog) env.program(ast, evalOptions(OptPartialEval));
+    Prog partialDisabled =
+        (Prog) env.program(ast, evalOptions(OptPartialEval, OptDisableNativeEval));
+    for (String unknownVariable : List.of("self", "unrelated")) {
+      List<String> partialEnabledEvents = new ArrayList<>();
+      List<String> partialDisabledEvents = new ArrayList<>();
+      Val partialEnabledResult =
+          partialEnabled
+              .eval(
+                  partialVars(
+                      Map.of("self", observedAddresses(partialEnabledEvents)),
+                      attributePattern(unknownVariable)))
+              .getVal();
+      Val partialDisabledResult =
+          partialDisabled
+              .eval(
+                  partialVars(
+                      Map.of("self", observedAddresses(partialDisabledEvents)),
+                      attributePattern(unknownVariable)))
+              .getVal();
+
+      assertEquivalent(partialEnabledResult, partialDisabledResult);
+      assertThat(partialEnabledEvents)
+          .as(unknownVariable)
+          .containsExactlyElementsOf(partialDisabledEvents);
+      if (unknownVariable.equals("self")) {
+        assertThat(partialEnabledResult).isInstanceOf(UnknownT.class);
+        assertThat(partialEnabledEvents).isEmpty();
+      } else {
+        assertThat(partialEnabledResult.booleanValue()).isTrue();
+        assertThat(partialEnabledEvents).hasSize(29);
+      }
+    }
+
+    ExecutorService executor = Executors.newFixedThreadPool(4);
+    try {
+      List<Future<Boolean>> concurrentResults = new ArrayList<>();
+      for (int i = 0; i < 100; i++) {
+        boolean unique = (i & 1) == 0;
+        concurrentResults.add(
+            executor.submit(
+                () ->
+                    enabled
+                        .eval(Map.of("self", observedAddresses(new ArrayList<>(), unique)))
+                        .getVal()
+                        .booleanValue()));
+      }
+      for (int i = 0; i < concurrentResults.size(); i++) {
+        assertThat(concurrentResults.get(i).get(5, SECONDS)).isEqualTo((i & 1) == 0);
+      }
+    } finally {
+      executor.shutdownNow();
+      assertThat(executor.awaitTermination(5, SECONDS)).isTrue();
+    }
   }
 
   @Test
@@ -600,6 +696,17 @@ class Jackson3NativePlanTest {
     return new NestedAggregateInput(List.of(Map.of("value", 1L), Map.of("value", 2L)));
   }
 
+  private static List<ObservedAddress> observedAddresses(List<String> events) {
+    return observedAddresses(events, true);
+  }
+
+  private static List<ObservedAddress> observedAddresses(List<String> events, boolean unique) {
+    return List.of(
+        new ObservedAddress("first", "IPAddress", "192.0.2.1", events),
+        new ObservedAddress("other", "Hostname", "example.test", events),
+        new ObservedAddress("last", "IPAddress", unique ? "192.0.2.2" : "192.0.2.1", events));
+  }
+
   private static DynamicMapInput dynamicMapInput() {
     return new DynamicMapInput(
         Map.of("one", true),
@@ -633,7 +740,7 @@ class Jackson3NativePlanTest {
     }
   }
 
-  @SuppressWarnings({"unused", "ClassCanBeRecord"})
+  @SuppressWarnings("unused")
   public static final class ObjectMapInput {
     private final Map<String, NestedObject> objects;
     private int objectsReadCount;
@@ -652,7 +759,7 @@ class Jackson3NativePlanTest {
     }
   }
 
-  @SuppressWarnings({"unused", "ClassCanBeRecord"})
+  @SuppressWarnings("unused")
   public static final class NestedObject {
     private final String value;
     private int valueReadCount;
@@ -671,6 +778,31 @@ class Jackson3NativePlanTest {
     }
   }
 
+  @SuppressWarnings({"unused", "ClassCanBeRecord"})
+  public static final class ObservedAddress {
+    private final String id;
+    private final String type;
+    private final String value;
+    private final List<String> events;
+
+    public ObservedAddress(String id, String type, String value, List<String> events) {
+      this.id = id;
+      this.type = type;
+      this.value = value;
+      this.events = events;
+    }
+
+    public String getType() {
+      events.add(id + ".type");
+      return type;
+    }
+
+    public String getValue() {
+      events.add(id + ".value");
+      return value;
+    }
+  }
+
   private static final class LookupOnlyMap<K, V> extends AbstractMap<K, V> {
     private final K key;
     private final V value;
@@ -685,13 +817,14 @@ class Jackson3NativePlanTest {
       return key.equals(requestedKey) ? value : null;
     }
 
+    @SuppressWarnings("NullableProblems")
     @Override
     public Set<Entry<K, V>> entrySet() {
       throw new AssertionError("constant exact lookup must not traverse the source map");
     }
   }
 
-  @SuppressWarnings({"unused", "ClassCanBeRecord"})
+  @SuppressWarnings("unused")
   public static final class AggregateInput {
     private final List<Long> numbers;
     private final List<ULong> unsigned;
@@ -764,50 +897,16 @@ class Jackson3NativePlanTest {
     }
   }
 
-  @SuppressWarnings({"unused", "ClassCanBeRecord"})
-  public static final class DynamicMapInput {
-    private final Map<String, Boolean> booleans;
-    private final Map<String, Long> integers;
-    private final Map<String, ULong> unsigned;
-    private final Map<String, Double> doubles;
-    private final Map<String, String> texts;
-    private final String lookupKey = "one";
-
-    public DynamicMapInput(
-        Map<String, Boolean> booleans,
-        Map<String, Long> integers,
-        Map<String, ULong> unsigned,
-        Map<String, Double> doubles,
-        Map<String, String> texts) {
-      this.booleans = booleans;
-      this.integers = integers;
-      this.unsigned = unsigned;
-      this.doubles = doubles;
-      this.texts = texts;
-    }
-
-    public Map<String, Boolean> getBooleans() {
-      return booleans;
-    }
-
-    public Map<String, Long> getIntegers() {
-      return integers;
-    }
-
-    public Map<String, ULong> getUnsigned() {
-      return unsigned;
-    }
-
-    public Map<String, Double> getDoubles() {
-      return doubles;
-    }
-
-    public Map<String, String> getTexts() {
-      return texts;
-    }
+  @SuppressWarnings("unused")
+  public record DynamicMapInput(
+      Map<String, Boolean> booleans,
+      Map<String, Long> integers,
+      Map<String, ULong> unsigned,
+      Map<String, Double> doubles,
+      Map<String, String> texts) {
 
     public String getLookupKey() {
-      return lookupKey;
+      return "one";
     }
   }
 

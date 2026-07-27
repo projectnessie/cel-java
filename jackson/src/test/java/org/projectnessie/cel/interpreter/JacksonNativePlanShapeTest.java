@@ -28,6 +28,7 @@ import static org.projectnessie.cel.interpreter.Dispatcher.newDispatcher;
 import static org.projectnessie.cel.interpreter.Interpreter.newInterpreter;
 import static org.projectnessie.cel.interpreter.functions.Overload.standardOverloads;
 
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.Env.AstIssuesTuple;
@@ -77,6 +78,15 @@ class JacksonNativePlanShapeTest {
     Interpretable dynamic = plan("input.objects[stringKey]");
     assertThat(dynamic).isNotInstanceOf(NativeMapObjectIndex.class);
     assertThat(dynamic).isNotInstanceOf(NativeIsland.class);
+  }
+
+  @Test
+  void keepsObjectListQuantifiersEstablishedWithoutStandardScalarFieldContract() {
+    Interpretable enabled =
+        plan(
+            "input.objectList.all(a1, " + "input.objectList.exists_one(a2, a2.value == a1.value))");
+
+    assertThat(enabled).isExactlyInstanceOf(EvalFold.class);
   }
 
   @Test
@@ -140,9 +150,7 @@ class JacksonNativePlanShapeTest {
     private final Map<Boolean, Long> booleanNumbers = Map.of(true, 1L);
     private final Map<Integer, Long> integerNumbers = Map.of(1, 1L);
     private final Map<String, Nested> objects = Map.of("one", new Nested("value"));
-    private final String lookupString = "one";
-    private final boolean lookupBoolean = true;
-    private final int lookupInteger = 1;
+    private final List<Nested> objectList = List.of(new Nested("value"));
 
     public Map<String, Long> getStringNumbers() {
       return stringNumbers;
@@ -160,16 +168,20 @@ class JacksonNativePlanShapeTest {
       return objects;
     }
 
+    public List<Nested> getObjectList() {
+      return objectList;
+    }
+
     public String getLookupString() {
-      return lookupString;
+      return "one";
     }
 
     public boolean isLookupBoolean() {
-      return lookupBoolean;
+      return true;
     }
 
     public int getLookupInteger() {
-      return lookupInteger;
+      return 1;
     }
   }
 
