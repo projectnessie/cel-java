@@ -112,7 +112,7 @@ final class SourceImpl implements Source {
       String content, String description, List<Integer> lineOffsets, Map<Long, Integer> idOffsets) {
     this.content = content;
     this.description = description;
-    this.lineOffsets = lineOffsets;
+    this.lineOffsets = List.copyOf(lineOffsets);
     this.idOffsets = idOffsets;
   }
 
