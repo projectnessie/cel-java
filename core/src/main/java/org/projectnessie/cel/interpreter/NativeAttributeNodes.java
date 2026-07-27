@@ -21,6 +21,7 @@ import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.interpreter.Coster.Cost.estimateCost;
 import static org.projectnessie.cel.interpreter.ValueSignal.signal;
 
+import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.interpreter.AttributeFactory.Attribute;
@@ -109,6 +110,45 @@ final class NativeStringAttr extends NativeScalarAttr implements NativeStringCap
   @Override
   public String evalString(Activation activation) {
     return NativeSupport.stringValue(adapter, resolveNative(activation));
+  }
+}
+
+final class NativeStringMapObjectField extends NativeScalarAttr implements NativeStringCapability {
+  private final NativeMapObjectIndex source;
+  private final FieldType fieldType;
+
+  NativeStringMapObjectField(
+      long id,
+      TypeAdapter adapter,
+      Attribute attribute,
+      Attribute partialAttribute,
+      NativeMapObjectIndex source,
+      FieldType fieldType) {
+    super(id, adapter, attribute, partialAttribute);
+    this.source = source;
+    this.fieldType = fieldType;
+  }
+
+  @Override
+  public String evalString(Activation activation) {
+    if (usesPartialAttribute(activation)) {
+      return NativeSupport.stringValue(adapter, resolveNative(activation));
+    }
+    Object target = source.selectRaw(activation);
+    if (target == null || target instanceof Val) {
+      Val value = source.materializeSelected(target);
+      if (isError(value) || isUnknown(value)) {
+        throw signal(value);
+      }
+      target = value.value();
+    }
+    try {
+      return NativeSupport.stringValue(adapter, fieldType.getFrom.getFrom(target));
+    } catch (ValueSignal failure) {
+      throw failure;
+    } catch (Exception failure) {
+      throw signal(newErr(failure, failure.toString()));
+    }
   }
 }
 
