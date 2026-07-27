@@ -17,12 +17,16 @@ package org.projectnessie.cel.interpreter;
 
 import static java.util.concurrent.TimeUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeout;
 import static org.projectnessie.cel.CEL.astToCheckedExpr;
 import static org.projectnessie.cel.Env.newEnv;
 import static org.projectnessie.cel.EnvOption.declarations;
 import static org.projectnessie.cel.EvalOption.OptDisableNativeEval;
+import static org.projectnessie.cel.EvalOption.OptExhaustiveEval;
 import static org.projectnessie.cel.EvalOption.OptPartialEval;
+import static org.projectnessie.cel.EvalOption.OptTrackState;
 import static org.projectnessie.cel.ProgramOption.evalOptions;
+import static org.projectnessie.cel.ProgramOption.regexEngine;
 import static org.projectnessie.cel.checker.Decls.Bool;
 import static org.projectnessie.cel.checker.Decls.String;
 import static org.projectnessie.cel.checker.Decls.newVar;
@@ -41,6 +45,7 @@ import static org.projectnessie.cel.interpreter.Dispatcher.newDispatcher;
 import static org.projectnessie.cel.interpreter.Interpreter.newInterpreter;
 import static org.projectnessie.cel.interpreter.functions.Overload.standardOverloads;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -53,6 +58,7 @@ import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.Ast;
 import org.projectnessie.cel.Env;
 import org.projectnessie.cel.Program;
+import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.StringT;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
@@ -72,9 +78,9 @@ class NativeConstantRegexTest {
     Interpretable decoratedPlan = plan("input.matches('a.*')", true, node -> node);
 
     assertThat(root(nativePlan)).isExactlyInstanceOf(NativeConstantRegex.class);
-    assertThat(root(establishedPlan)).isExactlyInstanceOf(EvalBinary.class);
-    assertThat(root(dynamicPlan)).isExactlyInstanceOf(EvalBinary.class);
-    assertThat(root(decoratedPlan)).isExactlyInstanceOf(EvalBinary.class);
+    assertThat(root(establishedPlan)).isExactlyInstanceOf(EvalRegex.class);
+    assertThat(root(dynamicPlan)).isExactlyInstanceOf(EvalRegex.class);
+    assertThat(root(decoratedPlan)).isExactlyInstanceOf(EvalRegex.class);
     assertThat(Coster.Cost.estimateCost(nativePlan))
         .isEqualTo(Coster.Cost.estimateCost(establishedPlan));
 
@@ -85,7 +91,7 @@ class NativeConstantRegexTest {
   }
 
   @Test
-  void validPatternsMatchEstablishedEvaluation() {
+  void validPatternsMatchEstablishedEvaluationForBothEngines() {
     for (String expression :
         List.of(
             "input.matches('a.*')",
@@ -93,25 +99,76 @@ class NativeConstantRegexTest {
             "input.matches('z')",
             "input.matches('')")) {
       for (String input : List.of("", "a", "abc", "zzz")) {
-        assertEquivalent(expression, Map.of("input", input));
+        for (RegexEngine engine : RegexEngine.values()) {
+          assertEquivalent(expression, Map.of("input", input), engine);
+        }
       }
     }
   }
 
   @Test
-  void invalidPatternFailureRetainsReachabilityAndLeftPrecedence() {
-    assertEquivalent("false && input.matches('[')", Map.of("input", "abc"));
-    assertEquivalent("true ? true : input.matches('[')", Map.of("input", "abc"));
+  void invalidPatternFailureRetainsReachabilityAndLeftPrecedenceForBothEngines() {
+    for (RegexEngine engine : RegexEngine.values()) {
+      assertEquivalent("false && input.matches('[')", Map.of("input", "abc"), engine);
+      assertEquivalent("true ? true : input.matches('[')", Map.of("input", "abc"), engine);
 
-    Val reached = assertEquivalent("input.matches('[')", Map.of("input", "abc"));
-    assertThat(reached).isInstanceOf(Err.class).asString().contains("Unclosed character class");
+      Val reached = assertEquivalent("input.matches('[')", Map.of("input", "abc"), engine);
+      assertThat(reached).isInstanceOf(Err.class);
 
-    Val leftError = newErr("left failed");
-    Val leftUnknown = unknownOf(71L);
-    assertThat(assertEquivalent("input.matches('[')", Map.of("input", leftError)))
-        .isSameAs(leftError);
-    assertThat(assertEquivalent("input.matches('[')", Map.of("input", leftUnknown)))
-        .isSameAs(leftUnknown);
+      Val leftError = newErr("left failed");
+      Val leftUnknown = unknownOf(71L);
+      assertThat(assertEquivalent("input.matches('[')", Map.of("input", leftError), engine))
+          .isSameAs(leftError);
+      assertThat(assertEquivalent("input.matches('[')", Map.of("input", leftUnknown), engine))
+          .isSameAs(leftUnknown);
+    }
+  }
+
+  @Test
+  void javaCompatibilityDefaultAndRe2DialectAreExplicit() {
+    String expression = "input.matches('a(?=b)')";
+    Map<String, String> variables = Map.of("input", "ab");
+
+    assertThat(plan(expression, true).eval(newActivation(variables)).booleanValue()).isTrue();
+    assertThat(
+            plan(expression, true, RegexEngine.JAVA).eval(newActivation(variables)).booleanValue())
+        .isTrue();
+    assertThat(plan(expression, true, RegexEngine.RE2).eval(newActivation(variables)))
+        .isInstanceOf(Err.class);
+    assertThat(plan(expression, false, RegexEngine.RE2).eval(newActivation(variables)))
+        .isInstanceOf(Err.class);
+
+    Val dynamic =
+        plan("input.matches(pattern)", true, RegexEngine.RE2)
+            .eval(newActivation(Map.of("input", "ab", "pattern", "a(?=b)")));
+    assertThat(dynamic).isInstanceOf(Err.class);
+  }
+
+  @Test
+  void uncheckedPlanningUsesSelectedEngine() {
+    var parsed = env.parse("input.matches('a(?=b)')");
+    assertThat(parsed.hasIssues()).as(parsed.getIssues().toString()).isFalse();
+    Dispatcher dispatcher = newDispatcher();
+    dispatcher.add(standardOverloads());
+
+    Val result =
+        interpreter(dispatcher, false, RegexEngine.RE2)
+            .newUncheckedInterpretable(parsed.getAst().getExpr())
+            .eval(newActivation(Map.of("input", "ab")));
+
+    assertThat(result).isInstanceOf(Err.class);
+  }
+
+  @Test
+  void statefulProgramsRetainSelectedEngine() {
+    Ast ast = compile("input.matches('a(?=b)')");
+
+    Program tracked = env.program(ast, regexEngine(RegexEngine.RE2), evalOptions(OptTrackState));
+    Program exhaustive =
+        env.program(ast, regexEngine(RegexEngine.RE2), evalOptions(OptExhaustiveEval));
+
+    assertThat(tracked.eval(Map.of("input", "ab")).getVal()).isInstanceOf(Err.class);
+    assertThat(exhaustive.eval(Map.of("input", "ab")).getVal()).isInstanceOf(Err.class);
   }
 
   @Test
@@ -156,7 +213,7 @@ class NativeConstantRegexTest {
 
   @Test
   void oneProgramSupportsConcurrentEvaluation() throws Exception {
-    Interpretable plan = plan("input.matches('value-[0-9]+')", true);
+    Interpretable plan = plan("input.matches('value-[0-9]+')", true, RegexEngine.RE2);
     ExecutorService executor = Executors.newFixedThreadPool(4);
     try {
       List<Future<Boolean>> results = new ArrayList<>();
@@ -174,9 +231,25 @@ class NativeConstantRegexTest {
     }
   }
 
+  @Test
+  void re2HandlesNestedQuantifiersWithoutBacktracking() {
+    Interpretable plan = plan("input.matches('^(a+)+$')", true, RegexEngine.RE2);
+    String input = "a".repeat(20_000) + "!";
+
+    Val result =
+        assertTimeout(
+            Duration.ofSeconds(3), () -> plan.eval(newActivation(Map.of("input", input))));
+
+    assertThat(result.booleanValue()).isFalse();
+  }
+
   private Val assertEquivalent(String expression, Object variables) {
-    Val nativeValue = plan(expression, true).eval(newActivation(variables));
-    Val establishedValue = plan(expression, false).eval(newActivation(variables));
+    return assertEquivalent(expression, variables, RegexEngine.JAVA);
+  }
+
+  private Val assertEquivalent(String expression, Object variables, RegexEngine regexEngine) {
+    Val nativeValue = plan(expression, true, regexEngine).eval(newActivation(variables));
+    Val establishedValue = plan(expression, false, regexEngine).eval(newActivation(variables));
     assertEquivalent(nativeValue, establishedValue, expression);
     return nativeValue;
   }
@@ -195,10 +268,22 @@ class NativeConstantRegexTest {
 
   private Interpretable plan(
       String expression, boolean nativeEnabled, InterpretableDecorator... decorators) {
+    return plan(expression, nativeEnabled, RegexEngine.JAVA, decorators);
+  }
+
+  private Interpretable plan(String expression, boolean nativeEnabled, RegexEngine regexEngine) {
+    return plan(expression, nativeEnabled, regexEngine, new InterpretableDecorator[0]);
+  }
+
+  private Interpretable plan(
+      String expression,
+      boolean nativeEnabled,
+      RegexEngine regexEngine,
+      InterpretableDecorator... decorators) {
     Ast ast = compile(expression);
     Dispatcher dispatcher = newDispatcher();
     dispatcher.add(standardOverloads());
-    return interpreter(dispatcher, nativeEnabled)
+    return interpreter(dispatcher, nativeEnabled, regexEngine)
         .newInterpretable(astToCheckedExpr(ast), decorators);
   }
 
@@ -208,15 +293,26 @@ class NativeConstantRegexTest {
     standards.add(standardOverloads());
     Dispatcher dispatcher = extendDispatcher(standards);
     dispatcher.add(replacement);
-    return interpreter(dispatcher, true).newInterpretable(astToCheckedExpr(ast));
+    return interpreter(dispatcher, true, RegexEngine.RE2).newInterpretable(astToCheckedExpr(ast));
   }
 
   private Interpreter interpreter(Dispatcher dispatcher, boolean nativeEnabled) {
+    return interpreter(dispatcher, nativeEnabled, RegexEngine.JAVA);
+  }
+
+  private Interpreter interpreter(
+      Dispatcher dispatcher, boolean nativeEnabled, RegexEngine regexEngine) {
     TypeAdapter adapter = env.getTypeAdapter();
     AttributeFactory attributes =
         newAttributeFactory(defaultContainer, adapter, env.getTypeProvider());
     return newInterpreter(
-        dispatcher, defaultContainer, env.getTypeProvider(), adapter, attributes, nativeEnabled);
+        dispatcher,
+        defaultContainer,
+        env.getTypeProvider(),
+        adapter,
+        attributes,
+        nativeEnabled,
+        regexEngine);
   }
 
   private static Interpretable root(Interpretable plan) {

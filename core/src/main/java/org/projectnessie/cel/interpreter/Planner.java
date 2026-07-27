@@ -42,6 +42,7 @@ import com.google.api.expr.v1alpha1.Type.PrimitiveType;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.operators.Operator;
@@ -88,6 +89,7 @@ final class Planner implements InterpretablePlanner {
   private final Map<Long, Type> typeMap;
   private final Map<String, FieldType> fieldTypes = new HashMap<>();
   private final PlanningPolicy policy;
+  private final RegexEngine regexEngine;
   private final InterpretableDecorator[] decorators;
   private AttributeFactory partialAttrFactory;
   private int planDepth;
@@ -102,6 +104,7 @@ final class Planner implements InterpretablePlanner {
       Map<Long, Reference> refMap,
       Map<Long, Type> typeMap,
       PlanningPolicy policy,
+      RegexEngine regexEngine,
       InterpretableDecorator[] decorators) {
     this.disp = disp;
     this.provider = provider;
@@ -111,6 +114,7 @@ final class Planner implements InterpretablePlanner {
     this.refMap = refMap;
     this.typeMap = typeMap;
     this.policy = policy;
+    this.regexEngine = requireNonNull(regexEngine);
     this.decorators = decorators;
   }
 
@@ -669,6 +673,10 @@ final class Planner implements InterpretablePlanner {
 
     // Otherwise, generate Interpretable calls specialized by argument count.
     Overload fnDef = resolvedFunc.implementation;
+    Interpretable regex = specializeStandardRegexCall(expr, resolvedFunc, args);
+    if (regex != null) {
+      return regex;
+    }
     Interpretable nativeScalar = specializeStrictScalarCall(expr, resolvedFunc, args);
     if (nativeScalar != null) {
       return nativeScalar;
@@ -905,20 +913,6 @@ final class Planner implements InterpretablePlanner {
       return null;
     }
 
-    if (overload.equals(Overloads.MatchesString)
-        && args[0] instanceof NativeStringCapability
-        && args[1] instanceof NativeStringConst pattern
-        && hasPrimitiveType(expr.getId(), PrimitiveType.BOOL)) {
-      return new NativeConstantRegex(
-          expr.getId(),
-          resolved.fnName,
-          overload,
-          args[0],
-          args[1],
-          (String) pattern.value().value(),
-          implementation);
-    }
-
     NativeArithmetic arithmetic = arithmetic(overload);
     if (arithmetic != null) {
       if (args[0] instanceof NativeIntCapability
@@ -966,6 +960,44 @@ final class Planner implements InterpretablePlanner {
           comparison);
     }
     return null;
+  }
+
+  private Interpretable specializeStandardRegexCall(
+      Expr expr, ResolvedFunction resolved, Interpretable[] args) {
+    String overload = resolved.overloadId;
+    Overload implementation = resolved.implementation;
+    if (args.length != 2
+        || !resolved.fnName.equals(Overloads.Matches)
+        || (!overload.isEmpty() && !overload.equals(Overloads.MatchesString))
+        || !StandardOverloadProvenance.isExactStandardImplementation(
+            implementation, resolved.fnName)) {
+      return null;
+    }
+    if (nativeScalarPlanning()
+        && resolved.nativeDescriptor() != null
+        && args[0] instanceof NativeStringCapability
+        && args[1] instanceof NativeStringConst pattern
+        && hasPrimitiveType(expr.getId(), PrimitiveType.BOOL)) {
+      return new NativeConstantRegex(
+          expr.getId(),
+          resolved.fnName,
+          overload,
+          args[0],
+          args[1],
+          (String) pattern.value().value(),
+          regexEngine,
+          implementation);
+    }
+    Interpretable[] established = asEstablished(args);
+    return new EvalRegex(
+        expr.getId(),
+        resolved.fnName,
+        overload,
+        established[0],
+        established[1],
+        regexEngine,
+        implementation.binary,
+        implementation.operandTrait);
   }
 
   private static NativeArithmetic arithmetic(String overload) {

@@ -15,12 +15,15 @@
  */
 package org.projectnessie.cel.interpreter;
 
+import static java.util.Objects.requireNonNull;
+
 import com.google.api.expr.v1alpha1.CheckedExpr;
 import com.google.api.expr.v1alpha1.Expr;
 import com.google.api.expr.v1alpha1.Reference;
 import com.google.api.expr.v1alpha1.Type;
 import java.util.HashMap;
 import java.util.Map;
+import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
@@ -33,6 +36,7 @@ final class ExprInterpreter implements Interpreter {
   private final TypeAdapter adapter;
   private final AttributeFactory attrFactory;
   private final PlanningPolicy planningPolicy;
+  private final RegexEngine regexEngine;
 
   ExprInterpreter(
       Dispatcher dispatcher,
@@ -40,13 +44,15 @@ final class ExprInterpreter implements Interpreter {
       TypeProvider provider,
       TypeAdapter adapter,
       AttributeFactory attrFactory,
-      PlanningPolicy planningPolicy) {
+      PlanningPolicy planningPolicy,
+      RegexEngine regexEngine) {
     this.dispatcher = dispatcher;
     this.container = container;
     this.provider = provider;
     this.adapter = adapter;
     this.attrFactory = attrFactory;
     this.planningPolicy = planningPolicy;
+    this.regexEngine = requireNonNull(regexEngine, "regexEngine");
   }
 
   @Override
@@ -89,6 +95,7 @@ final class ExprInterpreter implements Interpreter {
         refMap,
         typeMap,
         effectivePolicy,
+        regexEngine,
         effectiveDecorators);
   }
 
@@ -102,6 +109,7 @@ final class ExprInterpreter implements Interpreter {
         new HashMap<>(),
         new HashMap<>(),
         PlanningPolicy.ESTABLISHED_ONLY,
+        regexEngine,
         decorators);
   }
 

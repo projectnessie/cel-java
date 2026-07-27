@@ -21,6 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.tools.Script;
 import org.projectnessie.cel.tools.ScriptHost;
@@ -43,6 +44,14 @@ class StandaloneJackson3SmokeTest {
             .build();
 
     assertThat(script.execute(Boolean.class, singletonMap("input", new Input("reports")))).isTrue();
+
+    Script re2 =
+        ScriptHost.newBuilder()
+            .regexEngine(RegexEngine.RE2)
+            .build()
+            .buildScript("'abc'.matches('b')")
+            .build();
+    assertThat(re2.execute(Boolean.class, java.util.Map.of())).isTrue();
   }
 
   public static final class Input {
