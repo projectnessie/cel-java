@@ -43,6 +43,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.IntT;
@@ -55,6 +56,7 @@ import org.projectnessie.cel.common.types.pb.Checked;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.types.jackson.types.AnEnum;
+import org.projectnessie.cel.types.jackson.types.ArrayObject;
 import org.projectnessie.cel.types.jackson.types.CollectionsObject;
 import org.projectnessie.cel.types.jackson.types.CustomSerializedEnum;
 import org.projectnessie.cel.types.jackson.types.EnumWithConstantBody;
@@ -85,6 +87,22 @@ class Jackson2TypeDescriptionTest {
 
   static final class InvalidMapKeyObject {
     public Map<Double, String> invalidMap;
+  }
+
+  static final class UnsupportedBooleanArray {
+    public boolean[] values;
+  }
+
+  static final class UnsupportedShortArray {
+    public short[] values;
+  }
+
+  static final class UnsupportedCharArray {
+    public char[] values;
+  }
+
+  static final class UnsupportedFloatArray {
+    public float[] values;
   }
 
   @Test
@@ -182,6 +200,63 @@ class Jackson2TypeDescriptionTest {
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("Unsupported CEL map key type")
         .hasMessageContaining("java.lang.Double");
+  }
+
+  @Test
+  void arrayFieldTypesMatchRuntimeAdaptation() {
+    JacksonRegistry reg = (JacksonRegistry) newRegistry();
+    reg.register(ArrayObject.class);
+
+    checkArrayFieldType(reg, "bytes", Checked.checkedBytes);
+    checkArrayFieldType(reg, "ints", Decls.newListType(Checked.checkedInt));
+    checkArrayFieldType(reg, "longs", Decls.newListType(Checked.checkedInt));
+    checkArrayFieldType(reg, "doubles", Decls.newListType(Checked.checkedDouble));
+    checkArrayFieldType(reg, "strings", Decls.newListType(Checked.checkedString));
+    checkArrayFieldType(reg, "boxedInts", Decls.newListType(Checked.checkedInt));
+    checkArrayFieldType(reg, "uints", Decls.newListType(Checked.checkedUint));
+    checkArrayFieldType(reg, "enums", Decls.newListType(Checked.checkedInt));
+    checkArrayFieldType(
+        reg,
+        "objects",
+        Decls.newListType(
+            com.google.api.expr.v1alpha1.Type.newBuilder()
+                .setMessageType(InnerType.class.getName())
+                .build()));
+    checkArrayFieldType(reg, "dynamic", Checked.checkedListDyn);
+    checkArrayFieldType(reg, "values", Checked.checkedListDyn);
+    checkArrayFieldType(
+        reg, "nestedInts", Decls.newListType(Decls.newListType(Checked.checkedInt)));
+    checkArrayFieldType(reg, "nestedBytes", Decls.newListType(Checked.checkedBytes));
+  }
+
+  @Test
+  void rejectsUnsupportedPrimitiveArrays() {
+    Map.of(
+            UnsupportedBooleanArray.class,
+            "boolean[]",
+            UnsupportedShortArray.class,
+            "short[]",
+            UnsupportedCharArray.class,
+            "char[]",
+            UnsupportedFloatArray.class,
+            "float[]")
+        .forEach(
+            (type, typeName) -> {
+              JacksonRegistry reg = (JacksonRegistry) newRegistry();
+              assertThatThrownBy(() -> reg.register(type))
+                  .isInstanceOf(IllegalArgumentException.class)
+                  .hasMessageContaining("Unsupported Java array type")
+                  .hasMessageContaining(typeName);
+            });
+  }
+
+  private static void checkArrayFieldType(
+      JacksonRegistry reg, String property, com.google.api.expr.v1alpha1.Type expectedType) {
+    JacksonFieldType fieldType =
+        (JacksonFieldType) reg.findFieldType(ArrayObject.class.getName(), property);
+    assertThat(fieldType).isNotNull();
+    assertThat(fieldType.propertyWriter().getType().isArrayType()).isTrue();
+    assertThat(fieldType.type).isEqualTo(expectedType);
   }
 
   @Test

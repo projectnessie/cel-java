@@ -685,6 +685,16 @@ public class ProviderTest {
     TypeRegistry reg = newEmptyRegistry();
     Val val = reg.nativeToValue(new nonConvertible());
     assertThat(val).matches(Err::isError);
+
+    for (Object array :
+        new Object[] {
+          new boolean[0], new short[0], new char[0], new float[0],
+        }) {
+      assertThat(reg.nativeToValue(array))
+          .matches(Err::isError)
+          .asString()
+          .contains("unsupported Java array type", array.getClass().getTypeName());
+    }
   }
 
   static class nonConvertible {}
