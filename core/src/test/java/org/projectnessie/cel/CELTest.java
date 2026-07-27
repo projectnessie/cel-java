@@ -245,6 +245,15 @@ public class CELTest {
   }
 
   @Test
+  void compileReturnsParseIssuesWithoutChecking() {
+    AstIssuesTuple result = newEnv().compile("a +");
+
+    assertThat(result.hasIssues()).isTrue();
+    assertThat(result.getAst()).isNull();
+    assertThat(result.getIssues().getErrors()).isNotEmpty();
+  }
+
+  @Test
   void exampleWithBuiltins() {
     // Variables used within this expression environment.
     EnvOption decls =
@@ -845,6 +854,19 @@ public class CELTest {
     Env e3 = e2.extend();
     assertThat(e2.getTypeAdapter()).isEqualTo(e3.getTypeAdapter());
     assertThat(e2.getTypeProvider()).isEqualTo(e3.getTypeProvider());
+  }
+
+  @Test
+  void EnvExtensionPreservesDistinctEqualRegistries() {
+    TypeRegistry adapter = newEmptyRegistry();
+    TypeRegistry provider = newEmptyRegistry();
+    assertThat(adapter).isEqualTo(provider).isNotSameAs(provider);
+
+    Env extended = newEnv(customTypeAdapter(adapter), customTypeProvider(provider)).extend();
+
+    assertThat(extended.getTypeAdapter()).isNotSameAs(adapter);
+    assertThat(extended.getTypeProvider()).isNotSameAs(provider);
+    assertThat(extended.getTypeAdapter()).isNotSameAs(extended.getTypeProvider());
   }
 
   @Test

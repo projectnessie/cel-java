@@ -250,6 +250,9 @@ public final class Env {
    */
   public AstIssuesTuple compileSource(Source src) {
     AstIssuesTuple aiParse = parseSource(src);
+    if (aiParse.hasIssues()) {
+      return aiParse;
+    }
     AstIssuesTuple aiCheck = check(aiParse.ast);
     Issues iss = aiParse.issues.append(aiCheck.issues);
     return new AstIssuesTuple(aiCheck.ast, iss);
@@ -287,7 +290,7 @@ public final class Env {
       provider = reg;
       // If the adapter and provider are the same object, set the adapter
       // to the same ref.TypeRegistry as the provider.
-      if (adapterReg.equals(providerReg)) {
+      if (adapterReg == providerReg) {
         adapter = reg;
       } else {
         // Otherwise, make a copy of the adapter.
