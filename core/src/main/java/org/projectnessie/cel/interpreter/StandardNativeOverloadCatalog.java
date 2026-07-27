@@ -42,6 +42,8 @@ import static org.projectnessie.cel.common.types.Overloads.LessEqualsString;
 import static org.projectnessie.cel.common.types.Overloads.LessInt64;
 import static org.projectnessie.cel.common.types.Overloads.LessString;
 import static org.projectnessie.cel.common.types.Overloads.LogicalNot;
+import static org.projectnessie.cel.common.types.Overloads.Matches;
+import static org.projectnessie.cel.common.types.Overloads.MatchesString;
 import static org.projectnessie.cel.common.types.Overloads.ModuloInt64;
 import static org.projectnessie.cel.common.types.Overloads.MultiplyDouble;
 import static org.projectnessie.cel.common.types.Overloads.MultiplyInt64;
@@ -134,6 +136,7 @@ final class StandardNativeOverloadCatalog {
         GreaterEqualsString);
     bind(mutable, implementations, Operator.Index.id, IndexList, IndexMap);
     bind(mutable, implementations, Operator.In.id, InList, InMap);
+    bind(mutable, implementations, Matches, MatchesString);
     bind(
         mutable,
         implementations,
