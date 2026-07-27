@@ -37,7 +37,6 @@ public class CollectionsObject {
   public Map<String, Duration> stringProtoDurationMap;
   public Map<String, java.time.Duration> stringJavaDurationMap;
   public Map<String, ByteString> stringBytesMap;
-  public Map<Float, Double> floatDoubleMap;
 
   public List<String> stringList;
   public List<Boolean> booleanList;
@@ -77,7 +76,6 @@ public class CollectionsObject {
           "stringProtoDurationMap",
           "stringJavaDurationMap",
           "stringBytesMap",
-          "floatDoubleMap",
           "stringList",
           "booleanList",
           "byteList",

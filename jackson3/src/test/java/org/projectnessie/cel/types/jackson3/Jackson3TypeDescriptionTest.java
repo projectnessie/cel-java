@@ -82,6 +82,10 @@ class Jackson3TypeDescriptionTest {
 
   record AccessorRecord(@JsonProperty("record_name") String name) {}
 
+  static final class InvalidMapKeyObject {
+    public Map<Double, String> invalidMap;
+  }
+
   @Test
   void basics() {
     Jackson3Registry reg = (Jackson3Registry) newRegistry();
@@ -170,6 +174,16 @@ class Jackson3TypeDescriptionTest {
   }
 
   @Test
+  void rejectsUnsupportedMapKeyTypes() {
+    Jackson3Registry reg = (Jackson3Registry) newRegistry();
+
+    assertThatThrownBy(() -> reg.register(InvalidMapKeyObject.class))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Unsupported CEL map key type")
+        .hasMessageContaining("java.lang.Double");
+  }
+
+  @Test
   void enumConstantSpecificClassBodyUsesDeclaringClassName() {
     Jackson3Registry reg = (Jackson3Registry) newRegistry();
     reg.enumDescription(EnumWithConstantBody.class);
@@ -233,14 +247,6 @@ class Jackson3TypeDescriptionTest {
         Checked.checkedString,
         ByteString.class,
         Checked.checkedBytes);
-    checkMapType(
-        reg,
-        "floatDoubleMap",
-        Float.class,
-        Checked.checkedDouble,
-        Double.class,
-        Checked.checkedDouble);
-
     // verify the list-type-fields
 
     checkListType(reg, "stringList", String.class, Checked.checkedString);
@@ -384,8 +390,6 @@ class Jackson3TypeDescriptionTest {
     collectionsObject.stringJavaDurationMap = singletonMap("a", java.time.Duration.ofSeconds(1));
     collectionsObject.stringBytesMap =
         singletonMap("a", ByteString.copyFrom(new byte[] {(byte) 1}));
-    collectionsObject.floatDoubleMap = singletonMap(1f, 2d);
-
     // populate (primitive) list types
 
     collectionsObject.stringList = asList("a", "b", "c");
