@@ -127,7 +127,7 @@ final class PartActivation implements PartialActivation {
 
   PartActivation(Activation delegate, AttributePattern[] unknowns) {
     this.delegate = delegate;
-    this.unknowns = unknowns;
+    this.unknowns = unknowns.clone();
   }
 
   @Override
@@ -148,7 +148,7 @@ final class PartActivation implements PartialActivation {
 
   @Override
   public AttributePattern[] unknownAttributePatterns() {
-    return unknowns;
+    return unknowns.clone();
   }
 
   @Override
