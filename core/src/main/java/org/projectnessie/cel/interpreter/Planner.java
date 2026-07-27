@@ -820,6 +820,20 @@ final class Planner implements InterpretablePlanner {
       return null;
     }
 
+    if (overload.equals(Overloads.MatchesString)
+        && args[0] instanceof NativeStringCapability
+        && args[1] instanceof NativeStringConst pattern
+        && hasPrimitiveType(expr.getId(), PrimitiveType.BOOL)) {
+      return new NativeConstantRegex(
+          expr.getId(),
+          resolved.fnName,
+          overload,
+          args[0],
+          args[1],
+          (String) pattern.value().value(),
+          implementation);
+    }
+
     NativeArithmetic arithmetic = arithmetic(overload);
     if (arithmetic != null) {
       if (args[0] instanceof NativeIntCapability
