@@ -94,20 +94,7 @@ final class FunctionActivation implements Activation {
 }
 
 /** Activation which resolves against its child before its parent. */
-final class HierarchicalActivation implements Activation {
-  private final Activation parent;
-  private final Activation child;
-
-  HierarchicalActivation(Activation parent, Activation child) {
-    this.parent = parent;
-    this.child = child;
-  }
-
-  @Override
-  public Activation parent() {
-    return parent;
-  }
-
+record HierarchicalActivation(Activation parent, Activation child) implements Activation {
   @Override
   public Object resolve(String name) {
     if (name.startsWith(".")) {
@@ -126,6 +113,7 @@ final class HierarchicalActivation implements Activation {
     return ResolvedValue.mapTo(resolve(name));
   }
 
+  @SuppressWarnings("NullableProblems")
   @Override
   public String toString() {
     return "HierarchicalActivation{" + "parent=" + parent + ", child=" + child + '}';
