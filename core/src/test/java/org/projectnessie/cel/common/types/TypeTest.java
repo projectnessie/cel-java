@@ -29,7 +29,9 @@ import static org.projectnessie.cel.common.types.TimestampT.TimestampType;
 import static org.projectnessie.cel.common.types.TypeT.TypeType;
 import static org.projectnessie.cel.common.types.UintT.UintType;
 
+import com.google.api.expr.v1alpha1.Value;
 import org.junit.jupiter.api.Test;
+import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.Val;
 
@@ -61,6 +63,23 @@ public class TypeTest {
   @Test
   void typeType() {
     assertThat(TypeType.type()).isSameAs(TypeType);
+  }
+
+  @Test
+  void typeValueNamesAdaptToBuiltInAndObjectTypes() {
+    assertThat(Types.getTypeByName("int")).isSameAs(IntType);
+    assertThat(Types.getTypeByName("google.protobuf.Duration")).isSameAs(DurationType);
+    assertThat(Types.getTypeByName("google.protobuf.Timestamp")).isSameAs(TimestampType);
+    assertThat(Types.getTypeByName("example.CustomType")).isNull();
+
+    ProtoTypeRegistry registry = ProtoTypeRegistry.newRegistry(Value.getDefaultInstance());
+    assertThat(registry.nativeToValue(Value.newBuilder().setTypeValue("int").build()))
+        .isSameAs(IntType);
+
+    Val objectType =
+        registry.nativeToValue(Value.newBuilder().setTypeValue("example.CustomType").build());
+    assertThat(objectType).isInstanceOf(Type.class);
+    assertThat(((Type) objectType).typeName()).isEqualTo("example.CustomType");
   }
 
   @Test

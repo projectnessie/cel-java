@@ -18,6 +18,7 @@ package org.projectnessie.cel.common.types.pb;
 import static org.projectnessie.cel.common.types.Err.anyWithEmptyType;
 import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.unknownType;
+import static org.projectnessie.cel.common.types.TypeT.newObjectTypeValue;
 import static org.projectnessie.cel.common.types.pb.PbTypeDescription.typeNameFromMessage;
 import static org.projectnessie.cel.common.types.ref.TypeAdapterSupport.maybeNativeToValue;
 
@@ -27,6 +28,7 @@ import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.Types;
 import org.projectnessie.cel.common.types.ref.StandardScalarTypeAdapter;
+import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeAdapterSupport;
 import org.projectnessie.cel.common.types.ref.Val;
@@ -139,7 +141,9 @@ public final class DefaultTypeAdapter implements StandardScalarTypeAdapter {
         case STRING_VALUE:
           return v.getStringValue();
         case TYPE_VALUE:
-          return Types.getTypeByName(v.getTypeValue());
+          String typeName = v.getTypeValue();
+          Type type = Types.getTypeByName(typeName);
+          return type != null ? type : newObjectTypeValue(typeName);
         case UINT64_VALUE:
           return ULong.valueOf(v.getUint64Value());
         case OBJECT_VALUE:
