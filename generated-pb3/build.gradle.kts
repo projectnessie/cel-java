@@ -84,7 +84,7 @@ sourceSets.testFixtures {
 }
 
 dependencies {
-  api(libs.protobuf.java) { version { strictly(libs.versions.protobuf3.get()) } }
+  api(libs.protobuf.java3)
 
   // Since we need the protobuf stuff in this cel-core module, it's easy to generate the
   // gRPC code as well. But do not expose the gRPC dependencies "publicly".
@@ -99,7 +99,8 @@ configure<ProtobufExtension> {
   // Configure the protoc executable
   protoc {
     // Download from repositories
-    artifact = "com.google.protobuf:protoc:${libs.versions.protobuf3.get()}"
+    artifact =
+      "com.google.protobuf:protoc:${libs.protobuf.java3.get().versionConstraint.preferredVersion}"
   }
 }
 
