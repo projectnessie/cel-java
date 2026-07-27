@@ -22,6 +22,7 @@ import static org.projectnessie.cel.common.types.Err.errIntOverflow;
 import static org.projectnessie.cel.common.types.Err.isError;
 import static org.projectnessie.cel.common.types.Err.maybeNoSuchOverloadErr;
 import static org.projectnessie.cel.common.types.Err.modulusByZero;
+import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.Overflow.addInt64Checked;
@@ -36,6 +37,7 @@ import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.interpreter.ValueSignal.signal;
 
+import java.util.regex.Pattern;
 import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.BoolT;
 import org.projectnessie.cel.common.types.DoubleT;
@@ -141,6 +143,59 @@ final class NativeStringConst extends EvalConst implements NativeStringCapabilit
   @Override
   public String evalString(Activation activation) {
     return value;
+  }
+}
+
+/**
+ * Exact standard {@code matches_string} call with a literal pattern compiled once per program.
+ *
+ * <p>An invalid pattern is retained as a CEL error and surfaced only after evaluation reaches this
+ * call and successfully evaluates the left operand.
+ */
+final class NativeConstantRegex extends EvalBinary implements NativeBooleanCapability {
+  private final Pattern pattern;
+  private final Val patternError;
+
+  NativeConstantRegex(
+      long id,
+      String function,
+      String overload,
+      Interpretable input,
+      Interpretable patternExpression,
+      String pattern,
+      Overload implementation) {
+    super(
+        id,
+        function,
+        overload,
+        input,
+        patternExpression,
+        implementation.operandTrait,
+        implementation.binary);
+    Pattern compiled = null;
+    Val error = null;
+    try {
+      compiled = Pattern.compile(pattern);
+    } catch (Exception failure) {
+      error = newErr(failure, "%s", failure.getMessage());
+    }
+    this.pattern = compiled;
+    this.patternError = error;
+  }
+
+  @Override
+  public boolean evalBoolean(Activation activation) {
+    String input;
+    try {
+      input = ((NativeStringCapability) lhs).evalString(activation);
+    } catch (ValueSignal failure) {
+      return NativeScalarContinuations.booleanResult(
+          evalPrepared(failure.value, rhs.eval(activation)));
+    }
+    if (patternError != null) {
+      throw signal(patternError);
+    }
+    return pattern.matcher(input).find();
   }
 }
 
