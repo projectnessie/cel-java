@@ -246,6 +246,9 @@ public final class FieldDescription extends Description {
     if (fieldVal instanceof EnumValue) {
       return (long) ((EnumValue) fieldVal).getNumber();
     }
+    if (fd.isRepeated() && fieldVal instanceof List) {
+      return fieldVal;
+    }
     if (fieldVal instanceof Message) {
       return maybeUnwrapDynamic(db, (Message) fieldVal);
     }
