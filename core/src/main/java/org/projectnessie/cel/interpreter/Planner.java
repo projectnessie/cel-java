@@ -15,6 +15,7 @@
  */
 package org.projectnessie.cel.interpreter;
 
+import static java.util.Objects.requireNonNull;
 import static org.projectnessie.cel.common.types.BytesT.bytesOf;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.DurationT.durationOf;
@@ -219,8 +220,8 @@ final class Planner implements InterpretablePlanner {
       }
       if (nativeScalarPlanning()) {
         NativeLocalVariable local = nativeLocalVariable(identName);
-        if (local != null && local.kind == nativeKind(id)) {
-          return switch (local.kind) {
+        if (local != null && local.scalarKind != null && local.scalarKind == nativeKind(id)) {
+          return switch (local.scalarKind) {
             case BOOLEAN -> new NativeBooleanLocalIdent(id, identName, adapter);
             case INT -> new NativeIntLocalIdent(id, identName, adapter);
             case UINT -> new NativeUintLocalIdent(id, identName, adapter);
@@ -303,7 +304,9 @@ final class Planner implements InterpretablePlanner {
     // values.
     if (sel.getTestOnly()) {
       // Return the test only eval expression.
-      return new EvalTestOnly(expr.getId(), asEstablished(op), stringOf(sel.getField()), fieldType);
+      Interpretable established =
+          new EvalTestOnly(expr.getId(), asEstablished(op), stringOf(sel.getField()), fieldType);
+      return specializeObjectLocalPresence(expr, sel, opType, fieldType, established);
     }
     // Build a qualifier.
     boolean rawExactAggregateField = exactAggregateField(expr, opType, fieldType);
@@ -320,14 +323,16 @@ final class Planner implements InterpretablePlanner {
     // Lastly, create a field selection Interpretable.
     if (op instanceof InterpretableAttribute attr) {
       attr.addQualifier(qual);
-      return specializeSelector(
-          expr,
-          opType,
-          fieldType,
-          attr,
-          rawExactAggregateField
-              ? partialRawExactSelectAttribute(sel, qual)
-              : partialSelectAttribute(expr, sel, opType));
+      Interpretable selected =
+          specializeSelector(
+              expr,
+              opType,
+              fieldType,
+              attr,
+              rawExactAggregateField
+                  ? partialRawExactSelectAttribute(sel, qual)
+                  : partialSelectAttribute(expr, sel, opType));
+      return specializeObjectLocalStringField(expr, sel, opType, fieldType, selected);
     }
 
     InterpretableAttribute relAttr = relativeAttr(op.id(), asEstablished(op));
@@ -335,14 +340,68 @@ final class Planner implements InterpretablePlanner {
       return null;
     }
     relAttr.addQualifier(qual);
-    return specializeSelector(
-        expr,
-        opType,
-        fieldType,
-        relAttr,
-        rawExactAggregateField
-            ? partialRawExactSelectAttribute(sel, qual)
-            : partialSelectAttribute(expr, sel, opType));
+    Interpretable selected =
+        specializeSelector(
+            expr,
+            opType,
+            fieldType,
+            relAttr,
+            rawExactAggregateField
+                ? partialRawExactSelectAttribute(sel, qual)
+                : partialSelectAttribute(expr, sel, opType));
+    return specializeObjectLocalStringField(expr, sel, opType, fieldType, selected);
+  }
+
+  private Interpretable specializeObjectLocalPresence(
+      Expr expr, Select select, Type operandType, FieldType fieldType, Interpretable established) {
+    NativeLocalVariable local = exactObjectLocal(select.getOperand(), operandType);
+    if (local == null
+        || fieldType == null
+        || fieldType.isSet == null
+        || !hasPrimitiveType(expr.getId(), PrimitiveType.BOOL)) {
+      return established;
+    }
+    return new NativeObjectFieldPresence(
+        expr.getId(), local.name, adapter, fieldType, asEstablished(established));
+  }
+
+  private Interpretable specializeObjectLocalStringField(
+      Expr expr, Select select, Type operandType, FieldType fieldType, Interpretable established) {
+    NativeLocalVariable local = exactObjectLocal(select.getOperand(), operandType);
+    Type checkedType = typeMap.get(expr.getId());
+    if (local == null
+        || fieldType == null
+        || fieldType.getFrom == null
+        || checkedType == null
+        || !checkedType.equals(fieldType.type)
+        || !hasPrimitiveType(expr.getId(), PrimitiveType.STRING)) {
+      return established;
+    }
+    return new NativeStringObjectField(
+        expr.getId(), local.name, adapter, fieldType, asEstablished(established));
+  }
+
+  private NativeLocalVariable exactObjectLocal(Expr operand, Type operandType) {
+    if (!nativeCertifiedHostAggregatePlanning()
+        || decorators.length != 0
+        || provider != adapter
+        || !(provider instanceof StandardScalarFieldProvider)
+        || operandType == null
+        || operandType.getMessageType().isEmpty()
+        || operandType.getMessageType().startsWith("google.protobuf.")
+        || operand.getExprKindCase() != Expr.ExprKindCase.IDENT_EXPR) {
+      return null;
+    }
+    Reference reference = refMap.get(operand.getId());
+    if (reference == null
+        || reference.getValue() != Reference.getDefaultInstance().getValue()
+        || reference.getName().startsWith(".")) {
+      return null;
+    }
+    NativeLocalVariable local = nativeLocalVariable(reference.getName());
+    return local != null && operandType.getMessageType().equals(local.exactObjectType)
+        ? local
+        : null;
   }
 
   private boolean exactAggregateField(Expr expr, Type operandType, FieldType fieldType) {
@@ -1585,7 +1644,6 @@ final class Planner implements InterpretablePlanner {
     Type resultType = typeMap.get(expr.getId());
     if (listType == null
         || listType.getTypeKindCase() != Type.TypeKindCase.LIST_TYPE
-        || resultType == null
         || !listType.getListType().getElemType().equals(resultType)) {
       return false;
     }
@@ -2708,7 +2766,7 @@ final class Planner implements InterpretablePlanner {
     NativeLocalVariable previousLocal = nativeLocalVariable;
     if (candidate) {
       nativeLocalVariable =
-          new NativeLocalVariable(fold.getIterVar(), inputKind, nativeLocalVariable);
+          NativeLocalVariable.scalar(fold.getIterVar(), inputKind, nativeLocalVariable);
     }
     Interpretable filter;
     Interpretable transform;
@@ -2767,14 +2825,19 @@ final class Planner implements InterpretablePlanner {
       return null;
     }
     DirectQuantifierPattern pattern = directQuantifierPattern(fold);
-    if (pattern == null
-        || referencesIdent(pattern.predicate, fold.getAccuVar())
-        || containsComprehension(pattern.predicate)) {
+    if (pattern == null || referencesIdent(pattern.predicate, fold.getAccuVar())) {
       return null;
     }
     Expr rangeExpression = fold.getIterRange();
     Type rangeType = typeMap.get(rangeExpression.getId());
     if (rangeType == null) {
+      return null;
+    }
+    if (rangeType.getTypeKindCase() == Type.TypeKindCase.LIST_TYPE
+        && !rangeType.getListType().getElemType().getMessageType().isEmpty()) {
+      return planDirectObjectQuantifier(expr, fold, pattern, rangeExpression, rangeType);
+    }
+    if (containsComprehension(pattern.predicate)) {
       return null;
     }
 
@@ -2818,10 +2881,10 @@ final class Planner implements InterpretablePlanner {
 
     NativeLocalVariable previousLocal = nativeLocalVariable;
     nativeLocalVariable =
-        new NativeLocalVariable(fold.getIterVar(), elementKind, nativeLocalVariable);
+        NativeLocalVariable.scalar(fold.getIterVar(), elementKind, nativeLocalVariable);
     if (mapRange && !fold.getIterVar2().isEmpty()) {
       nativeLocalVariable =
-          new NativeLocalVariable(fold.getIterVar2(), valueKind, nativeLocalVariable);
+          NativeLocalVariable.scalar(fold.getIterVar2(), valueKind, nativeLocalVariable);
     }
     Interpretable condition;
     Interpretable step;
@@ -2842,7 +2905,9 @@ final class Planner implements InterpretablePlanner {
     Interpretable establishedCondition = asEstablished(condition);
     Interpretable establishedStep = asEstablished(step);
     Interpretable establishedResult = asEstablished(result);
-    if (predicate == null || !directQuantifierGlueIsExact(pattern, fold)) {
+    if (predicate == null
+        || directQuantifierGlueIsNotExact(pattern, fold)
+        || !exactStandardPredicateCalls(pattern.predicate)) {
       return new EvalFold(
           expr.getId(),
           fold.getAccuVar(),
@@ -2951,6 +3016,124 @@ final class Planner implements InterpretablePlanner {
         adapter);
   }
 
+  private Interpretable planDirectObjectQuantifier(
+      Expr expr,
+      Comprehension fold,
+      DirectQuantifierPattern pattern,
+      Expr rangeExpression,
+      Type rangeType) {
+    Type elementType = rangeType.getListType().getElemType();
+    String messageType = elementType.getMessageType();
+    if (!fold.getIterVar2().isEmpty()
+        || messageType.isEmpty()
+        || messageType.startsWith("google.protobuf.")
+        || (!pattern.existsOne && pattern.quantifier != NativeQuantifier.ALL)
+        || provider != adapter
+        || !(provider instanceof StandardScalarFieldProvider)
+        || !(adapter instanceof ExactAggregateTypeAdapter exactAdapter)) {
+      return null;
+    }
+
+    Interpretable accumulatorInitial = plan(fold.getAccuInit());
+    Interpretable range = plan(rangeExpression);
+    if (accumulatorInitial == null
+        || !(range instanceof NativeListSourceCapability source)
+        || !source.exactListSource()
+        || !retainedListSource(rangeExpression, source)) {
+      return null;
+    }
+
+    NativeLocalVariable previousLocal = nativeLocalVariable;
+    nativeLocalVariable =
+        NativeLocalVariable.exactObject(fold.getIterVar(), messageType, nativeLocalVariable);
+    Interpretable condition;
+    Interpretable step;
+    try {
+      condition = plan(fold.getLoopCondition());
+      step = plan(fold.getLoopStep());
+    } finally {
+      nativeLocalVariable = previousLocal;
+    }
+    Interpretable result = plan(fold.getResult());
+    if (condition == null || step == null || result == null) {
+      return null;
+    }
+
+    NativeBooleanCapability predicate = directQuantifierPredicate(pattern, step);
+    Interpretable establishedAccumulator = asEstablished(accumulatorInitial);
+    Interpretable establishedRange = asEstablished(range);
+    Interpretable establishedCondition = asEstablished(condition);
+    Interpretable establishedStep = asEstablished(step);
+    Interpretable establishedResult = asEstablished(result);
+    if (predicate == null
+        || directQuantifierGlueIsNotExact(pattern, fold)
+        || !exactStandardPredicateCalls(pattern.predicate)) {
+      return new EvalFold(
+          expr.getId(),
+          fold.getAccuVar(),
+          establishedAccumulator,
+          fold.getIterVar(),
+          fold.getIterVar2(),
+          establishedRange,
+          establishedCondition,
+          establishedStep,
+          establishedResult);
+    }
+
+    NativeObjectListTraversal traversal =
+        new NativeObjectListTraversal(
+            source, new CheckedValueMaterializer(exactAdapter, elementType));
+    if (pattern.existsOne) {
+      return new NativeObjectExistsOneFold(
+          expr.getId(),
+          fold.getAccuVar(),
+          establishedAccumulator,
+          fold.getIterVar(),
+          establishedRange,
+          traversal,
+          establishedCondition,
+          establishedStep,
+          establishedResult,
+          predicate,
+          adapter);
+    }
+    return new NativeObjectAllFold(
+        expr.getId(),
+        fold.getAccuVar(),
+        establishedAccumulator,
+        fold.getIterVar(),
+        establishedRange,
+        traversal,
+        establishedCondition,
+        establishedStep,
+        establishedResult,
+        predicate,
+        adapter);
+  }
+
+  private boolean exactStandardPredicateCalls(Expr expression) {
+    if (expression.getExprKindCase() == Expr.ExprKindCase.SELECT_EXPR) {
+      return exactStandardPredicateCalls(expression.getSelectExpr().getOperand());
+    }
+    if (expression.getExprKindCase() != Expr.ExprKindCase.CALL_EXPR) {
+      // Nested comprehensions apply this gate independently when they are planned.
+      return true;
+    }
+    if (!exactStandardImplementation(expression)) {
+      return false;
+    }
+    Call call = expression.getCallExpr();
+    if (call.hasTarget() && !exactStandardPredicateCalls(call.getTarget())) {
+      return false;
+    }
+    for (Expr argument : call.getArgsList()) {
+      if (!exactStandardPredicateCalls(argument)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   private static NativeBooleanCapability directQuantifierPredicate(
       DirectQuantifierPattern pattern, Interpretable step) {
     if (pattern.existsOne) {
@@ -2965,20 +3148,21 @@ final class Planner implements InterpretablePlanner {
     return null;
   }
 
-  private boolean directQuantifierGlueIsExact(DirectQuantifierPattern pattern, Comprehension fold) {
+  private boolean directQuantifierGlueIsNotExact(
+      DirectQuantifierPattern pattern, Comprehension fold) {
     if (!exactStandardImplementation(fold.getLoopStep())) {
-      return false;
+      return true;
     }
     if (pattern.existsOne) {
-      return exactStandardImplementation(fold.getResult())
-          && exactStandardImplementation(fold.getLoopStep().getCallExpr().getArgs(1));
+      return !exactStandardImplementation(fold.getResult())
+          || !exactStandardImplementation(fold.getLoopStep().getCallExpr().getArgs(1));
     }
     Expr condition = fold.getLoopCondition();
     if (!exactStandardImplementation(condition)) {
-      return false;
+      return true;
     }
-    return pattern.quantifier != NativeQuantifier.EXISTS
-        || exactStandardImplementation(condition.getCallExpr().getArgs(0));
+    return pattern.quantifier == NativeQuantifier.EXISTS
+        && !exactStandardImplementation(condition.getCallExpr().getArgs(0));
   }
 
   private boolean macroListFoldGlueIsExact(Comprehension fold) {
@@ -3599,7 +3783,21 @@ final class Planner implements InterpretablePlanner {
   }
 
   private record NativeLocalVariable(
-      String name, NativeScalarKind kind, NativeLocalVariable parent) {}
+      String name,
+      NativeScalarKind scalarKind,
+      String exactObjectType,
+      NativeLocalVariable parent) {
+    static NativeLocalVariable scalar(
+        String name, NativeScalarKind kind, NativeLocalVariable parent) {
+      return new NativeLocalVariable(name, requireNonNull(kind, "kind"), null, parent);
+    }
+
+    static NativeLocalVariable exactObject(
+        String name, String messageType, NativeLocalVariable parent) {
+      return new NativeLocalVariable(
+          name, null, requireNonNull(messageType, "messageType"), parent);
+    }
+  }
 
   private record DirectQuantifierPattern(
       NativeQuantifier quantifier, boolean existsOne, Expr predicate) {}
