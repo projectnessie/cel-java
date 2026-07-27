@@ -214,10 +214,6 @@ public class ProtoTypeRegistry
   @Override
   public void register(Object t) {
     if (t instanceof Message) {
-      Set<FileDescriptor> fds = collectFileDescriptorSet((Message) t);
-      for (FileDescriptor fd : fds) {
-        registerDescriptor(fd);
-      }
       registerMessage((Message) t);
     } else if (t instanceof org.projectnessie.cel.common.types.ref.Type) {
       registerType((org.projectnessie.cel.common.types.ref.Type) t);
@@ -654,6 +650,9 @@ public class ProtoTypeRegistry
 
   /** RegisterMessage registers a protocol buffer message and its dependencies. */
   public void registerMessage(Message message) {
+    for (FileDescriptor descriptor : collectFileDescriptorSet(message)) {
+      registerDescriptor(descriptor);
+    }
     FileDescription fd = pbdb.registerMessage(message);
     fieldTypeCache.remove(typeNameFromMessage(message));
     registerAllTypes(fd);
