@@ -29,12 +29,27 @@ import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.FieldTester;
 import org.projectnessie.cel.common.types.traits.Indexer;
 
+/**
+ * Base class for CEL object values backed by a host-language object and type description.
+ *
+ * <p>Concrete integrations supply field-testing and indexing behavior through their type
+ * description. CEL equality requires the same CEL object type name and delegates value comparison
+ * to the backing object's {@link Object#equals(Object)} implementation.
+ */
 public abstract class ObjectT extends BaseVal implements FieldTester, Indexer {
   protected final TypeAdapter adapter;
   protected final Object value;
   protected final TypeDescription typeDesc;
   protected final Type typeValue;
 
+  /**
+   * Creates an object value.
+   *
+   * @param adapter adapter used for values read from object fields
+   * @param value backing host object
+   * @param typeDesc field and type metadata
+   * @param typeValue CEL runtime type value
+   */
   protected ObjectT(TypeAdapter adapter, Object value, TypeDescription typeDesc, Type typeValue) {
     this.adapter = adapter;
     this.value = value;

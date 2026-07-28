@@ -22,14 +22,37 @@ import java.util.Objects;
 import org.projectnessie.cel.interpreter.InterpretableDecorator;
 import org.projectnessie.cel.interpreter.functions.Overload;
 
+/**
+ * Opaque configuration token used while creating a {@link Program}.
+ *
+ * <p>Obtain options from the static factories on this interface. Although this is declared as a
+ * functional interface, its abstract method uses a package-private implementation type; external
+ * implementation is not a supported extension mechanism.
+ *
+ * <p>Options are applied in order. Environment-level options contributed by a {@link Library} are
+ * applied before options passed directly to {@link Env#program(Ast, ProgramOption...)}.
+ */
 @FunctionalInterface
 public interface ProgramOption {
+  /**
+   * Applies this token to internal program construction.
+   *
+   * <p>This method is for CEL-Java's factory-produced options and is not an external SPI.
+   *
+   * @param prog internal program construction state
+   * @return construction state for the next option
+   */
   Prog apply(Prog prog);
 
   /**
-   * CustomDecorator appends an InterpreterDecorator to the program.
+   * Appends a low-level interpreter-plan decorator.
    *
-   * <p>InterpretableDecorators can be used to inspect, alter, or replace the Program plan.
+   * <p>Decorators can inspect, alter, or replace the established interpreter plan. Custom
+   * decorators are applied in insertion order; built-in optimization and state decorators may have
+   * fixed later placement. Supplying a custom decorator disables native planning for the program.
+   *
+   * @param dec decorator to append
+   * @return program configuration token
    */
   static ProgramOption customDecorator(InterpretableDecorator dec) {
     return p -> {
@@ -38,7 +61,15 @@ public interface ProgramOption {
     };
   }
 
-  /** Functions adds function overloads that extend or override the set of CEL built-ins. */
+  /**
+   * Adds runtime function overload implementations.
+   *
+   * <p>Each overload ID must correspond to a declaration available while checking the expression.
+   * Duplicate overload IDs are rejected rather than silently replaced.
+   *
+   * @param funcs overload implementations to add
+   * @return program configuration token
+   */
   static ProgramOption functions(Overload... funcs) {
     return p -> {
       p.dispatcher.add(funcs);
@@ -47,11 +78,15 @@ public interface ProgramOption {
   }
 
   /**
-   * Globals sets the global variable values for a given program. These values may be shadowed by
-   * variables with the same name provided to the Eval() call.
+   * Sets default variable bindings for a program.
    *
-   * <p>The vars value may either be an `interpreter.Activation` instance or a
-   * `map[string]interface{}`.
+   * <p>Bindings supplied to {@link Program#eval(Object)} shadow defaults with the same name. {@code
+   * vars} accepts the same activation inputs as {@link
+   * org.projectnessie.cel.interpreter.Activation#newActivation(Object)}. Retained maps and values
+   * must remain stable while the program may evaluate them.
+   *
+   * @param vars default activation, map, or resolver
+   * @return program configuration token
    */
   static ProgramOption globals(Object vars) {
     return p -> {
@@ -60,7 +95,12 @@ public interface ProgramOption {
     };
   }
 
-  /** EvalOptions sets one or more evaluation options which may affect the evaluation or Result. */
+  /**
+   * Enables evaluation modes for a program.
+   *
+   * @param opts evaluation options
+   * @return program configuration token
+   */
   static ProgramOption evalOptions(EvalOption... opts) {
     return p -> {
       Collections.addAll(p.evalOpts, opts);

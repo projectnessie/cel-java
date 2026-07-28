@@ -20,7 +20,8 @@ package org.projectnessie.cel;
  *
  * <p>Both engines perform substring matching unless the expression contains anchors. The engine is
  * selected for a {@link Program} with {@link ProgramOption#regexEngine(RegexEngine)} and remains
- * fixed for the lifetime of that program.
+ * fixed for the lifetime of that program. Engine selection governs regex syntax and matching
+ * execution; it does not establish an overall CEL evaluation or input-size budget.
  */
 public enum RegexEngine {
   /**

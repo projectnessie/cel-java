@@ -36,11 +36,16 @@ import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 
 /**
- * CEL-Java {@link TypeRegistry} to use Jackson 2 objects as input values for CEL scripts.
+ * A {@link TypeRegistry} that exposes Jackson 2 bean properties to CEL.
  *
- * <p>The implementation does not support the construction of Jackson objects in CEL expressions and
- * therefore returning Jackson objects from CEL expressions is not possible/implemented and results
- * in {@link UnsupportedOperationException}s.
+ * <p>Use this registry when application inputs are ordinary Java objects described by a Jackson 2
+ * {@link ObjectMapper}. Register a class or instance before checking an expression that selects its
+ * fields. Runtime adaptation of an object also discovers its type, but that is too late to make the
+ * type available to an already running checker.
+ *
+ * <p>The registry is for reading host objects. It does not construct Jackson-described objects for
+ * CEL object literals: {@link #newValue(String, Map)} and {@link #registerType(Type...)} throw
+ * {@link UnsupportedOperationException}.
  *
  * <p>Jackson array fields use the same representations as runtime adaptation: {@code byte[]} is CEL
  * bytes; {@code int[]}, {@code long[]}, and {@code double[]} are typed CEL lists; and reference
@@ -49,9 +54,20 @@ import org.projectnessie.cel.common.types.ref.Val;
  * supported and are rejected during registration. Inferred {@code long[]} fields are signed {@code
  * list<int>} values.
  *
+ * <p>Java {@link java.util.Collection} fields become CEL lists. Java {@link Map} fields become CEL
+ * maps when their keys map to CEL {@code bool}, {@code int}, {@code uint}, or {@code string}.
+ * Unsupported map-key types and container shapes for which Jackson supplies no element, key, or
+ * value type are rejected during registration. {@link java.util.Optional} fields use the contained
+ * checked type. A null property is absent for CEL presence testing and is read as CEL null.
+ *
  * <p>The configured factories snapshot supported Jackson bean-property configuration. The registry
  * supports direct and mutually recursive object schemas, and publishes a newly discovered schema
- * graph only after every type in that graph has been initialized successfully.
+ * graph only after every type in that graph has been initialized successfully. Failed discovery
+ * does not publish a partial graph and can be retried. Discovery is serialized, so a registry can
+ * be reused by concurrent compilation and evaluation callers.
+ *
+ * <p>{@link #copy()} creates independent registration state and another mapper snapshot. Types
+ * registered later in one copy are not visible in the other.
  */
 public final class JacksonRegistry implements TypeRegistry, StandardScalarTypeAdapter {
   final ObjectMapper objectMapper;
@@ -141,6 +157,12 @@ public final class JacksonRegistry implements TypeRegistry, StandardScalarTypeAd
         new JacksonRegistry(Objects.requireNonNull(objectMapper, "objectMapper").copy()));
   }
 
+  /**
+   * Copies mapper configuration and all successfully registered schemas into independent registry
+   * state.
+   *
+   * @return an independently configurable registry
+   */
   @Override
   public synchronized TypeRegistry copy() {
     JacksonRegistry copy = new JacksonRegistry(objectMapper.copy());
@@ -154,9 +176,16 @@ public final class JacksonRegistry implements TypeRegistry, StandardScalarTypeAd
   /**
    * Registers a Jackson object type or Java enum.
    *
+   * <p>{@code t} may be a {@link Class} or an instance. Object registration recursively discovers
+   * bean-property types. Repeated registration is idempotent.
+   *
    * <p>Enum classes and instances expose constants under their fully qualified Java names. Their
    * CEL values are integers corresponding to {@link Enum#ordinal()}; Jackson serialization names do
    * not change this CEL representation.
+   *
+   * @param t the class or representative instance to register
+   * @throws NullPointerException if {@code t} is null
+   * @throws RuntimeException if Jackson cannot describe the type
    */
   @Override
   public void register(Object t) {
@@ -168,11 +197,23 @@ public final class JacksonRegistry implements TypeRegistry, StandardScalarTypeAd
     }
   }
 
+  /**
+   * Jackson registries do not accept CEL runtime type definitions.
+   *
+   * @param types ignored
+   * @throws UnsupportedOperationException always
+   */
   @Override
   public void registerType(Type... types) {
     throw new UnsupportedOperationException();
   }
 
+  /**
+   * Resolves a previously registered enum constant.
+   *
+   * @param enumName the fully qualified class and constant name
+   * @return the constant's ordinal as a CEL integer, or a CEL error for an unknown name
+   */
   @Override
   public Val enumValue(String enumName) {
     JacksonEnumValue enumVal = enumValues.get(enumName);
@@ -182,6 +223,12 @@ public final class JacksonRegistry implements TypeRegistry, StandardScalarTypeAd
     return enumVal.ordinalValue();
   }
 
+  /**
+   * Resolves a registered object type or enum constant as a CEL identifier.
+   *
+   * @param identName fully qualified Java class or enum-constant name
+   * @return the CEL type or enum ordinal, or {@code null} if {@code identName} is unknown
+   */
   @Override
   public Val findIdent(String identName) {
     JacksonTypeDescription td = knownTypesByName.get(identName);
@@ -196,6 +243,12 @@ public final class JacksonRegistry implements TypeRegistry, StandardScalarTypeAd
     return null;
   }
 
+  /**
+   * Returns the checked CEL type for a registered Java class name.
+   *
+   * @param typeName fully qualified Java class name
+   * @return the checked type, or {@code null} if the class has not been registered
+   */
   @Override
   public com.google.api.expr.v1alpha1.Type findType(String typeName) {
     JacksonTypeDescription td = knownTypesByName.get(typeName);
@@ -205,6 +258,13 @@ public final class JacksonRegistry implements TypeRegistry, StandardScalarTypeAd
     return td.pbType();
   }
 
+  /**
+   * Returns a registered bean property's checked type and accessors.
+   *
+   * @param messageType fully qualified registered Java class name
+   * @param fieldName Jackson-visible property name
+   * @return the field metadata, or {@code null} if the type or property is unknown
+   */
   @Override
   public FieldType findFieldType(String messageType, String fieldName) {
     JacksonTypeDescription td = knownTypesByName.get(messageType);
@@ -214,11 +274,29 @@ public final class JacksonRegistry implements TypeRegistry, StandardScalarTypeAd
     return td.fieldType(fieldName);
   }
 
+  /**
+   * Jackson-described host objects cannot be constructed by CEL object literals.
+   *
+   * @param typeName ignored
+   * @param fields ignored
+   * @throws UnsupportedOperationException always
+   */
   @Override
   public Val newValue(String typeName, Map<String, Val> fields) {
     throw new UnsupportedOperationException();
   }
 
+  /**
+   * Adapts a Java value to a CEL value.
+   *
+   * <p>Standard scalar and aggregate values use the common adapter. Java enum values must have been
+   * registered and become CEL integers. Other objects are described and registered on first use,
+   * then exposed as CEL objects whose properties are read through Jackson.
+   *
+   * @param value the value to adapt
+   * @return the adapted CEL value, or a CEL error for an unregistered enum constant
+   * @throws RuntimeException if Jackson cannot describe an object value
+   */
   @Override
   public Val nativeToValue(Object value) {
     if (value instanceof Val) {

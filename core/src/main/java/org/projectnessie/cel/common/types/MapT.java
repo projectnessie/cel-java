@@ -40,6 +40,14 @@ import org.projectnessie.cel.common.types.traits.Mapper;
 import org.projectnessie.cel.common.types.traits.Sizer;
 import org.projectnessie.cel.common.types.traits.Trait;
 
+/**
+ * Base class and factories for CEL map values.
+ *
+ * <p>Map keys are CEL values and obey CEL equality. Factory ownership differs by input: already
+ * adapted maps can remain live views, while ordinary Java maps are re-keyed into an internal map
+ * and retain their raw values for lazy adaptation. Source keys and equality/hash-relevant objects
+ * must remain stable while the resulting map is used.
+ */
 public abstract class MapT extends BaseVal implements Mapper, Container, Indexer, IterableT, Sizer {
   /** MapType singleton. */
   public static final Type MapType =
@@ -50,10 +58,16 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
           Trait.IterableType,
           Trait.SizerType);
 
+  /** Creates a CEL map backed by an already adapted map. */
   public static Val newWrappedMap(TypeAdapter adapter, Map<Val, Val> value) {
     return new ValMapT(adapter, value);
   }
 
+  /**
+   * Creates a CEL map from either already adapted entries or ordinary Java entries.
+   *
+   * @return the map value, or a CEL error for null or CEL-equivalent duplicate keys
+   */
   @SuppressWarnings("unchecked")
   public static Val newMaybeWrappedMap(TypeAdapter adapter, Map<?, ?> value) {
     boolean alreadyWrapped = true;
@@ -111,6 +125,7 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
     return new NativeMapT(valueAdapter, newMap);
   }
 
+  /** Returns whether a CEL value is valid as a map-literal key. */
   public static boolean isSupportedLiteralKeyType(Val key) {
     return switch (key.type().typeEnum()) {
       case Bool, Int, String, Uint -> true;
