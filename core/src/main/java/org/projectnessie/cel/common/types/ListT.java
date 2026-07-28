@@ -64,6 +64,12 @@ public abstract class ListT extends BaseVal implements Lister {
     return new GenericListT(adapter, value);
   }
 
+  /**
+   * Returns a CEL list backed by a live view of {@code value}.
+   *
+   * <p>Mutations completed between CEL operations are visible through the returned value. The
+   * caller must not mutate the list while a CEL operation or program evaluation is consuming it.
+   */
   public static Val newGenericList(TypeAdapter adapter, List<?> value) {
     return new ListBackedListT(adapter, value);
   }
@@ -91,12 +97,12 @@ public abstract class ListT extends BaseVal implements Lister {
 
   abstract static class BaseListT extends ListT {
     protected final TypeAdapter adapter;
-    protected final long size;
 
-    BaseListT(TypeAdapter adapter, long size) {
+    BaseListT(TypeAdapter adapter) {
       this.adapter = adapter;
-      this.size = size;
     }
+
+    abstract int currentSize();
 
     @SuppressWarnings({"removal", "unchecked"})
     @Override
@@ -144,7 +150,7 @@ public abstract class ListT extends BaseVal implements Lister {
 
     private ListValue toPbListValue() {
       ListValue.Builder list = ListValue.newBuilder();
-      int s = (int) size;
+      int s = nativeSize();
       for (int i = 0; i < s; i++) {
         Val v = getUnchecked(i);
         Value e = adapter.valueToNative(v, Value.class);
@@ -159,7 +165,7 @@ public abstract class ListT extends BaseVal implements Lister {
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     private <T> Object toJavaArray(Class<T> typeDesc) {
-      int s = (int) size;
+      int s = nativeSize();
       Class compType = typeDesc.getComponentType();
       if (compType == Enum.class) {
         // Note: cannot create `Enum` values of the right type here.
@@ -186,7 +192,7 @@ public abstract class ListT extends BaseVal implements Lister {
 
     @Override
     public IteratorT iterator() {
-      return new ArrayListIteratorT();
+      return new ArrayListIteratorT(nativeSize());
     }
 
     abstract Val getUnchecked(int index);
@@ -207,9 +213,10 @@ public abstract class ListT extends BaseVal implements Lister {
 
     @Override
     public Val nativeGetAt(int index) {
-      if (index < 0 || index >= size) {
+      int currentSize = nativeSize();
+      if (index < 0 || index >= currentSize) {
         return newErr(
-            "invalid_argument: index '%d' out of range in list of size '%d'", index, size);
+            "invalid_argument: index '%d' out of range in list of size '%d'", index, currentSize);
       }
       return getUnchecked(index);
     }
@@ -219,10 +226,11 @@ public abstract class ListT extends BaseVal implements Lister {
       if (!(other instanceof ListT o)) {
         return False;
       }
-      if (size != o.size().intValue()) {
+      int currentSize = nativeSize();
+      if (currentSize != o.nativeSize()) {
         return False;
       }
-      for (int i = 0; i < size; i++) {
+      for (int i = 0; i < currentSize; i++) {
         Val e1 = getUnchecked(i);
         if (isError(e1)) {
           return e1;
@@ -246,7 +254,8 @@ public abstract class ListT extends BaseVal implements Lister {
 
     @Override
     public Val contains(Val value) {
-      for (int i = 0; i < size; i++) {
+      int currentSize = nativeSize();
+      for (int i = 0; i < currentSize; i++) {
         Val elem = getUnchecked(i);
         if (value.equal(elem) == True) {
           return True;
@@ -257,12 +266,12 @@ public abstract class ListT extends BaseVal implements Lister {
 
     @Override
     public Val size() {
-      return intOf(size);
+      return intOf(nativeSize());
     }
 
     @Override
-    public int nativeSize() {
-      return Math.toIntExact(size);
+    public final int nativeSize() {
+      return currentSize();
     }
 
     @Override
@@ -279,7 +288,8 @@ public abstract class ListT extends BaseVal implements Lister {
     @Override
     public int hashCode() {
       int result = 1;
-      for (int i = 0; i < size; i++) {
+      int currentSize = nativeSize();
+      for (int i = 0; i < currentSize; i++) {
         result = 31 * result + getUnchecked(i).hashCode();
       }
       return result;
@@ -310,8 +320,13 @@ public abstract class ListT extends BaseVal implements Lister {
       return (int) longIndex;
     }
 
-    private final class ArrayListIteratorT extends BaseVal implements IteratorT {
+    private final class ArrayListIteratorT extends BaseIteratorT {
+      private final int size;
       private int index;
+
+      private ArrayListIteratorT(int size) {
+        this.size = size;
+      }
 
       @Override
       public Val hasNext() {
@@ -324,32 +339,6 @@ public abstract class ListT extends BaseVal implements Lister {
           return getUnchecked(index++);
         }
         return noMoreElements();
-      }
-
-      @Override
-      @SuppressWarnings("removal")
-      public <T> T convertToNative(Class<T> typeDesc) {
-        throw new UnsupportedOperationException("IMPLEMENT ME??");
-      }
-
-      @Override
-      public Val convertToType(Type typeValue) {
-        throw new UnsupportedOperationException("IMPLEMENT ME??");
-      }
-
-      @Override
-      public Val equal(Val other) {
-        throw new UnsupportedOperationException("IMPLEMENT ME??");
-      }
-
-      @Override
-      public Type type() {
-        throw new UnsupportedOperationException("IMPLEMENT ME??");
-      }
-
-      @Override
-      public Object value() {
-        throw new UnsupportedOperationException("IMPLEMENT ME??");
       }
     }
   }
@@ -371,8 +360,13 @@ public abstract class ListT extends BaseVal implements Lister {
     private final Object[] array;
 
     GenericListT(TypeAdapter adapter, Object[] array) {
-      super(adapter, array.length);
+      super(adapter);
       this.array = array;
+    }
+
+    @Override
+    int currentSize() {
+      return array.length;
     }
 
     @Override
@@ -423,7 +417,7 @@ public abstract class ListT extends BaseVal implements Lister {
           + ", adapter="
           + adapter
           + ", size="
-          + size
+          + nativeSize()
           + '}';
     }
   }
@@ -432,8 +426,13 @@ public abstract class ListT extends BaseVal implements Lister {
     private final List<?> list;
 
     ListBackedListT(TypeAdapter adapter, List<?> list) {
-      super(adapter, list.size());
+      super(adapter);
       this.list = list;
+    }
+
+    @Override
+    int currentSize() {
+      return list.size();
     }
 
     @Override
@@ -446,13 +445,14 @@ public abstract class ListT extends BaseVal implements Lister {
       if (!(other instanceof Lister otherList)) {
         return noSuchOverload(this, "add", other);
       }
+      int thisSize = nativeSize();
       int otherSize = otherList.nativeSize();
-      Object[] newArray = new Object[list.size() + otherSize];
-      for (int i = 0; i < list.size(); i++) {
+      Object[] newArray = new Object[thisSize + otherSize];
+      for (int i = 0; i < thisSize; i++) {
         newArray[i] = list.get(i);
       }
       for (int i = 0; i < otherSize; i++) {
-        newArray[list.size() + i] = nativeListElement(elementAt(otherList, i), Object.class);
+        newArray[thisSize + i] = nativeListElement(elementAt(otherList, i), Object.class);
       }
       return new GenericListT(adapter, newArray);
     }
@@ -461,7 +461,7 @@ public abstract class ListT extends BaseVal implements Lister {
     public Val get(Val index) {
       int i;
       try {
-        i = checkedIndex(index, list.size());
+        i = checkedIndex(index, nativeSize());
       } catch (InvalidIndexException e) {
         return e.error;
       }
@@ -479,8 +479,13 @@ public abstract class ListT extends BaseVal implements Lister {
     private final Val[] array;
 
     ValListT(TypeAdapter adapter, Val[] array) {
-      super(adapter, array.length);
+      super(adapter);
       this.array = array;
+    }
+
+    @Override
+    int currentSize() {
+      return array.length;
     }
 
     @Override
@@ -536,14 +541,14 @@ public abstract class ListT extends BaseVal implements Lister {
           + ", adapter="
           + adapter
           + ", size="
-          + size
+          + nativeSize()
           + '}';
     }
   }
 
   abstract static class PrimitiveArrayListT extends BaseListT {
-    PrimitiveArrayListT(TypeAdapter adapter, long size) {
-      super(adapter, size);
+    PrimitiveArrayListT(TypeAdapter adapter) {
+      super(adapter);
     }
 
     @Override
@@ -551,7 +556,7 @@ public abstract class ListT extends BaseVal implements Lister {
       if (!(other instanceof Lister otherLister)) {
         return noSuchOverload(this, "add", other);
       }
-      int thisSize = (int) size;
+      int thisSize = nativeSize();
       int otherSize = otherLister.nativeSize();
       Val[] newArray = new Val[thisSize + otherSize];
       for (int i = 0; i < thisSize; i++) {
@@ -568,8 +573,13 @@ public abstract class ListT extends BaseVal implements Lister {
     private final int[] array;
 
     IntArrayListT(TypeAdapter adapter, int[] array) {
-      super(adapter, array.length);
+      super(adapter);
       this.array = array;
+    }
+
+    @Override
+    int currentSize() {
+      return array.length;
     }
 
     @Override
@@ -635,8 +645,13 @@ public abstract class ListT extends BaseVal implements Lister {
     private final long[] array;
 
     LongArrayListT(TypeAdapter adapter, long[] array) {
-      super(adapter, array.length);
+      super(adapter);
       this.array = array;
+    }
+
+    @Override
+    int currentSize() {
+      return array.length;
     }
 
     @Override
@@ -690,8 +705,13 @@ public abstract class ListT extends BaseVal implements Lister {
     private final double[] array;
 
     DoubleArrayListT(TypeAdapter adapter, double[] array) {
-      super(adapter, array.length);
+      super(adapter);
       this.array = array;
+    }
+
+    @Override
+    int currentSize() {
+      return array.length;
     }
 
     @Override

@@ -44,6 +44,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Consumer;
 import org.projectnessie.cel.EnvOption.EnvFeature;
 import org.projectnessie.cel.checker.Checker;
 import org.projectnessie.cel.checker.Checker.CheckResult;
@@ -62,8 +63,23 @@ import org.projectnessie.cel.parser.Parser.ParseResult;
 /**
  * Env encapsulates the context necessary to perform parsing, type checking, or generation of
  * evaluable programs for different expressions.
+ *
+ * <p>An environment may be configured until its first call to {@link #check(Ast)}. That call
+ * permanently freezes the environment configuration, even if checker initialization fails. Use
+ * {@link #extend(EnvOption...)} to derive a separately configurable environment after that point.
+ * Built-in {@link EnvOption} values and {@link #setFeature(EnvFeature)} throw {@link
+ * IllegalStateException} when applied to a frozen environment.
+ *
+ * <p>Once configuration is complete, parsing and checking may be performed concurrently provided
+ * that any custom type provider supports concurrent reads. Registry mutation must be completed
+ * before the environment is checked or otherwise shared. Other concurrent uses of custom adapters
+ * and providers remain subject to those components' own contracts.
  */
 public final class Env {
+
+  private static final String FROZEN_CONFIGURATION_MESSAGE =
+      "environment configuration is frozen after the first check; use extend() to configure a new"
+          + " environment";
 
   Container container;
   final List<Decl> declarations;
@@ -79,7 +95,8 @@ public final class Env {
   private CheckerEnv chk;
 
   private RuntimeException chkErr;
-  private final Object once = new Object();
+  private boolean frozen;
+  private final Object lifecycleLock = new Object();
 
   private Env(
       Container container,
@@ -142,7 +159,7 @@ public final class Env {
   }
 
   void addProgOpts(List<ProgramOption> progOpts) {
-    this.progOpts.addAll(progOpts);
+    applyConfiguration(e -> e.progOpts.addAll(progOpts));
   }
 
   public static final class AstIssuesTuple {
@@ -175,13 +192,18 @@ public final class Env {
    *
    * <p>It is possible to have both non-nil Ast and Issues values returned from this call: however,
    * the mere presence of an Ast does not imply that it is valid for use.
+   *
+   * <p>The first call permanently freezes this environment's configuration. Configure a derived
+   * environment with {@link #extend(EnvOption...)} when different declarations, types, macros,
+   * features, or other options are needed.
    */
   public AstIssuesTuple check(Ast ast) {
     // Note, errors aren't currently possible on the Ast to ParsedExpr conversion.
     ParsedExpr pe = astToParsedExpr(ast);
 
     // Construct the internal checker env, erroring if there is an issue adding the declarations.
-    synchronized (once) {
+    synchronized (lifecycleLock) {
+      frozen = true;
       if (chk == null && chkErr == null) {
         CheckerEnv ce = CheckerEnv.newCheckerEnv(container, provider);
         ce.enableDynamicAggregateLiterals(true);
@@ -199,7 +221,8 @@ public final class Env {
       }
     }
 
-    // The once call will ensure that this value is set or nil for all invocations.
+    // Checker initialization under the lifecycle lock ensures that this value is stable for all
+    // invocations.
     if (chkErr != null) {
       Errors errs = new Errors(ast.getSource());
       errs.reportError(chkErr, NoLocation, "%s", chkErr.toString());
@@ -266,46 +289,53 @@ public final class Env {
    * mutable. To ensure separation of state between extended environments either make sure the
    * TypeAdapter and TypeProvider are immutable, or that their underlying implementations are based
    * on the ref.TypeRegistry which provides a Copy method which will be invoked by this method.
+   *
+   * <p>Extending does not change whether this environment is frozen. The returned environment is
+   * separately configurable until its own first check.
    */
   public Env extend(List<EnvOption> opts) {
-    if (chkErr != null) {
-      throw chkErr;
-    }
-    // Copy slices.
-    List<Decl> decsCopy = new ArrayList<>(declarations);
-    List<Macro> macsCopy = new ArrayList<>(macros);
-    List<ProgramOption> progOptsCopy = new ArrayList<>(progOpts);
-
-    // Copy the adapter / provider if they appear to be mutable.
-    TypeAdapter adapter = this.adapter;
-    TypeProvider provider = this.provider;
-    // In most cases the provider and adapter will be a ref.TypeRegistry;
-    // however, in the rare cases where they are not, they are assumed to
-    // be immutable. Since it is possible to set the TypeProvider separately
-    // from the TypeAdapter, the possible configurations which could use a
-    // TypeRegistry as the base implementation are captured below.
-    if (this.adapter instanceof TypeRegistry adapterReg
-        && this.provider instanceof TypeRegistry providerReg) {
-      TypeRegistry reg = providerReg.copy();
-      provider = reg;
-      // If the adapter and provider are the same object, set the adapter
-      // to the same ref.TypeRegistry as the provider.
-      if (adapterReg == providerReg) {
-        adapter = reg;
-      } else {
-        // Otherwise, make a copy of the adapter.
-        adapter = adapterReg.copy();
+    Env ext;
+    synchronized (lifecycleLock) {
+      if (chkErr != null) {
+        throw chkErr;
       }
-    } else if (this.provider instanceof TypeRegistry) {
-      provider = ((TypeRegistry) this.provider).copy();
-    } else if (this.adapter instanceof TypeRegistry) {
-      adapter = ((TypeRegistry) this.adapter).copy();
+      // Copy slices.
+      List<Decl> decsCopy = new ArrayList<>(declarations);
+      List<Macro> macsCopy = new ArrayList<>(macros);
+      List<ProgramOption> progOptsCopy = new ArrayList<>(progOpts);
+
+      // Copy the adapter / provider if they appear to be mutable.
+      TypeAdapter adapter = this.adapter;
+      TypeProvider provider = this.provider;
+      // In most cases the provider and adapter will be a ref.TypeRegistry;
+      // however, in the rare cases where they are not, they are assumed to
+      // be immutable. Since it is possible to set the TypeProvider separately
+      // from the TypeAdapter, the possible configurations which could use a
+      // TypeRegistry as the base implementation are captured below.
+      if (this.adapter instanceof TypeRegistry adapterReg
+          && this.provider instanceof TypeRegistry providerReg) {
+        TypeRegistry reg = providerReg.copy();
+        provider = reg;
+        // If the adapter and provider are the same object, set the adapter
+        // to the same ref.TypeRegistry as the provider.
+        if (adapterReg == providerReg) {
+          adapter = reg;
+        } else {
+          // Otherwise, make a copy of the adapter.
+          adapter = adapterReg.copy();
+        }
+      } else if (this.provider instanceof TypeRegistry) {
+        provider = ((TypeRegistry) this.provider).copy();
+      } else if (this.adapter instanceof TypeRegistry) {
+        adapter = ((TypeRegistry) this.adapter).copy();
+      }
+
+      Set<EnvFeature> featuresCopy = EnumSet.copyOf(this.features);
+
+      ext =
+          new Env(
+              this.container, decsCopy, macsCopy, adapter, provider, featuresCopy, progOptsCopy);
     }
-
-    Set<EnvFeature> featuresCopy = EnumSet.copyOf(this.features);
-
-    Env ext =
-        new Env(this.container, decsCopy, macsCopy, adapter, provider, featuresCopy, progOptsCopy);
     return ext.configure(opts);
   }
 
@@ -318,7 +348,9 @@ public final class Env {
    * options.go.
    */
   public boolean hasFeature(EnvFeature flag) {
-    return features.contains(flag);
+    synchronized (lifecycleLock) {
+      return features.contains(flag);
+    }
   }
 
   /**
@@ -363,9 +395,31 @@ public final class Env {
     return newProgram(this, ast, optSet.toArray(new ProgramOption[0]));
   }
 
-  /** SetFeature sets the given feature flag, as enumerated in options.go. */
+  /**
+   * SetFeature sets the given feature flag.
+   *
+   * <p>Features must be configured before the first call to {@link #check(Ast)}. Use {@link
+   * #extend(EnvOption...)} to configure a derived environment after this environment has been
+   * frozen.
+   *
+   * @throws IllegalStateException if this environment has already been checked
+   */
   public void setFeature(EnvFeature flag) {
-    features.add(flag);
+    applyConfiguration(e -> e.features.add(flag));
+  }
+
+  void setFeatures(EnvFeature... flags) {
+    applyConfiguration(e -> Collections.addAll(e.features, flags));
+  }
+
+  Env applyConfiguration(Consumer<Env> configuration) {
+    synchronized (lifecycleLock) {
+      if (frozen) {
+        throw new IllegalStateException(FROZEN_CONFIGURATION_MESSAGE);
+      }
+      configuration.accept(this);
+      return this;
+    }
   }
 
   Container getContainer() {
@@ -474,8 +528,8 @@ public final class Env {
         + chk
         + "\n    , chkErr="
         + chkErr
-        + "\n    , once="
-        + once
+        + "\n    , frozen="
+        + frozen
         + '}';
   }
 }

@@ -22,6 +22,7 @@ import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.IntT.intOf;
+import static org.projectnessie.cel.common.types.IteratorT.IteratorType;
 import static org.projectnessie.cel.common.types.MapT.newMaybeWrappedMap;
 import static org.projectnessie.cel.common.types.MapT.newWrappedMap;
 import static org.projectnessie.cel.common.types.NullT.NullValue;
@@ -41,6 +42,7 @@ import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.common.types.traits.Trait;
 
 public class MapTest {
 
@@ -245,12 +247,22 @@ public class MapTest {
     assertThat(celMap.find(intOf(42))).isNull();
 
     IteratorT iter = celMap.iterator();
+    int iteratorHash = iter.hashCode();
+    assertThat(iter.type()).isSameAs(IteratorType);
+    assertThat(iter.type().hasTrait(Trait.IteratorType)).isTrue();
+    assertThat(iter).hasToString("iterator");
+    assertThat(iter.equals(iter)).isTrue();
+    assertThat(iter.equals(celMap.iterator())).isFalse();
     Map<Val, Val> mapFromIter = new HashMap<>();
     while (iter.hasNext() == True) {
       Val key = iter.next();
       mapFromIter.put(key, celMap.find(key));
     }
     assertThat(mapFromIter).hasSize(javaMap.size()).containsAllEntriesOf(javaMap);
+    assertThat(iter.next()).matches(Err::isError).hasToString("no more elements");
+    assertThat(iter.next()).matches(Err::isError).hasToString("no more elements");
+    assertThat(iter.hashCode()).isEqualTo(iteratorHash);
+    assertThat(iter).hasToString("iterator");
 
     assertThat(celMap.convertToNative(Map.class))
         .isEqualTo(

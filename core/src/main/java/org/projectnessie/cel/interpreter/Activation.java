@@ -61,12 +61,18 @@ public interface Activation extends ActivationFunction {
    * NewActivation returns an activation based on a map-based binding where the map keys are
    * expected to be qualified names used with ResolveName calls.
    *
-   * <p>The input `bindings` may either be of type `Activation` or `map[string]interface{}`.
+   * <p>The input {@code bindings} may be an {@link Activation}, a {@link Map}, a {@link Function},
+   * or an {@link ActivationFunction}.
    *
-   * <p>Lazy bindings may be supplied within the map-based input in either of the following forms: -
-   * func() interface{} - func() ref.Val
+   * <p>The activation retains a map input without copying it, but does not modify it. The caller
+   * must not mutate the map while the activation may be resolved.
    *
-   * <p>The output of the lazy binding will overwrite the variable reference in the internal map.
+   * <p>A map value may be a no-argument {@link java.util.function.Supplier} for lazy resolution.
+   * The activation invokes the supplier when the binding is first resolved and memoizes a
+   * successful result, including {@code null}, in activation-owned state. Concurrent resolutions
+   * share that result. If the supplier throws, the exception is propagated without memoizing a
+   * result, so a later resolution retries it. A supplier returned by a supplier is the resolved
+   * value and is not invoked by the activation.
    *
    * <p>Values which are not represented as ref.Val types on input may be adapted to a ref.Val using
    * the ref.TypeAdapter configured in the environment.
