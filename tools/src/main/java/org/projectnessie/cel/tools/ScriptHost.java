@@ -28,24 +28,41 @@ import static org.projectnessie.cel.ProgramOption.regexEngine;
 import com.google.api.expr.v1alpha1.Decl;
 import java.util.ArrayList;
 import java.util.List;
-import org.projectnessie.cel.Ast;
 import org.projectnessie.cel.Env;
-import org.projectnessie.cel.Env.AstIssuesTuple;
 import org.projectnessie.cel.EnvOption;
 import org.projectnessie.cel.EvalOption;
 import org.projectnessie.cel.Library;
-import org.projectnessie.cel.Program;
 import org.projectnessie.cel.ProgramOption;
 import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 
 /**
- * Manages {@link Script} instances, works like a factory to generate reusable scripts.
+ * Manages {@link Script} instances and their host-scoped type registry.
  *
- * <p>The current implementation is rather dumb, but it might be extended in the future to cache
- * {@link Script} instances returned by {@link #getOrCreateScript(String, List, List)}.
+ * <p>A host owns a registry snapshot. Types contributed through any {@link ScriptBuilder} become
+ * part of that host's cumulative type universe and are visible to subsequently built scripts.
+ * Equivalent repeated type registrations are allowed. Conflicting or invalid registrations still
+ * fail.
+ *
+ * <p>Complete all type-contributing script builds before sharing the host or its scripts for
+ * concurrent use. A host does not support adding types concurrently with script construction or
+ * evaluation.
+ *
+ * <pre>{@code
+ * ScriptCompiler compiler =
+ *     ScriptCompiler.newBuilder()
+ *         .withDeclarations(Decls.newVar("name", Decls.String))
+ *         .build();
+ * Script script = compiler.compile("'Hello, ' + name");
+ * }</pre>
+ *
+ * @deprecated Use {@link ScriptCompiler} to configure declarations, types, libraries, and policy
+ *     once, then compile one or more source expressions. This class remains available for
+ *     compatibility with its source-first, cumulative-type lifecycle.
  */
+@SuppressWarnings("DeprecatedIsStillUsed")
+@Deprecated
 public final class ScriptHost {
 
   private final boolean disableOptimize;
@@ -101,6 +118,13 @@ public final class ScriptHost {
       return withTypes(asList(types));
     }
 
+    /**
+     * Adds types to this host's cumulative type universe while building the script.
+     *
+     * <p>The types are visible to scripts built subsequently by the same host. Repeating equivalent
+     * registrations is allowed. Complete type registration before sharing the host or its scripts
+     * for concurrent use.
+     */
     public ScriptBuilder withTypes(List<Object> types) {
       this.types.addAll(types);
       return this;
@@ -127,27 +151,12 @@ public final class ScriptHost {
 
       Env env = newCustomEnv(registry, envOptions);
 
-      AstIssuesTuple astIss = env.parse(sourceText);
-      if (astIss.hasIssues()) {
-        throw new ScriptCreateException("parse failed", astIss.getIssues());
-      }
-      Ast ast = astIss.getAst();
-
-      astIss = env.check(ast);
-      if (astIss.hasIssues()) {
-        throw new ScriptCreateException("check failed", astIss.getIssues());
-      }
-      ast = astIss.getAst();
-
       List<ProgramOption> programOptions = new ArrayList<>();
       programOptions.add(regexEngine(regexEngine));
       if (!disableOptimize) {
         programOptions.add(evalOptions(OptOptimize));
       }
-
-      Program prg = env.program(ast, programOptions.toArray(new ProgramOption[] {}));
-
-      return new Script(env, prg);
+      return ScriptCompiler.compile(env, sourceText, programOptions);
     }
   }
 
@@ -174,10 +183,12 @@ public final class ScriptHost {
     }
 
     /**
-     * Use the given {@link TypeRegistry}.
+     * Uses a snapshot of the given {@link TypeRegistry} as the host's cumulative type universe.
      *
-     * <p>The implementation will fall back to {@link
-     * org.projectnessie.cel.common.types.pb.ProtoTypeRegistry}.
+     * <p>The snapshot is taken by {@link #build()}. Later mutations of the supplied registry are
+     * not visible to the host, and types registered while building scripts do not mutate the
+     * supplied registry. The implementation falls back to {@link
+     * org.projectnessie.cel.common.types.pb.ProtoTypeRegistry} when no registry is supplied.
      */
     public Builder registry(TypeRegistry registry) {
       this.registry = registry;
@@ -201,6 +212,8 @@ public final class ScriptHost {
       TypeRegistry r = registry;
       if (r == null) {
         r = ProtoTypeRegistry.newRegistry();
+      } else {
+        r = r.copy();
       }
       return new ScriptHost(disableOptimize, r, regexEngine);
     }

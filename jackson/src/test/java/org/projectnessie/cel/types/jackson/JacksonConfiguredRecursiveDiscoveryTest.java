@@ -40,7 +40,7 @@ import org.projectnessie.cel.common.types.ObjectT;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.tools.Script;
-import org.projectnessie.cel.tools.ScriptHost;
+import org.projectnessie.cel.tools.ScriptCompiler;
 
 class JacksonConfiguredRecursiveDiscoveryTest {
 
@@ -116,14 +116,13 @@ class JacksonConfiguredRecursiveDiscoveryTest {
     assertThat(cyclicNext.get(stringOf("name"))).isEqualTo(stringOf("root"));
 
     Script script =
-        ScriptHost.newBuilder()
+        ScriptCompiler.newBuilder()
             .registry(JacksonRegistry.newRegistry())
-            .build()
-            .buildScript("node.next.next.name == 'root'")
             .withDeclarations(
                 Decls.newVar("node", Decls.newObjectType(RecursiveNode.class.getName())))
             .withTypes(RecursiveNode.class)
-            .build();
+            .build()
+            .compile("node.next.next.name == 'root'");
     assertThat(script.executeWithActivation(Boolean.class, singletonMap("node", node))).isTrue();
 
     for (TypeRegistry recursiveRegistry :

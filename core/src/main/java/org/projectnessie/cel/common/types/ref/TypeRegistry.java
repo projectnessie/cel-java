@@ -29,7 +29,14 @@ public interface TypeRegistry extends TypeAdapter, TypeProvider {
   /** Copy the TypeRegistry and return a new registry whose mutable state is isolated. */
   TypeRegistry copy();
 
-  /** Register a type via a materialized object, which the provider can turn into a type. */
+  /**
+   * Registers a type via a materialized object, which the provider can turn into a type.
+   *
+   * <p>Repeated registration of an equivalent materialized type must succeed without changing the
+   * existing type's behavior. Implementations define materialized-type equivalence because the
+   * supported host representations are implementation-specific. Distinct representations of the
+   * same logical type need not be equivalent.
+   */
   void register(Object t);
 
   /**

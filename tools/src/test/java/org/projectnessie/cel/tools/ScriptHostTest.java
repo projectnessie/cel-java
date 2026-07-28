@@ -39,11 +39,14 @@ import org.projectnessie.cel.common.types.ListT;
 import org.projectnessie.cel.common.types.MapT;
 import org.projectnessie.cel.common.types.Overloads;
 import org.projectnessie.cel.common.types.StringT;
+import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
+import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.interpreter.ActivationFunction;
 import org.projectnessie.cel.interpreter.functions.Overload;
 import org.projectnessie.cel.toolstests.Dummy;
 
+@SuppressWarnings("deprecation")
 class ScriptHostTest {
   private static final String AUTHORIZATION_EXPRESSION =
       "resource.service == \"storage.googleapis.com\""
@@ -264,6 +267,60 @@ class ScriptHostTest {
     arguments.put("checkName", checkName);
 
     assertThat(script.executeWithActivation(Boolean.class, arguments)).isTrue();
+  }
+
+  @Test
+  void suppliedRegistryIsSnapshottedAndBuilderTypesAccumulateIdempotently() throws Exception {
+    ProtoTypeRegistry supplied = ProtoTypeRegistry.newEmptyRegistry();
+    ScriptHost host = ScriptHost.newBuilder().registry(supplied).build();
+    String messageType = Dummy.MyPojo.getDescriptor().getFullName();
+
+    for (int i = 0; i < 3; i++) {
+      Script script =
+          host.buildScript("inp.Property1")
+              .withDeclarations(Decls.newVar("inp", Decls.newObjectType(messageType)))
+              .withTypes(Dummy.MyPojo.getDefaultInstance())
+              .build();
+      assertThat(
+              script.executeWithActivation(
+                  String.class,
+                  Map.of("inp", Dummy.MyPojo.newBuilder().setProperty1("value").build())))
+          .isEqualTo("value");
+    }
+
+    assertThat(supplied.findType(messageType)).isNull();
+
+    Script scriptWithoutRepeatedType =
+        host.buildScript("inp.Property1")
+            .withDeclarations(Decls.newVar("inp", Decls.newObjectType(messageType)))
+            .build();
+    assertThat(
+            scriptWithoutRepeatedType.executeWithActivation(
+                String.class,
+                Map.of("inp", Dummy.MyPojo.newBuilder().setProperty1("accumulated").build())))
+        .isEqualTo("accumulated");
+  }
+
+  @Test
+  void repeatedProtoTypesAreIdempotentForGeneralAndExactRegistries() throws Exception {
+    for (TypeRegistry registry :
+        List.of(ProtoTypeRegistry.newRegistry(), ProtoTypeRegistry.newExactAggregateRegistry())) {
+      ScriptHost host = ScriptHost.newBuilder().registry(registry).build();
+      for (int i = 0; i < 3; i++) {
+        Script script =
+            host.buildScript("inp.Property1")
+                .withDeclarations(
+                    Decls.newVar(
+                        "inp", Decls.newObjectType(Dummy.MyPojo.getDescriptor().getFullName())))
+                .withTypes(Dummy.MyPojo.getDefaultInstance())
+                .build();
+        assertThat(
+                script.executeWithActivation(
+                    String.class,
+                    Map.of("inp", Dummy.MyPojo.newBuilder().setProperty1("value").build())))
+            .isEqualTo("value");
+      }
+    }
   }
 
   @Test

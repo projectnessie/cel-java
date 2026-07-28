@@ -1653,6 +1653,11 @@ class NativePlanTest {
             "flags.exists(value, value == b)",
             Map.of("flags", new Boolean[] {false, true}, "b", true)),
         new Evaluation(
+            "flags.exists(value, value)",
+            Map.of("flags", new Object[] {unknownOf(2001L), unknownOf(2002L)})),
+        new Evaluation(
+            "flags.exists(value, value)", Map.of("flags", new Object[] {unknownOf(2003L), true})),
+        new Evaluation(
             "numbers.exists(x, x == target)",
             Map.of("numbers", new long[] {1, 2}, "x", 99L, "target", 2L)),
         new Evaluation(
@@ -2277,6 +2282,11 @@ class NativePlanTest {
         new Evaluation(
             "flags.all(value, value)",
             Map.of("flags", new Object[] {unknownOf(207L), newErr("predicate")})),
+        new Evaluation(
+            "flags.all(value, value)",
+            Map.of("flags", new Object[] {unknownOf(2071L), unknownOf(2072L)})),
+        new Evaluation(
+            "flags.all(value, value)", Map.of("flags", new Object[] {unknownOf(2073L), false})),
         new Evaluation(
             "numbers.all(x, x <= target)",
             Map.of("numbers", new long[] {1, 2}, "x", 99L, "target", 2L)),

@@ -17,11 +17,7 @@ package org.projectnessie.cel.interpreter;
 
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
-import static org.projectnessie.cel.common.types.Err.isError;
-import static org.projectnessie.cel.common.types.Err.noSuchOverload;
-import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 
-import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.ref.Val;
 
 class EvalOr extends AbstractEvalLhsRhs {
@@ -30,7 +26,6 @@ class EvalOr extends AbstractEvalLhsRhs {
     super(id, lhs, rhs);
   }
 
-  @SuppressWarnings("DuplicatedCode")
   @Override
   public Val eval(Activation ctx) {
     // short-circuit lhs.
@@ -43,23 +38,7 @@ class EvalOr extends AbstractEvalLhsRhs {
     if (rVal == True) {
       return True;
     }
-    // return if both sides are bool false.
-    if (lVal == False && rVal == False) {
-      return False;
-    }
-    // TODO: return both values as a set if both are unknown or error.
-    // prefer left unknown to right unknown.
-    if (isUnknown(lVal)) {
-      return lVal;
-    }
-    if (isUnknown(rVal)) {
-      return rVal;
-    }
-    // If the left-hand side is non-boolean return it as the error.
-    if (isError(lVal)) {
-      return lVal;
-    }
-    return noSuchOverload(lVal, Operator.LogicalOr.id, rVal);
+    return LogicalValueSupport.combine(lVal, rVal, false);
   }
 
   @Override
@@ -91,23 +70,7 @@ class EvalAnd extends AbstractEvalLhsRhs {
     if (rVal == False) {
       return False;
     }
-    // return if both sides are bool true.
-    if (lVal == True && rVal == True) {
-      return True;
-    }
-    // TODO: return both values as a set if both are unknown or error.
-    // prefer left unknown to right unknown.
-    if (isUnknown(lVal)) {
-      return lVal;
-    }
-    if (isUnknown(rVal)) {
-      return rVal;
-    }
-    // If the left-hand side is non-boolean return it as the error.
-    if (isError(lVal)) {
-      return lVal;
-    }
-    return noSuchOverload(lVal, Operator.LogicalAnd.id, rVal);
+    return LogicalValueSupport.combine(lVal, rVal, true);
   }
 
   @Override

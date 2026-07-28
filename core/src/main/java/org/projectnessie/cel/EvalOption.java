@@ -21,10 +21,16 @@ package org.projectnessie.cel;
  */
 public enum EvalOption {
 
-  /** OptTrackState will cause the runtime to return an immutable EvalState value in the Result. */
+  /**
+   * Causes the runtime to record intermediate expression values in the result's mutable,
+   * evaluation-owned {@link org.projectnessie.cel.interpreter.EvalState}.
+   */
   OptTrackState(1),
 
-  /** OptExhaustiveEval causes the runtime to disable short-circuits and track state. */
+  /**
+   * Causes the runtime to disable short-circuit evaluation and record intermediate expression
+   * values in the result's mutable, evaluation-owned state.
+   */
   OptExhaustiveEval(2 | OptTrackState.mask),
 
   /**

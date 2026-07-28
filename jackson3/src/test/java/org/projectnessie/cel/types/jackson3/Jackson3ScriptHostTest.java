@@ -21,13 +21,16 @@ import static org.projectnessie.cel.common.types.StringT.stringOf;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.ObjectT;
+import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.tools.Script;
+import org.projectnessie.cel.tools.ScriptCompiler;
 import org.projectnessie.cel.tools.ScriptHost;
 import org.projectnessie.cel.types.jackson3.types.AnEnum;
 import org.projectnessie.cel.types.jackson3.types.ArrayObject;
@@ -38,7 +41,51 @@ import org.projectnessie.cel.types.jackson3.types.MetaTest;
 import org.projectnessie.cel.types.jackson3.types.MyPojo;
 import org.projectnessie.cel.types.jackson3.types.ObjectListEnum;
 
+@SuppressWarnings("deprecation")
 public class Jackson3ScriptHostTest {
+
+  @Test
+  void scriptCompilerConfiguresJacksonTypesBeforeCompilingSources() throws Exception {
+    for (TypeRegistry registry :
+        List.of(Jackson3Registry.newRegistry(), Jackson3Registry.newExactAggregateRegistry())) {
+      ScriptCompiler compiler =
+          ScriptCompiler.newBuilder()
+              .registry(registry)
+              .withDeclarations(
+                  Decls.newVar("param", Decls.newObjectType(MetaTest.class.getName())))
+              .withTypes(MetaTest.class)
+              .build();
+      MetaTest value = MetaTest.builder().author("author").build();
+
+      assertThat(compiler.compile("param.author").execute(String.class, Map.of("param", value)))
+          .isEqualTo("author");
+      assertThat(
+              compiler
+                  .compile("param.author == 'author'")
+                  .execute(Boolean.class, Map.of("param", value)))
+          .isTrue();
+    }
+  }
+
+  @Test
+  void repeatedTypesAreIdempotentForGeneralAndExactRegistries() throws Exception {
+    for (TypeRegistry registry :
+        List.of(Jackson3Registry.newRegistry(), Jackson3Registry.newExactAggregateRegistry())) {
+      ScriptHost host = ScriptHost.newBuilder().registry(registry).build();
+      for (int i = 0; i < 3; i++) {
+        Script script =
+            host.buildScript("param.author")
+                .withDeclarations(
+                    Decls.newVar("param", Decls.newObjectType(MetaTest.class.getName())))
+                .withTypes(MetaTest.class)
+                .build();
+        assertThat(
+                script.executeWithActivation(
+                    String.class, Map.of("param", MetaTest.builder().author("author").build())))
+            .isEqualTo("author");
+      }
+    }
+  }
 
   @Test
   void standaloneEnum() throws Exception {
