@@ -23,7 +23,6 @@ import static org.projectnessie.cel.common.types.Err.isError;
 import static org.projectnessie.cel.common.types.Err.maybeNoSuchOverloadErr;
 import static org.projectnessie.cel.common.types.Err.modulusByZero;
 import static org.projectnessie.cel.common.types.Err.newErr;
-import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.Overflow.addInt64Checked;
 import static org.projectnessie.cel.common.types.Overflow.divideInt64Checked;
@@ -38,7 +37,6 @@ import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.interpreter.ValueSignal.signal;
 
 import org.projectnessie.cel.RegexEngine;
-import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.BoolT;
 import org.projectnessie.cel.common.types.DoubleT;
 import org.projectnessie.cel.common.types.IntT;
@@ -878,18 +876,8 @@ final class NativeLogical {
 
     Val leftResult = leftSlow != null ? leftSlow : boolOf(leftValue);
     Val rightResult = rightSlow != null ? rightSlow : boolOf(rightValue);
-    if (isUnknown(leftResult)) {
-      throw signal(leftResult);
-    }
-    if (isUnknown(rightResult)) {
-      throw signal(rightResult);
-    }
-    if (isError(leftResult)) {
-      throw signal(leftResult);
-    }
-    throw signal(
-        noSuchOverload(
-            leftResult, and ? Operator.LogicalAnd.id : Operator.LogicalOr.id, rightResult));
+    return NativeScalarContinuations.booleanResult(
+        LogicalValueSupport.combine(leftResult, rightResult, and));
   }
 }
 

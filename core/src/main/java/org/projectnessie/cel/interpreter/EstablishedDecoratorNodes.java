@@ -17,10 +17,8 @@ package org.projectnessie.cel.interpreter;
 
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
-import static org.projectnessie.cel.common.types.Err.isError;
 import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
-import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.interpreter.Coster.Cost.estimateCost;
 import static org.projectnessie.cel.interpreter.Interpretable.calExhaustiveBinaryOpsCost;
 
@@ -335,29 +333,11 @@ final class EvalExhaustiveOr extends AbstractEvalLhsRhs {
   }
 
   /** Eval implements the Interpretable interface method. */
-  @SuppressWarnings("DuplicatedCode")
   @Override
   public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
     Val lVal = lhs.eval(ctx);
     Val rVal = rhs.eval(ctx);
-    if (lVal == True || rVal == True) {
-      return True;
-    }
-    if (lVal == False && rVal == False) {
-      return False;
-    }
-    if (isUnknown(lVal)) {
-      return lVal;
-    }
-    if (isUnknown(rVal)) {
-      return rVal;
-    }
-    // TODO: Combine the errors into a set in the future.
-    // If the left-hand side is non-boolean return it as the error.
-    if (isError(lVal)) {
-      return lVal;
-    }
-    return noSuchOverload(lVal, Operator.LogicalOr.id, rVal);
+    return LogicalValueSupport.combine(lVal, rVal, false);
   }
 
   /** Cost implements the Coster interface method. */
@@ -379,27 +359,11 @@ final class EvalExhaustiveAnd extends AbstractEvalLhsRhs {
   }
 
   /** Eval implements the Interpretable interface method. */
-  @SuppressWarnings("DuplicatedCode")
   @Override
   public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
     Val lVal = lhs.eval(ctx);
     Val rVal = rhs.eval(ctx);
-    if (lVal == False || rVal == False) {
-      return False;
-    }
-    if (lVal == True && rVal == True) {
-      return True;
-    }
-    if (isUnknown(lVal)) {
-      return lVal;
-    }
-    if (isUnknown(rVal)) {
-      return rVal;
-    }
-    if (isError(lVal)) {
-      return lVal;
-    }
-    return noSuchOverload(lVal, Operator.LogicalAnd.id, rVal);
+    return LogicalValueSupport.combine(lVal, rVal, true);
   }
 
   /** Cost implements the Coster interface method. */

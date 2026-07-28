@@ -77,9 +77,14 @@ public final class PbTypeDescription extends Description implements TypeDescript
     this.zeroMsg = zeroMsg;
   }
 
-  void updateReflectType(Message zeroMsg) {
-    this.zeroMsg = zeroMsg;
-    this.reflectType = zeroMsg.getClass();
+  void updateReflectType(Message message) {
+    Message newZero = message.getDefaultInstanceForType();
+    Class<?> newReflectType = newZero.getClass();
+    if (reflectType == newReflectType) {
+      return;
+    }
+    this.zeroMsg = newZero;
+    this.reflectType = newReflectType;
   }
 
   /**

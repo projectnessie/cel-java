@@ -671,6 +671,11 @@ public class ProtoTypeRegistry
    */
   public void registerMessage(Message message) {
     Objects.requireNonNull(message, "message");
+    String messageType = typeNameFromMessage(message);
+    PbTypeDescription existingDescription = pbdb.describeType(messageType);
+    Class<?> existingRepresentation =
+        existingDescription != null ? existingDescription.reflectType() : null;
+    Class<?> registeredRepresentation = message.getDefaultInstanceForType().getClass();
     Set<FileDescriptor> descriptors = collectFileDescriptorSet(message);
     List<org.projectnessie.cel.common.types.ref.Type> runtimeTypes = new ArrayList<>();
     for (FileDescriptor descriptor : descriptors) {
@@ -681,7 +686,9 @@ public class ProtoTypeRegistry
       registerDescriptor(descriptor);
     }
     FileDescription fd = pbdb.registerMessage(message);
-    fieldTypeCache.remove(typeNameFromMessage(message));
+    if (existingRepresentation != registeredRepresentation) {
+      fieldTypeCache.remove(messageType);
+    }
     registerAllTypes(fd);
   }
 

@@ -35,7 +35,7 @@ import org.projectnessie.cel.Env.AstIssuesTuple;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
 import org.projectnessie.cel.tools.Script;
-import org.projectnessie.cel.tools.ScriptHost;
+import org.projectnessie.cel.tools.ScriptCompiler;
 
 @Warmup(iterations = 1, time = 1500, timeUnit = TimeUnit.MILLISECONDS)
 @Measurement(iterations = 5, time = 300, timeUnit = TimeUnit.MILLISECONDS)
@@ -82,16 +82,16 @@ public class CompileBuildBench {
   }
 
   @Benchmark
-  public void scriptHostBuild(CompileState state, Blackhole blackhole) throws Exception {
-    ScriptHost host = ScriptHost.newBuilder().build();
+  public void scriptCompilerBuild(CompileState state, Blackhole blackhole) throws Exception {
     Script script =
-        host.buildScript(state.source())
+        ScriptCompiler.newBuilder()
             .withDeclarations(
                 Decls.newVar("resource", Decls.String),
                 Decls.newVar("user", Decls.String),
                 Decls.newVar("request", Decls.Dyn),
                 Decls.newVar("items", Decls.newListType(Decls.Dyn)))
-            .build();
+            .build()
+            .compile(state.source());
     blackhole.consume(script);
   }
 

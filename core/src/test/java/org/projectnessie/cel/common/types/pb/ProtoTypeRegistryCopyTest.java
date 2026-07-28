@@ -57,6 +57,20 @@ class ProtoTypeRegistryCopyTest {
     assertThat(copy.fileDescriptions().stream().anyMatch(file -> file == originalFile)).isFalse();
   }
 
+  @Test
+  void repeatedGeneratedRegistrationRetainsDefaultBindingAndFieldCache() {
+    ProtoTypeRegistry registry = ProtoTypeRegistry.newEmptyRegistry();
+    TestAllTypes populated = TestAllTypes.newBuilder().setSingleInt32(41).build();
+    registry.registerMessage(populated);
+    FieldType initialField = registry.findFieldType(TYPE_NAME, "single_int32");
+
+    registry.registerMessage(TestAllTypes.newBuilder().setSingleInt32(42).build());
+
+    assertThat(registry.findFieldType(TYPE_NAME, "single_int32")).isSameAs(initialField);
+    Val value = registry.newValue(TYPE_NAME, Map.of());
+    assertThat(value.value()).isEqualTo(TestAllTypes.getDefaultInstance());
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   void generatedToCopyToDynamicKeepsOriginalBinding(boolean exact) {
