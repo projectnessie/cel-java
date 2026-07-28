@@ -54,7 +54,16 @@ import org.projectnessie.cel.common.types.TimestampT;
 import org.projectnessie.cel.common.types.ref.TypeDescription;
 
 /**
- * TypeDescription is a collection of type metadata relevant to expression checking and evaluation.
+ * Protocol Buffer message metadata used during CEL checking and evaluation.
+ *
+ * <p>A description combines an immutable protobuf {@link Descriptor}, its CEL field descriptions,
+ * and the Java message representation used to construct and convert values. A descriptor-only
+ * description uses the strongest known representation: canonical generated classes for recognized
+ * well-known types, otherwise {@link DynamicMessage} until a generated message is registered.
+ *
+ * <p>Descriptions are registry-owned. Their representation binding and field map must be treated as
+ * read-only by callers. {@link Db#copy()} gives each registry copy an independent description so
+ * one copy may bind generated messages while another retains dynamic messages.
  */
 public final class PbTypeDescription extends Description implements TypeDescription {
 
@@ -88,8 +97,14 @@ public final class PbTypeDescription extends Description implements TypeDescript
   }
 
   /**
-   * NewTypeDescription produces a TypeDescription value for the fully-qualified proto type name
-   * with a given descriptor.
+   * Creates a descriptor using the strongest known message representation.
+   *
+   * <p>Recognized well-known types use canonical generated classes; other descriptors initially use
+   * {@link DynamicMessage}.
+   *
+   * @param typeName fully qualified protobuf message name
+   * @param desc matching protobuf message descriptor
+   * @return a new type description containing all declared fields
    */
   public static PbTypeDescription newTypeDescription(String typeName, Descriptor desc) {
     DynamicMessage msgZero = DynamicMessage.getDefaultInstance(desc);
@@ -113,21 +128,38 @@ public final class PbTypeDescription extends Description implements TypeDescript
     return new PbTypeDescription(typeName, desc, new HashMap<>(fieldMap), reflectType, zeroMsg);
   }
 
-  /** FieldMap returns a string field name to FieldDescription map. */
+  /**
+   * Returns the field-name index.
+   *
+   * <p>The map is live registry state and must be treated as read-only.
+   */
   public Map<String, FieldDescription> fieldMap() {
     return fieldMap;
   }
 
-  /** FieldByName returns (FieldDescription, true) if the field name is declared within the type. */
+  /**
+   * Looks up a field by its protobuf source name.
+   *
+   * @param name protobuf source field name
+   * @return the description, or {@code null} if no such field is declared
+   */
   public FieldDescription fieldByName(String name) {
     return fieldMap.get(name);
   }
 
   /**
-   * MaybeUnwrap accepts a proto message as input and unwraps it to a primitive CEL type if
-   * possible.
+   * Converts a protobuf well-known message to the Java representation expected by CEL.
    *
-   * <p>This method returns the unwrapped value and 'true', else the original value and 'false'.
+   * <p>Ordinary messages are returned as messages. Wrapper messages become scalar or protobuf-null
+   * values, timestamps and durations become their Java time representations, and {@link Any} values
+   * whose payload types are registered are decoded using {@code db}. Dynamic messages without
+   * populated extensions are converted when this description has a generated representation
+   * binding.
+   *
+   * @param db descriptor database used to resolve {@link Any} payloads and extensions
+   * @param m a {@link Message} matching this description
+   * @return the unwrapped value, or a message when no well-known conversion applies
+   * @throws RuntimeException if protobuf bytes cannot be parsed
    */
   public Object maybeUnwrap(Db db, Object m) {
     Message msg = (Message) m;
@@ -171,28 +203,33 @@ public final class PbTypeDescription extends Description implements TypeDescript
     return unwrap(db, this, msg);
   }
 
-  /** Name returns the fully-qualified name of the type. */
+  /** Returns the fully qualified protobuf message name. */
   @Override
   public String name() {
     return desc.getFullName();
   }
 
-  /** New returns a mutable proto message */
+  /**
+   * Creates a builder for this registry's generated or dynamic message representation.
+   *
+   * @return a new mutable builder
+   */
   public Message.Builder newMessageBuilder() {
     return zeroMsg.newBuilderForType();
   }
 
+  /** Returns the immutable protobuf descriptor for this message type. */
   public Descriptor getDescriptor() {
     return desc;
   }
 
-  /** ReflectType returns the Golang reflect.Type for this type. */
+  /** Returns the generated message class or {@link DynamicMessage} class bound by this registry. */
   @Override
   public Class<?> reflectType() {
     return reflectType;
   }
 
-  /** Zero returns the zero proto.Message value for this type. */
+  /** Returns the immutable default instance for the bound message representation. */
   @Override
   public Message zero() {
     return zeroMsg;
@@ -247,10 +284,10 @@ public final class PbTypeDescription extends Description implements TypeDescript
   }
 
   /**
-   * unwrap unwraps the provided proto.Message value, potentially based on the description if the
-   * input message is a *dynamicpb.Message which obscures the typing information from Go.
+   * Converts a generated or dynamic well-known protobuf message to its CEL Java representation.
    *
-   * <p>Returns the unwrapped value and 'true' if unwrapped, otherwise the input value and 'false'.
+   * <p>Dynamic messages use the supplied description to recover the registered message type.
+   * Ordinary application messages are returned unchanged.
    */
   static Object unwrap(Db db, Description desc, Message msg) {
     Function<Message, Object> conv = MessageToObjectExact.get(msg.getClass());
@@ -384,6 +421,15 @@ public final class PbTypeDescription extends Description implements TypeDescript
     }
   }
 
+  /**
+   * Returns the protobuf type name represented by a message.
+   *
+   * <p>For {@link Any}, this returns the payload type name from its type URL. Other messages return
+   * their descriptor's fully qualified name.
+   *
+   * @param message message to inspect
+   * @return the protobuf type name, possibly empty for an empty {@link Any} type URL
+   */
   public static String typeNameFromMessage(Message message) {
     if (message instanceof DynamicMessage dyn) {
       Descriptor dynDesc = dyn.getDescriptorForType();
@@ -399,6 +445,12 @@ public final class PbTypeDescription extends Description implements TypeDescript
     return message.getDescriptorForType().getFullName();
   }
 
+  /**
+   * Extracts the type name suffix from a protobuf type URL.
+   *
+   * @param typeUrl type URL or an already unprefixed type name
+   * @return the substring after the first slash, or the entire input when no slash is present
+   */
   public static String typeNameFromUrl(String typeUrl) {
     return typeUrl.substring(typeUrl.indexOf('/') + 1);
   }

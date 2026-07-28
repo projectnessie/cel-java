@@ -16,17 +16,25 @@
 package org.projectnessie.cel.common.types.ref;
 
 /**
- * TypeRegistry allows third-parties to add custom types to CEL. Not all `TypeProvider`
- * implementations support type-customization, so these features are optional. However, a
- * `TypeRegistry` should be a `TypeProvider` and a `TypeAdapter` to ensure that types which are
- * registered can be converted to CEL representations.
+ * Mutable adapter and provider to which host types can be registered.
+ *
+ * <p>Not every {@link TypeProvider} supports registration. A registry combines provider and adapter
+ * behavior so registered types can be checked, constructed, and converted consistently.
  *
  * <p>Unless an implementation documents otherwise, complete registry mutation before sharing the
- * registry for concurrent checking or evaluation.
+ * registry for concurrent checking or evaluation. Use {@link #copy()} when independently mutable
+ * configuration is required after a configured registry has been reused.
  */
 public interface TypeRegistry extends TypeAdapter, TypeProvider {
 
-  /** Copy the TypeRegistry and return a new registry whose mutable state is isolated. */
+  /**
+   * Copies this registry.
+   *
+   * <p>The returned registry has independently mutable registration state. Registered immutable
+   * type metadata may be shared internally by an implementation.
+   *
+   * @return an independently configurable registry
+   */
   TypeRegistry copy();
 
   /**
@@ -36,6 +44,8 @@ public interface TypeRegistry extends TypeAdapter, TypeProvider {
    * existing type's behavior. Implementations define materialized-type equivalence because the
    * supported host representations are implementation-specific. Distinct representations of the
    * same logical type need not be equivalent.
+   *
+   * @param t implementation-supported materialized type, descriptor, or instance
    */
   void register(Object t);
 
@@ -48,6 +58,7 @@ public interface TypeRegistry extends TypeAdapter, TypeProvider {
    * type from that call. Implementations may reject type-value registration entirely with {@link
    * UnsupportedOperationException}.
    *
+   * @param types runtime CEL type values to register
    * @throws IllegalArgumentException if a supported registry already contains a conflicting
    *     definition
    * @throws NullPointerException if this registry supports type-value registration and {@code

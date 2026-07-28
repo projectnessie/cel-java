@@ -66,6 +66,13 @@ import org.projectnessie.cel.parser.ast.ListInitializerList;
 import org.projectnessie.cel.parser.ast.MapInitializerList;
 import org.projectnessie.cel.parser.ast.Start;
 
+/**
+ * Low-level CEL parser.
+ *
+ * <p>Applications normally parse and check source through {@link org.projectnessie.cel.Env}. These
+ * static entry points are useful when a caller needs a parsed protobuf expression, source metadata,
+ * and parse diagnostics without type checking.
+ */
 public final class Parser {
 
   private static final Set<String> reservedIds =
@@ -94,14 +101,17 @@ public final class Parser {
 
   private final Options options;
 
+  /** Parses a source with all standard macros enabled. */
   public static ParseResult parseAllMacros(Source source) {
     return parse(Options.builder().macros(AllMacros).build(), source);
   }
 
+  /** Parses a source with exactly the supplied macro set and default resource limits. */
   public static ParseResult parseWithMacros(Source source, List<Macro> macros) {
     return parse(Options.builder().macros(macros).build(), source);
   }
 
+  /** Parses a source using the supplied limits and macro configuration. */
   public static ParseResult parse(Options options, Source source) {
     return new Parser(options).parse(source);
   }
@@ -159,29 +169,40 @@ public final class Parser {
     return Location.newLocation(node.getBeginLine(), node.getBeginColumn() - 1);
   }
 
+  /**
+   * Result of one parse operation.
+   *
+   * <p>If parsing reports errors, {@link #getExpr()} is {@code null}. Source information and the
+   * diagnostic collection remain available in both success and failure cases.
+   */
   public static final class ParseResult {
     private final Expr expr;
     private final Errors errors;
     private final SourceInfo sourceInfo;
 
+    /** Creates a parse result from its expression, diagnostics, and source metadata. */
     public ParseResult(Expr expr, Errors errors, SourceInfo sourceInfo) {
       this.expr = expr;
       this.errors = errors;
       this.sourceInfo = sourceInfo;
     }
 
+    /** Returns the parsed expression, or {@code null} when parsing failed. */
     public Expr getExpr() {
       return expr;
     }
 
+    /** Returns parse diagnostics. */
     public Errors getErrors() {
       return errors;
     }
 
+    /** Returns source metadata collected while parsing. */
     public SourceInfo getSourceInfo() {
       return sourceInfo;
     }
 
+    /** Returns whether parsing produced at least one error diagnostic. */
     public boolean hasErrors() {
       return errors.hasErrors();
     }

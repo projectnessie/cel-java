@@ -26,16 +26,23 @@ import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
 
-/** interpretablePlanner creates an Interpretable evaluation plan from a proto Expr value. */
+/**
+ * Creates executable {@link Interpretable} plans from protobuf CEL expressions.
+ *
+ * <p>Checked planners use reference and type metadata to resolve calls, types, and names during
+ * planning. Unchecked planners defer more resolution to evaluation. Most applications should obtain
+ * programs through {@link org.projectnessie.cel.Env}.
+ */
 public interface InterpretablePlanner {
-  /** Plan generates an Interpretable value (or error) from the input proto Expr. */
+  /** Plans an expression or throws when the expression cannot be planned. */
   Interpretable plan(Expr expr);
 
   /**
-   * newPlanner creates an interpretablePlanner which references a Dispatcher, TypeProvider,
-   * TypeAdapter, Container, and CheckedExpr value. These pieces of data are used to resolve
-   * functions, types, and namespaced identifiers at plan time rather than at runtime since it only
-   * needs to be done once and may be semi-expensive to compute.
+   * Creates a checked planner using the Java regex engine.
+   *
+   * <p>The dispatcher, provider, adapter, attribute factory, container, and checked metadata
+   * resolve functions, types, and namespaced identifiers at plan time rather than at runtime since
+   * it only needs to be done once.
    */
   static InterpretablePlanner newPlanner(
       Dispatcher disp,
@@ -77,10 +84,7 @@ public interface InterpretablePlanner {
         decorators);
   }
 
-  /**
-   * newPlanner creates an interpretablePlanner from checked expression metadata without requiring a
-   * CheckedExpr wrapper.
-   */
+  /** Creates a checked planner from reference and type maps using the Java regex engine. */
   static InterpretablePlanner newPlanner(
       Dispatcher disp,
       TypeProvider provider,
@@ -124,9 +128,10 @@ public interface InterpretablePlanner {
   }
 
   /**
-   * newUncheckedPlanner creates an interpretablePlanner which references a Dispatcher,
-   * TypeProvider, TypeAdapter, and Container to resolve functions and types at plan time.
-   * Namespaces present in Select expressions are resolved lazily at evaluation time.
+   * Creates an unchecked planner using the Java regex engine.
+   *
+   * <p>The planner uses the dispatcher, provider, adapter, attribute factory, and container where
+   * possible. Namespaces in select expressions are resolved lazily during evaluation.
    */
   static InterpretablePlanner newUncheckedPlanner(
       Dispatcher disp,

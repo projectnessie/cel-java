@@ -17,12 +17,13 @@ package org.projectnessie.cel.common.types.traits;
 
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** Modder interface to support '%' operator overloads. */
+/** Capability for values that support the CEL binary {@code %} operator. */
 public interface Modder {
   /**
-   * Modulo returns the result of taking the modulus of the current value by the denominator.
+   * Computes this value modulo {@code denominator}.
    *
-   * <p>A denominator value of zero results in an error.
+   * @param denominator right-hand operand
+   * @return the remainder, or a CEL error or unknown value; zero returns a CEL error
    */
   Val modulo(Val denominator);
 }

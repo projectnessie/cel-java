@@ -104,6 +104,30 @@ import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Lister;
 import org.projectnessie.cel.common.types.traits.Trait;
 
+/**
+ * CEL type registry and value adapter for generated and dynamic Protocol Buffer messages.
+ *
+ * <p>A registry supplies protobuf message and enum declarations to the checker, creates protobuf
+ * values for CEL object literals, and adapts protobuf messages for evaluation. {@link
+ * #newRegistry(Message...)} includes CEL standard runtime types and protobuf well-known types. Pass
+ * representative default message instances to register application schemas and their transitive
+ * descriptor dependencies.
+ *
+ * <p>Ordinary application message descriptors initially use {@link
+ * com.google.protobuf.DynamicMessage}; recognized protobuf well-known types use their canonical
+ * generated representations. Registering an application generated message binds that Java
+ * representation for new values and enables generated field access where available. {@link #copy()}
+ * preserves the current binding in independent mutable registry state, so later registration in one
+ * copy does not affect another.
+ *
+ * <p>Complete registration before sharing a registry with concurrent compilation or evaluation
+ * callers. Concurrent evaluation may populate internal field-access caches, but registration and
+ * copying are configuration operations and must not race with other registry access.
+ *
+ * <p>{@link #newExactAggregateRegistry(Message...)} is an explicit optimization contract for
+ * supported protobuf aggregate fields. The ordinary registry remains the general-purpose choice;
+ * callers must not assume that a particular expression or field uses an optimized evaluator.
+ */
 public class ProtoTypeRegistry
     implements TypeRegistry, StandardScalarTypeAdapter, StandardScalarFieldProvider {
   private static final ProtoTypeRegistry DEFAULT_REGISTRY = newDefaultRegistry();
@@ -119,9 +143,16 @@ public class ProtoTypeRegistry
   }
 
   /**
-   * NewRegistry accepts a list of proto message instances and returns a type provider which can
-   * create new instances of the provided message or any message that proto depends upon in its
-   * FileDescriptor.
+   * Creates a general-purpose registry and registers the supplied message schemas.
+   *
+   * <p>Each message registers its file descriptor and all transitive file dependencies. The
+   * instances also select the generated or dynamic Java representation used for their message
+   * types.
+   *
+   * @param types representative protobuf messages; an empty array creates a registry containing the
+   *     standard and well-known types
+   * @return an independent mutable registry
+   * @throws NullPointerException if {@code types} or an element is null
    */
   public static ProtoTypeRegistry newRegistry(Message... types) {
     ProtoTypeRegistry p = DEFAULT_REGISTRY.copy();
@@ -136,7 +167,12 @@ public class ProtoTypeRegistry
    * Java representations.
    *
    * <p>The returned registry remains a {@link ProtoTypeRegistry}. Unsupported aggregate fields and
-   * all scalar fields retain the default protobuf behavior.
+   * all scalar fields retain the default protobuf behavior. Registration and representation binding
+   * otherwise follow {@link #newRegistry(Message...)}.
+   *
+   * @param types representative protobuf messages to register
+   * @return an independent registry with exact aggregate adaptation enabled
+   * @throws NullPointerException if {@code types} or an element is null
    */
   public static TypeRegistry newExactAggregateRegistry(Message... types) {
     ProtoTypeRegistry p =
@@ -198,14 +234,26 @@ public class ProtoTypeRegistry
     return p;
   }
 
-  /** NewEmptyRegistry returns a registry which is completely unconfigured. */
+  /**
+   * Creates a registry without CEL runtime type registrations.
+   *
+   * <p>This advanced factory still has an isolated descriptor database initialized with protobuf
+   * well-known descriptors. Prefer {@link #newRegistry(Message...)} unless building the complete
+   * runtime type catalog explicitly.
+   *
+   * @return an independent mutable registry
+   */
   public static ProtoTypeRegistry newEmptyRegistry() {
     return new ProtoTypeRegistry(new HashMap<>(), newDb());
   }
 
   /**
-   * Copy implements the ref.TypeRegistry interface method which copies the current state of the
-   * registry into its own memory space.
+   * Copies the current registry into independent mutable state.
+   *
+   * <p>The copy retains registered runtime types, descriptors, and current generated/dynamic
+   * representation bindings. Later registrations and field caches are isolated.
+   *
+   * @return an independent registry copy
    */
   @Override
   public ProtoTypeRegistry copy() {
@@ -217,6 +265,13 @@ public class ProtoTypeRegistry
     return new ProtoTypeRegistry(copiedTypes, copiedDb);
   }
 
+  /**
+   * Registers a protobuf message or CEL runtime type.
+   *
+   * @param t a {@link Message} or {@link org.projectnessie.cel.common.types.ref.Type}
+   * @throws RuntimeException if the value has another type
+   * @throws NullPointerException if {@code t} is null
+   */
   @Override
   public void register(Object t) {
     if (t instanceof Message) {
@@ -228,6 +283,12 @@ public class ProtoTypeRegistry
     }
   }
 
+  /**
+   * Resolves a registered protobuf enum constant.
+   *
+   * @param enumName fully qualified protobuf enum-constant name
+   * @return its numeric value as a CEL integer, or a CEL error if unknown
+   */
   @Override
   public Val enumValue(String enumName) {
     EnumValueDescription enumVal = pbdb.describeEnum(enumName);
@@ -237,6 +298,16 @@ public class ProtoTypeRegistry
     return intOf(enumVal.value());
   }
 
+  /**
+   * Resolves checked type and runtime access metadata for a protobuf field.
+   *
+   * <p>The returned metadata supports both generated and descriptor-based access according to the
+   * representation currently bound to this registry.
+   *
+   * @param messageType fully qualified registered protobuf message name
+   * @param fieldName protobuf source field name or qualified extension name
+   * @return field metadata, or {@code null} if the message type or field is unknown
+   */
   @Override
   public FieldType findFieldType(String messageType, String fieldName) {
     Map<String, FieldType> messageFields = fieldTypeCache.get(messageType);
@@ -372,6 +443,12 @@ public class ProtoTypeRegistry
     return field;
   }
 
+  /**
+   * Resolves a registered CEL type, protobuf enum constant, or extension identifier.
+   *
+   * @param identName identifier to resolve
+   * @return the runtime type/value, or {@code null} if the identifier is unknown
+   */
   @Override
   public Val findIdent(String identName) {
     org.projectnessie.cel.common.types.ref.Type t = revTypeMap.get(identName);
@@ -388,6 +465,12 @@ public class ProtoTypeRegistry
     return null;
   }
 
+  /**
+   * Resolves a registered protobuf message as a checked CEL type value.
+   *
+   * @param typeName fully qualified protobuf message name
+   * @return the checked type value, or {@code null} if the message type is unknown
+   */
   @Override
   public Type findType(String typeName) {
     if (pbdb.describeType(typeName) == null) {
@@ -399,6 +482,18 @@ public class ProtoTypeRegistry
     return Type.newBuilder().setType(Type.newBuilder().setMessageType(typeName)).build();
   }
 
+  /**
+   * Constructs a registered protobuf message from CEL field values.
+   *
+   * <p>Field values are converted according to their protobuf descriptors. CEL null clears
+   * supported singular message fields and is pruned from supported repeated/map well-known message
+   * values according to protobuf conversion rules.
+   *
+   * @param typeName fully qualified registered protobuf message name
+   * @param fields protobuf source field names and CEL values
+   * @return the constructed protobuf-backed CEL object, or a CEL error for an unknown type, field,
+   *     or invalid field conversion
+   */
   @Override
   public Val newValue(String typeName, Map<String, Val> fields) {
     PbTypeDescription td = pbdb.describeType(typeName);
@@ -651,6 +746,11 @@ public class ProtoTypeRegistry
   /**
    * Registers the contents of a protocol buffer {@link FileDescriptor}.
    *
+   * <p>This method registers declarations in that file only. Use {@link #registerMessage(Message)}
+   * to traverse descriptor dependencies and bind a generated or dynamic message representation.
+   * Repeated equivalent registration is idempotent.
+   *
+   * @param fileDesc descriptor whose declarations to register
    * @throws IllegalArgumentException if the descriptor declares a runtime type name with a
    *     conflicting kind or trait set
    * @throws NullPointerException if {@code fileDesc} is null
@@ -665,6 +765,11 @@ public class ProtoTypeRegistry
   /**
    * Registers a protocol buffer message and all of its descriptor dependencies.
    *
+   * <p>The message's default instance selects its generated or dynamic representation. Registering
+   * the same schema and representation repeatedly is idempotent. Binding a different representation
+   * updates this registry and invalidates the affected field-access cache.
+   *
+   * @param message representative generated or dynamic message
    * @throws IllegalArgumentException if the descriptor set declares a runtime type name with a
    *     conflicting kind or trait set
    * @throws NullPointerException if {@code message} is null
@@ -698,6 +803,7 @@ public class ProtoTypeRegistry
    * <p>Equivalent definitions have the same runtime kind and complete trait set and are idempotent.
    * Conflicting definitions fail before any definition from this call is installed.
    *
+   * @param types runtime types to register
    * @throws IllegalArgumentException if a type name has a conflicting runtime kind or trait set
    * @throws NullPointerException if {@code types} or any element is null
    */
@@ -741,10 +847,14 @@ public class ProtoTypeRegistry
   }
 
   /**
-   * NativeToValue converts various "native" types to ref.Val with this specific implementation
-   * providing support for custom proto-based types.
+   * Converts a Java or Protocol Buffer value to a CEL value.
    *
-   * <p>This method should be the inverse of ref.Val.ConvertToNative.
+   * <p>Registered messages become protobuf-backed CEL objects. Protobuf wrapper, JSON, timestamp,
+   * duration, and {@code Any} messages are unwrapped to their CEL representations where possible.
+   * Unknown protobuf types and unsupported Java inputs produce CEL error values.
+   *
+   * @param value value to adapt
+   * @return the converted CEL value or a CEL error
    */
   @Override
   public Val nativeToValue(Object value) {

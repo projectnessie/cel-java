@@ -21,9 +21,11 @@ import org.projectnessie.cel.common.Errors;
 import org.projectnessie.cel.common.Source;
 
 /**
- * Issues defines methods for inspecting the error details of parse and check calls.
+ * Diagnostics produced while parsing or type-checking a CEL expression.
  *
- * <p>Note: in the future, non-fatal warnings and notices may be inspectable via the Issues struct.
+ * <p>Currently this type reports errors. Call {@link #hasIssues()} before using an AST returned in
+ * the same {@link Env.AstIssuesTuple}. This wrapper retains its underlying {@link Errors}; it is
+ * mutable through the live list returned by {@link #getErrors()} and is not thread-safe.
  */
 public final class Issues {
 
@@ -33,17 +35,31 @@ public final class Issues {
     this.errs = errs;
   }
 
-  /** NewIssues returns an Issues struct from a common.Errors object. */
+  /**
+   * Wraps an existing error collection without copying it.
+   *
+   * @param errs error collection
+   * @return issues backed by {@code errs}
+   */
   public static Issues newIssues(Errors errs) {
     return new Issues(errs);
   }
 
-  /** NewIssues returns an Issues struct from a common.Errors object. */
+  /**
+   * Creates empty diagnostics associated with a source.
+   *
+   * @param source source used to format any subsequently added errors
+   * @return empty issues
+   */
   public static Issues noIssues(Source source) {
     return new Issues(new Errors(source));
   }
 
-  /** Err returns an error value if the issues list contains one or more errors. */
+  /**
+   * Creates an exception containing the formatted diagnostics when errors are present.
+   *
+   * @return formatted runtime exception, or {@code null} when there are no issues
+   */
   public RuntimeException err() {
     if (!errs.hasErrors()) {
       return null;
@@ -51,21 +67,44 @@ public final class Issues {
     return new RuntimeException(toString());
   }
 
+  /**
+   * Reports whether errors are present.
+   *
+   * @return {@code true} when at least one error is present
+   */
   public boolean hasIssues() {
     return errs.hasErrors();
   }
 
-  /** Errors returns the collection of errors encountered in more granular detail. */
+  /**
+   * Returns the live mutable error list.
+   *
+   * <p>Changes to this list change this {@code Issues} instance. Callers that need an immutable
+   * snapshot should use {@link List#copyOf(java.util.Collection)}.
+   *
+   * @return mutable errors in encounter order
+   */
   public List<CELError> getErrors() {
     return errs.getErrors();
   }
 
-  /** Append collects the issues from another Issues struct into a new Issues object. */
+  /**
+   * Returns new diagnostics containing this instance's errors followed by {@code other}'s errors.
+   *
+   * <p>Neither input is modified. The returned list contains the same {@link CELError} references.
+   *
+   * @param other diagnostics to append
+   * @return combined diagnostics
+   */
   public Issues append(Issues other) {
     return newIssues(errs.append(other.getErrors()));
   }
 
-  /** String converts the issues to a suitable display string. */
+  /**
+   * Formats errors with source locations for display.
+   *
+   * @return newline-delimited diagnostic text, or an empty string when no errors are present
+   */
   @Override
   public String toString() {
     return errs.toDisplayString();

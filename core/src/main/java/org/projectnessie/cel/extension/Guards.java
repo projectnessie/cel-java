@@ -29,7 +29,14 @@ import org.projectnessie.cel.interpreter.functions.QuaternaryOp;
 import org.projectnessie.cel.interpreter.functions.TernaryOp;
 import org.projectnessie.cel.interpreter.functions.UnaryOp;
 
-/** function invocation guards for common call signatures within extension functions. */
+/**
+ * Adapters for common extension-function signatures.
+ *
+ * <p>Each adapter extracts the expected primitive values from CEL arguments, invokes the supplied
+ * Java function, converts its result back to a CEL value, and converts a thrown {@link
+ * RuntimeException} into a CEL error. Callers must register the adapter only with a declaration
+ * whose checked argument types match the adapter name.
+ */
 public final class Guards {
 
   private Guards() {}
