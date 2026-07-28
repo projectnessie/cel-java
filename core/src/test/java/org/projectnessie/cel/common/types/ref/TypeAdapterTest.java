@@ -23,6 +23,7 @@ import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.StringT.StringType;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
+import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
 
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.common.types.Err;
@@ -138,6 +139,32 @@ class TypeAdapterTest {
     assertThatThrownBy(() -> DEFAULT_ADAPTER.valueToDouble(intOf(1)))
         .isInstanceOf(RuntimeException.class)
         .hasMessage("native type conversion error from 'int' to 'double'");
+  }
+
+  @Test
+  void unknownLongConversionUsesTheUnknownValueContract() {
+    assertThat(DEFAULT_ADAPTER.valueToLong(unknownOf(42L))).isEqualTo(42L);
+    assertThat(DEFAULT_ADAPTER.valueToNative(unknownOf(42L), long.class)).isEqualTo(42L);
+    assertThatThrownBy(() -> DEFAULT_ADAPTER.valueToLong(unknownOf(1L, 2L)))
+        .isInstanceOf(RuntimeException.class)
+        .hasMessage("native type conversion error from 'unknown' to 'long'");
+    assertThatThrownBy(() -> DEFAULT_ADAPTER.valueToNative(unknownOf(1L, 2L), long.class))
+        .isInstanceOf(RuntimeException.class)
+        .hasMessage("native type conversion error from 'unknown' to 'long'");
+  }
+
+  @Test
+  void unknownArrayConversionsThroughAdapterAreCompleteAndDefensive() {
+    Val unknown = unknownOf(3L, 1L, 2L);
+
+    long[] array = DEFAULT_ADAPTER.valueToNative(unknown, long[].class);
+    long[] object = (long[]) DEFAULT_ADAPTER.valueToNative(unknown, Object.class);
+    assertThat(array).containsExactly(1L, 2L, 3L);
+    assertThat(object).containsExactly(1L, 2L, 3L);
+
+    array[0] = 99L;
+    object[0] = 98L;
+    assertThat(DEFAULT_ADAPTER.valueToNative(unknown, long[].class)).containsExactly(1L, 2L, 3L);
   }
 
   @Test

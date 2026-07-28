@@ -16,12 +16,9 @@
 package org.projectnessie.cel.interpreter;
 
 import static java.util.Objects.requireNonNull;
-import static org.projectnessie.cel.common.operators.Operator.LogicalAnd;
-import static org.projectnessie.cel.common.operators.Operator.LogicalOr;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.Err.isError;
 import static org.projectnessie.cel.common.types.Err.newErr;
-import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
@@ -601,7 +598,7 @@ class NativeLoopBinding implements Activation {
 
   void record(Val value, NativeQuantifier quantifier) {
     pending =
-        logicalSlow(
+        LogicalValueSupport.combine(
             pending != null ? pending : boolOf(quantifier.initialValue),
             value,
             quantifier == NativeQuantifier.ALL);
@@ -688,28 +685,6 @@ class NativeLoopBinding implements Activation {
   @Override
   public ResolvedValue resolveName(String name) {
     return ResolvedValue.mapTo(resolve(name));
-  }
-
-  @SuppressWarnings("DuplicatedCode")
-  private static Val logicalSlow(Val left, Val right, boolean and) {
-    Val shortCircuit = boolOf(!and);
-    Val identity = boolOf(and);
-    if (left == shortCircuit || right == shortCircuit) {
-      return shortCircuit;
-    }
-    if (left == identity && right == identity) {
-      return identity;
-    }
-    if (isUnknown(left)) {
-      return left;
-    }
-    if (isUnknown(right)) {
-      return right;
-    }
-    if (isError(left)) {
-      return left;
-    }
-    return noSuchOverload(left, and ? LogicalAnd.id : LogicalOr.id, right);
   }
 
   private static ValueSignal wrapPropagatedError(Val value) {

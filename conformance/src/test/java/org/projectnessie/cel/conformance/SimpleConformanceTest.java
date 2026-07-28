@@ -16,6 +16,8 @@
 package org.projectnessie.cel.conformance;
 
 import static java.util.stream.Collectors.toCollection;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.abort;
 import static org.junit.jupiter.api.DynamicContainer.dynamicContainer;
@@ -88,12 +90,14 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.DynamicNode;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
 import org.projectnessie.cel.Ast;
 import org.projectnessie.cel.Env;
@@ -107,6 +111,7 @@ import org.projectnessie.cel.common.types.IteratorT;
 import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.TypeT;
 import org.projectnessie.cel.common.types.Types;
+import org.projectnessie.cel.common.types.UnknownT;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Lister;
@@ -614,6 +619,12 @@ class SimpleConformanceTest {
       throw new AssertionError(
           testPath + ": got " + print(actual) + ", want unknown " + print(expected));
     }
+    Set<Long> expectedIds = new TreeSet<>(expected.getExprsList());
+    Set<Long> actualIds = new TreeSet<>(actual.getUnknown().getExprsList());
+    if (!expectedIds.equals(actualIds)) {
+      throw new AssertionError(
+          testPath + ": unknown expression IDs got " + actualIds + ", want " + expectedIds);
+    }
   }
 
   private static boolean valuesEqual(Value expected, Value actual) {
@@ -680,9 +691,20 @@ class SimpleConformanceTest {
     return switch (ev.getKindCase()) {
       case VALUE -> valueToRefValue(adapter, ev.getValue());
       case ERROR -> newErr("XXX add details later");
-      case UNKNOWN -> unknownOf(ev.getUnknown().getExprs(0));
+      case UNKNOWN -> unknownSetToRefValue(ev.getUnknown());
       default -> throw new IllegalArgumentException("unknown ExprValue kind " + ev.getKindCase());
     };
+  }
+
+  private static UnknownT unknownSetToRefValue(UnknownSet unknown) {
+    if (unknown.getExprsCount() == 0) {
+      throw new IllegalArgumentException("unknown ExprValue contains no expression ids");
+    }
+    long[] additionalExpressionIds = new long[unknown.getExprsCount() - 1];
+    for (int i = 1; i < unknown.getExprsCount(); i++) {
+      additionalExpressionIds[i - 1] = unknown.getExprs(i);
+    }
+    return unknownOf(unknown.getExprs(0), additionalExpressionIds);
   }
 
   private static Val valueToRefValue(TypeAdapter adapter, Value v) {
@@ -732,11 +754,116 @@ class SimpleConformanceTest {
 
   private static ExprValue refValueToExprValue(TypeAdapter adapter, Val res) {
     if (isUnknown(res)) {
-      return ExprValue.newBuilder()
-          .setUnknown(UnknownSet.newBuilder().addExprs(res.intValue()))
-          .build();
+      UnknownSet.Builder unknown = UnknownSet.newBuilder();
+      for (long expressionId : ((UnknownT) res).expressionIds()) {
+        unknown.addExprs(expressionId);
+      }
+      return ExprValue.newBuilder().setUnknown(unknown).build();
     }
     return ExprValue.newBuilder().setValue(refValueToValue(adapter, res)).build();
+  }
+
+  @Test
+  void unknownExprValueRoundTripsAllCanonicalExpressionIds() {
+    ExprValue wireValue =
+        ExprValue.newBuilder()
+            .setUnknown(UnknownSet.newBuilder().addExprs(3L).addExprs(1L).addExprs(3L))
+            .build();
+
+    Val imported = exprValueToRefValue(null, wireValue);
+    assertThat(imported).isInstanceOf(UnknownT.class);
+    ExprValue exported = refValueToExprValue(null, imported);
+
+    assertThat(exported.getUnknown().getExprsList()).containsExactly(1L, 3L);
+
+    Val singleton =
+        exprValueToRefValue(
+            null, ExprValue.newBuilder().setUnknown(UnknownSet.newBuilder().addExprs(9L)).build());
+    assertThat(refValueToExprValue(null, singleton).getUnknown().getExprsList())
+        .containsExactly(9L);
+  }
+
+  @Test
+  void emptyUnknownExprValueIsRejected() {
+    ExprValue wireValue =
+        ExprValue.newBuilder().setUnknown(UnknownSet.getDefaultInstance()).build();
+
+    assertThatThrownBy(() -> exprValueToRefValue(null, wireValue))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("unknown ExprValue contains no expression ids");
+  }
+
+  @Test
+  void exactUnknownMatcherComparesSetsIndependentOfWireOrder() {
+    UnknownSet expected = UnknownSet.newBuilder().addExprs(3L).addExprs(1L).addExprs(3L).build();
+    ExprValue actual =
+        ExprValue.newBuilder()
+            .setUnknown(UnknownSet.newBuilder().addExprs(1L).addExprs(3L))
+            .build();
+
+    matchUnknown("unknown/test", expected, actual);
+
+    assertThatThrownBy(
+            () ->
+                matchUnknown(
+                    "unknown/test",
+                    expected,
+                    ExprValue.newBuilder()
+                        .setUnknown(UnknownSet.newBuilder().addExprs(1L).addExprs(2L))
+                        .build()))
+        .isInstanceOf(AssertionError.class)
+        .hasMessage("unknown/test: unknown expression IDs got [1, 2], want [1, 3]");
+    assertThatThrownBy(
+            () ->
+                matchUnknown(
+                    "unknown/missing",
+                    expected,
+                    ExprValue.newBuilder()
+                        .setUnknown(UnknownSet.newBuilder().addExprs(1L))
+                        .build()))
+        .isInstanceOf(AssertionError.class)
+        .hasMessage("unknown/missing: unknown expression IDs got [1], want [1, 3]");
+    assertThatThrownBy(
+            () ->
+                matchUnknown(
+                    "unknown/extra",
+                    expected,
+                    ExprValue.newBuilder()
+                        .setUnknown(UnknownSet.newBuilder().addExprs(1L).addExprs(3L).addExprs(4L))
+                        .build()))
+        .isInstanceOf(AssertionError.class)
+        .hasMessage("unknown/extra: unknown expression IDs got [1, 3, 4], want [1, 3]");
+    assertThatThrownBy(
+            () ->
+                matchUnknown(
+                    "unknown/kind",
+                    expected,
+                    ExprValue.newBuilder().setValue(Value.newBuilder().setBoolValue(true)).build()))
+        .isInstanceOf(AssertionError.class)
+        .hasMessageContaining("unknown/kind:")
+        .hasMessageContaining("want unknown");
+  }
+
+  @Test
+  void anyUnknownMatcherRemainsKindOnly() throws InvalidProtocolBufferException {
+    SimpleTest wildcard =
+        SimpleTest.newBuilder()
+            .setAnyUnknowns(dev.cel.expr.conformance.test.UnknownSetMatcher.getDefaultInstance())
+            .build();
+    ExprValue multiple =
+        ExprValue.newBuilder()
+            .setUnknown(UnknownSet.newBuilder().addExprs(5L).addExprs(7L))
+            .build();
+
+    match("unknown/wildcard", wildcard, multiple);
+    assertThatThrownBy(
+            () ->
+                match(
+                    "unknown/wildcard",
+                    wildcard,
+                    ExprValue.newBuilder().setValue(Value.newBuilder().setBoolValue(true)).build()))
+        .isInstanceOf(AssertionError.class)
+        .hasMessageContaining("want one of several unknowns");
   }
 
   private static Value refValueToValue(TypeAdapter adapter, Val res) {

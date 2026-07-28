@@ -66,7 +66,6 @@ import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.UintT;
-import org.projectnessie.cel.common.types.UnknownT;
 
 /** Helper class for {@link TypeAdapter} implementations to convert between Java and CEL types. */
 public final class TypeAdapterSupport {
@@ -384,7 +383,7 @@ public final class TypeAdapterSupport {
   }
 
   public static long valueToLong(Val value) {
-    if (value instanceof IntT || value instanceof UintT || value instanceof UnknownT) {
+    if (value instanceof IntT || value instanceof UintT) {
       return value.intValue();
     }
     return legacyValueToNative(value, long.class);
