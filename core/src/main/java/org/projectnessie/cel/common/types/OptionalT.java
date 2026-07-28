@@ -38,7 +38,13 @@ import org.projectnessie.cel.common.types.traits.Receiver;
 import org.projectnessie.cel.common.types.traits.Sizer;
 import org.projectnessie.cel.common.types.traits.Trait;
 
-/** Runtime value for CEL optional_type values. */
+/**
+ * Runtime value for CEL {@code optional_type} values.
+ *
+ * <p>An optional distinguishes absence from a present CEL value, including a present CEL null.
+ * Optional access helpers return either a present optional, {@link #none()}, or a CEL error value
+ * when the operand does not support the requested operation.
+ */
 public final class OptionalT extends BaseVal implements FieldTester, Indexer, Receiver {
   public static final String OptionalTypeName = "optional_type";
   public static final Type OptionalType =
@@ -55,30 +61,37 @@ public final class OptionalT extends BaseVal implements FieldTester, Indexer, Re
     this.present = present;
   }
 
+  /** Returns the singleton absent optional. */
   public static OptionalT none() {
     return None;
   }
 
+  /** Returns a present optional containing the non-null CEL value. */
   public static OptionalT of(Val value) {
     return new OptionalT(Objects.requireNonNull(value, "value"), true);
   }
 
+  /** Returns an absent optional for a CEL zero value, otherwise a present optional. */
   public static OptionalT ofNonZeroValue(Val value) {
     return isZeroValue(value) ? none() : of(value);
   }
 
+  /** Applies optional field selection to a CEL operand. */
   public static Val optionalSelect(Val operand, Val field) {
     return optionalAccess(operand, field);
   }
 
+  /** Applies optional indexing to a CEL operand. */
   public static Val optionalIndex(Val operand, Val index) {
     return optionalAccess(operand, index);
   }
 
+  /** Returns whether this optional contains a value. */
   public boolean hasValue() {
     return present;
   }
 
+  /** Returns the contained CEL value, or {@code null} when absent. */
   public Val getValue() {
     return value;
   }

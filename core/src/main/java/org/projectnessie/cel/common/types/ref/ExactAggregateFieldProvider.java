@@ -45,6 +45,7 @@ public interface ExactAggregateFieldProvider extends TypeProvider {
    * @param messageType fully qualified checked CEL message type
    * @param fieldName protobuf/host field name used by the checked select
    * @param checkedType checked CEL result type of the field
+   * @return whether this field satisfies the exact aggregate representation contract
    */
   default boolean isExactAggregateField(String messageType, String fieldName, Type checkedType) {
     return true;

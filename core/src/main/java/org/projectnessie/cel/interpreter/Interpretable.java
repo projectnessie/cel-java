@@ -27,33 +27,35 @@ import org.projectnessie.cel.interpreter.AttributeFactory.Qualifier;
 import org.projectnessie.cel.interpreter.Coster.Cost;
 
 /**
- * Interpretable can accept a given Activation and produce a value along with an accompanying
- * EvalState which can be used to inspect whether additional data might be necessary to complete the
- * evaluation.
+ * One executable node in a low-level CEL evaluation plan.
+ *
+ * <p>Evaluating a node against an {@link Activation} returns a CEL {@link Val}. Evaluation-state
+ * recording is added separately through an {@link InterpretableDecorator}; it is not returned by
+ * this interface.
  */
 public interface Interpretable {
-  /** ID value corresponding to the expression node. */
+  /** Returns the source expression identifier represented by this node. */
   long id();
 
-  /** Eval an Activation to produce an output. */
+  /** Evaluates this node against an activation. */
   Val eval(Activation activation);
 
-  /** InterpretableConst interface for tracking whether the Interpretable is a constant value. */
+  /** Executable node that always returns one constant CEL value. */
   interface InterpretableConst extends Interpretable {
-    /** Value returns the constant value of the instruction. */
+    /** Returns the constant value. */
     Val value();
   }
 
-  /** InterpretableAttribute interface for tracking whether the Interpretable is an attribute. */
+  /** Executable node backed by an activation attribute and optional qualifier path. */
   interface InterpretableAttribute extends Interpretable, Qualifier, Attribute {
-    /** Attr returns the Attribute value. */
+    /** Returns the underlying attribute. */
     Attribute attr();
 
-    /** Adapter returns the type adapter to be used for adapting resolved Attribute values. */
+    /** Returns the adapter used for resolved attribute values. */
     TypeAdapter adapter();
 
     /**
-     * AddQualifier proxies the Attribute.AddQualifier method.
+     * Adds a qualifier to the underlying attribute.
      *
      * <p>Note, this method may mutate the current attribute state. If the desire is to clone the
      * Attribute, the Attribute should first be copied before adding the qualifier. Attributes are
@@ -70,38 +72,28 @@ public interface Interpretable {
     @Override
     Object qualify(Activation vars, Object obj);
 
-    /** Resolve returns the value of the Attribute given the current Activation. */
+    /** Resolves the attribute against the activation. */
     @Override
     Object resolve(Activation act);
   }
 
-  /**
-   * InterpretableCall interface for inspecting Interpretable instructions related to function
-   * calls.
-   */
+  /** Executable function-call node exposed for planning decorators and advanced inspection. */
   interface InterpretableCall extends Interpretable {
 
-    /**
-     * Function returns the function name as it appears in text or mangled operator name as it
-     * appears in the operators.go file.
-     */
+    /** Returns the source function name or internal operator identifier. */
     String function();
 
-    /**
-     * OverloadID returns the overload id associated with the function specialization. Overload ids
-     * are stable across language boundaries and can be treated as synonymous with a unique function
-     * signature.
-     */
+    /** Returns the overload identifier selected by checking or planning. */
     String overloadID();
 
     /**
-     * Args returns the normalized arguments to the function overload. For receiver-style functions,
-     * the receiver target is arg 0.
+     * Returns normalized arguments to the function overload. For receiver-style functions, the
+     * receiver target is arg 0.
      */
     Interpretable[] args();
   }
 
-  /** NewConstValue creates a new constant valued Interpretable. */
+  /** Creates an executable constant node for an expression identifier. */
   static InterpretableConst newConstValue(long id, Val val) {
     return new EvalConst(id, val);
   }

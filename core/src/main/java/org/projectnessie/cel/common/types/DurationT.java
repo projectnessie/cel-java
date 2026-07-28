@@ -117,9 +117,7 @@ public final class DurationT extends BaseVal
     this.d = d;
   }
 
-  /**
-   * Verifies that the range of this duration conforms to Go's constraints, see above code comment.
-   */
+  /** Returns this value or a CEL error when it is outside the CEL duration range. */
   public Val rangeCheck() {
     if (d.getSeconds() < minDurationSeconds || d.getSeconds() > maxDurationSeconds) {
       return errDurationOutOfRange;

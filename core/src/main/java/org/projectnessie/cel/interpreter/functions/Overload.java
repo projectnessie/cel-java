@@ -51,111 +51,262 @@ import org.projectnessie.cel.common.types.traits.Subtractor;
 import org.projectnessie.cel.common.types.traits.Trait;
 
 /**
- * Overload defines a named overload of a function, indicating an operand trait which must be
- * present on the first argument to the overload as well as one or more fixed-arity or generic
- * function implementations.
+ * Runtime implementation associated with a CEL function or overload identifier.
  *
- * <p>The majority of operators within the expression language are unary or binary and the
- * specializations simplify the call contract for implementers of types with operator overloads. Any
- * added complexity is assumed to be handled by the generic FunctionOp.
+ * <p>Extension authors normally create an instance with a fixed-arity factory and register it
+ * through {@link org.projectnessie.cel.ProgramOption#functions(Overload...)}. A checked call first
+ * resolves its declared overload identifier and falls back to its function name; an unchecked call
+ * resolves by function name. Consequently, the registered {@link #operator} must match the
+ * identifier used by the corresponding checker declaration.
+ *
+ * <p>If {@link #operandTrait} is non-null, the first argument must advertise that trait before the
+ * configured operation is invoked. Otherwise receiver dispatch is attempted when the first argument
+ * implements {@link org.projectnessie.cel.common.types.traits.Receiver}; if neither path applies,
+ * evaluation returns a CEL no-such-overload error. A null trait makes the configured operation
+ * directly applicable after normal argument error/unknown propagation.
+ *
+ * <p>An overload is immutable, but its operation object may be invoked concurrently by reusable
+ * programs and must be thread-safe. Operations return non-null CEL values; evaluation failures
+ * should be CEL error values rather than Java {@code null}. Registering the same identifier twice
+ * in one program configuration fails with {@link IllegalArgumentException}.
  */
 public final class Overload {
-  /** Operator name as written in an expression or defined within operators.go. */
+  /** Function name or checked overload identifier used for dispatcher lookup. */
   public final String operator;
 
-  /**
-   * Operand trait used to dispatch the call. The zero-value indicates a global function overload or
-   * that one of the Unary / Binary / Function definitions should be used to execute the call.
-   */
+  /** Optional trait required on the first argument before invoking the configured operation. */
   public final Trait operandTrait;
 
-  /** Unary defines the overload with a UnaryOp implementation. May be nil. */
+  /** One-argument implementation, or {@code null} when not configured. */
   public final UnaryOp unary;
 
-  /** Binary defines the overload with a BinaryOp implementation. May be nil. */
+  /** Two-argument implementation, or {@code null} when not configured. */
   public final BinaryOp binary;
 
-  /** Ternary defines the overload with a TernaryOp implementation. May be nil. */
+  /** Three-argument implementation, or {@code null} when not configured. */
   public final TernaryOp ternary;
 
-  /** Quaternary defines the overload with a QuaternaryOp implementation. May be nil. */
+  /** Four-argument implementation, or {@code null} when not configured. */
   public final QuaternaryOp quaternary;
 
-  /** Quinary defines the overload with a QuinaryOp implementation. May be nil. */
+  /** Five-argument implementation, or {@code null} when not configured. */
   public final QuinaryOp quinary;
 
-  /** Function defines the overload with a FunctionOp implementation. May be nil. */
+  /** Variable-arity implementation, or {@code null} when not configured. */
   public final FunctionOp function;
 
+  /**
+   * Creates an unconditional one-argument implementation.
+   *
+   * @param operator CEL operator
+   * @param op runtime implementation
+   * @return the immutable overload definition
+   */
   public static Overload unary(Operator operator, UnaryOp op) {
     return unary(operator.id, op);
   }
 
+  /**
+   * Creates an unconditional one-argument implementation.
+   *
+   * @param operator dispatcher identifier
+   * @param op runtime implementation
+   * @return the immutable overload definition
+   */
   public static Overload unary(String operator, UnaryOp op) {
     return unary(operator, null, op);
   }
 
+  /**
+   * Creates a trait-guarded one-argument implementation.
+   *
+   * @param operator CEL operator
+   * @param trait required trait on the argument, or {@code null} for unconditional dispatch
+   * @param op runtime implementation
+   * @return the immutable overload definition
+   */
   public static Overload unary(Operator operator, Trait trait, UnaryOp op) {
     return unary(operator.id, trait, op);
   }
 
+  /**
+   * Creates a trait-guarded one-argument implementation.
+   *
+   * @param operator dispatcher identifier
+   * @param trait required trait on the argument, or {@code null} for unconditional dispatch
+   * @param op runtime implementation
+   * @return the immutable overload definition
+   */
   public static Overload unary(String operator, Trait trait, UnaryOp op) {
     return new Overload(operator, trait, op, null, null, null, null, null);
   }
 
+  /**
+   * Creates an unconditional two-argument implementation.
+   *
+   * @param operator CEL operator
+   * @param op runtime implementation
+   * @return the immutable overload definition
+   */
   public static Overload binary(Operator operator, BinaryOp op) {
     return binary(operator.id, op);
   }
 
+  /**
+   * Creates an unconditional two-argument implementation.
+   *
+   * @param operator dispatcher identifier
+   * @param op runtime implementation
+   * @return the immutable overload definition
+   */
   public static Overload binary(String operator, BinaryOp op) {
     return binary(operator, null, op);
   }
 
+  /**
+   * Creates a trait-guarded two-argument implementation.
+   *
+   * @param operator CEL operator
+   * @param trait required trait on the first argument, or {@code null} for unconditional dispatch
+   * @param op runtime implementation
+   * @return the immutable overload definition
+   */
   public static Overload binary(Operator operator, Trait trait, BinaryOp op) {
     return binary(operator.id, trait, op);
   }
 
+  /**
+   * Creates a trait-guarded two-argument implementation.
+   *
+   * @param operator dispatcher identifier
+   * @param trait required trait on the first argument, or {@code null} for unconditional dispatch
+   * @param op runtime implementation
+   * @return the immutable overload definition
+   */
   public static Overload binary(String operator, Trait trait, BinaryOp op) {
     return new Overload(operator, trait, null, op, null, null, null, null);
   }
 
+  /**
+   * Creates an unconditional three-argument implementation.
+   *
+   * @param operator dispatcher identifier
+   * @param op runtime implementation
+   * @return the immutable overload definition
+   */
   public static Overload ternary(String operator, TernaryOp op) {
     return ternary(operator, null, op);
   }
 
+  /**
+   * Creates a trait-guarded three-argument implementation.
+   *
+   * @param operator dispatcher identifier
+   * @param trait required trait on the first argument, or {@code null} for unconditional dispatch
+   * @param op runtime implementation
+   * @return the immutable overload definition
+   */
   public static Overload ternary(String operator, Trait trait, TernaryOp op) {
     return new Overload(operator, trait, null, null, op, null, null, null);
   }
 
+  /**
+   * Creates an unconditional four-argument implementation.
+   *
+   * @param operator dispatcher identifier
+   * @param op runtime implementation
+   * @return the immutable overload definition
+   */
   public static Overload quaternary(String operator, QuaternaryOp op) {
     return quaternary(operator, null, op);
   }
 
+  /**
+   * Creates a trait-guarded four-argument implementation.
+   *
+   * @param operator dispatcher identifier
+   * @param trait required trait on the first argument, or {@code null} for unconditional dispatch
+   * @param op runtime implementation
+   * @return the immutable overload definition
+   */
   public static Overload quaternary(String operator, Trait trait, QuaternaryOp op) {
     return new Overload(operator, trait, null, null, null, op, null, null);
   }
 
+  /**
+   * Creates an unconditional five-argument implementation.
+   *
+   * @param operator dispatcher identifier
+   * @param op runtime implementation
+   * @return the immutable overload definition
+   */
   public static Overload quinary(String operator, QuinaryOp op) {
     return quinary(operator, null, op);
   }
 
+  /**
+   * Creates a trait-guarded five-argument implementation.
+   *
+   * @param operator dispatcher identifier
+   * @param trait required trait on the first argument, or {@code null} for unconditional dispatch
+   * @param op runtime implementation
+   * @return the immutable overload definition
+   */
   public static Overload quinary(String operator, Trait trait, QuinaryOp op) {
     return new Overload(operator, trait, null, null, null, null, op, null);
   }
 
+  /**
+   * Creates an unconditional variable-arity implementation.
+   *
+   * @param operator dispatcher identifier
+   * @param op runtime implementation
+   * @return the immutable overload definition
+   */
   public static Overload function(String operator, FunctionOp op) {
     return function(operator, null, op);
   }
 
+  /**
+   * Creates a trait-guarded variable-arity implementation.
+   *
+   * @param operator dispatcher identifier
+   * @param trait required trait on the first argument, or {@code null} for unconditional dispatch
+   * @param op runtime implementation
+   * @return the immutable overload definition
+   */
   public static Overload function(String operator, Trait trait, FunctionOp op) {
     return new Overload(operator, trait, null, null, null, null, null, op);
   }
 
+  /**
+   * Creates a definition containing one-, two-, and variable-arity implementations.
+   *
+   * <p>Planning selects the implementation matching the call arity.
+   *
+   * @param operator dispatcher identifier
+   * @param trait required trait on the first argument, or {@code null} for unconditional dispatch
+   * @param unary one-argument implementation, or {@code null}
+   * @param binary two-argument implementation, or {@code null}
+   * @param function generic implementation, or {@code null}
+   * @return the immutable overload definition
+   */
   public static Overload overload(
       String operator, Trait trait, UnaryOp unary, BinaryOp binary, FunctionOp function) {
     return new Overload(operator, trait, unary, binary, null, null, null, function);
   }
 
+  /**
+   * Creates a definition containing implementations through arity three plus a generic fallback.
+   *
+   * @param operator dispatcher identifier
+   * @param trait required trait on the first argument, or {@code null} for unconditional dispatch
+   * @param unary one-argument implementation, or {@code null}
+   * @param binary two-argument implementation, or {@code null}
+   * @param ternary three-argument implementation, or {@code null}
+   * @param function generic implementation, or {@code null}
+   * @return the immutable overload definition
+   */
   public static Overload overload(
       String operator,
       Trait trait,
@@ -166,6 +317,18 @@ public final class Overload {
     return new Overload(operator, trait, unary, binary, ternary, null, null, function);
   }
 
+  /**
+   * Creates a definition containing implementations through arity four plus a generic fallback.
+   *
+   * @param operator dispatcher identifier
+   * @param trait required trait on the first argument, or {@code null} for unconditional dispatch
+   * @param unary one-argument implementation, or {@code null}
+   * @param binary two-argument implementation, or {@code null}
+   * @param ternary three-argument implementation, or {@code null}
+   * @param quaternary four-argument implementation, or {@code null}
+   * @param function generic implementation, or {@code null}
+   * @return the immutable overload definition
+   */
   public static Overload overload(
       String operator,
       Trait trait,
@@ -177,6 +340,19 @@ public final class Overload {
     return new Overload(operator, trait, unary, binary, ternary, quaternary, null, function);
   }
 
+  /**
+   * Creates a definition containing implementations through arity five plus a generic fallback.
+   *
+   * @param operator dispatcher identifier
+   * @param trait required trait on the first argument, or {@code null} for unconditional dispatch
+   * @param unary one-argument implementation, or {@code null}
+   * @param binary two-argument implementation, or {@code null}
+   * @param ternary three-argument implementation, or {@code null}
+   * @param quaternary four-argument implementation, or {@code null}
+   * @param quinary five-argument implementation, or {@code null}
+   * @param function generic implementation, or {@code null}
+   * @return the immutable overload definition
+   */
   public static Overload overload(
       String operator,
       Trait trait,
@@ -235,7 +411,14 @@ public final class Overload {
     return sb.toString();
   }
 
-  /** StandardOverloads returns the definitions of the built-in overloads. */
+  /**
+   * Returns the built-in runtime overload definitions.
+   *
+   * <p>The returned array is a new shallow copy. The overload definitions and their operation
+   * objects are shared and immutable.
+   *
+   * @return a copy of the standard overload array
+   */
   public static Overload[] standardOverloads() {
     return StandardOverloadsHolder.OVERLOADS.clone();
   }

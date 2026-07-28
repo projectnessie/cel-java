@@ -15,14 +15,20 @@
  */
 package org.projectnessie.cel.common.types.ref;
 
-/**
- * TypeDescription is a collection of type metadata relevant to expression checking and evaluation.
- */
+/** Metadata connecting a named CEL object type to its Java representation. */
 public interface TypeDescription {
 
-  /** Name returns the fully-qualified name of the type. */
+  /**
+   * Returns the fully qualified CEL type name.
+   *
+   * @return the name used during checking and evaluation
+   */
   String name();
 
-  /** ReflectType returns the Golang reflect.Type for this type. */
+  /**
+   * Returns the Java class represented by this description.
+   *
+   * @return the host-language class accepted by the corresponding adapter and provider
+   */
   Class<?> reflectType();
 }

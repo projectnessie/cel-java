@@ -22,11 +22,23 @@ import java.util.Arrays;
 import java.util.List;
 import org.projectnessie.cel.common.Location;
 
+/**
+ * Source-aware {@link ExprHelper} used while expanding one macro invocation.
+ *
+ * <p>New nodes receive expression identifiers associated with the source location of the macro
+ * call. A helper instance is scoped to that expansion and is not intended for concurrent use.
+ */
 public final class ExprHelperImpl implements ExprHelper {
 
   final Helper parserHelper;
   final long id;
 
+  /**
+   * Creates a helper for the expression identifier of the macro call being expanded.
+   *
+   * @param parserHelper parser source/identifier state
+   * @param id expression identifier of the macro call
+   */
   public ExprHelperImpl(Helper parserHelper, long id) {
     this.parserHelper = parserHelper;
     this.id = id;

@@ -52,7 +52,17 @@ import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** FieldDescription holds metadata related to fields declared within a type. */
+/**
+ * Protocol Buffer field metadata and low-level access operations.
+ *
+ * <p>The description maps a protobuf {@link FieldDescriptor} to its checked CEL type, Java
+ * representation, presence semantics, and generated/dynamic message access. Repeated fields become
+ * CEL lists, protobuf map fields become CEL maps, unsigned integers use {@link ULong}, and
+ * well-known wrapper fields use CEL null when absent.
+ *
+ * <p>Applications normally obtain field metadata through {@link
+ * ProtoTypeRegistry#findFieldType(String, String)} rather than constructing descriptions directly.
+ */
 public final class FieldDescription extends Description {
   private static final Object NO_NATIVE_MAP_KEY = new Object();
 
@@ -66,7 +76,15 @@ public final class FieldDescription extends Description {
   private final Class<?> reflectType;
   private final Message zeroMsg;
 
-  /** NewFieldDescription creates a new field description from a protoreflect.FieldDescriptor. */
+  /**
+   * Creates metadata for a protobuf field.
+   *
+   * <p>Map-entry key and value descriptions are created recursively.
+   *
+   * @param fieldDesc immutable protobuf field descriptor
+   * @return a new field description
+   * @throws NullPointerException if {@code fieldDesc} is null
+   */
   public static FieldDescription newFieldDescription(FieldDescriptor fieldDesc) {
     Objects.requireNonNull(fieldDesc);
     Class<?> reflectType;
@@ -166,7 +184,11 @@ public final class FieldDescription extends Description {
     this.zeroMsg = zeroMsg;
   }
 
-  /** CheckedType returns the type-definition used at type-check time. */
+  /**
+   * Returns the checked CEL type for this field.
+   *
+   * <p>Repeated non-map fields become lists and protobuf map fields become maps.
+   */
   public Type checkedType() {
     if (desc.isMapField()) {
       return Type.newBuilder()
@@ -184,17 +206,17 @@ public final class FieldDescription extends Description {
     return typeDefToType();
   }
 
-  /** Descriptor returns the protoreflect.FieldDescriptor for this type. */
+  /** Returns the immutable protobuf field descriptor. */
   public FieldDescriptor descriptor() {
     return desc;
   }
 
   /**
-   * IsSet returns whether the field is set on the target value, per the proto presence conventions
-   * of proto2 or proto3 accordingly.
+   * Tests field presence using the applicable proto2 or proto3 rules.
    *
-   * <p>This function implements the FieldType.IsSet function contract which can be used to operate
-   * on more than just protobuf field accesses; however, the target here must be a protobuf.Message.
+   * @param target generated or dynamic protobuf message
+   * @return {@code false} if {@code target} is not a message, has no matching field descriptor, or
+   *     the field is absent
    */
   public boolean isSet(Object target) {
     if (target instanceof Message v) {
@@ -205,13 +227,17 @@ public final class FieldDescription extends Description {
   }
 
   /**
-   * GetFrom returns the accessor method associated with the field on the proto generated struct.
+   * Reads a field and normalizes it to the Java representation expected by CEL.
    *
-   * <p>If the field is not set, the proto default value is returned instead.
+   * <p>Absent ordinary fields use protobuf defaults. Absent well-known wrapper fields use protobuf
+   * null. Dynamic well-known messages are unwrapped with {@code db}.
    *
-   * <p>This function implements the FieldType.GetFrom function contract which can be used to
-   * operate on more than just protobuf field accesses; however, the target here must be a
-   * protobuf.Message.
+   * @param db descriptor database used to unwrap nested messages
+   * @param target non-null generated or dynamic protobuf message whose schema contains this field
+   * @return normalized scalar, list, map, or message value
+   * @throws IllegalArgumentException if {@code target} is not a protobuf message
+   * @throws NullPointerException if {@code target} is {@code null} or its schema does not contain
+   *     this field
    */
   public Object getFrom(Db db, Object target) {
     if (!(target instanceof Message v)) {
@@ -270,52 +296,64 @@ public final class FieldDescription extends Description {
     //    }
   }
 
-  /** IsEnum returns true if the field type refers to an enum value. */
+  /**
+   * Returns whether this field descriptor has protobuf enum Java type.
+   *
+   * <p>Repeated enum fields qualify; map fields do not, even when their value type is an enum.
+   */
   public boolean isEnum() {
     return desc.getJavaType() == JavaType.ENUM;
   }
 
-  /** IsMap returns true if the field is of map type. */
+  /** Returns whether this is a protobuf map field. */
   public boolean isMap() {
     return desc.isMapField();
   }
 
-  /** IsMessage returns true if the field is of message type. */
+  /**
+   * Returns whether this field descriptor has protobuf message Java type.
+   *
+   * <p>Every protobuf map field qualifies because its descriptor uses a synthetic message entry,
+   * regardless of the map value type.
+   */
   public boolean isMessage() {
     return desc.getJavaType() == JavaType.MESSAGE;
   }
 
-  /** IsOneof returns true if the field is declared within a oneof block. */
+  /** Returns whether the field is declared in a protobuf {@code oneof}. */
   public boolean isOneof() {
     return desc.getContainingOneof() != null;
   }
 
-  /**
-   * IsList returns true if the field is a repeated value.
-   *
-   * <p>This method will also return true for map values, so check whether the field is also a map.
-   */
+  /** Returns whether this is a repeated non-map field. */
   public boolean isList() {
     return desc.isRepeated() && !desc.isMapField();
   }
 
   /**
-   * MaybeUnwrapDynamic takes the reflected protoreflect.Message and determines whether the value
-   * can be unwrapped to a more primitive CEL type.
+   * Unwraps a dynamic well-known message to the Java representation expected by CEL.
    *
-   * <p>This function returns the unwrapped value and 'true' on success, or the original value and
-   * 'false' otherwise.
+   * @param db descriptor database used for nested {@code Any} values and extensions
+   * @param msg message to inspect
+   * @return the unwrapped value, or the original message when no conversion applies
    */
   public Object maybeUnwrapDynamic(Db db, Message msg) {
     return unwrapDynamic(db, this, msg);
   }
 
-  /** Name returns the CamelCase name of the field within the proto-based struct. */
+  /** Returns the protobuf source name of the field. */
   public String name() {
     return desc.getName();
   }
 
-  /** ReflectType returns the Golang reflect.Type for this field. */
+  /**
+   * Returns the Java representation used when converting a CEL value for this field.
+   *
+   * <p>Map fields return {@link Map}; repeated fields return an array class; scalar fields return
+   * their boxed class. Ordinary message fields use {@link DynamicMessage}; recognized well-known
+   * message fields use their canonical generated class. Generated optimized field access is
+   * selected separately from this descriptor-level representation.
+   */
   public Class<?> reflectType() {
     boolean r = desc.isRepeated();
     if (r && desc.isMapField()) {
@@ -334,19 +372,21 @@ public final class FieldDescription extends Description {
   }
 
   /**
-   * String returns the fully qualified name of the field within its type as well as whether the
-   * field occurs within a oneof. func (fd *FieldDescription) String() string { return
-   * fmt.Sprintf("%v.%s `oneof=%t`", desc.ContainingMessage().FullName(), name(), isOneof()) }
+   * Returns the default protobuf message for a message-valued field.
    *
-   * <p>/** Zero returns the zero value for the protobuf message represented by this field.
-   *
-   * <p>If the field is not a proto.Message type, the zero value is nil.
+   * @return a dynamic default message, or {@code null} for non-message fields
    */
   @Override
   public Message zero() {
     return zeroMsg;
   }
 
+  /**
+   * Returns the scalar or message CEL type for one value of this field.
+   *
+   * <p>Unlike {@link #checkedType()}, this method does not wrap repeated and map fields in their
+   * aggregate type.
+   */
   public Type typeDefToType() {
     switch (desc.getJavaType()) {
       case MESSAGE:
@@ -405,6 +445,12 @@ public final class FieldDescription extends Description {
     return Objects.hash(desc, reflectType);
   }
 
+  /**
+   * Tests presence on a generated or dynamic protobuf message.
+   *
+   * @return {@code false} for a non-message target, a message without a matching field descriptor,
+   *     or an absent field
+   */
   public boolean hasField(Object target) {
     if (!(target instanceof Message message)) {
       return false;
@@ -413,10 +459,29 @@ public final class FieldDescription extends Description {
     return fd != null && hasValueForField(fd, message);
   }
 
+  /**
+   * Reads and normalizes this field using {@link DefaultTypeAdapter#Instance} for map values.
+   *
+   * @param target non-null generated or dynamic protobuf message whose schema contains this field
+   * @return a normalized Java value or CEL map wrapper
+   * @throws ClassCastException if {@code target} is not a protobuf message
+   * @throws NullPointerException if {@code target} is {@code null} or its schema does not contain
+   *     this field
+   */
   public Object getField(Object target) {
     return getField(target, DefaultTypeAdapter.Instance);
   }
 
+  /**
+   * Reads and normalizes this field using the supplied adapter for map values.
+   *
+   * @param target non-null generated or dynamic protobuf message whose schema contains this field
+   * @param adapter adapter retained by protobuf map wrappers for nested conversion
+   * @return a normalized Java value or CEL map wrapper
+   * @throws ClassCastException if {@code target} is not a protobuf message
+   * @throws NullPointerException if {@code target} is {@code null} or its schema does not contain
+   *     this field
+   */
   public Object getField(Object target, TypeAdapter adapter) {
     Message message = (Message) target;
     FieldDescriptor fd = fieldDescriptorFor(message);
@@ -477,6 +542,13 @@ public final class FieldDescription extends Description {
     return isWellKnownType(desc);
   }
 
+  /**
+   * Reads a field through protobuf reflection and normalizes unsigned, map, and wrapper values.
+   *
+   * @param desc descriptor belonging to {@code message}
+   * @param message generated or dynamic message
+   * @return the normalized Java value
+   */
   public static Object getValueFromField(FieldDescriptor desc, Message message) {
     return normalizeValueFromField(desc, message, message.getField(desc));
   }
@@ -919,6 +991,12 @@ public final class FieldDescription extends Description {
     return wellKnown.hasWrapper();
   }
 
+  /**
+   * Tests protobuf field presence.
+   *
+   * <p>Repeated fields are present when non-empty; singular fields delegate to {@link
+   * Message#hasField(FieldDescriptor)}.
+   */
   public static boolean hasValueForField(FieldDescriptor desc, Message message) {
     if (desc.isRepeated()) {
       return message.getRepeatedFieldCount(desc) > 0;

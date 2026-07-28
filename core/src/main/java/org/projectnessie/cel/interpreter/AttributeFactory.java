@@ -62,7 +62,13 @@ import org.projectnessie.cel.interpreter.AttributeFactory.Qualifier;
 import org.projectnessie.cel.interpreter.AttributeFactory.ValQualifier;
 import org.projectnessie.cel.interpreter.AttributePattern.QualifierValueEquator;
 
-/** AttributeFactory provides methods creating Attribute and Qualifier values. */
+/**
+ * Creates variable attributes and field/index qualifiers for low-level evaluation plans.
+ *
+ * <p>Attributes resolve activation bindings and then apply qualifiers in expression order. Factory
+ * instances retain the configured container, adapter, and provider and are intended to be
+ * configured as part of interpreter construction.
+ */
 public interface AttributeFactory {
   /**
    * AbsoluteAttribute creates an attribute that refers to a top-level variable name.
@@ -108,10 +114,7 @@ public interface AttributeFactory {
    */
   Qualifier newQualifier(Type objType, long qualID, Object val);
 
-  /**
-   * Qualifier marker interface for designating different qualifier values and where they appear
-   * within field selections and index call expressions (`_[_]`).
-   */
+  /** Field-selection or index operation associated with an expression identifier. */
   interface Qualifier {
     /** ID where the qualifier appears within an expression. */
     long id();
@@ -123,19 +126,18 @@ public interface AttributeFactory {
     Object qualify(Activation vars, Object obj);
   }
 
-  /**
-   * ConstantQualifier interface embeds the Qualifier interface and provides an option to inspect
-   * the qualifier's constant value.
-   *
-   * <p>Non-constant qualifiers are of Attribute type.
-   */
+  /** Qualifier whose key or field value is a CEL constant. */
   interface ConstantQualifier extends Qualifier {
+    /** Returns the constant CEL qualifier value. */
     Val value();
   }
 
+  /** Constant qualifier that can compare its value without applying the qualifier. */
   interface ConstantQualifierEquator extends QualifierValueEquator, ConstantQualifier {}
 
+  /** Qualifier capable of returning a CEL value directly. */
   interface ValQualifier extends Qualifier {
+    /** Applies this qualifier and returns its CEL value or CEL error. */
     Val qualifyToVal(Activation vars, Object obj);
   }
 
@@ -169,18 +171,18 @@ public interface AttributeFactory {
     List<Qualifier> qualifiers();
 
     /**
-     * TryResolve attempts to return the value of the attribute given the current Activation. If an
-     * error is encountered during attribute resolution, it will be returned immediately. If the
-     * attribute cannot be resolved within the Activation, the result must be: `nil`, `false`,
-     * `nil`.
+     * Resolves the first candidate available from the activation or type provider.
+     *
+     * @throws RuntimeException if no candidate resolves or a qualifier cannot be applied
      */
     Object tryResolve(Activation a);
   }
 
   /**
-   * NewAttributeFactory returns a default AttributeFactory which is produces Attribute values
-   * capable of resolving types by simple names and qualify the values using the supported qualifier
-   * types: bool, int, string, and uint.
+   * Creates the default attribute factory.
+   *
+   * <p>The factory resolves names through the supplied container and provider and adapts
+   * qualification targets with the supplied adapter.
    */
   static AttributeFactory newAttributeFactory(Container cont, TypeAdapter a, TypeProvider p) {
     return new AttrFactory(cont, a, p);
@@ -462,11 +464,13 @@ record AbsoluteAttribute(
   }
 
   /**
-   * TryResolve iterates through the namespaced variable names until one is found within the
-   * Activation or TypeProvider.
+   * Resolves the first matching namespaced variable or type and applies this attribute's
+   * qualifiers.
    *
-   * <p>If the variable name cannot be found as an Activation variable or in the TypeProvider as a
-   * type, then the result is `nil`, `false`, `nil` per the interface requirement.
+   * @param vars runtime variables
+   * @return the resolved value
+   * @throws RuntimeException if no candidate variable or type exists, or a qualifier cannot be
+   *     applied
    */
   @Override
   public Object tryResolve(Activation vars) {

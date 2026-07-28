@@ -18,26 +18,36 @@ package org.projectnessie.cel.interpreter;
 import java.util.HashMap;
 import org.projectnessie.cel.interpreter.functions.Overload;
 
-/** Dispatcher resolves function calls to their appropriate overload. */
+/**
+ * Mutable registry that resolves checked overload identifiers to runtime implementations.
+ *
+ * <p>Configure a dispatcher before planning interpretable expressions. A child dispatcher created
+ * by {@link #extendDispatcher(Dispatcher)} keeps its registrations separate and falls back to its
+ * parent. Dispatcher mutation and concurrent lookup must not race.
+ */
 public interface Dispatcher {
-  /** Add one or more overloads, returning an error if any Overload has the same Overload#Name. */
+  /**
+   * Adds runtime overload implementations.
+   *
+   * @throws IllegalArgumentException if an identifier is already registered in this dispatcher
+   */
   void add(Overload... overloads);
 
-  /** FindOverload returns an Overload definition matching the provided name. */
+  /** Returns the overload for an identifier, or {@code null} when none is registered. */
   Overload findOverload(String overload);
 
-  /** OverloadIds returns the set of all overload identifiers configured for dispatch. */
+  /** Returns a snapshot of identifiers visible through this dispatcher, including its parents. */
   String[] overloadIds();
 
-  /** NewDispatcher returns an empty Dispatcher instance. */
+  /** Returns an empty mutable dispatcher without a parent. */
   static Dispatcher newDispatcher() {
     return new DefaultDispatcher(null, new HashMap<>());
   }
 
   /**
-   * ExtendDispatcher returns a Dispatcher which inherits the overloads of its parent, and provides
-   * an isolation layer between built-ins and extension functions which is useful for forward
-   * compatibility.
+   * Returns an empty mutable dispatcher that falls back to {@code parent}.
+   *
+   * <p>Registrations in the returned child do not mutate the parent.
    */
   static Dispatcher extendDispatcher(Dispatcher parent) {
     return new DefaultDispatcher(parent, new HashMap<>());

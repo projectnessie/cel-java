@@ -18,14 +18,16 @@ package org.projectnessie.cel.common.types.traits;
 import org.projectnessie.cel.common.types.ref.Val;
 
 /**
- * FieldTester indicates if a defined field on an object type is set to a non-default value.
- *
- * <p>For use with the `has()` macro.
+ * Capability for object values that support field-presence tests used by the CEL {@code has()}
+ * macro.
  */
 public interface FieldTester {
   /**
-   * IsSet returns true if the field is defined and set to a non-default value. The method will
-   * return false if defined and not set, and an error if the field is not defined.
+   * Tests whether the named field is present according to the object's CEL presence semantics.
+   *
+   * @param field CEL field-name value
+   * @return CEL true if present, false if the field exists but is absent, or a CEL error or unknown
+   *     value
    */
   Val isSet(Val field);
 }

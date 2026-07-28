@@ -75,13 +75,35 @@ public final class ScriptHost {
     this.regexEngine = regexEngine;
   }
 
-  /** Use {@link #buildScript(String)}. */
+  /**
+   * Compiles a script using declarations and types supplied for this invocation.
+   *
+   * @param sourceText CEL expression source text
+   * @param declarations variable and function declarations
+   * @param types native type descriptions accepted by the host registry
+   * @return a reusable compiled script
+   * @throws ScriptException if parsing or type checking fails
+   * @deprecated Use {@link #buildScript(String)}, or preferably {@link ScriptCompiler}.
+   */
   @Deprecated
   public Script getOrCreateScript(String sourceText, List<Decl> declarations, List<Object> types)
       throws ScriptException {
     return buildScript(sourceText).withDeclarations(declarations).withTypes(types).build();
   }
 
+  /**
+   * Starts configuring a script for the supplied CEL source.
+   *
+   * <p>The returned builder is tied to this host. Types added to it are registered in the host's
+   * cumulative registry when {@link ScriptBuilder#build()} is called.
+   *
+   * <p>Prefer {@link ScriptCompiler#compile(String)} after configuring a reusable compiler.
+   *
+   * @param sourceText CEL expression source text
+   * @return a mutable builder for that source
+   * @throws NullPointerException if {@code sourceText} is {@code null}
+   * @throws IllegalArgumentException if {@code sourceText} is blank
+   */
   public ScriptBuilder buildScript(String sourceText) {
     if (sourceText.trim().isEmpty()) {
       throw new IllegalArgumentException("No source code.");
@@ -89,6 +111,14 @@ public final class ScriptHost {
     return new ScriptBuilder(sourceText);
   }
 
+  /**
+   * Mutable, host-associated construction state for one {@link Script}.
+   *
+   * <p>Instances are not thread-safe. Declaration, type, and library methods append to their
+   * existing configuration.
+   *
+   * <p>Prefer {@link ScriptCompiler.Builder} for isolated, configuration-first construction.
+   */
   public final class ScriptBuilder {
     private final String sourceText;
     private String container;
@@ -100,20 +130,46 @@ public final class ScriptHost {
       this.sourceText = sourceText;
     }
 
+    /**
+     * Selects the CEL container used to resolve qualified names.
+     *
+     * @param container CEL container name
+     * @return this builder
+     */
     public ScriptBuilder withContainer(String container) {
       this.container = container;
       return this;
     }
 
+    /**
+     * Adds declarations used while checking this script.
+     *
+     * @param declarations variable and function declarations
+     * @return this builder
+     */
     public ScriptBuilder withDeclarations(Decl... declarations) {
       return withDeclarations(asList(declarations));
     }
 
+    /**
+     * Adds declarations used while checking this script.
+     *
+     * <p>The declaration references are copied into this builder.
+     *
+     * @param declarations variable and function declarations
+     * @return this builder
+     */
     public ScriptBuilder withDeclarations(List<Decl> declarations) {
       this.declarations.addAll(declarations);
       return this;
     }
 
+    /**
+     * Adds types to this host's cumulative type universe while building the script.
+     *
+     * @param types native type descriptions accepted by the host registry
+     * @return this builder
+     */
     public ScriptBuilder withTypes(Object... types) {
       return withTypes(asList(types));
     }
@@ -124,21 +180,45 @@ public final class ScriptHost {
      * <p>The types are visible to scripts built subsequently by the same host. Repeating equivalent
      * registrations is allowed. Complete type registration before sharing the host or its scripts
      * for concurrent use.
+     *
+     * @param types native type descriptions accepted by the host registry
+     * @return this builder
      */
     public ScriptBuilder withTypes(List<Object> types) {
       this.types.addAll(types);
       return this;
     }
 
+    /**
+     * Adds libraries used to check and evaluate this script.
+     *
+     * @param libraries libraries providing compile-time and program options
+     * @return this builder
+     */
     public ScriptBuilder withLibraries(Library... libraries) {
       return withLibraries(asList(libraries));
     }
 
+    /**
+     * Adds libraries used to check and evaluate this script.
+     *
+     * <p>The library references are copied into this builder.
+     *
+     * @param libraries libraries providing compile-time and program options
+     * @return this builder
+     */
     public ScriptBuilder withLibraries(List<Library> libraries) {
       this.libraries.addAll(libraries);
       return this;
     }
 
+    /**
+     * Compiles this builder's source and updates the host's cumulative registry with configured
+     * types.
+     *
+     * @return a reusable compiled script
+     * @throws ScriptCreateException if parsing or type checking fails
+     */
     public Script build() throws ScriptCreateException {
       List<EnvOption> envOptions = new ArrayList<>();
       envOptions.add(StdLib());
@@ -160,10 +240,22 @@ public final class ScriptHost {
     }
   }
 
+  /**
+   * Returns a builder for a compatibility {@link ScriptHost}.
+   *
+   * <p>Prefer {@link ScriptCompiler#newBuilder()}.
+   *
+   * @return a new host builder
+   */
   public static Builder newBuilder() {
     return new Builder();
   }
 
+  /**
+   * Mutable construction state for {@link ScriptHost}; instances are not thread-safe.
+   *
+   * <p>Prefer {@link ScriptCompiler.Builder}.
+   */
   public static final class Builder {
     private Builder() {}
 
@@ -173,8 +265,11 @@ public final class ScriptHost {
     private RegexEngine regexEngine = RegexEngine.JAVA;
 
     /**
-     * Call to instruct the built {@link ScriptHost} to disable script optimizations.
+     * Disables {@link EvalOption#OptOptimize} for scripts built by the resulting host.
      *
+     * <p>This does not disable planner-selected native evaluation.
+     *
+     * @return this builder
      * @see EvalOption#OptOptimize
      */
     public Builder disableOptimize() {
@@ -189,6 +284,9 @@ public final class ScriptHost {
      * not visible to the host, and types registered while building scripts do not mutate the
      * supplied registry. The implementation falls back to {@link
      * org.projectnessie.cel.common.types.pb.ProtoTypeRegistry} when no registry is supplied.
+     *
+     * @param registry registry to snapshot, or {@code null} to restore the default
+     * @return this builder
      */
     public Builder registry(TypeRegistry registry) {
       this.registry = registry;
@@ -201,6 +299,8 @@ public final class ScriptHost {
      * <p>The default is {@link RegexEngine#JAVA}. The selection applies to all scripts built by the
      * resulting host.
      *
+     * @param regexEngine engine used by every script
+     * @return this builder
      * @throws NullPointerException if {@code regexEngine} is {@code null}
      */
     public Builder regexEngine(RegexEngine regexEngine) {
@@ -208,6 +308,11 @@ public final class ScriptHost {
       return this;
     }
 
+    /**
+     * Builds a host with a snapshot of the configured registry.
+     *
+     * @return compatibility script host
+     */
     public ScriptHost build() {
       TypeRegistry r = registry;
       if (r == null) {

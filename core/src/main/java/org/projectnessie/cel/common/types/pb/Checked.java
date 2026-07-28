@@ -27,32 +27,67 @@ import com.google.protobuf.NullValue;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Canonical checked-type descriptors used when mapping Protocol Buffer fields to CEL types.
+ *
+ * <p>The values are instances of the generated {@link Type} API from the CEL expression protobuf
+ * schema. They describe checker types; they are not runtime {@link
+ * org.projectnessie.cel.common.types.ref.Type} values. Most applications should obtain field and
+ * object types through {@link ProtoTypeRegistry} instead of using this low-level catalog directly.
+ *
+ * <p>The maps are shared lookup tables and must be treated as read-only.
+ */
 public final class Checked {
 
-  // common types
+  /** The CEL dynamic type. */
   public static final Type checkedDyn =
       Type.newBuilder().setDyn(Empty.getDefaultInstance()).build();
-  // Wrapper and primitive types.
+
+  /** The checked CEL {@code bool} type. */
   public static final Type checkedBool = checkedPrimitive(PrimitiveType.BOOL);
+
+  /** The checked CEL {@code bytes} type. */
   public static final Type checkedBytes = checkedPrimitive(PrimitiveType.BYTES);
+
+  /** The checked CEL {@code double} type. */
   public static final Type checkedDouble = checkedPrimitive(PrimitiveType.DOUBLE);
+
+  /** The checked CEL {@code int} type. */
   public static final Type checkedInt = checkedPrimitive(PrimitiveType.INT64);
+
+  /** The checked CEL {@code string} type. */
   public static final Type checkedString = checkedPrimitive(PrimitiveType.STRING);
+
+  /** The checked CEL {@code uint} type. */
   public static final Type checkedUint = checkedPrimitive(PrimitiveType.UINT64);
-  // Well-known type equivalents.
+
+  /** The checked CEL representation of {@code google.protobuf.Any}. */
   public static final Type checkedAny = checkedWellKnown(WellKnownType.ANY);
+
+  /** The checked CEL {@code duration} type. */
   public static final Type checkedDuration = checkedWellKnown(WellKnownType.DURATION);
+
+  /** The checked CEL {@code timestamp} type. */
   public static final Type checkedTimestamp = checkedWellKnown(WellKnownType.TIMESTAMP);
-  // Json-based type equivalents.
+
+  /** The checked CEL null type. */
   public static final Type checkedNull = Type.newBuilder().setNull(NullValue.NULL_VALUE).build();
+
+  /** The checked CEL {@code list<dyn>} type used for protobuf JSON lists. */
   public static final Type checkedListDyn =
       Type.newBuilder().setListType(ListType.newBuilder().setElemType(checkedDyn)).build();
+
+  /** The checked CEL {@code map<string, dyn>} type used for protobuf JSON objects. */
   public static final Type checkedMapStringDyn =
       Type.newBuilder()
           .setMapType(MapType.newBuilder().setKeyType(checkedString).setValueType(checkedDyn))
           .build();
 
-  /** CheckedPrimitives map from proto field descriptor type to expr.Type. */
+  /**
+   * Maps protobuf field kinds to their checked CEL primitive types.
+   *
+   * <p>This shared map is registry infrastructure and must be treated as read-only.
+   */
   public static final Map<Field.Kind, Type> CheckedPrimitives = new HashMap<>();
 
   static {
@@ -74,7 +109,9 @@ public final class Checked {
   }
 
   /**
-   * CheckedWellKnowns map from qualified proto type name to expr.Type for well-known proto types.
+   * Maps qualified protobuf type names to checked CEL types for well-known protobuf types.
+   *
+   * <p>This shared map is registry infrastructure and must be treated as read-only.
    */
   public static final Map<String, Type> CheckedWellKnowns = new HashMap<>();
 
@@ -102,6 +139,12 @@ public final class Checked {
     CheckedWellKnowns.put("google.protobuf.Value", checkedDyn);
   }
 
+  /**
+   * Creates a checked CEL message type.
+   *
+   * @param name the fully qualified protobuf message name, without a type-URL prefix
+   * @return a new immutable checked-type descriptor
+   */
   public static Type checkedMessageType(String name) {
     return Type.newBuilder().setMessageType(name).build();
   }

@@ -33,7 +33,7 @@ import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.interpreter.functions.Overload;
 
-/** EncodersLib provides CEL helper functions for common binary-to-text encodings. */
+/** CEL extension providing common binary-to-text encoding functions. */
 public final class EncodersLib implements Library {
   private static final String BASE64_ENCODE = "base64.encode";
   private static final String BASE64_DECODE = "base64.decode";
@@ -42,6 +42,7 @@ public final class EncodersLib implements Library {
 
   private EncodersLib() {}
 
+  /** Returns an environment option installing the encoder declarations and implementations. */
   public static EnvOption encoders() {
     return Library.Lib(new EncodersLib());
   }

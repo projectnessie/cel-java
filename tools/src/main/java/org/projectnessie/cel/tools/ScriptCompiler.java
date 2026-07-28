@@ -56,9 +56,11 @@ import org.projectnessie.cel.common.types.ref.TypeRegistry;
  * Script greeting = compiler.compile("'Hello, ' + name");
  * }</pre>
  *
- * <p>The builder snapshots a supplied type registry and all collection inputs when {@link
- * Builder#build()} is called. Configured types are registered in that owned snapshot before this
- * compiler is returned. A built compiler exposes no configuration mutation.
+ * <p>Collection inputs are copied when added to the builder. {@link Builder#build()} snapshots the
+ * accumulated builder state and supplied type registry, then registers configured types in that
+ * owned registry snapshot. A built compiler exposes no configuration mutation. The standard CEL
+ * library, {@link RegexEngine#JAVA Java regular expressions}, and {@link EvalOption#OptOptimize
+ * constant optimization} are enabled by default.
  *
  * <p>A built compiler may compile sources concurrently. Custom registries, adapters, providers,
  * libraries, and program options used by the configuration must support the concurrent access they
@@ -119,14 +121,20 @@ public final class ScriptCompiler {
   /**
    * Returns a new mutable builder for an immutable {@link ScriptCompiler}.
    *
-   * @return a new builder with the standard library, Java regular expressions, optimizations
-   *     enabled, and the default Protobuf type registry
+   * @return a new builder with the standard library, Java regular expressions, constant
+   *     optimization enabled, native planning permitted, and the default Protobuf type registry
    */
   public static Builder newBuilder() {
     return new Builder();
   }
 
-  /** Mutable construction state for {@link ScriptCompiler}; instances are not thread-safe. */
+  /**
+   * Mutable construction state for {@link ScriptCompiler}.
+   *
+   * <p>Configuration methods append to the existing declarations, types, and libraries. A builder
+   * is not thread-safe. Each call to {@link #build()} snapshots its current state and returns an
+   * independent compiler.
+   */
   public static final class Builder {
     private boolean disableOptimize;
     private TypeRegistry registry;
@@ -139,7 +147,12 @@ public final class ScriptCompiler {
     private Builder() {}
 
     /**
-     * Disables script optimizations for every source compiled by the resulting compiler.
+     * Disables {@link EvalOption#OptOptimize} for every source compiled by the resulting compiler.
+     *
+     * <p>This disables program-creation-time constant optimization. It does not disable
+     * planner-selected native evaluation. When established interpreter planning is required, use
+     * the lower-level {@link Env#program(Ast, ProgramOption...)} API with {@link
+     * ProgramOption#evalOptions(EvalOption...)} and {@link EvalOption#OptDisableNativeEval}.
      *
      * @return this builder
      * @see EvalOption#OptOptimize
@@ -196,6 +209,7 @@ public final class ScriptCompiler {
      *
      * @param declarations variable and function declarations
      * @return this builder
+     * @throws NullPointerException if the array or an element is {@code null}
      */
     public Builder withDeclarations(Decl... declarations) {
       return withDeclarations(asList(declarations));
@@ -220,6 +234,7 @@ public final class ScriptCompiler {
      *
      * @param types native type descriptions accepted by the configured registry
      * @return this builder
+     * @throws NullPointerException if the array or an element is {@code null}
      */
     public Builder withTypes(Object... types) {
       return withTypes(asList(types));
@@ -245,6 +260,7 @@ public final class ScriptCompiler {
      *
      * @param libraries libraries providing compile-time and program options
      * @return this builder
+     * @throws NullPointerException if the array or an element is {@code null}
      */
     public Builder withLibraries(Library... libraries) {
       return withLibraries(asList(libraries));
@@ -272,6 +288,8 @@ public final class ScriptCompiler {
      * into the owned environment before the compiler is returned.
      *
      * @return a reusable compiler
+     * @throws RuntimeException if a configured type, declaration, library, or option cannot be
+     *     installed
      */
     public ScriptCompiler build() {
       TypeRegistry ownedRegistry =

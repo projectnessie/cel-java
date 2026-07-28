@@ -17,7 +17,18 @@ package org.projectnessie.cel;
 
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** An executable CEL program created from an {@link Ast}. */
+/**
+ * A reusable executable CEL program created from an {@link Ast}.
+ *
+ * <p>Programs created by {@link Env} are fully configured before they are returned and may be
+ * evaluated concurrently, subject to the thread-safety of configured custom adapters, providers,
+ * functions, decorators, global activations, and caller inputs. Reuse a program rather than parsing
+ * and planning the same expression for every input.
+ *
+ * <p>A program does not impose a CPU, memory, result-size, or latency budget. Hosts accepting
+ * untrusted expressions or inputs remain responsible for suitable policy limits, isolation, and
+ * cancellation or timeout strategy.
+ */
 public interface Program {
 
   /**
@@ -36,7 +47,9 @@ public interface Program {
    * Evaluates this program against the supplied variables.
    *
    * <p>{@code vars} may be an {@link org.projectnessie.cel.interpreter.Activation} or a Java map
-   * from variable names to values accepted by the configured type adapter.
+   * from variable names to values accepted by the configured type adapter. The lower-level
+   * activation factory also accepts {@link java.util.function.Function} and {@link
+   * org.projectnessie.cel.interpreter.ActivationFunction}.
    *
    * <p>The caller retains ownership of {@code vars} and every value reachable from it. Some input
    * adapters retain live views of mutable Java values, so mutations completed before a later call
@@ -54,8 +67,10 @@ public interface Program {
    * <p>A CEL evaluation error is returned as an error {@link Val}. An unexpected internal Java
    * failure is thrown as a {@link RuntimeException}.
    *
-   * @param vars activation or Java map containing input variables
+   * @param vars input accepted by {@link
+   *     org.projectnessie.cel.interpreter.Activation#newActivation(Object)}
    * @return the CEL value and per-evaluation details
+   * @throws RuntimeException if the activation is invalid or an unexpected Java failure occurs
    */
   EvalResult eval(Object vars);
 
@@ -64,7 +79,8 @@ public interface Program {
    *
    * <p>{@link Program#eval(Object)} returns non-null details and state. The public {@link
    * Program#newEvalResult(Val, EvalDetails)} factory retains directly supplied values, including
-   * {@code null}, for compatibility.
+   * {@code null}, for compatibility. Instances are immutable, but the referenced {@link
+   * EvalDetails} and its state may be mutable.
    */
   final class EvalResult {
     private final Val val;
