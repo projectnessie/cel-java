@@ -20,21 +20,39 @@ package org.projectnessie.cel.common.types.ref;
  * implementations support type-customization, so these features are optional. However, a
  * `TypeRegistry` should be a `TypeProvider` and a `TypeAdapter` to ensure that types which are
  * registered can be converted to CEL representations.
+ *
+ * <p>Unless an implementation documents otherwise, complete registry mutation before sharing the
+ * registry for concurrent checking or evaluation.
  */
 public interface TypeRegistry extends TypeAdapter, TypeProvider {
 
   /** Copy the TypeRegistry and return a new registry whose mutable state is isolated. */
   TypeRegistry copy();
 
-  /** Register a type via a materialized object, which the provider can turn into a type. */
+  /**
+   * Registers a type via a materialized object, which the provider can turn into a type.
+   *
+   * <p>Repeated registration of an equivalent materialized type must succeed without changing the
+   * existing type's behavior. Implementations define materialized-type equivalence because the
+   * supported host representations are implementation-specific. Distinct representations of the
+   * same logical type need not be equivalent.
+   */
   void register(Object t);
 
   /**
    * RegisterType registers a type value with the provider which ensures the provider is aware of
    * how to map the type to an identifier.
    *
-   * <p>If a type is provided more than once with an alternative definition, the call will result in
-   * an error.
+   * <p>Registries which support this operation accept equivalent repeated definitions. If a type is
+   * provided more than once with an alternative definition, the call fails without installing any
+   * type from that call. Implementations may reject type-value registration entirely with {@link
+   * UnsupportedOperationException}.
+   *
+   * @throws IllegalArgumentException if a supported registry already contains a conflicting
+   *     definition
+   * @throws NullPointerException if this registry supports type-value registration and {@code
+   *     types} or any element is null
+   * @throws UnsupportedOperationException if this registry does not support type-value registration
    */
   void registerType(Type... types);
 }

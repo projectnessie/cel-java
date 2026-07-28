@@ -77,9 +77,14 @@ public final class PbTypeDescription extends Description implements TypeDescript
     this.zeroMsg = zeroMsg;
   }
 
-  void updateReflectType(Message zeroMsg) {
-    this.zeroMsg = zeroMsg;
-    this.reflectType = zeroMsg.getClass();
+  void updateReflectType(Message message) {
+    Message newZero = message.getDefaultInstanceForType();
+    Class<?> newReflectType = newZero.getClass();
+    if (reflectType == newReflectType) {
+      return;
+    }
+    this.zeroMsg = newZero;
+    this.reflectType = newReflectType;
   }
 
   /**
@@ -95,6 +100,17 @@ public final class PbTypeDescription extends Description implements TypeDescript
     }
     return new PbTypeDescription(
         typeName, desc, fieldMap, reflectTypeOf(msgZero), zeroValueOf(msgZero));
+  }
+
+  /**
+   * Returns an independently mutable description with the current protobuf representation binding.
+   *
+   * <p>Protobuf descriptors, messages, and field descriptions are immutable and can be shared. The
+   * field map and the generated-versus-dynamic representation binding are registry-owned state and
+   * must not be shared between registry copies.
+   */
+  PbTypeDescription copy() {
+    return new PbTypeDescription(typeName, desc, new HashMap<>(fieldMap), reflectType, zeroMsg);
   }
 
   /** FieldMap returns a string field name to FieldDescription map. */

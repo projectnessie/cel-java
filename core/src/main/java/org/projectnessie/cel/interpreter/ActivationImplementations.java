@@ -16,6 +16,7 @@
 package org.projectnessie.cel.interpreter;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 import org.projectnessie.cel.common.types.ref.Val;
@@ -24,10 +25,13 @@ import org.projectnessie.cel.interpreter.Activation.PartialActivation;
 /**
  * Activation backed by a map of named values.
  *
- * <p>Named bindings may lazily supply values through a no-argument {@link Supplier}.
+ * <p>The source map is retained but never mutated and must remain stable while the activation may
+ * be resolved. Named bindings may lazily supply values through a no-argument {@link Supplier};
+ * successful results are memoized in activation-owned state.
  */
 final class MapActivation implements Activation {
   private final Map<String, Object> bindings;
+  private Map<String, Object> memoizedSupplierValues;
 
   MapActivation(Map<String, Object> bindings) {
     this.bindings = bindings;
@@ -46,11 +50,23 @@ final class MapActivation implements Activation {
       return null;
     }
 
-    if (obj instanceof Supplier) {
-      obj = ((Supplier<?>) obj).get();
-      bindings.put(name, obj);
+    if (obj instanceof Supplier<?> supplier) {
+      return resolveSupplier(name, supplier);
     }
     return obj;
+  }
+
+  private synchronized Object resolveSupplier(String name, Supplier<?> supplier) {
+    if (memoizedSupplierValues != null && memoizedSupplierValues.containsKey(name)) {
+      return memoizedSupplierValues.get(name);
+    }
+
+    Object value = supplier.get();
+    if (memoizedSupplierValues == null) {
+      memoizedSupplierValues = new HashMap<>();
+    }
+    memoizedSupplierValues.put(name, value);
+    return value;
   }
 
   @SuppressWarnings("removal")
