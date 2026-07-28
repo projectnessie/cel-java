@@ -39,6 +39,7 @@ import static org.projectnessie.cel.common.types.UintT.UintType;
 import static org.projectnessie.cel.common.types.pb.Db.collectFileDescriptorSet;
 import static org.projectnessie.cel.common.types.pb.Db.newDb;
 import static org.projectnessie.cel.common.types.pb.DefaultTypeAdapter.maybeUnwrapValue;
+import static org.projectnessie.cel.common.types.pb.FileDescription.newFileDescription;
 import static org.projectnessie.cel.common.types.pb.PbObjectT.newObject;
 import static org.projectnessie.cel.common.types.pb.PbTypeDescription.typeNameFromMessage;
 import static org.projectnessie.cel.common.types.ref.TypeAdapterSupport.maybeNativeToValue;
@@ -75,7 +76,9 @@ import com.google.protobuf.WireFormat;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -88,15 +91,18 @@ import org.projectnessie.cel.common.types.IteratorT;
 import org.projectnessie.cel.common.types.MapT;
 import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.TypeT;
+import org.projectnessie.cel.common.types.Types;
 import org.projectnessie.cel.common.types.ref.FieldGetter;
 import org.projectnessie.cel.common.types.ref.FieldTester;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.StandardScalarFieldProvider;
 import org.projectnessie.cel.common.types.ref.StandardScalarTypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeAdapterSupport;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Lister;
+import org.projectnessie.cel.common.types.traits.Trait;
 
 public class ProtoTypeRegistry
     implements TypeRegistry, StandardScalarTypeAdapter, StandardScalarFieldProvider {
@@ -642,15 +648,36 @@ public class ProtoTypeRegistry
     return value;
   }
 
-  /** RegisterDescriptor registers the contents of a protocol buffer `FileDescriptor`. */
+  /**
+   * Registers the contents of a protocol buffer {@link FileDescriptor}.
+   *
+   * @throws IllegalArgumentException if the descriptor declares a runtime type name with a
+   *     conflicting kind or trait set
+   * @throws NullPointerException if {@code fileDesc} is null
+   */
   public void registerDescriptor(FileDescriptor fileDesc) {
+    Objects.requireNonNull(fileDesc, "fileDesc");
+    validateTypeRegistrations(runtimeTypes(newFileDescription(fileDesc)));
     FileDescription fd = pbdb.registerDescriptor(fileDesc);
     registerAllTypes(fd);
   }
 
-  /** RegisterMessage registers a protocol buffer message and its dependencies. */
+  /**
+   * Registers a protocol buffer message and all of its descriptor dependencies.
+   *
+   * @throws IllegalArgumentException if the descriptor set declares a runtime type name with a
+   *     conflicting kind or trait set
+   * @throws NullPointerException if {@code message} is null
+   */
   public void registerMessage(Message message) {
-    for (FileDescriptor descriptor : collectFileDescriptorSet(message)) {
+    Objects.requireNonNull(message, "message");
+    Set<FileDescriptor> descriptors = collectFileDescriptorSet(message);
+    List<org.projectnessie.cel.common.types.ref.Type> runtimeTypes = new ArrayList<>();
+    for (FileDescriptor descriptor : descriptors) {
+      runtimeTypes.addAll(runtimeTypes(newFileDescription(descriptor)));
+    }
+    validateTypeRegistrations(runtimeTypes);
+    for (FileDescriptor descriptor : descriptors) {
       registerDescriptor(descriptor);
     }
     FileDescription fd = pbdb.registerMessage(message);
@@ -658,12 +685,52 @@ public class ProtoTypeRegistry
     registerAllTypes(fd);
   }
 
+  /**
+   * Registers runtime type definitions by name.
+   *
+   * <p>Equivalent definitions have the same runtime kind and complete trait set and are idempotent.
+   * Conflicting definitions fail before any definition from this call is installed.
+   *
+   * @throws IllegalArgumentException if a type name has a conflicting runtime kind or trait set
+   * @throws NullPointerException if {@code types} or any element is null
+   */
   @Override
   public void registerType(org.projectnessie.cel.common.types.ref.Type... types) {
-    for (org.projectnessie.cel.common.types.ref.Type t : types) {
-      revTypeMap.put(t.typeName(), t);
+    Map<String, org.projectnessie.cel.common.types.ref.Type> additions =
+        validateTypeRegistrations(Arrays.asList(Objects.requireNonNull(types, "types")));
+    revTypeMap.putAll(additions);
+  }
+
+  private Map<String, org.projectnessie.cel.common.types.ref.Type> validateTypeRegistrations(
+      Iterable<org.projectnessie.cel.common.types.ref.Type> types) {
+    Map<String, org.projectnessie.cel.common.types.ref.Type> additions = new LinkedHashMap<>();
+    for (org.projectnessie.cel.common.types.ref.Type input : types) {
+      Objects.requireNonNull(input, "types element");
+      String typeName = Objects.requireNonNull(input.typeName(), "typeName");
+      org.projectnessie.cel.common.types.ref.Type existing = additions.get(typeName);
+      if (existing == null) {
+        existing = revTypeMap.get(typeName);
+      }
+      if (existing == null) {
+        additions.put(typeName, input);
+        continue;
+      }
+      TypeRegistration existingRegistration = TypeRegistration.of(existing);
+      TypeRegistration inputRegistration = TypeRegistration.of(input);
+      if (existingRegistration.typeEnum != inputRegistration.typeEnum) {
+        throw new IllegalArgumentException(
+            String.format(
+                "type registration conflict for '%s': existing kind '%s', input kind '%s'",
+                typeName, existingRegistration.typeEnum, inputRegistration.typeEnum));
+      }
+      if (!existingRegistration.traits.equals(inputRegistration.traits)) {
+        throw new IllegalArgumentException(
+            String.format(
+                "type registration conflict for '%s': existing traits %s, input traits %s",
+                typeName, existingRegistration.traits, inputRegistration.traits));
+      }
     }
-    // TODO: generate an error when the type name is registered more than once.
+    return additions;
   }
 
   /**
@@ -750,9 +817,19 @@ public class ProtoTypeRegistry
   }
 
   void registerAllTypes(FileDescription fd) {
+    List<org.projectnessie.cel.common.types.ref.Type> runtimeTypes = runtimeTypes(fd);
+    registerType(runtimeTypes.toArray(org.projectnessie.cel.common.types.ref.Type[]::new));
+  }
+
+  private static List<org.projectnessie.cel.common.types.ref.Type> runtimeTypes(
+      FileDescription fd) {
+    List<org.projectnessie.cel.common.types.ref.Type> types = new ArrayList<>();
     for (String typeName : fd.getTypeNames()) {
-      registerType(newObjectTypeValue(typeName));
+      org.projectnessie.cel.common.types.ref.Type canonical =
+          Checked.CheckedWellKnowns.containsKey(typeName) ? Types.getTypeByName(typeName) : null;
+      types.add(canonical != null ? canonical : newObjectTypeValue(typeName));
     }
+    return types;
   }
 
   @Override
@@ -775,6 +852,19 @@ public class ProtoTypeRegistry
           generatedTester != null ? new FieldType(type, isSet, getFrom) : null;
       this.objectGetterFieldType =
           objectGetter != null ? new FieldType(type, isSet, objectGetter) : null;
+    }
+  }
+
+  private record TypeRegistration(TypeEnum typeEnum, EnumSet<Trait> traits) {
+    static TypeRegistration of(org.projectnessie.cel.common.types.ref.Type type) {
+      TypeEnum typeEnum = Objects.requireNonNull(type.typeEnum(), "typeEnum");
+      EnumSet<Trait> traits = EnumSet.noneOf(Trait.class);
+      for (Trait trait : Trait.values()) {
+        if (type.hasTrait(trait)) {
+          traits.add(trait);
+        }
+      }
+      return new TypeRegistration(typeEnum, traits);
     }
   }
 

@@ -398,6 +398,7 @@ public final class Overload {
 
       // Dyn conversion (identity function).
       unary(Overloads.TypeConvertDyn, v -> v),
+      // The interpreter cursor crosses these low-level unary boundaries as a Val.
       unary(Overloads.Iterator, Trait.IterableType, v -> ((IterableT) v).iterator()),
       unary(Overloads.HasNext, Trait.IteratorType, v -> ((IteratorT) v).hasNext()),
       unary(Overloads.Next, Trait.IteratorType, v -> ((IteratorT) v).next())

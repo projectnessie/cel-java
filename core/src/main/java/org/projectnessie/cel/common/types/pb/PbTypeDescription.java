@@ -97,6 +97,17 @@ public final class PbTypeDescription extends Description implements TypeDescript
         typeName, desc, fieldMap, reflectTypeOf(msgZero), zeroValueOf(msgZero));
   }
 
+  /**
+   * Returns an independently mutable description with the current protobuf representation binding.
+   *
+   * <p>Protobuf descriptors, messages, and field descriptions are immutable and can be shared. The
+   * field map and the generated-versus-dynamic representation binding are registry-owned state and
+   * must not be shared between registry copies.
+   */
+  PbTypeDescription copy() {
+    return new PbTypeDescription(typeName, desc, new HashMap<>(fieldMap), reflectType, zeroMsg);
+  }
+
   /** FieldMap returns a string field name to FieldDescription map. */
   public Map<String, FieldDescription> fieldMap() {
     return fieldMap;
