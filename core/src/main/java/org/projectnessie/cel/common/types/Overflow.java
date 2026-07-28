@@ -24,19 +24,32 @@ import java.time.ZonedDateTime;
 import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
 
+/**
+ * Checked arithmetic used by CEL numeric, duration, and timestamp value implementations.
+ *
+ * <p>Methods return the computed Java value when it is representable in the corresponding CEL
+ * domain and throw {@link OverflowException} otherwise. Unsigned integer operands and results use
+ * the raw bits of a Java {@code long}.
+ *
+ * <p>This is low-level value-runtime infrastructure. Application code normally observes overflow as
+ * a CEL error value produced by the calling CEL operation.
+ */
 public final class Overflow {
+  /** Stackless exception used internally to signal a CEL arithmetic overflow. */
   public static final class OverflowException extends RuntimeException {
     OverflowException() {
       super("overflow", null, false, false);
     }
   }
 
+  /** Shared stackless overflow signal used by the checked operations in this class. */
   public static final OverflowException overflowException = new OverflowException();
 
   /**
-   * addInt64Checked performs addition with overflow detection of two int64, returning the result of
-   * the addition if no overflow occurred as the first return value and a bool indicating whether no
-   * overflow occurred as the second return value.
+   * Adds two signed CEL int values.
+   *
+   * @return the signed sum
+   * @throws OverflowException if the sum is outside the signed 64-bit range
    */
   public static long addInt64Checked(long x, long y) {
     if ((y > 0 && x > Long.MAX_VALUE - y) || (y < 0 && x < Long.MIN_VALUE - y)) {
@@ -46,9 +59,10 @@ public final class Overflow {
   }
 
   /**
-   * subtractInt64Checked performs subtraction with overflow detection of two int64, returning the
-   * result of the subtraction if no overflow occurred as the first return value and a bool
-   * indicating whether no overflow occurred as the second return value.
+   * Subtracts two signed CEL int values.
+   *
+   * @return {@code x - y}
+   * @throws OverflowException if the difference is outside the signed 64-bit range
    */
   public static long subtractInt64Checked(long x, long y) {
     if ((y < 0 && x > Long.MAX_VALUE + y) || (y > 0 && x < Long.MIN_VALUE + y)) {
@@ -58,9 +72,10 @@ public final class Overflow {
   }
 
   /**
-   * negateInt64Checked performs negation with overflow detection of an int64, returning the result
-   * of the negation if no overflow occurred as the first return value and a bool indicating whether
-   * no overflow occurred as the second return value.
+   * Negates a signed CEL int value.
+   *
+   * @return {@code -x}
+   * @throws OverflowException if {@code x} is {@link Long#MIN_VALUE}
    */
   public static long negateInt64Checked(long x) {
     // In twos complement, negating MinInt64 would result in a valid of MaxInt64+1.
@@ -71,9 +86,10 @@ public final class Overflow {
   }
 
   /**
-   * multiplyInt64Checked performs multiplication with overflow detection of two int64, returning
-   * the result of the multiplication if no overflow occurred as the first return value and a bool
-   * indicating whether no overflow occurred as the second return value.
+   * Multiplies two signed CEL int values.
+   *
+   * @return {@code x * y}
+   * @throws OverflowException if the product is outside the signed 64-bit range
    */
   public static long multiplyInt64Checked(long x, long y) {
     // Detecting multiplication overflow is more complicated than the others. The first two detect
@@ -99,9 +115,11 @@ public final class Overflow {
   }
 
   /**
-   * divideInt64Checked performs division with overflow detection of two int64, returning the result
-   * of the division if no overflow occurred as the first return value and a bool indicating whether
-   * no overflow occurred as the second return value.
+   * Divides two signed CEL int values.
+   *
+   * @return {@code x / y}
+   * @throws OverflowException if dividing {@link Long#MIN_VALUE} by {@code -1}
+   * @throws ArithmeticException if {@code y} is zero
    */
   public static long divideInt64Checked(long x, long y) {
     // In twos complement, negating MinInt64 would result in a valid of MaxInt64+1.
@@ -112,9 +130,11 @@ public final class Overflow {
   }
 
   /**
-   * moduloInt64Checked performs modulo with overflow detection of two int64, returning the result
-   * of the modulo if no overflow occurred as the first return value and a bool indicating whether
-   * no overflow occurred as the second return value.
+   * Computes the remainder of two signed CEL int values.
+   *
+   * @return {@code x % y}
+   * @throws OverflowException if dividing {@link Long#MIN_VALUE} by {@code -1}
+   * @throws ArithmeticException if {@code y} is zero
    */
   public static long moduloInt64Checked(long x, long y) {
     // In twos complement, negating MinInt64 would result in a valid of MaxInt64+1.
@@ -125,9 +145,10 @@ public final class Overflow {
   }
 
   /**
-   * addUint64Checked performs addition with overflow detection of two uint64, returning the result
-   * of the addition if no overflow occurred as the first return value and a bool indicating whether
-   * no overflow occurred as the second return value.
+   * Adds two CEL uint values represented as raw {@code long} bits.
+   *
+   * @return the raw bits of the unsigned sum
+   * @throws OverflowException if the sum is outside the unsigned 64-bit range
    */
   public static long addUint64Checked(long x, long y) {
     // hopefully faster than using BigInteger...
@@ -151,9 +172,10 @@ public final class Overflow {
   }
 
   /**
-   * subtractUint64Checked performs subtraction with overflow detection of two uint64, returning the
-   * result of the subtraction if no overflow occurred as the first return value and a bool
-   * indicating whether no overflow occurred as the second return value.
+   * Subtracts two CEL uint values represented as raw {@code long} bits.
+   *
+   * @return the raw bits of the unsigned difference
+   * @throws OverflowException if {@code y} is greater than {@code x} as an unsigned value
    */
   public static long subtractUint64Checked(long x, long y) {
     // hopefully faster than using BigInteger...
@@ -175,9 +197,10 @@ public final class Overflow {
   }
 
   /**
-   * multiplyUint64Checked performs multiplication with overflow detection of two uint64, returning
-   * the result of the multiplication if no overflow occurred as the first return value and a bool
-   * indicating whether no overflow occurred as the second return value.
+   * Multiplies two CEL uint values represented as raw {@code long} bits.
+   *
+   * @return the raw bits of the unsigned product
+   * @throws OverflowException if the product is outside the unsigned 64-bit range
    */
   public static long multiplyUint64Checked(long x, long y) {
     // Sloooow, but works.
@@ -189,9 +212,10 @@ public final class Overflow {
   }
 
   /**
-   * addDurationChecked performs addition with overflow detection of two time.Duration, returning
-   * the result of the addition if no overflow occurred as the first return value and a bool
-   * indicating whether no overflow occurred as the second return value.
+   * Adds two durations.
+   *
+   * @return the sum
+   * @throws OverflowException if the Java duration result overflows
    */
   public static Duration addDurationChecked(Duration x, Duration y) {
     try {
@@ -202,9 +226,10 @@ public final class Overflow {
   }
 
   /**
-   * subtractDurationChecked performs subtraction with overflow detection of two time.Duration,
-   * returning the result of the subtraction if no overflow occurred as the first return value and a
-   * bool indicating whether no overflow occurred as the second return value.
+   * Subtracts two durations.
+   *
+   * @return {@code x - y}
+   * @throws OverflowException if the Java duration result overflows
    */
   public static Duration subtractDurationChecked(Duration x, Duration y) {
     try {
@@ -215,9 +240,10 @@ public final class Overflow {
   }
 
   /**
-   * negateDurationChecked performs negation with overflow detection of a time.Duration, returning
-   * the result of the negation if no overflow occurred as the first return value and a bool
-   * indicating whether no overflow occurred as the second return value.
+   * Negates a duration.
+   *
+   * @return the negated duration
+   * @throws OverflowException if the Java duration result overflows
    */
   public static Duration negateDurationChecked(Duration x) {
     try {
@@ -228,9 +254,10 @@ public final class Overflow {
   }
 
   /**
-   * addDurationChecked performs addition with overflow detection of a time.Time and time.Duration,
-   * returning the result of the addition if no overflow occurred as the first return value and a
-   * bool indicating whether no overflow occurred as the second return value.
+   * Adds a duration to a timestamp and enforces the CEL timestamp range.
+   *
+   * @return the resulting timestamp
+   * @throws OverflowException if Java arithmetic or the CEL timestamp range overflows
    */
   public static ZonedDateTime addTimeDurationChecked(ZonedDateTime x, Duration y) {
     try {
@@ -241,9 +268,10 @@ public final class Overflow {
   }
 
   /**
-   * subtractTimeChecked performs subtraction with overflow detection of two time.Time, returning
-   * the result of the subtraction if no overflow occurred as the first return value and a bool
-   * indicating whether no overflow occurred as the second return value.
+   * Subtracts two timestamps.
+   *
+   * @return the duration from {@code y} to {@code x}
+   * @throws OverflowException if the Java duration result overflows
    */
   public static Duration subtractTimeChecked(ZonedDateTime x, ZonedDateTime y) {
     try {
@@ -258,9 +286,10 @@ public final class Overflow {
   }
 
   /**
-   * subtractTimeDurationChecked performs subtraction with overflow detection of a time.Time and
-   * time.Duration, returning the result of the subtraction if no overflow occurred as the first
-   * return value and a bool indicating whether no overflow occurred as the second return value.
+   * Subtracts a duration from a timestamp and enforces the CEL timestamp range.
+   *
+   * @return the resulting timestamp
+   * @throws OverflowException if Java arithmetic or the CEL timestamp range overflows
    */
   public static ZonedDateTime subtractTimeDurationChecked(ZonedDateTime x, Duration y) {
     try {
@@ -271,8 +300,12 @@ public final class Overflow {
   }
 
   /**
-   * Checks whether the given timestamp overflowed in the bounds of "Go", that is less than {@link
-   * TimestampT#minUnixTime} or greater than {@link TimestampT#maxUnixTime}.
+   * Validates a timestamp against the CEL timestamp range.
+   *
+   * @param x timestamp to validate
+   * @return {@code x}
+   * @throws OverflowException if its epoch second is outside {@link TimestampT#minUnixTime} through
+   *     {@link TimestampT#maxUnixTime}
    */
   public static ZonedDateTime checkTimeOverflow(ZonedDateTime x) {
     long s = x.toEpochSecond();

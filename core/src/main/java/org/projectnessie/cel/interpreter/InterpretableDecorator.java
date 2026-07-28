@@ -25,15 +25,22 @@ import org.projectnessie.cel.interpreter.Interpretable.InterpretableConst;
  */
 @FunctionalInterface
 public interface InterpretableDecorator {
+  /**
+   * Decorates or replaces one plan node.
+   *
+   * <p>Decorators are invoked during planning and must preserve the node's CEL semantics unless
+   * their documented purpose explicitly changes evaluation behavior.
+   */
   Interpretable decorate(Interpretable i);
 
-  /** evalObserver is a functional interface that accepts an expression id and an observed value. */
+  /** Receives the value produced for an expression identifier. */
   @FunctionalInterface
   interface EvalObserver {
+    /** Records one evaluated expression value. */
     void observe(long id, Val v);
   }
 
-  /** decObserveEval records evaluation state into an EvalState object. */
+  /** Returns a decorator that reports every evaluated node to the observer. */
   static InterpretableDecorator decObserveEval(EvalObserver observer) {
     return i -> {
       if ((i instanceof EvalWatch)
@@ -53,8 +60,10 @@ public interface InterpretableDecorator {
   }
 
   /**
-   * decDisableShortcircuits ensures that all branches of an expression will be evaluated, no
-   * short-circuiting.
+   * Returns a decorator that evaluates all branches for exhaustive-state observation.
+   *
+   * <p>This intentionally replaces ordinary short-circuit behavior and should be used only for
+   * exhaustive evaluation/state collection.
    */
   static InterpretableDecorator decDisableShortcircuits() {
     return i -> {
@@ -93,14 +102,16 @@ public interface InterpretableDecorator {
   }
 
   /**
-   * decOptimize optimizes the program plan by looking for common evaluation patterns and
-   * conditionally precomputating the result.
+   * Returns the built-in plan optimizer.
    *
    * <ul>
-   *   <li>build list and map values with constant elements.
-   *   <li>evaluate constant type-conversion calls.
-   *   <li>convert 'in' operations to set membership tests if possible.
+   *   <li>Build list and map values with constant elements.
+   *   <li>Evaluate supported constant calls and conversions.
+   *   <li>Convert eligible membership calls to constant-set lookups.
    * </ul>
+   *
+   * <p>Unsupported or semantically unsafe shapes retain their existing nodes. The optimizer does
+   * not guarantee that a particular expression is folded or specialized.
    */
   static InterpretableDecorator decOptimize() {
     return BuiltInOptimizer.INSTANCE;

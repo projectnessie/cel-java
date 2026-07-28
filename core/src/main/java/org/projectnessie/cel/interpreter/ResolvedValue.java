@@ -17,12 +17,22 @@ package org.projectnessie.cel.interpreter;
 
 import java.util.Objects;
 
+/**
+ * Legacy activation-resolution result distinguishing absent, present-null, and present values.
+ *
+ * @deprecated migrate callbacks to {@link ActivationFunction}, using {@link
+ *     ActivationFunction#ABSENT} for absence and ordinary {@code null} for present null
+ */
 @SuppressWarnings("DeprecatedIsStillUsed")
 @Deprecated(forRemoval = true)
 public final class ResolvedValue {
+  /** Legacy singleton representing a present {@code null} value. */
   public static final ResolvedValue NULL_VALUE = new ResolvedValue(null, true);
+
+  /** Legacy singleton representing an absent binding. */
   public static final ResolvedValue ABSENT = new ResolvedValue(null, false);
 
+  /** Returns a legacy result containing a non-null value. */
   public static ResolvedValue resolvedValue(Object value) {
     return new ResolvedValue(Objects.requireNonNull(value), true);
   }
@@ -35,10 +45,12 @@ public final class ResolvedValue {
     this.present = present;
   }
 
+  /** Returns the contained value, including {@code null} for {@link #NULL_VALUE}. */
   public Object value() {
     return value;
   }
 
+  /** Returns whether a binding is present. */
   public boolean present() {
     return present;
   }

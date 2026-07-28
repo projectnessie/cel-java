@@ -22,7 +22,8 @@ import org.projectnessie.cel.interpreter.EvalState;
  *
  * <p>{@link Program#eval(Object)} always returns details containing a non-null, evaluation-owned
  * state. The public constructor retains its supplied value, including {@code null}, for
- * compatibility with directly constructed instances.
+ * compatibility with directly constructed instances. Evaluation states are mutable and not
+ * thread-safe; inspect or modify a returned state only with appropriate external synchronization.
  */
 public final class EvalDetails {
   private final EvalState state;

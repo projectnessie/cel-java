@@ -18,13 +18,11 @@ package org.projectnessie.cel.common;
 import java.math.BigInteger;
 
 /**
- * Represents a 64 bit unsigned long for the CEL {@code uint} type.
+ * Java representation of the complete unsigned 64-bit range used by CEL {@code uint}.
  *
- * <p>According to the CEL spec, the {@code uint} and {@code int} types are, loosely speaking,
- * "incompatible. This means, that these two types are not comparable in operators (for example
- * _equal_, _less-than_, etc) not do function overloads match across both types.
- *
- * <p>This class is mostly there to let the unit tests ported from CEL-Go pass.
+ * <p>The wrapped {@code long} stores the unsigned bit pattern. {@link #longValue()} therefore
+ * returns that bit pattern and may be negative for values greater than {@link Long#MAX_VALUE};
+ * {@link #toString()}, comparison, and floating-point conversions use unsigned magnitude.
  */
 public final class ULong extends Number implements Comparable<ULong> {
   private final long ulong;
@@ -33,6 +31,7 @@ public final class ULong extends Number implements Comparable<ULong> {
     this.ulong = ulong;
   }
 
+  /** Returns an unsigned value backed by the supplied 64-bit pattern. */
   public static ULong valueOf(long ulong) {
     return new ULong(ulong);
   }

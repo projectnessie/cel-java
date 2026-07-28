@@ -15,6 +15,13 @@
  */
 package org.projectnessie.cel.common.types;
 
+/**
+ * Standard CEL overload identifiers.
+ *
+ * <p>Checker declarations and interpreter implementations must use the same identifier to connect a
+ * checked call to its runtime operation. These constants are protocol-level names, not user-visible
+ * CEL function syntax.
+ */
 public final class Overloads {
   private Overloads() {}
 

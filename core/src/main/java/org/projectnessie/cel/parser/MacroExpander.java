@@ -20,11 +20,21 @@ import java.util.List;
 import org.projectnessie.cel.common.ErrorWithLocation;
 
 /**
- * MacroExpander converts the target and args of a function call that matches a Macro.
+ * Rewrites the target and arguments of a function call that matches a {@link Macro}.
  *
- * <p>Note: when the Macros.IsReceiverStyle() is true, the target argument will be nil.
+ * <p>The target is {@code null} for a global call and non-null for a receiver-style call. Throw
+ * {@link ErrorWithLocation} to report a source-aware parse diagnostic.
  */
 @FunctionalInterface
 public interface MacroExpander {
+  /**
+   * Expands one matching call.
+   *
+   * @param eh source-aware expression construction helper
+   * @param target receiver expression, or {@code null} for a global call
+   * @param args call arguments, excluding the receiver
+   * @return replacement expression
+   * @throws ErrorWithLocation if the matched call cannot be expanded
+   */
   Expr expand(ExprHelper eh, Expr target, List<Expr> args) throws ErrorWithLocation;
 }

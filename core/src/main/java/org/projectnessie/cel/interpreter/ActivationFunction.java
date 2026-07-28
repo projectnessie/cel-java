@@ -15,8 +15,22 @@
  */
 package org.projectnessie.cel.interpreter;
 
+/**
+ * Resolves CEL variable names to caller-supplied Java values.
+ *
+ * <p>Return {@link #ABSENT} by identity when a name has no binding. Java {@code null} is a present
+ * binding representing CEL null and is therefore distinct from absence. The resolver is retained by
+ * an activation created with {@link Activation#newActivation(Object)} and may be called
+ * concurrently when a program is shared; implementations must provide the corresponding thread
+ * safety and should not mutate evaluation inputs.
+ */
 @FunctionalInterface
 public interface ActivationFunction {
+  /**
+   * Identity sentinel returned for an unresolved variable.
+   *
+   * <p>Do not expose this object as an actual variable value.
+   */
   Object ABSENT =
       new Object() {
         @Override
@@ -26,12 +40,13 @@ public interface ActivationFunction {
       };
 
   /**
-   * Returns a value from the activation by qualified name.
+   * Resolves a value by qualified CEL variable name.
    *
-   * <p>Return the exact ABSENT singleton when unresolved; consumers compare it by identity.
+   * <p>Return the exact {@link #ABSENT} singleton when unresolved; consumers compare it by
+   * identity. Java {@code null} means the name is present with a CEL null value.
    *
-   * @return the resolved value, {@code null} if null or the constant/sentinel value {@link #ABSENT}
-   *     if the name/value is absent.
+   * @param name qualified variable name requested by the evaluator
+   * @return the resolved Java or CEL value, {@code null} for a present null, or {@link #ABSENT}
    */
   Object resolve(String name);
 }

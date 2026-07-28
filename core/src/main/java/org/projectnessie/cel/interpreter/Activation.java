@@ -19,9 +19,17 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * Activation used to resolve identifiers by name and references by id.
+ * Supplies variable bindings to a CEL evaluation.
  *
- * <p>An Activation is the primary mechanism by which a caller supplies input into a CEL program.
+ * <p>An activation distinguishes an absent binding ({@link ActivationFunction#ABSENT}) from a
+ * present CEL null binding (Java {@code null}). Values may be Java host representations or already
+ * adapted {@link org.projectnessie.cel.common.types.ref.Val} instances; the program's type adapter
+ * converts host values when they are consumed.
+ *
+ * <p>Activations and their backing objects may be retained for the lifetime of a program or
+ * evaluation. Callers must not mutate retained maps or bound values while evaluation is in
+ * progress. Custom implementations and resolver functions may be called concurrently when a program
+ * is shared and are responsible for their own thread safety.
  */
 public interface Activation extends ActivationFunction {
   @SuppressWarnings("removal")
@@ -35,34 +43,45 @@ public interface Activation extends ActivationFunction {
   }
 
   /**
-   * Deprecated for removal.
+   * Resolves a name using the legacy wrapper representation.
    *
    * <p>Replace with {@link #resolve(String)}.
+   *
+   * @param name qualified variable name
+   * @return the legacy resolved-value wrapper
+   * @deprecated use {@link #resolve(String)}
    */
   @SuppressWarnings({"DeprecatedIsStillUsed", "removal"})
   @Deprecated(forRemoval = true)
   ResolvedValue resolveName(String name);
 
   /**
-   * Parent returns the parent of the current activation, may be nil. If non-nil, the parent will be
-   * searched during resolve calls.
+   * Returns this activation's parent, if its implementation exposes one.
+   *
+   * @return the parent activation, or {@code null}
    */
   default Activation parent() {
     return null;
   }
 
-  /** EmptyActivation returns a variable free activation. */
+  /**
+   * Returns an activation with no variable bindings.
+   *
+   * @return a reusable empty activation
+   */
   static Activation emptyActivation() {
     // This call cannot fail.
     return newActivation(Map.of());
   }
 
   /**
-   * NewActivation returns an activation based on a map-based binding where the map keys are
-   * expected to be qualified names used with ResolveName calls.
+   * Creates an activation from a supported binding source.
    *
    * <p>The input {@code bindings} may be an {@link Activation}, a {@link Map}, a {@link Function},
-   * or an {@link ActivationFunction}.
+   * or an {@link ActivationFunction}. An activation is returned unchanged. Map keys are qualified
+   * CEL variable names. An {@code ActivationFunction} uses {@link ActivationFunction#ABSENT} for
+   * absence and Java {@code null} for a present null. The legacy {@code Function} form treats both
+   * a Java {@code null} result and a legacy absent wrapper as absence.
    *
    * <p>The activation retains a map input without copying it, but does not modify it. The caller
    * must not mutate the map while the activation may be resolved.
@@ -76,6 +95,11 @@ public interface Activation extends ActivationFunction {
    *
    * <p>Values which are not represented as ref.Val types on input may be adapted to a ref.Val using
    * the ref.TypeAdapter configured in the environment.
+   *
+   * @param bindings supported binding source
+   * @return an activation backed by {@code bindings}
+   * @throws NullPointerException if {@code bindings} is {@code null}
+   * @throws IllegalArgumentException if {@code bindings} has an unsupported type
    */
   @SuppressWarnings({"rawtypes", "unchecked", "removal"})
   static Activation newActivation(Object bindings) {
@@ -101,31 +125,47 @@ public interface Activation extends ActivationFunction {
   }
 
   /**
-   * NewHierarchicalActivation takes two activations and produces a new one which prioritizes
-   * resolution in the child first and parent(s) second.
+   * Creates an activation that resolves against {@code child} before {@code parent}.
+   *
+   * <p>The returned activation retains both inputs. A name beginning with {@code .} bypasses the
+   * child and is resolved directly against the parent after the leading dot is removed.
+   *
+   * @param parent non-null fallback activation
+   * @param child non-null preferred activation
+   * @return a hierarchical activation
    */
   static Activation newHierarchicalActivation(Activation parent, Activation child) {
     return new HierarchicalActivation(parent, child);
   }
 
   /**
-   * NewPartialActivation returns an Activation which contains a list of AttributePattern values
-   * representing field and index operations that should result in a 'types.Unknown' result.
+   * Creates an activation that marks matching attribute paths as unknown.
    *
-   * <p>The `bindings` value may be any value type supported by the interpreter.NewActivation call,
-   * but is typically either an existing Activation or map[string]interface{}.
+   * <p>{@code bindings} accepts every source supported by {@link #newActivation(Object)}. The
+   * pattern array is copied, but each mutable {@link AttributePattern} is retained. Complete
+   * pattern construction before creating or sharing the activation. Callers receive a cloned array
+   * from {@link PartialActivation#unknownAttributePatterns()}.
+   *
+   * @param bindings supported binding source
+   * @param unknowns non-null attribute patterns that should produce CEL unknown values
+   * @return a partial activation
+   * @throws NullPointerException if {@code bindings} or {@code unknowns} is {@code null}
    */
   static PartialActivation newPartialActivation(Object bindings, AttributePattern... unknowns) {
     Activation a = newActivation(bindings);
     return new PartActivation(a, unknowns);
   }
 
-  /** PartialActivation extends the Activation interface with a set of UnknownAttributePatterns. */
+  /** Activation that supplies attribute patterns for partial evaluation. */
   interface PartialActivation extends Activation {
 
     /**
-     * UnknownAttributePaths returns a set of AttributePattern values which match Attribute
-     * expressions for data accesses whose values are not yet known.
+     * Returns the attribute patterns whose matching accesses are unknown.
+     *
+     * <p>The returned array is a new shallow copy. Its mutable pattern elements remain shared with
+     * this activation.
+     *
+     * @return a copy of the unknown-pattern array
      */
     AttributePattern[] unknownAttributePatterns();
   }

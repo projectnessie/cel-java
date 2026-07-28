@@ -19,37 +19,43 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
+/**
+ * Mutable diagnostic collection for one CEL source.
+ *
+ * <p>Instances are operation-local and are not thread-safe. {@link #getErrors()} exposes the live
+ * list for historical compatibility.
+ */
 public class Errors {
   private final List<CELError> errors = new ArrayList<>();
   private final Source source;
 
+  /** Creates an empty diagnostic collection for the supplied source. */
   public Errors(Source source) {
     this.source = source;
   }
 
-  /** ReportError records an error at a source location. */
+  /** Records a formatted error at a source location. */
   public void reportError(Location l, String format, Object... args) {
     reportError(null, l, format, args);
   }
 
+  /** Records a formatted error and its originating exception at a source location. */
   public void reportError(Exception e, Location l, String format, Object... args) {
     CELError err = new CELError(e, l, String.format(format, args));
     errors.add(err);
   }
 
-  /** GetErrors returns the list of observed errors. */
+  /** Returns the live mutable list of recorded diagnostics. */
   public List<CELError> getErrors() {
     return errors;
   }
 
+  /** Returns whether at least one diagnostic has been recorded. */
   public boolean hasErrors() {
     return !errors.isEmpty();
   }
 
-  /**
-   * Append takes an Errors object as input creates a new Errors object with the current and input
-   * errors.
-   */
+  /** Returns a new collection containing the current diagnostics followed by the supplied ones. */
   public Errors append(List<CELError> errors) {
     Errors errs = new Errors(source);
     errs.errors.addAll(this.errors);
@@ -62,7 +68,7 @@ public class Errors {
     return toDisplayString();
   }
 
-  /** ToDisplayString returns the error set to a newline delimited string. */
+  /** Returns source-decorated diagnostics sorted and separated by newlines. */
   public String toDisplayString() {
     return errors.stream()
         .sorted()
@@ -70,6 +76,7 @@ public class Errors {
         .collect(Collectors.joining("\n"));
   }
 
+  /** Records a syntax-error diagnostic. */
   public void syntaxError(Location l, String msg) {
     reportError(l, "Syntax error: %s", msg);
   }

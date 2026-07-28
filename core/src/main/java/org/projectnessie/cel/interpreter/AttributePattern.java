@@ -35,12 +35,17 @@ import org.projectnessie.cel.interpreter.AttributeFactory.NamespacedAttribute;
 import org.projectnessie.cel.interpreter.AttributeFactory.Qualifier;
 
 /**
- * AttributePattern represents a top-level variable with an optional set of qualifier patterns.
+ * Mutable description of an attribute path that should evaluate to a CEL unknown value.
  *
- * <p>When using a CEL expression within a container, e.g. a package or namespace, the variable name
- * in the pattern must match the qualified name produced during the variable namespace resolution.
- * For example, if variable `c` appears in an expression whose container is `a.b`, the variable name
- * supplied to the pattern must be `a.b.c`
+ * <p>Pass completed patterns to {@link Activation#newPartialActivation(Object,
+ * AttributePattern...)}. A pattern consists of a fully qualified top-level variable and zero or
+ * more field, index, or wildcard qualifiers. Matching is overlap-based: if a pattern is a prefix of
+ * an accessed attribute, or the accessed attribute is a prefix of a pattern, the last matched
+ * expression component produces an unknown result.
+ *
+ * <p>When an expression uses a CEL container, the variable name must match the qualified name
+ * produced during namespace resolution. For example, variable {@code c} in container {@code a.b} is
+ * represented by pattern variable {@code a.b.c}.
  *
  * <p>The qualifier patterns for attribute matching must be one of the following:
  *
@@ -49,18 +54,21 @@ import org.projectnessie.cel.interpreter.AttributeFactory.Qualifier;
  *   <li>wildcard (*)
  * </ul>
  *
- * <p>Examples:
+ * <p>Example paths:
  *
  * <ol>
- *   <li>ns.myvar["complex-value"]
- *   <li>ns.myvar["complex-value"][0]
- *   <li>ns.myvar["complex-value"].*.name
+ *   <li>{@code ns.myvar["complex-value"]}
+ *   <li>{@code ns.myvar["complex-value"][0]}
+ *   <li>{@code ns.myvar["complex-value"].*.name}
  * </ol>
  *
  * <p>The first example is simple: match an attribute where the variable is 'ns.myvar' with a field
  * access on 'complex-value'. The second example expands the match to indicate that only a specific
- * index `0` should match. And lastly, the third example matches any indexed access that later
- * selects the 'name' field.
+ * index {@code 0} should match. The third example matches any indexed access that later selects the
+ * {@code name} field.
+ *
+ * <p>Instances are mutable and not thread-safe. Complete qualifier construction before passing a
+ * pattern to an activation or otherwise sharing it.
  */
 public final class AttributePattern {
   private final String variable;
@@ -71,14 +79,21 @@ public final class AttributePattern {
     this.qualifierPatterns = qualifierPatterns;
   }
 
-  /** NewAttributePattern produces a new mutable AttributePattern based on a variable name. */
+  /**
+   * Creates a mutable pattern for a fully qualified variable.
+   *
+   * @param variable non-null, fully qualified CEL variable name
+   * @return a new pattern with no qualifier restrictions
+   */
   public static AttributePattern newAttributePattern(String variable) {
     return new AttributePattern(variable, new ArrayList<>());
   }
 
   /**
-   * QualString adds a string qualifier pattern to the AttributePattern. The string may be a valid
-   * identifier, or string map key including empty string.
+   * Appends a string field or map-key qualifier.
+   *
+   * @param pattern non-null field name or string map key, including the empty string
+   * @return this mutable pattern
    */
   public AttributePattern qualString(String pattern) {
     qualifierPatterns.add(AttributeQualifierPattern.forValue(pattern));
@@ -86,42 +101,68 @@ public final class AttributePattern {
   }
 
   /**
-   * QualInt adds an int qualifier pattern to the AttributePattern. The index may be either a map or
-   * list index.
+   * Appends a CEL int map key or list index qualifier.
+   *
+   * @param pattern signed CEL int key or list index
+   * @return this mutable pattern
    */
   public AttributePattern qualInt(long pattern) {
     qualifierPatterns.add(AttributeQualifierPattern.forValue(pattern));
     return this;
   }
 
-  /** QualUint adds an uint qualifier pattern for a map index operation to the AttributePattern. */
+  /**
+   * Appends a CEL uint map-key qualifier.
+   *
+   * <p>{@code pattern} contains the raw bits of the unsigned value.
+   *
+   * @param pattern unsigned key bits
+   * @return this mutable pattern
+   */
   public AttributePattern qualUint(long pattern) {
     qualifierPatterns.add(AttributeQualifierPattern.forValue(ULong.valueOf(pattern)));
     return this;
   }
 
-  /** QualBool adds a bool qualifier pattern for a map index operation to the AttributePattern. */
+  /**
+   * Appends a CEL boolean map-key qualifier.
+   *
+   * @param pattern boolean key
+   * @return this mutable pattern
+   */
   public AttributePattern qualBool(boolean pattern) {
     qualifierPatterns.add(AttributeQualifierPattern.forValue(pattern));
     return this;
   }
 
-  /** Wildcard adds a special sentinel qualifier pattern that will match any single qualifier. */
+  /**
+   * Appends a wildcard that matches one field or index qualifier.
+   *
+   * @return this mutable pattern
+   */
   public AttributePattern wildcard() {
     qualifierPatterns.add(AttributeQualifierPattern.wildcard());
     return this;
   }
 
   /**
-   * VariableMatches returns true if the fully qualified variable matches the AttributePattern fully
-   * qualified variable name.
+   * Tests the fully qualified variable portion of this pattern.
+   *
+   * @param variable fully qualified candidate variable
+   * @return whether the candidate equals this pattern's variable
    */
   public boolean variableMatches(String variable) {
     return this.variable.equals(variable);
   }
 
   /**
-   * QualifierPatterns returns the set of AttributeQualifierPattern values on the AttributePattern.
+   * Returns the live qualifier list used by this pattern.
+   *
+   * <p>The list and its element type are interpreter implementation details. External callers
+   * should build patterns through the qualifier methods instead of modifying the returned list. Any
+   * direct structural modification affects this pattern and is not thread-safe.
+   *
+   * @return the live qualifier list
    */
   public List<AttributeQualifierPattern> qualifierPatterns() {
     return qualifierPatterns;
@@ -138,7 +179,7 @@ public final class AttributePattern {
         + '}';
   }
 
-  /** AttributeQualifierPattern holds a wilcard or valued qualifier pattern. */
+  /** Holds a wildcard or value-based qualifier pattern. */
   static final class AttributeQualifierPattern {
     private final boolean wildcard;
     private final Object value;
@@ -182,7 +223,7 @@ public final class AttributePattern {
    * type, is equal to the value held in the Qualifier. This interface is used by the
    * AttributeQualifierPattern to determine pattern matches for non-wildcard qualifier patterns.
    *
-   * <p>Note: Attribute values are also Qualifier values; however, Attriutes are resolved before
+   * <p>Note: Attribute values are also Qualifier values; however, attributes are resolved before
    * qualification happens. This is an implementation detail, but one relevant to why the Attribute
    * types do not surface in the list of implementations.
    *
@@ -198,8 +239,16 @@ public final class AttributePattern {
   }
 
   /**
-   * NewPartialAttributeFactory returns an AttributeFactory implementation capable of performing
-   * AttributePattern matches with PartialActivation inputs.
+   * Creates the low-level attribute factory used for partial evaluation.
+   *
+   * <p>The container, adapter, and provider must come from the same configured environment. The
+   * returned factory recognizes {@link Activation.PartialActivation} inputs and produces unknown
+   * values for matching patterns; ordinary activations retain normal attribute resolution.
+   *
+   * @param container namespace resolution configuration
+   * @param adapter Java-to-CEL value adapter
+   * @param provider type and field provider
+   * @return an attribute factory that supports partial activations
    */
   public static AttributeFactory newPartialAttributeFactory(
       Container container, TypeAdapter adapter, TypeProvider provider) {
@@ -248,7 +297,7 @@ public final class AttributePattern {
     }
 
     /**
-     * MaybeAttribute implementation of the AttributeFactory interface which ensure that the set of
+     * MaybeAttribute implementation of the AttributeFactory interface which ensures that the set of
      * 'maybe' NamespacedAttribute values are produced using the PartialAttributeFactory rather than
      * the base AttributeFactory implementation.
      */
@@ -264,24 +313,22 @@ public final class AttributePattern {
      * Attribute value match any of the ActivationPattern objects in the set of unknown activation
      * patterns on the given PartialActivation.
      *
-     * <p>For example, in the expression `a.b`, the Attribute is composed of variable `a`, with
-     * string qualifier `b`. When a PartialActivation is supplied, it indicates that some or all of
-     * the data provided in the input is unknown by specifying unknown AttributePatterns. An
-     * AttributePattern that refers to variable `a` with a string qualifier of `c` will not match
-     * `a.b`; however, any of the following patterns will match Attribute `a.b`:
+     * <p>For example, in expression {@code a.b}, the attribute is composed of variable {@code a}
+     * and string qualifier {@code b}. A partial activation indicates that some or all input data is
+     * unknown through its attribute patterns. A pattern for variable {@code a} with string
+     * qualifier {@code c} does not match {@code a.b}; any of the following patterns do:
      *
      * <ul>
-     *   <li>`AttributePattern("a")`
-     *   <li>`AttributePattern("a").Wildcard()`
-     *   <li>`AttributePattern("a").QualString("b")`
-     *   <li>`AttributePattern("a").QualString("b").QualInt(0)`
+     *   <li>{@code newAttributePattern("a")}
+     *   <li>{@code newAttributePattern("a").wildcard()}
+     *   <li>{@code newAttributePattern("a").qualString("b")}
+     *   <li>{@code newAttributePattern("a").qualString("b").qualInt(0)}
      * </ul>
      *
      * <p>Any AttributePattern which overlaps an Attribute or vice-versa will produce an Unknown
      * result for the last pattern matched variable or qualifier in the Attribute. In the first
-     * matching example, the expression id representing variable `a` would be listed in the Unknown
-     * result, whereas in the other pattern examples, the qualifier `b` would be returned as the
-     * Unknown.
+     * matching example, the expression ID representing variable {@code a} is listed in the unknown
+     * result, whereas in the other examples the qualifier {@code b} is returned as unknown.
      */
     Object matchesUnknownPatterns(
         PartialActivation vars, long attrID, String[] variableNames, List<Qualifier> qualifiers) {

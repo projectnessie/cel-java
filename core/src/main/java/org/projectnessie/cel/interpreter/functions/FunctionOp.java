@@ -18,10 +18,20 @@ package org.projectnessie.cel.interpreter.functions;
 import org.projectnessie.cel.common.types.ref.Val;
 
 /**
- * FunctionOp is a function with accepts zero or more arguments and produces an value (as
- * interface{}) or error as a result.
+ * Runtime implementation of a variable-arity CEL function overload.
+ *
+ * <p>Use a fixed-arity operation interface where one is available. The interpreter supplies
+ * arguments in expression order; for receiver-style calls, the receiver is first. Implementations
+ * registered on a reusable program must be thread-safe and must not retain or modify the supplied
+ * array.
  */
 @FunctionalInterface
 public interface FunctionOp {
+  /**
+   * Invokes the function.
+   *
+   * @param values evaluated arguments in call order
+   * @return the non-null CEL result, which may be a CEL error or unknown value
+   */
   Val invoke(Val... values);
 }
