@@ -33,6 +33,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -81,18 +82,22 @@ public final class Db {
 
   /** NewDb creates a new `pb.Db` with an empty type name to file description map. */
   public static Db newDb() {
-    // The FileDescription objects in the default db contain lazily initialized TypeDescription
-    // values which may point to the state contained in the DefaultDb irrespective of this shallow
-    // copy; however, the type graph for a field is idempotently computed, and is guaranteed to
-    // only be initialized once thanks to atomic values within the TypeDescription objects, so it
-    // is safe to share these values across instances.
     return defaultDb.copy();
   }
 
   /** Copy creates a copy of the current database with its own internal descriptor mapping. */
   public Db copy() {
-    Map<String, FileDescription> revFileDescriptorMap = new HashMap<>(this.revFileDescriptorMap);
-    List<FileDescription> files = new ArrayList<>(this.files);
+    Map<FileDescription, FileDescription> copiedDescriptions = new IdentityHashMap<>();
+    Map<String, FileDescription> revFileDescriptorMap =
+        new HashMap<>(this.revFileDescriptorMap.size());
+    this.revFileDescriptorMap.forEach(
+        (name, description) ->
+            revFileDescriptorMap.put(
+                name, copiedDescriptions.computeIfAbsent(description, FileDescription::copy)));
+    List<FileDescription> files = new ArrayList<>(this.files.size());
+    this.files.forEach(
+        description ->
+            files.add(copiedDescriptions.computeIfAbsent(description, FileDescription::copy)));
     return new Db(revFileDescriptorMap, files);
   }
 

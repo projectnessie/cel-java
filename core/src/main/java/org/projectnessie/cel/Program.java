@@ -29,6 +29,13 @@ public interface Program {
    *
    * <p>The vars value may either be an `interpreter.Activation` or a `map[string]interface{}`.
    *
+   * <p>The caller retains ownership of {@code vars} and every value reachable from it. Some input
+   * adapters retain live views of mutable Java values, so mutations completed before a later call
+   * to {@code eval} may be visible to that evaluation. Do not mutate the input object or any
+   * reachable value while this method is running. Concurrent evaluations may share input only when
+   * it remains effectively immutable for the duration of all evaluations or the caller otherwise
+   * provides safe independent ownership.
+   *
    * <p>If the `OptTrackState` or `OptExhaustiveEval` flags are used, the `details` response will be
    * non-nil. Given this caveat on `details`, the return state from evaluation will be:
    *

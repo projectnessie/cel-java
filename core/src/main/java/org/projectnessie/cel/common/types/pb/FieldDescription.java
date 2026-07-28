@@ -48,7 +48,6 @@ import java.util.Objects;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.IteratorT;
 import org.projectnessie.cel.common.types.MapT;
-import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
@@ -863,7 +862,7 @@ public final class FieldDescription extends Description {
       }
     }
 
-    private final class EntryKeyIterator extends BaseVal implements IteratorT {
+    private final class EntryKeyIterator implements IteratorT {
       private final java.util.Iterator<?> iterator = allEntries().iterator();
 
       @Override
@@ -880,29 +879,18 @@ public final class FieldDescription extends Description {
       }
 
       @Override
-      @SuppressWarnings("removal")
-      public <T> T convertToNative(Class<T> typeDesc) {
-        throw new UnsupportedOperationException();
+      public boolean equals(Object other) {
+        return this == other;
       }
 
       @Override
-      public Val convertToType(org.projectnessie.cel.common.types.ref.Type typeValue) {
-        throw new UnsupportedOperationException();
+      public int hashCode() {
+        return System.identityHashCode(this);
       }
 
       @Override
-      public Val equal(Val other) {
-        throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public org.projectnessie.cel.common.types.ref.Type type() {
-        throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public Object value() {
-        throw new UnsupportedOperationException();
+      public String toString() {
+        return "iterator";
       }
     }
   }

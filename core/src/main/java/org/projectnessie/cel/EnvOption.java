@@ -27,7 +27,13 @@ import org.projectnessie.cel.common.types.ref.TypeProvider;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.parser.Macro;
 
-/** EnvOption is a functional interface for configuring the environment. */
+/**
+ * EnvOption is a functional interface for configuring the environment.
+ *
+ * <p>Built-in options must be applied while an {@link Env} is being created or extended and before
+ * its first check. Applying a built-in option to an environment after its first check throws {@link
+ * IllegalStateException}.
+ */
 @FunctionalInterface
 public interface EnvOption {
   Env apply(Env e);
@@ -53,10 +59,7 @@ public interface EnvOption {
    * comprehensions such as `all` and `exists` are enabled only via macros.
    */
   static EnvOption clearMacros() {
-    return e -> {
-      e.macros.clear();
-      return e;
-    };
+    return e -> e.applyConfiguration(env -> env.macros.clear());
   }
 
   /**
@@ -66,10 +69,7 @@ public interface EnvOption {
    * together.
    */
   static EnvOption customTypeAdapter(TypeAdapter adapter) {
-    return e -> {
-      e.adapter = adapter;
-      return e;
-    };
+    return e -> e.applyConfiguration(env -> env.adapter = adapter);
   }
 
   /**
@@ -79,10 +79,7 @@ public interface EnvOption {
    * together.
    */
   static EnvOption customTypeProvider(TypeProvider provider) {
-    return e -> {
-      e.provider = provider;
-      return e;
-    };
+    return e -> e.applyConfiguration(env -> env.provider = provider);
   }
 
   /**
@@ -95,10 +92,7 @@ public interface EnvOption {
   static EnvOption declarations(List<Decl> decls) {
     // TODO: provide an alternative means of specifying declarations that doesn't refer
     //  to the underlying proto implementations.
-    return e -> {
-      e.declarations.addAll(decls);
-      return e;
-    };
+    return e -> e.applyConfiguration(env -> env.declarations.addAll(decls));
   }
 
   static EnvOption declarations(Decl... decls) {
@@ -108,9 +102,7 @@ public interface EnvOption {
   /** Features sets the given feature flags. See list of Feature constants above. */
   static EnvOption features(EnvFeature... flags) {
     return e -> {
-      for (EnvFeature flag : flags) {
-        e.setFeature(flag);
-      }
+      e.setFeatures(flags);
       return e;
     };
   }
@@ -137,10 +129,7 @@ public interface EnvOption {
    * <p>Note: This option must be specified after ClearMacros if used together.
    */
   static EnvOption macros(List<Macro> macros) {
-    return e -> {
-      e.macros.addAll(macros);
-      return e;
-    };
+    return e -> e.applyConfiguration(env -> env.macros.addAll(macros));
   }
 
   /**
@@ -151,10 +140,7 @@ public interface EnvOption {
    * `Expr{expression: 'a &lt; b'}` instead of having to write `google.type.Expr{...}`.
    */
   static EnvOption container(String name) {
-    return e -> {
-      e.container = e.container.extend(name(name));
-      return e;
-    };
+    return e -> e.applyConfiguration(env -> env.container = env.container.extend(name(name)));
   }
 
   /**
@@ -209,10 +195,9 @@ public interface EnvOption {
    * preserved between compilations even as the container evolves.
    */
   static EnvOption abbrevs(String... qualifiedNames) {
-    return e -> {
-      e.container = e.container.extend(Container.abbrevs(qualifiedNames));
-      return e;
-    };
+    return e ->
+        e.applyConfiguration(
+            env -> env.container = env.container.extend(Container.abbrevs(qualifiedNames)));
   }
 
   /**
@@ -228,17 +213,19 @@ public interface EnvOption {
    * <p>Note: This option must be specified after the CustomTypeProvider option when used together.
    */
   static EnvOption types(List<Object> addTypes) {
-    return e -> {
-      if (!(e.provider instanceof TypeRegistry reg)) {
-        throw new RuntimeException(
-            String.format(
-                "custom types not supported by provider: %s", e.provider.getClass().getName()));
-      }
-      for (Object t : addTypes) {
-        reg.register(t);
-      }
-      return e;
-    };
+    return e ->
+        e.applyConfiguration(
+            env -> {
+              if (!(env.provider instanceof TypeRegistry reg)) {
+                throw new RuntimeException(
+                    String.format(
+                        "custom types not supported by provider: %s",
+                        env.provider.getClass().getName()));
+              }
+              for (Object t : addTypes) {
+                reg.register(t);
+              }
+            });
   }
 
   static EnvOption types(Object... addTypes) {

@@ -22,9 +22,11 @@ import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.NullT.NullValue;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 
+import com.google.protobuf.ListValue;
 import java.util.AbstractCollection;
 import java.util.AbstractSet;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -63,6 +65,21 @@ class AggregateSourceSemanticsTest {
     assertThat(snapshottedCollection.nativeSize()).isEqualTo(2);
     assertThat(listValues(snapshottedCollection))
         .containsExactly("collection-before", "collection-second");
+  }
+
+  @Test
+  void listBackedStructuralGrowthAndShrinkageRemainCoherentBetweenOperations() {
+    List<Object> source = new ArrayList<>(List.of("one", "two"));
+    Lister liveList = (Lister) DefaultTypeAdapter.Instance.nativeToValue(source);
+
+    source.add("three");
+    assertListState(liveList, "one", "two", "three");
+
+    source.subList(1, source.size()).clear();
+    source.set(0, "replacement");
+    assertListState(liveList, "replacement");
+    assertThat(liveList.get(intOf(1))).matches(Err::isError);
+    assertThat(liveList.nativeGetAt(1)).matches(Err::isError);
   }
 
   @Test
@@ -217,6 +234,46 @@ class AggregateSourceSemanticsTest {
     List<Object> values = new ArrayList<>();
     for (int i = 0; i < list.nativeSize(); i++) {
       values.add(list.get(intOf(i)).value());
+    }
+    return values;
+  }
+
+  @SuppressWarnings("removal")
+  private static void assertListState(Lister actual, String... expected) {
+    Lister expectedList =
+        (Lister)
+            DefaultTypeAdapter.Instance.nativeToValue(
+                Arrays.stream(expected).map(value -> (Object) value).toList());
+
+    assertThat(actual.size()).isEqualTo(intOf(expected.length));
+    assertThat(actual.nativeSize()).isEqualTo(expected.length);
+    assertThat(listValues(actual)).containsExactly((Object[]) expected);
+    assertThat(iteratorValues(actual)).containsExactly((Object[]) expected);
+    assertThat(actual.contains(stringOf(expected[expected.length - 1]))).isSameAs(True);
+    assertThat(actual.contains(stringOf("absent"))).isSameAs(False);
+    assertThat(actual.equal(expectedList)).isSameAs(True);
+    assertThat(actual).isEqualTo(expectedList);
+    assertThat(actual.hashCode()).isEqualTo(expectedList.hashCode());
+
+    List<?> nativeList = actual.convertToNative(List.class);
+    assertThat(nativeList.toArray()).containsExactly((Object[]) expected);
+    assertThat(actual.convertToNative(Object[].class)).containsExactly((Object[]) expected);
+    ListValue protobufList = actual.convertToNative(ListValue.class);
+    assertThat(protobufList.getValuesList())
+        .extracting(com.google.protobuf.Value::getStringValue)
+        .containsExactly(expected);
+
+    Lister suffix = (Lister) DefaultTypeAdapter.Instance.nativeToValue(new Object[] {"suffix"});
+    List<Object> concatenated = new ArrayList<>(Arrays.asList(expected));
+    concatenated.add("suffix");
+    assertThat(listValues((Lister) actual.add(suffix))).containsExactlyElementsOf(concatenated);
+  }
+
+  private static List<Object> iteratorValues(Lister list) {
+    List<Object> values = new ArrayList<>();
+    IteratorT iterator = list.iterator();
+    while (iterator.hasNext() == True) {
+      values.add(iterator.next().value());
     }
     return values;
   }

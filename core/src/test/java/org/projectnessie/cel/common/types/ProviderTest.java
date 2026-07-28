@@ -18,22 +18,29 @@ package org.projectnessie.cel.common.types;
 import static com.google.protobuf.NullValue.NULL_VALUE;
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.projectnessie.cel.Util.mapOf;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.BytesT.bytesOf;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
+import static org.projectnessie.cel.common.types.DurationT.DurationType;
 import static org.projectnessie.cel.common.types.DurationT.durationOf;
+import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.IntT.IntZero;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.ListT.newGenericArrayList;
 import static org.projectnessie.cel.common.types.MapT.newMaybeWrappedMap;
 import static org.projectnessie.cel.common.types.NullT.NullValue;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
+import static org.projectnessie.cel.common.types.TimestampT.TimestampType;
 import static org.projectnessie.cel.common.types.TimestampT.ZoneIdZ;
 import static org.projectnessie.cel.common.types.TimestampT.timestampOf;
+import static org.projectnessie.cel.common.types.TypeT.newObjectTypeValue;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newEmptyRegistry;
+import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newExactAggregateRegistry;
 import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newRegistry;
 
 import com.google.api.expr.v1alpha1.CheckedExpr;
@@ -41,9 +48,13 @@ import com.google.api.expr.v1alpha1.Constant;
 import com.google.api.expr.v1alpha1.Expr;
 import com.google.api.expr.v1alpha1.ParsedExpr;
 import com.google.api.expr.v1alpha1.SourceInfo;
+import com.google.protobuf.Any;
 import com.google.protobuf.BoolValue;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.BytesValue;
+import com.google.protobuf.DescriptorProtos.DescriptorProto;
+import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
+import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.DoubleValue;
 import com.google.protobuf.FloatValue;
 import com.google.protobuf.Int32Value;
@@ -66,10 +77,13 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
+import org.projectnessie.cel.common.types.ref.Type;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Indexer;
 import org.projectnessie.cel.common.types.traits.Lister;
+import org.projectnessie.cel.common.types.traits.Trait;
 import org.projectnessie.cel.test.proto3.OutOfOrderEnumOuterClass;
 
 public class ProviderTest {
@@ -83,6 +97,163 @@ public class ProviderTest {
     reg = newRegistry();
     reg2 = reg.copy();
     assertThat(reg).isEqualTo(reg2);
+  }
+
+  @Test
+  void equivalentTypeRegistrationIsIdempotentAndPreservesFirstInstance() {
+    ProtoTypeRegistry registry = newEmptyRegistry();
+    Type first = newObjectTypeValue("example.RuntimeType", Trait.ReceiverType);
+    Type equivalent = newObjectTypeValue("example.RuntimeType", Trait.ReceiverType);
+
+    registry.registerType(first);
+    registry.registerType(equivalent);
+    registry.register(equivalent);
+
+    assertThat(registry.findIdent(first.typeName())).isSameAs(first);
+  }
+
+  @Test
+  void conflictingTypeKindAndTraitsAreRejectedWithoutReplacement() {
+    ProtoTypeRegistry registry = newRegistry();
+
+    assertThatThrownBy(() -> registry.registerType(newObjectTypeValue(IntType.typeName())))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage(
+            "type registration conflict for 'int': existing kind 'Int', input kind 'Object'");
+    assertThat(registry.findIdent(IntType.typeName())).isSameAs(IntType);
+
+    Type first = newObjectTypeValue("example.Traits");
+    registry.registerType(first);
+    assertThatThrownBy(
+            () -> registry.registerType(newObjectTypeValue("example.Traits", Trait.ReceiverType)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage(
+            "type registration conflict for 'example.Traits': "
+                + "existing traits [FieldTesterType, IndexerType], "
+                + "input traits [ReceiverType]");
+    assertThat(registry.findIdent(first.typeName())).isSameAs(first);
+  }
+
+  @Test
+  void typeRegistrationBatchIsFailureAtomic() {
+    ProtoTypeRegistry registry = newEmptyRegistry();
+    Type existing = newObjectTypeValue("example.Existing", Trait.ReceiverType);
+    registry.registerType(existing);
+
+    Type pending = newObjectTypeValue("example.Pending");
+    Type conflict = newObjectTypeValue(existing.typeName());
+    assertThatThrownBy(() -> registry.registerType(pending, conflict))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThat(registry.findIdent(pending.typeName())).isNull();
+    assertThat(registry.findIdent(existing.typeName())).isSameAs(existing);
+
+    Type duplicate = newObjectTypeValue("example.Duplicate");
+    Type conflictingDuplicate = newObjectTypeValue(duplicate.typeName(), Trait.ReceiverType);
+    assertThatThrownBy(() -> registry.registerType(duplicate, conflictingDuplicate))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThat(registry.findIdent(duplicate.typeName())).isNull();
+
+    Type equivalentDuplicate = newObjectTypeValue("example.EquivalentDuplicate");
+    registry.registerType(equivalentDuplicate, newObjectTypeValue(equivalentDuplicate.typeName()));
+    assertThat(registry.findIdent(equivalentDuplicate.typeName())).isSameAs(equivalentDuplicate);
+
+    Type beforeNull = newObjectTypeValue("example.BeforeNull");
+    assertThatNullPointerException()
+        .isThrownBy(() -> registry.registerType(beforeNull, null))
+        .withMessage("types element");
+    assertThat(registry.findIdent(beforeNull.typeName())).isNull();
+    assertThatNullPointerException()
+        .isThrownBy(() -> registry.registerType((Type[]) null))
+        .withMessage("types");
+  }
+
+  @Test
+  void copiedAndExactRegistriesRetainConflictContractAndIsolation() {
+    ProtoTypeRegistry registry = newEmptyRegistry();
+    Type first = newObjectTypeValue("example.Copied");
+    registry.registerType(first);
+
+    ProtoTypeRegistry copy = registry.copy();
+    copy.registerType(newObjectTypeValue(first.typeName()));
+    assertThat(copy.findIdent(first.typeName())).isSameAs(first);
+    assertThatThrownBy(
+            () -> copy.registerType(newObjectTypeValue(first.typeName(), Trait.ReceiverType)))
+        .isInstanceOf(IllegalArgumentException.class);
+
+    Type copyOnly = newObjectTypeValue("example.CopyOnly");
+    copy.registerType(copyOnly);
+    assertThat(copy.findIdent(copyOnly.typeName())).isSameAs(copyOnly);
+    assertThat(registry.findIdent(copyOnly.typeName())).isNull();
+
+    TypeRegistry exact = newExactAggregateRegistry();
+    assertThatThrownBy(() -> exact.registerType(newObjectTypeValue(IntType.typeName())))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThat(exact.findIdent(IntType.typeName())).isSameAs(IntType);
+  }
+
+  @Test
+  void protobufWellKnownRuntimeTypesRemainCanonical() {
+    ProtoTypeRegistry registry = newRegistry();
+
+    assertThat(registry.findIdent(DurationType.typeName())).isSameAs(DurationType);
+    assertThat(registry.findIdent(TimestampType.typeName())).isSameAs(TimestampType);
+    assertThat(registry.findIdent(Any.getDescriptor().getFullName()))
+        .isInstanceOf(Type.class)
+        .extracting(value -> ((Type) value).typeEnum())
+        .isEqualTo(TypeEnum.Object);
+
+    registry.registerDescriptor(com.google.protobuf.Duration.getDescriptor().getFile());
+    registry.registerMessage(Timestamp.getDefaultInstance());
+
+    assertThat(registry.findIdent(DurationType.typeName())).isSameAs(DurationType);
+    assertThat(registry.findIdent(TimestampType.typeName())).isSameAs(TimestampType);
+  }
+
+  @Test
+  void protobufMessageNamedLikePrimitiveIsNotCanonicalized() throws Exception {
+    FileDescriptor descriptor =
+        FileDescriptor.buildFrom(
+            FileDescriptorProto.newBuilder()
+                .setName("primitive-name.proto")
+                .addMessageType(DescriptorProto.newBuilder().setName(IntType.typeName()))
+                .build(),
+            new FileDescriptor[0]);
+    ProtoTypeRegistry registry = newRegistry();
+
+    assertThatThrownBy(() -> registry.registerDescriptor(descriptor))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage(
+            "type registration conflict for 'int': existing kind 'Int', input kind 'Object'");
+    assertThat(registry.findIdent(IntType.typeName())).isSameAs(IntType);
+    assertThat(registry.findType(IntType.typeName())).isNull();
+  }
+
+  @Test
+  void descriptorAndMessageConflictsAreRejectedBeforeDatabaseMutation() {
+    String typeName = TestAllTypes.getDescriptor().getFullName();
+    String siblingTypeName = TestAllTypes.getDescriptor().getNestedTypes().get(0).getFullName();
+    Type conflicting = newObjectTypeValue(typeName, Trait.ReceiverType);
+
+    ProtoTypeRegistry descriptorRegistry = newEmptyRegistry();
+    descriptorRegistry.registerType(conflicting);
+    assertThatThrownBy(
+            () -> descriptorRegistry.registerDescriptor(TestAllTypes.getDescriptor().getFile()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("type registration conflict for '" + typeName + "'");
+    assertThat(descriptorRegistry.findIdent(typeName)).isSameAs(conflicting);
+    assertThat(descriptorRegistry.findType(typeName)).isNull();
+    assertThat(descriptorRegistry.findIdent(siblingTypeName)).isNull();
+    assertThat(descriptorRegistry.findType(siblingTypeName)).isNull();
+
+    ProtoTypeRegistry messageRegistry = newEmptyRegistry();
+    messageRegistry.registerType(conflicting);
+    assertThatThrownBy(() -> messageRegistry.registerMessage(TestAllTypes.getDefaultInstance()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("type registration conflict for '" + typeName + "'");
+    assertThat(messageRegistry.findIdent(typeName)).isSameAs(conflicting);
+    assertThat(messageRegistry.findType(typeName)).isNull();
+    assertThat(messageRegistry.findIdent(siblingTypeName)).isNull();
+    assertThat(messageRegistry.findType(siblingTypeName)).isNull();
   }
 
   @Test
