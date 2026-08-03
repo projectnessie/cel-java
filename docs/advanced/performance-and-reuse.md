@@ -101,7 +101,12 @@ CEL is intentionally side-effect constrained, but that does not make arbitrary e
 Large inputs, nested comprehensions, dynamic regular expressions, or expensive custom overloads
 can consume substantial CPU and memory.
 
-Parser recursion and source-size limits constrain parsing only. CEL-Java does not currently expose
-a general evaluation step, time, memory, or comprehension-iteration budget. Applications accepting
-untrusted expressions or unbounded inputs must enforce their own admission rules, input-size
-limits, deadlines, and isolation appropriate to the threat model.
+Parser recursion and source-size limits constrain parsing only. Controlled-operation APIs add
+cooperative elapsed-time, executing-thread CPU/allocation, and post-expansion AST structural
+limits. They deliberately do not provide a deterministic evaluation-step, result-size, retained
+heap, or comprehension-iteration limit.
+
+Applications accepting untrusted expressions or unbounded inputs should combine these controls
+with admission rules, input-size limits, a restricted extension set, and isolation appropriate to
+the threat model. See
+[Resource controls and cancellation](resource-controls-and-cancellation.md).

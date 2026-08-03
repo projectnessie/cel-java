@@ -25,9 +25,10 @@ import org.projectnessie.cel.common.types.ref.Val;
  * functions, decorators, global activations, and caller inputs. Reuse a program rather than parsing
  * and planning the same expression for every input.
  *
- * <p>A program does not impose a CPU, memory, result-size, or latency budget. Hosts accepting
- * untrusted expressions or inputs remain responsible for suitable policy limits, isolation, and
- * cancellation or timeout strategy.
+ * <p>{@link #eval(Object)} is an unrestricted fast path. Use {@link #evalCancelable(Object,
+ * ResourceLimits)} for cooperative elapsed-time, executing-thread CPU/allocation, and cancellation
+ * controls. Neither path imposes a result-size or retained-heap limit, so hosts accepting untrusted
+ * expressions or inputs remain responsible for suitable admission policy and isolation.
  */
 public interface Program {
 
@@ -73,6 +74,39 @@ public interface Program {
    * @throws RuntimeException if the activation is invalid or an unexpected Java failure occurs
    */
   EvalResult eval(Object vars);
+
+  /**
+   * Creates a cancellation-only one-shot evaluation handle.
+   *
+   * <p>The returned handle performs evaluation synchronously on the thread calling {@link
+   * CancelableEval#eval()}. Handle creation and prior executor queueing do not count as execution.
+   *
+   * @param vars evaluation input
+   * @return one-shot controlled evaluation
+   * @throws UnsupportedOperationException if a third-party program implementation does not support
+   *     controlled evaluation
+   */
+  default CancelableEval evalCancelable(Object vars) {
+    return evalCancelable(vars, ResourceLimits.unlimited());
+  }
+
+  /**
+   * Creates a one-shot evaluation handle with cooperative cancellation and resource limits.
+   *
+   * <p>Cancellation and limit exhaustion throw {@link OperationAbortedException}; they are not CEL
+   * error values. Limits are measured from the start of {@link CancelableEval#eval()} and are
+   * checked cooperatively.
+   *
+   * @param vars evaluation input
+   * @param limits immutable limits for this invocation
+   * @return one-shot controlled evaluation
+   * @throws NullPointerException if {@code limits} is {@code null}
+   * @throws UnsupportedOperationException if a third-party program implementation does not support
+   *     controlled evaluation
+   */
+  default CancelableEval evalCancelable(Object vars, ResourceLimits limits) {
+    return ProgramControls.newEvaluation(this, vars, limits);
+  }
 
   /**
    * Value and details associated with an evaluation result.

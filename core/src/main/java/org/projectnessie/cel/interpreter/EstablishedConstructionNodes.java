@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.common.types.MapT;
 import org.projectnessie.cel.common.types.OptionalT;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
@@ -56,9 +57,11 @@ final class EvalMap extends AbstractEval implements Coster {
   /** Eval implements the Interpretable interface method. */
   @Override
   public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
+    var controller = ActivationControls.controller(ctx);
     Map<Val, Val> entries = new HashMap<>(keys.length * 4 / 3 + 1);
     // If any argument is unknown or error early terminate.
     for (int i = 0; i < keys.length; i++) {
+      controller.checkpoint(Phase.EVALUATE);
       Interpretable key = keys[i];
       Val keyVal = key.eval(ctx);
       if (isUnknownOrError(keyVal)) {
@@ -134,9 +137,11 @@ final class EvalObj extends AbstractEval implements Coster {
   /** Eval implements the Interpretable interface method. */
   @Override
   public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
+    var controller = ActivationControls.controller(ctx);
     Map<String, Val> fieldVals = new HashMap<>();
     // If any argument is unknown or error early terminate.
     for (int i = 0; i < fields.length; i++) {
+      controller.checkpoint(Phase.EVALUATE);
       String field = fields[i];
       Val val = vals[i].eval(ctx);
       if (isUnknownOrError(val)) {

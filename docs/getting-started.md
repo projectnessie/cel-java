@@ -140,9 +140,11 @@ a CEL error, or when a typed result cannot represent an unknown value.
 Unexpected failures in application-supplied components and conversion code
 can still surface as Java runtime exceptions.
 
-CEL evaluation is not a resource sandbox. If expressions or input sizes are
-untrusted, the embedding application must supply its own execution and
-resource limits.
+CEL evaluation is not a resource sandbox. CEL-Java offers cooperative
+cancellation and optional measured/structural limits, but applications with
+untrusted expressions or inputs must still define admission, input, function,
+isolation, and fail-closed policies. See
+[Resource controls and cancellation](advanced/resource-controls-and-cancellation.md).
 
 ## Where to go next
 
@@ -156,5 +158,7 @@ resource limits.
   [Jackson integration](guides/jackson.md) cover application object types.
 - [Environments and programs](advanced/environments-and-programs.md) covers
   the lower-level API in more depth.
+- [Resource controls and cancellation](advanced/resource-controls-and-cancellation.md)
+  covers one-shot controlled compilation and evaluation.
 - [Configuration options](reference/configuration-options.md) lists the
   supported compiler and evaluator options.

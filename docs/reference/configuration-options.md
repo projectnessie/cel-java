@@ -121,3 +121,20 @@ custom-function work.
 
 The higher-level `Env` parser assembles its parser configuration from the environment’s macro set
 and standard parser defaults.
+
+## Per-operation resource limits
+
+`ResourceLimits` configures a single `...Cancelable(...)` operation rather than a reusable
+compiler, environment, program, or script. Its builder accepts optional elapsed-time,
+executing-thread CPU-time, executing-thread allocated-byte, post-expansion AST-node, AST-depth, and
+AST-metadata limits.
+
+The handle owns an immutable snapshot of those limits. Creating a handle does not start its
+measured budgets; its synchronous `execute()`, `compile()`, or `eval()` method does. Overloads
+without a `ResourceLimits` argument still provide explicit cancellation but do not impose finite
+budgets.
+
+Measured limits are cooperative and can overshoot between checkpoints. Allocated bytes are
+cumulative allocation by the execution thread, not live or retained heap. See
+[Resource controls and cancellation](../advanced/resource-controls-and-cancellation.md) for the
+failure model, JVM counter requirements, and examples.

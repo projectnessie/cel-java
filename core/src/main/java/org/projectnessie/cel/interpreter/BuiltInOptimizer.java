@@ -22,12 +22,14 @@ import static org.projectnessie.cel.interpreter.Activation.emptyActivation;
 
 import java.util.HashSet;
 import java.util.Set;
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.common.types.IteratorT;
 import org.projectnessie.cel.common.types.Overloads;
 import org.projectnessie.cel.common.types.Util;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Lister;
+import org.projectnessie.cel.internal.OperationCheckpoints;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableCall;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableConst;
 
@@ -73,32 +75,47 @@ final class BuiltInOptimizer implements InterpretableDecorator {
   }
 
   static EvalConst foldConstantUnary(InterpretableCall call) {
+    var controller = OperationCheckpoints.currentController();
+    controller.checkpoint(Phase.OPTIMIZE);
     Interpretable[] args = call.args();
     if (args.length != 1 || !(args[0] instanceof InterpretableConst)) {
       return null;
     }
-    Val val = call.eval(emptyActivation());
+    Val val;
+    try (var ignored = controller.overridePhase(Phase.OPTIMIZE)) {
+      val = call.eval(ActivationControls.controlled(emptyActivation(), controller));
+    }
     throwErrorAsIllegalStateException(val);
     return new EvalConst(call.id(), val);
   }
 
   static EvalConst foldList(EvalList list) {
+    var controller = OperationCheckpoints.currentController();
     for (Interpretable elem : list.elems) {
+      controller.checkpoint(Phase.OPTIMIZE);
       if (!(elem instanceof InterpretableConst)) {
         return null;
       }
     }
-    return new EvalConst(list.id(), list.eval(emptyActivation()));
+    try (var ignored = controller.overridePhase(Phase.OPTIMIZE)) {
+      return new EvalConst(
+          list.id(), list.eval(ActivationControls.controlled(emptyActivation(), controller)));
+    }
   }
 
   static EvalConst foldMap(EvalMap map) {
+    var controller = OperationCheckpoints.currentController();
     for (int index = 0; index < map.keys.length; index++) {
+      controller.checkpoint(Phase.OPTIMIZE);
       if (!(map.keys[index] instanceof InterpretableConst)
           || !(map.vals[index] instanceof InterpretableConst)) {
         return null;
       }
     }
-    return new EvalConst(map.id(), map.eval(emptyActivation()));
+    try (var ignored = controller.overridePhase(Phase.OPTIMIZE)) {
+      return new EvalConst(
+          map.id(), map.eval(ActivationControls.controlled(emptyActivation(), controller)));
+    }
   }
 
   /** Converts {@code in} over a homogeneous primitive constant list to constant-set membership. */

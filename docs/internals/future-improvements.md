@@ -37,16 +37,18 @@ caller-owned mutable inputs.
 
 ## Resource controls and cancellation
 
-`Program` does not impose CPU, memory, result-size, or latency budgets. Hosts evaluating untrusted
-expressions remain responsible for isolation and policy limits.
+CEL-Java now provides cooperative cancellation, elapsed and executing-thread CPU/allocation
+budgets, and structural AST admission. The public contract and its non-preemptive boundaries are
+documented in
+[Resource controls and cancellation](../advanced/resource-controls-and-cancellation.md).
 
-A future resource-control API would need precise, deterministic semantics:
+Potential extensions still require separate design and measurement:
 
-- what is counted and at which interpreter boundaries;
-- how limits interact with macros, comprehensions, regex operations, and custom overloads;
-- whether cancellation is cooperative and how frequently it is checked;
-- how a limit result is represented without confusing it with a CEL error or unknown; and
-- how overhead affects ordinary trusted evaluations.
+- a deterministic abstract execution-step or comprehension-iteration budget;
+- retained-heap or result-size controls;
+- accounting for work delegated by host callbacks to other threads;
+- optional checkpoint-frequency tuning without exposing interpreter internals; and
+- planning diagnostics that explain which operation phase exhausted a deployment policy.
 
 The existing heuristic `Coster` ranges estimate plan cost; they are not execution budgets or
 measured time.

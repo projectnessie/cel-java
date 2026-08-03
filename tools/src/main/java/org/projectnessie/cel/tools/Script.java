@@ -22,10 +22,14 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 import org.projectnessie.cel.Env;
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.Program;
 import org.projectnessie.cel.Program.EvalResult;
+import org.projectnessie.cel.ResourceLimits;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.internal.CheckedControlledOperation;
+import org.projectnessie.cel.internal.OperationController;
 import org.projectnessie.cel.interpreter.ActivationFunction;
 
 /**
@@ -93,6 +97,37 @@ public final class Script {
   }
 
   /**
+   * Creates a cancellation-only execution handle for map-backed variables.
+   *
+   * @param resultType requested Java result class, or {@link Val} to skip native conversion
+   * @param arguments variable names and their Java values
+   * @param <T> requested result type
+   * @return a lazy one-shot execution handle
+   * @throws NullPointerException if an argument is {@code null}
+   */
+  public <T> CancelableScriptExecution<T> executeCancelable(
+      Class<T> resultType, Map<String, Object> arguments) {
+    return executeCancelable(resultType, arguments, ResourceLimits.unlimited());
+  }
+
+  /**
+   * Creates a controlled execution handle for map-backed variables.
+   *
+   * <p>The map and reachable values must remain stable until execution completes.
+   *
+   * @param resultType requested Java result class, or {@link Val} to skip native conversion
+   * @param arguments variable names and their Java values
+   * @param limits immutable limits for evaluation and result conversion
+   * @param <T> requested result type
+   * @return a lazy one-shot execution handle
+   * @throws NullPointerException if an argument is {@code null}
+   */
+  public <T> CancelableScriptExecution<T> executeCancelable(
+      Class<T> resultType, Map<String, Object> arguments, ResourceLimits limits) {
+    return newControlledExecution(resultType, arguments, limits);
+  }
+
+  /**
    * Evaluates this script using a caller-defined variable resolver.
    *
    * <p>The resolver may be called lazily and only for variables reached by the expression. It must
@@ -109,6 +144,35 @@ public final class Script {
   public <T> T executeWithActivation(Class<T> resultType, ActivationFunction arguments)
       throws ScriptException {
     return evaluate(resultType, arguments);
+  }
+
+  /**
+   * Creates a cancellation-only execution handle for a variable resolver.
+   *
+   * @param resultType requested Java result class, or {@link Val} to skip native conversion
+   * @param arguments variable resolver
+   * @param <T> requested result type
+   * @return a lazy one-shot execution handle
+   * @throws NullPointerException if an argument is {@code null}
+   */
+  public <T> CancelableScriptExecution<T> executeWithActivationCancelable(
+      Class<T> resultType, ActivationFunction arguments) {
+    return executeWithActivationCancelable(resultType, arguments, ResourceLimits.unlimited());
+  }
+
+  /**
+   * Creates a controlled execution handle for a variable resolver.
+   *
+   * @param resultType requested Java result class, or {@link Val} to skip native conversion
+   * @param arguments variable resolver
+   * @param limits immutable limits for evaluation and result conversion
+   * @param <T> requested result type
+   * @return a lazy one-shot execution handle
+   * @throws NullPointerException if an argument is {@code null}
+   */
+  public <T> CancelableScriptExecution<T> executeWithActivationCancelable(
+      Class<T> resultType, ActivationFunction arguments, ResourceLimits limits) {
+    return newControlledExecution(resultType, arguments, limits);
   }
 
   /**
@@ -134,8 +198,42 @@ public final class Script {
     Objects.requireNonNull(resultType, "resultType missing");
     Objects.requireNonNull(arguments, "arguments missing");
 
-    EvalResult evalResult = prg.eval(arguments);
+    return convert(resultType, prg.eval(arguments));
+  }
 
+  private <T> CancelableScriptExecution<T> newControlledExecution(
+      Class<T> resultType, Object arguments, ResourceLimits limits) {
+    Objects.requireNonNull(resultType, "resultType missing");
+    Objects.requireNonNull(arguments, "arguments missing");
+    Objects.requireNonNull(limits, "limits");
+    var controller = new OperationController(limits);
+    var operation =
+        new CheckedControlledOperation<T, ScriptException>(
+            controller,
+            Phase.EVALUATE,
+            () -> {
+              var evalResult = prg.evalCancelable(arguments, limits).eval();
+              controller.checkpointNow(Phase.RESULT_CONVERSION);
+              var result = convert(resultType, evalResult);
+              controller.checkpointNow(Phase.RESULT_CONVERSION);
+              return result;
+            });
+    return new CancelableScriptExecution<>() {
+      @Override
+      public T execute() throws ScriptException {
+        return operation.execute();
+      }
+
+      @Override
+      public void cancel() {
+        operation.cancel();
+      }
+    };
+  }
+
+  @SuppressWarnings("unchecked")
+  private <T> T convert(Class<T> resultType, EvalResult evalResult)
+      throws ScriptExecutionException {
     Val result = evalResult.getVal();
 
     if (isError(result)) {
