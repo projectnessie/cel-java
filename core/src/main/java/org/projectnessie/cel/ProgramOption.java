@@ -71,8 +71,9 @@ public interface ProgramOption {
    * @return program configuration token
    */
   static ProgramOption functions(Overload... funcs) {
+    var controlled = ControlledOverloads.wrap(funcs);
     return p -> {
-      p.dispatcher.add(funcs);
+      p.dispatcher.add(controlled);
       return p;
     };
   }

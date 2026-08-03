@@ -21,6 +21,7 @@ import static org.projectnessie.cel.interpreter.ValueSignal.signal;
 
 import java.util.Iterator;
 import java.util.Map;
+import org.projectnessie.cel.OperationAbortedException.Phase;
 
 /** Immutable plan for one directly traversed certified exact map source. */
 final class NativeMapTraversalPlan {
@@ -50,6 +51,9 @@ final class NativeMapTraversalPlan {
     } catch (ValueSignal failure) {
       raw = failure.value;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       raw = newErr(failure, failure.toString());
     }
     return new NativeResolvedMapTraversal(
@@ -87,8 +91,10 @@ final class NativeResolvedMapTraversal {
       NativeLoopBinding valueBinding,
       NativeMapLoopConsumer consumer) {
     try {
+      var controller = ActivationControls.controller(keyBinding);
       Iterator<? extends Map.Entry<?, ?>> iterator = map.entrySet().iterator();
       while (iterator.hasNext()) {
+        controller.checkpoint(Phase.EVALUATE);
         Map.Entry<?, ?> entry = iterator.next();
         Object rawKey = entry.getKey();
         NativeLoopBinding predicateBinding = keyBinding;
@@ -108,6 +114,9 @@ final class NativeResolvedMapTraversal {
     } catch (ValueSignal failure) {
       throw failure;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       throw signal(newErr(failure, failure.toString()));
     }
   }
@@ -180,6 +189,9 @@ final class NativeMapQuantifierFold extends EvalFold
       } catch (ValueSignal failure) {
         binding.record(failure.value);
       } catch (RuntimeException failure) {
+        if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         binding.record(failure);
       }
       return false;

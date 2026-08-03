@@ -29,6 +29,12 @@ Use these APIs when the tools layer does not expose a required mode:
   configuration;
 - [`Ast`](../../core/src/main/java/org/projectnessie/cel/Ast.java) — parsed or checked expression;
 - [`Program`](../../core/src/main/java/org/projectnessie/cel/Program.java) — reusable executable;
+- [`ResourceLimits`](../../core/src/main/java/org/projectnessie/cel/ResourceLimits.java),
+  [`CancelableOperation`](../../core/src/main/java/org/projectnessie/cel/CancelableOperation.java),
+  [`CancelableEval`](../../core/src/main/java/org/projectnessie/cel/CancelableEval.java),
+  and
+  [`OperationAbortedException`](../../core/src/main/java/org/projectnessie/cel/OperationAbortedException.java)
+  — per-operation cooperative controls;
 - [`ProgramOption`](../../core/src/main/java/org/projectnessie/cel/ProgramOption.java) and
   [`EvalOption`](../../core/src/main/java/org/projectnessie/cel/EvalOption.java) — planning and
   evaluation modes;
@@ -36,6 +42,13 @@ Use these APIs when the tools layer does not expose a required mode:
   activations, attribute patterns, and utility factories.
 
 The primary package is `org.projectnessie.cel` from `cel-core`.
+
+The tools layer exposes checked-exception-preserving
+[`CancelableScriptCompilation`](../../tools/src/main/java/org/projectnessie/cel/tools/CancelableScriptCompilation.java)
+and
+[`CancelableScriptExecution`](../../tools/src/main/java/org/projectnessie/cel/tools/CancelableScriptExecution.java)
+handles. See
+[Resource controls and cancellation](../advanced/resource-controls-and-cancellation.md).
 
 ## Types and values
 

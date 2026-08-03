@@ -160,6 +160,9 @@ final class NativeListConcatKernel {
       }
       throw signal(newErr("unsupported index type '%s' in list", failure.value.type()));
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       throw signal(newErr(failure, failure.toString()));
     }
   }
@@ -183,6 +186,9 @@ final class NativeListConcatKernel {
     } catch (ValueSignal failure) {
       leftFailure = failure;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       leftFailure = signal(newErr(failure, failure.toString()));
     }
     try {
@@ -190,6 +196,9 @@ final class NativeListConcatKernel {
     } catch (ValueSignal failure) {
       rightFailure = failure;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       rightFailure = signal(newErr(failure, failure.toString()));
     }
 
@@ -204,6 +213,9 @@ final class NativeListConcatKernel {
       } catch (ValueSignal failure) {
         leftFailure = failure;
       } catch (Exception failure) {
+        if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         leftFailure = signal(newErr(failure, failure.toString()));
       }
     }
@@ -216,6 +228,9 @@ final class NativeListConcatKernel {
       } catch (ValueSignal failure) {
         rightFailure = failure;
       } catch (Exception failure) {
+        if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         rightFailure = signal(newErr(failure, failure.toString()));
       }
     }
@@ -251,6 +266,9 @@ final class NativeListConcatKernel {
           earliestFailureIndex = i;
         }
       } catch (Exception failure) {
+        if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         rawValues[i] = FAILED;
         if (i < earliestFailureIndex) {
           earliestFailure = signal(newErr(failure, failure.toString()));
@@ -285,6 +303,9 @@ final class NativeListConcatKernel {
           earliestFailureIndex = i;
         }
       } catch (Exception failure) {
+        if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         if (i < earliestFailureIndex) {
           earliestFailure = signal(newErr(failure, failure.toString()));
           earliestFailureIndex = i;
@@ -340,6 +361,9 @@ final class NativeListConcatKernel {
     } catch (ValueSignal failure) {
       throw failure;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       throw signal(newErr(failure, failure.toString()));
     }
   }
@@ -504,6 +528,9 @@ final class NativeValueListConcatIndex extends AbstractEval implements Coster {
     } catch (ValueSignal failure) {
       return failure.value;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       return newErr(failure, failure.toString());
     }
   }

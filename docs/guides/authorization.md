@@ -75,8 +75,10 @@ the consequence of the decision:
 - Prefer RE2 when the policy's regex dialect permits it; otherwise validate or constrain patterns.
 - Keep custom functions bounded and side-effect free. A function that blocks, performs I/O, or
   allocates without limits expands the authorization trust boundary.
-- Apply process, request, or workload isolation and deadlines outside CEL. A Java executor timeout
-  alone does not prove that the underlying evaluation has stopped.
+- Use CEL-Java controlled operations for cooperative elapsed/CPU/allocation and AST limits. Combine
+  them with process, request, or workload isolation appropriate to the consequence of the
+  decision. Neither a cooperative limit nor a Java executor timeout can preempt arbitrary host
+  callback code.
 - Require a Boolean result and deny on compilation failure, CEL error, incompatible unknown result,
   conversion failure, timeout, or unexpected Java exception.
 - Keep activation maps and every reachable value stable for the complete evaluation.
@@ -91,6 +93,8 @@ evaluation may require a stronger boundary than an in-process deadline.
 - A CEL error result becomes `ScriptExecutionException` at the `Script` API.
 - An unknown can be returned as a CEL `Val`, but requesting `Boolean` reports an incompatible
   unknown as `ScriptExecutionException`.
+- Cancellation, interruption, and resource-limit exhaustion are unchecked
+  `OperationAbortedException` control outcomes, not CEL errors.
 - An absent binding is not Java null. Use an activation API that preserves that distinction when it
   matters.
 - Java exceptions can come from adapters, conversions, custom functions, or host code.

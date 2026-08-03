@@ -52,11 +52,15 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import org.projectnessie.cel.OperationAbortedException;
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.common.ErrorWithLocation;
 import org.projectnessie.cel.common.Errors;
 import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.Source;
 import org.projectnessie.cel.common.operators.Operator;
+import org.projectnessie.cel.internal.OperationCheckpoints;
+import org.projectnessie.cel.internal.OperationController;
 import org.projectnessie.cel.parser.Helper.Balancer;
 import org.projectnessie.cel.parser.ast.ConstantLiteral;
 import org.projectnessie.cel.parser.ast.ExprList;
@@ -100,6 +104,7 @@ public final class Parser {
           "while");
 
   private final Options options;
+  private final OperationController controller;
 
   /** Parses a source with all standard macros enabled. */
   public static ParseResult parseAllMacros(Source source) {
@@ -118,9 +123,11 @@ public final class Parser {
 
   Parser(Options options) {
     this.options = options;
+    this.controller = OperationCheckpoints.currentController();
   }
 
   ParseResult parse(Source source) {
+    controller.checkpointNow(Phase.PARSE);
     Helper helper = new Helper(source);
     Errors errors = new Errors(source);
     Expr expr = null;
@@ -136,6 +143,7 @@ public final class Parser {
       CelGrammarParser parser = new CelGrammarParser(source.description(), source.content());
       try {
         parser.Start();
+        controller.checkpointNow(Phase.AST_BUILD);
         expr = new AstBuilder(helper, errors).exprVisit(firstExpressionNode(parser.rootNode()));
       } catch (ParseException e) {
         errors.syntaxError(location(e.getLocation()), e.getMessage());
@@ -225,6 +233,7 @@ public final class Parser {
     }
 
     Expr exprVisit(Node node) {
+      controller.checkpoint(Phase.AST_BUILD);
       if (node == null) {
         return reportError(Location.NoLocation, "unknown parse element encountered: <<nil>>");
       }
@@ -732,7 +741,12 @@ public final class Parser {
 
       ExprHelperImpl eh = new ExprHelperImpl(helper, exprID);
       try {
-        return macro.expander().expand(eh, target, args);
+        controller.checkpointNow(Phase.AST_BUILD);
+        var expanded = macro.expander().expand(eh, target, args);
+        controller.checkpointNow(Phase.AST_BUILD);
+        return expanded;
+      } catch (OperationAbortedException e) {
+        throw e;
       } catch (ErrorWithLocation err) {
         Location loc = err.getLocation();
         if (loc == null) {

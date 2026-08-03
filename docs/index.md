@@ -35,6 +35,8 @@ CEL and need a particular integration or runtime detail, use the map below.
   activations, and runtime overloads
 - [Performance and reuse](advanced/performance-and-reuse.md) — compile-once/evaluate-many design,
   planning modes, and measurement
+- [Resource controls and cancellation](advanced/resource-controls-and-cancellation.md) —
+  cooperative cancellation, elapsed/CPU/allocation budgets, and AST admission
 
 ## Internals
 
