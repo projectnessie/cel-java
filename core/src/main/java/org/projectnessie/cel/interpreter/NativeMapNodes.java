@@ -62,6 +62,9 @@ final class NativeMapSources {
     } catch (ValueSignal failure) {
       throw failure;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       throw signal(newErr(failure, failure.toString()));
     }
   }
@@ -81,6 +84,9 @@ final class NativeMapSources {
     } catch (ValueSignal failure) {
       throw failure;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       throw signal(newErr(failure, failure.toString()));
     }
   }
@@ -375,6 +381,9 @@ abstract class NativeMapIndex extends NativeScalarAttr {
     } catch (ValueSignal failure) {
       return failure.value;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       throw signal(newErr(failure, failure.toString()));
     }
   }
@@ -395,6 +404,9 @@ abstract class NativeMapIndex extends NativeScalarAttr {
                 "exact map key of CEL type '%s' is incompatible with checked CEL %s",
                 failure.value.type().typeName(), dynamicKey.celName()));
       } catch (Exception failure) {
+        if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         throw signal(newErr(failure, failure.toString()));
       }
       return new Selection(raw, value, null);
@@ -748,6 +760,9 @@ final class NativeMapObjectIndex extends EvalAttr {
     try {
       return adapter.nativeToValue(resolve(activation));
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       return newErr(failure, failure.toString());
     }
   }

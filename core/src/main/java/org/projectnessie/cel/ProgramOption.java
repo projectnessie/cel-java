@@ -40,8 +40,9 @@ public interface ProgramOption {
 
   /** Functions adds function overloads that extend or override the set of CEL built-ins. */
   static ProgramOption functions(Overload... funcs) {
+    var controlled = ControlledOverloads.wrap(funcs);
     return p -> {
-      p.dispatcher.add(funcs);
+      p.dispatcher.add(controlled);
       return p;
     };
   }

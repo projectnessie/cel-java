@@ -29,6 +29,7 @@ import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
 import java.util.HashMap;
 import java.util.Map;
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
@@ -39,6 +40,7 @@ import org.projectnessie.cel.common.types.traits.Indexer;
 import org.projectnessie.cel.common.types.traits.Mapper;
 import org.projectnessie.cel.common.types.traits.Sizer;
 import org.projectnessie.cel.common.types.traits.Trait;
+import org.projectnessie.cel.internal.OperationCheckpoints;
 
 public abstract class MapT extends BaseVal implements Mapper, Container, Indexer, IterableT, Sizer {
   /** MapType singleton. */
@@ -132,8 +134,10 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
     }
 
     Iterable<?> entries = mapEntries();
+    var controller = OperationCheckpoints.currentController();
     if (entries != null) {
       for (Object entry : entries) {
+        controller.checkpoint(Phase.EVALUATE);
         Val key = mapEntryKey(entry);
         Val value = mapEntryValue(entry);
         Val oVal = o.find(key);
@@ -150,6 +154,7 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
 
     IteratorT myIter = iterator();
     while (myIter.hasNext() == True) {
+      controller.checkpoint(Phase.EVALUATE);
       Val key = myIter.next();
 
       Val val = get(key);
@@ -209,8 +214,10 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
   public final int hashCode() {
     int hash = 0;
     Iterable<?> entries = mapEntries();
+    var controller = OperationCheckpoints.currentController();
     if (entries != null) {
       for (Object entry : entries) {
+        controller.checkpoint();
         Val key = mapEntryKey(entry);
         Val value = mapEntryValue(entry);
         hash += key.hashCode() ^ (value != null ? value.hashCode() : 0);
@@ -220,6 +227,7 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
 
     IteratorT keys = iterator();
     while (keys.hasNext() == True) {
+      controller.checkpoint();
       Val key = keys.next();
       Val value = find(key);
       hash += key.hashCode() ^ (value != null ? value.hashCode() : 0);
@@ -270,20 +278,27 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
 
     private Struct toPbStruct() {
       Struct.Builder struct = Struct.newBuilder();
-      map.forEach(
-          (k, v) -> {
-            if (k.type().typeEnum() != TypeEnum.String) {
-              throw new IllegalArgumentException("bad key type");
-            }
-            struct.putFields(k.value().toString(), adapter.valueToNative(v, Value.class));
-          });
+      var controller = OperationCheckpoints.currentController();
+      for (Map.Entry<Val, Val> entry : map.entrySet()) {
+        controller.checkpoint();
+        Val key = entry.getKey();
+        if (key.type().typeEnum() != TypeEnum.String) {
+          throw new IllegalArgumentException("bad key type");
+        }
+        struct.putFields(
+            key.value().toString(), adapter.valueToNative(entry.getValue(), Value.class));
+      }
       return struct.build();
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     private Map toJavaMap() {
       Map r = new HashMap();
-      map.forEach((k, v) -> r.put(k.value(), v.value()));
+      var controller = OperationCheckpoints.currentController();
+      for (Map.Entry<Val, Val> entry : map.entrySet()) {
+        controller.checkpoint();
+        r.put(entry.getKey().value(), entry.getValue().value());
+      }
       return r;
     }
 
@@ -403,7 +418,9 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
         if (map.size() != nativeOther.map.size()) {
           return False;
         }
+        var controller = OperationCheckpoints.currentController();
         for (Map.Entry<Val, Object> entry : map.entrySet()) {
+          controller.checkpoint();
           Object otherRawValue = nativeOther.map.get(entry.getKey());
           if (otherRawValue == null && !nativeOther.map.containsKey(entry.getKey())) {
             return False;
@@ -424,8 +441,11 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
     @Override
     public Object value() {
       Map<Object, Object> nativeMap = new HashMap<>(map.size() * 4 / 3 + 1);
-      map.forEach(
-          (key, rawValue) -> nativeMap.put(key.value(), adapter.nativeToValue(rawValue).value()));
+      var controller = OperationCheckpoints.currentController();
+      for (Map.Entry<Val, Object> entry : map.entrySet()) {
+        controller.checkpoint();
+        nativeMap.put(entry.getKey().value(), adapter.nativeToValue(entry.getValue()).value());
+      }
       return nativeMap;
     }
 
@@ -476,7 +496,11 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
 
     private Map<Val, Val> adaptedMap() {
       Map<Val, Val> adapted = new HashMap<>(map.size() * 4 / 3 + 1);
-      map.forEach((key, rawValue) -> adapted.put(key, adapter.nativeToValue(rawValue)));
+      var controller = OperationCheckpoints.currentController();
+      for (Map.Entry<Val, Object> entry : map.entrySet()) {
+        controller.checkpoint();
+        adapted.put(entry.getKey(), adapter.nativeToValue(entry.getValue()));
+      }
       return adapted;
     }
 

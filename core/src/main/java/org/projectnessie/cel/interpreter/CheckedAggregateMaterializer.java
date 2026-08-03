@@ -46,6 +46,9 @@ final class CheckedAggregateMaterializer {
     try {
       return adapter.nativeAggregateToValue(value, checkedType);
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       return newErr(failure, failure.toString());
     }
   }
@@ -92,6 +95,9 @@ final class CheckedValueMaterializer {
           };
       return result != null ? result : incompatible(value);
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       return newErr(failure, failure.toString());
     }
   }
