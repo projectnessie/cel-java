@@ -24,6 +24,7 @@ import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.interpreter.ValueSignal.signal;
 
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.IterableT;
 import org.projectnessie.cel.common.types.IteratorT;
@@ -171,7 +172,9 @@ final class NativeScalarLoopKernel {
       consumer.prepareCapacity(sizer.nativeSize());
     }
     IteratorT iterator = ((IterableT) foldRange).iterator();
+    var controller = ActivationControls.controller(binding);
     while (iterator.hasNext() == True) {
+      controller.checkpoint(Phase.EVALUATE);
       binding.setObject(iterator.next());
       if (consumer.test(binding)) {
         return true;
@@ -307,6 +310,9 @@ final class NativeExistsOneFold extends NativeScalarLoopFold {
     } catch (ValueSignal valueSignal) {
       binding.record(valueSignal.value);
     } catch (RuntimeException failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       binding.record(failure);
     }
     return false;
@@ -407,6 +413,9 @@ final class NativeIntMappedExistsOneFold extends NativeIntMappedLoopFold {
       } catch (ValueSignal valueSignal) {
         binding.record(valueSignal.value);
       } catch (RuntimeException failure) {
+        if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         binding.record(failure);
       }
     }

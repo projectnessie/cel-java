@@ -55,6 +55,9 @@ import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
+import org.projectnessie.cel.internal.ControlledOperation;
+import org.projectnessie.cel.internal.OperationController;
+import org.projectnessie.cel.internal.OperationScope;
 import org.projectnessie.cel.interpreter.Activation.PartialActivation;
 import org.projectnessie.cel.interpreter.AttributePattern;
 import org.projectnessie.cel.parser.Macro;
@@ -295,6 +298,39 @@ public final class Env {
     return new AstIssuesTuple(ast, Issues.noIssues(ast.getSource()));
   }
 
+  /** Creates a cancellation-only one-shot type-check operation. */
+  public CancelableOperation<AstIssuesTuple> checkCancelable(Ast ast) {
+    return checkCancelable(ast, ResourceLimits.unlimited());
+  }
+
+  /**
+   * Creates a one-shot type-check operation with resource limits.
+   *
+   * <p>The environment remains frozen if execution reaches checker initialization, even if the
+   * operation is subsequently cancelled or exceeds a limit.
+   *
+   * @param ast caller-supplied parsed or checked AST
+   * @param limits immutable limits for admission and checking
+   * @return a lazy one-shot operation
+   * @throws NullPointerException if an argument is {@code null}
+   */
+  public CancelableOperation<AstIssuesTuple> checkCancelable(Ast ast, ResourceLimits limits) {
+    Objects.requireNonNull(ast, "ast");
+    var controller = operationController(Objects.requireNonNull(limits, "limits"));
+    return new ControlledOperation<>(
+        controller,
+        OperationAbortedException.Phase.SOURCE_ADMISSION,
+        () -> {
+          AstAdmission.check(ast, controller, OperationAbortedException.Phase.SOURCE_ADMISSION);
+          controller.checkpointNow(OperationAbortedException.Phase.CHECK);
+          var checked = check(ast);
+          if (!checked.hasIssues()) {
+            AstAdmission.check(checked.ast, controller, OperationAbortedException.Phase.CHECK);
+          }
+          return checked;
+        });
+  }
+
   /**
    * Parses and type-checks CEL source text.
    *
@@ -308,6 +344,24 @@ public final class Env {
    */
   public AstIssuesTuple compile(String txt) {
     return compileSource(newTextSource(txt));
+  }
+
+  /** Creates a cancellation-only parse-and-check operation. */
+  public CancelableOperation<AstIssuesTuple> compileCancelable(String txt) {
+    return compileCancelable(txt, ResourceLimits.unlimited());
+  }
+
+  /**
+   * Creates a one-shot parse-and-check operation with resource limits.
+   *
+   * @param txt CEL expression source
+   * @param limits immutable limits spanning parsing and checking
+   * @return a lazy one-shot operation
+   * @throws NullPointerException if an argument is {@code null}
+   */
+  public CancelableOperation<AstIssuesTuple> compileCancelable(String txt, ResourceLimits limits) {
+    Objects.requireNonNull(txt, "txt");
+    return compileSourceCancelable(newTextSource(txt), limits);
   }
 
   /**
@@ -329,6 +383,42 @@ public final class Env {
     AstIssuesTuple aiCheck = check(aiParse.ast);
     Issues iss = aiParse.issues.append(aiCheck.issues);
     return new AstIssuesTuple(aiCheck.ast, iss);
+  }
+
+  /** Creates a cancellation-only parse-and-check operation for a source. */
+  public CancelableOperation<AstIssuesTuple> compileSourceCancelable(Source src) {
+    return compileSourceCancelable(src, ResourceLimits.unlimited());
+  }
+
+  /**
+   * Creates a one-shot parse-and-check operation for a source with resource limits.
+   *
+   * @param src source text and description
+   * @param limits immutable limits spanning parsing and checking
+   * @return a lazy one-shot operation
+   * @throws NullPointerException if an argument is {@code null}
+   */
+  public CancelableOperation<AstIssuesTuple> compileSourceCancelable(
+      Source src, ResourceLimits limits) {
+    Objects.requireNonNull(src, "src");
+    var controller = operationController(Objects.requireNonNull(limits, "limits"));
+    return new ControlledOperation<>(
+        controller,
+        OperationAbortedException.Phase.PARSE,
+        () -> {
+          var parsed = parseSource(src);
+          if (parsed.hasIssues()) {
+            return parsed;
+          }
+          controller.checkpointNow(OperationAbortedException.Phase.AST_BUILD);
+          AstAdmission.check(parsed.ast, controller, OperationAbortedException.Phase.AST_BUILD);
+          controller.checkpointNow(OperationAbortedException.Phase.CHECK);
+          var checked = check(parsed.ast);
+          if (!checked.hasIssues()) {
+            AstAdmission.check(checked.ast, controller, OperationAbortedException.Phase.CHECK);
+          }
+          return new AstIssuesTuple(checked.ast, parsed.issues.append(checked.issues));
+        });
   }
 
   /**
@@ -430,6 +520,24 @@ public final class Env {
     return parseSource(src);
   }
 
+  /** Creates a cancellation-only parse operation. */
+  public CancelableOperation<AstIssuesTuple> parseCancelable(String txt) {
+    return parseCancelable(txt, ResourceLimits.unlimited());
+  }
+
+  /**
+   * Creates a one-shot parse operation with resource limits.
+   *
+   * @param txt CEL expression source
+   * @param limits immutable limits for parsing and AST construction
+   * @return a lazy one-shot operation
+   * @throws NullPointerException if an argument is {@code null}
+   */
+  public CancelableOperation<AstIssuesTuple> parseCancelable(String txt, ResourceLimits limits) {
+    Objects.requireNonNull(txt, "txt");
+    return parseSourceCancelable(newTextSource(txt), limits);
+  }
+
   /**
    * Parses a CEL source without type checking it.
    *
@@ -448,6 +556,36 @@ public final class Env {
     // subsequent calls to Check.
     return new AstIssuesTuple(
         new Ast(res.getExpr(), res.getSourceInfo(), src), Issues.noIssues(src));
+  }
+
+  /** Creates a cancellation-only parse operation for a source. */
+  public CancelableOperation<AstIssuesTuple> parseSourceCancelable(Source src) {
+    return parseSourceCancelable(src, ResourceLimits.unlimited());
+  }
+
+  /**
+   * Creates a one-shot parse operation for a source with resource limits.
+   *
+   * @param src source text and description
+   * @param limits immutable limits for parsing and AST construction
+   * @return a lazy one-shot operation
+   * @throws NullPointerException if an argument is {@code null}
+   */
+  public CancelableOperation<AstIssuesTuple> parseSourceCancelable(
+      Source src, ResourceLimits limits) {
+    Objects.requireNonNull(src, "src");
+    var controller = operationController(Objects.requireNonNull(limits, "limits"));
+    return new ControlledOperation<>(
+        controller,
+        OperationAbortedException.Phase.PARSE,
+        () -> {
+          var parsed = parseSource(src);
+          if (!parsed.hasIssues()) {
+            controller.checkpointNow(OperationAbortedException.Phase.AST_BUILD);
+            AstAdmission.check(parsed.ast, controller, OperationAbortedException.Phase.AST_BUILD);
+          }
+          return parsed;
+        });
   }
 
   /**
@@ -472,6 +610,36 @@ public final class Env {
     return newProgram(this, ast, optSet.toArray(new ProgramOption[0]));
   }
 
+  /** Creates a cancellation-only program-planning operation. */
+  public CancelableOperation<Program> programCancelable(Ast ast, ProgramOption... opts) {
+    return programCancelable(ast, ResourceLimits.unlimited(), opts);
+  }
+
+  /**
+   * Creates a one-shot program-planning operation with resource limits.
+   *
+   * @param ast parsed or checked AST
+   * @param limits immutable limits for admission, optimization, and planning
+   * @param opts additional program options, snapshotted when this method returns
+   * @return a lazy one-shot operation producing a reusable program
+   * @throws NullPointerException if an argument or option array is {@code null}
+   */
+  public CancelableOperation<Program> programCancelable(
+      Ast ast, ResourceLimits limits, ProgramOption... opts) {
+    Objects.requireNonNull(ast, "ast");
+    Objects.requireNonNull(opts, "opts");
+    var optionSnapshot = opts.clone();
+    var controller = operationController(Objects.requireNonNull(limits, "limits"));
+    return new ControlledOperation<>(
+        controller,
+        OperationAbortedException.Phase.SOURCE_ADMISSION,
+        () -> {
+          AstAdmission.check(ast, controller, OperationAbortedException.Phase.SOURCE_ADMISSION);
+          controller.checkpointNow(OperationAbortedException.Phase.PLAN);
+          return program(ast, optionSnapshot);
+        });
+  }
+
   /**
    * Enables an environment feature.
    *
@@ -485,6 +653,13 @@ public final class Env {
    */
   public void setFeature(EnvFeature flag) {
     applyConfiguration(e -> e.features.add(flag));
+  }
+
+  private static OperationController operationController(ResourceLimits limits) {
+    var active = OperationScope.current();
+    return active.isControlled() && active.limits() == limits
+        ? active
+        : new OperationController(limits);
   }
 
   void setFeatures(EnvFeature... flags) {

@@ -28,6 +28,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.IterableT;
 import org.projectnessie.cel.common.types.IteratorT;
@@ -69,6 +70,7 @@ final class EvalMapFold extends AbstractEval implements Coster {
   @SuppressWarnings("DuplicatedCode")
   @Override
   public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
+    var controller = ActivationControls.controller(ctx);
     Val foldRange = iterRange.eval(ctx);
     if (!foldRange.type().hasTrait(Trait.IterableType)) {
       return valOrErr(
@@ -90,6 +92,7 @@ final class EvalMapFold extends AbstractEval implements Coster {
     var isLister = foldRange instanceof Lister;
     var mapper = (foldRange instanceof Mapper m) ? m : null;
     while (it.hasNext() == True) {
+      controller.checkpoint(Phase.EVALUATE);
       Val next = it.next();
       Val key;
       Activation loopCtx = iterCtx;
@@ -226,6 +229,7 @@ final class EvalExhaustiveFold extends AbstractEval implements Coster {
   @SuppressWarnings("DuplicatedCode")
   @Override
   public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
+    var controller = ActivationControls.controller(ctx);
     Val foldRange = iterRange.eval(ctx);
     if (!foldRange.type().hasTrait(Trait.IterableType)) {
       return valOrErr(
@@ -250,6 +254,7 @@ final class EvalExhaustiveFold extends AbstractEval implements Coster {
     var mapper = (foldRange instanceof Mapper m) ? m : null;
     long index = 0L;
     while (it.hasNext() == True) {
+      controller.checkpoint(Phase.EVALUATE);
       // Modify the iter var in the fold activation.
       Val next = it.next();
       Activation loopCtx = iterCtx;
@@ -354,6 +359,7 @@ final class EvalExhaustiveListFold extends AbstractEval implements Coster {
   @SuppressWarnings("DuplicatedCode")
   @Override
   public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
+    var controller = ActivationControls.controller(ctx);
     Val foldRange = fold.iterRange.eval(ctx);
     if (!foldRange.type().hasTrait(Trait.IterableType)) {
       return valOrErr(
@@ -374,6 +380,7 @@ final class EvalExhaustiveListFold extends AbstractEval implements Coster {
     IteratorT it = ((IterableT) foldRange).iterator();
     long index = 0L;
     while (it.hasNext() == True) {
+      controller.checkpoint(Phase.EVALUATE);
       Val next = it.next();
       Activation loopCtx = iterCtx;
       if (iterCtx2 != null) {
@@ -439,6 +446,7 @@ final class EvalExhaustiveMapFold extends AbstractEval implements Coster {
   @SuppressWarnings("DuplicatedCode")
   @Override
   public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
+    var controller = ActivationControls.controller(ctx);
     Val foldRange = fold.iterRange.eval(ctx);
     if (!foldRange.type().hasTrait(Trait.IterableType)) {
       return valOrErr(
@@ -459,6 +467,7 @@ final class EvalExhaustiveMapFold extends AbstractEval implements Coster {
     IteratorT it = ((IterableT) foldRange).iterator();
     long index = 0L;
     while (it.hasNext() == True) {
+      controller.checkpoint(Phase.EVALUATE);
       Val next = it.next();
       Val key;
       Activation loopCtx = iterCtx;

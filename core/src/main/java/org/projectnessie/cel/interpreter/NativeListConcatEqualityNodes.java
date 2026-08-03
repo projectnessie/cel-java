@@ -23,6 +23,7 @@ import static org.projectnessie.cel.interpreter.ValueSignal.signal;
 
 import java.util.Collection;
 import java.util.Iterator;
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.Overflow.OverflowException;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
@@ -121,6 +122,7 @@ final class NativeListConcatEqualityPlan {
   }
 
   boolean eval(Activation activation) {
+    var controller = ActivationControls.controller(activation);
     Resolved resolved = resolve(activation);
     if (resolved.leftSize != resolved.rightSize) {
       return false;
@@ -133,6 +135,7 @@ final class NativeListConcatEqualityPlan {
             sources, resolved.rawValues, resolved.sizes, leftSourceCount, sources.length);
     try {
       for (long remaining = resolved.leftSize; remaining > 0; remaining--) {
+        controller.checkpoint(Phase.EVALUATE);
         boolean equal =
             switch (kind) {
               case BOOLEAN -> left.nextBoolean(adapter) == right.nextBoolean(adapter);
@@ -150,6 +153,9 @@ final class NativeListConcatEqualityPlan {
     } catch (ValueSignal failure) {
       throw failure;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       throw signal(newErr(failure, failure.toString()));
     }
   }
@@ -178,6 +184,9 @@ final class NativeListConcatEqualityPlan {
           earliestFailureIndex = i;
         }
       } catch (Exception failure) {
+        if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         rawValues[i] = FAILED;
         if (i < earliestFailureIndex) {
           earliestFailure = signal(newErr(failure, failure.toString()));
@@ -220,6 +229,9 @@ final class NativeListConcatEqualityPlan {
           earliestFailureIndex = i;
         }
       } catch (Exception failure) {
+        if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         if (i < earliestFailureIndex) {
           earliestFailure = signal(newErr(failure, failure.toString()));
           earliestFailureIndex = i;

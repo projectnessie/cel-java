@@ -46,6 +46,9 @@ public final class Guards {
       try {
         return StringT.stringOf(func.apply(((String) lhs.value()), getIntValue((IntT) rhs)));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -61,6 +64,9 @@ public final class Guards {
                 (getIntValue((IntT) values[1])),
                 (getIntValue((IntT) values[2]))));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -74,6 +80,9 @@ public final class Guards {
             func.apply(
                 (String) first.value(), getIntValue((IntT) second), getIntValue((IntT) third)));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -84,6 +93,9 @@ public final class Guards {
       try {
         return IntT.intOf(func.apply(((String) lhs.value()), ((String) rhs.value())));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -99,6 +111,9 @@ public final class Guards {
                 ((String) values[1].value()),
                 (getIntValue((IntT) values[2]))));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -111,6 +126,9 @@ public final class Guards {
         return IntT.intOf(
             func.apply((String) first.value(), (String) second.value(), getIntValue((IntT) third)));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -121,6 +139,9 @@ public final class Guards {
       try {
         return ListT.newStringArrayList(func.apply(((String) lhs.value()), ((String) rhs.value())));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -136,6 +157,9 @@ public final class Guards {
                 ((String) values[1].value()),
                 getIntValue((IntT) values[2])));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -148,6 +172,9 @@ public final class Guards {
         return ListT.newStringArrayList(
             func.apply((String) first.value(), (String) second.value(), getIntValue((IntT) third)));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -162,6 +189,9 @@ public final class Guards {
                 ((String) values[1].value()),
                 ((String) values[2].value())));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -174,6 +204,9 @@ public final class Guards {
         return StringT.stringOf(
             func.apply((String) first.value(), (String) second.value(), (String) third.value()));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -190,6 +223,9 @@ public final class Guards {
                 ((String) values[2].value()),
                 getIntValue((IntT) values[3])));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -206,6 +242,9 @@ public final class Guards {
                 (String) third.value(),
                 getIntValue((IntT) fourth)));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -216,6 +255,9 @@ public final class Guards {
       try {
         return StringT.stringOf(func.apply(((String) val.value())));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -227,6 +269,9 @@ public final class Guards {
         Object[] objects = (Object[]) val.value();
         return StringT.stringOf(func.apply(Arrays.copyOf(objects, objects.length, String[].class)));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -240,6 +285,9 @@ public final class Guards {
             func.apply(
                 Arrays.copyOf(objects, objects.length, String[].class), ((String) rhs.value())));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };

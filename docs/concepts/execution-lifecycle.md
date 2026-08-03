@@ -145,6 +145,9 @@ for how optimizations compose, and
 [Errors, unknowns, and partial state](errors-unknowns-and-partial-state.md)
 for partial evaluation.
 
-CEL-Java does not impose a CPU, memory, result-size, or latency budget on an
-evaluation. The embedding application is responsible for resource controls
-appropriate to its inputs and deployment.
+The ordinary lifecycle methods are unrestricted fast paths. Their
+`...Cancelable(...)` counterparts support cooperative cancellation, elapsed
+time, executing-thread CPU/allocation budgets, and structural AST admission.
+They do not provide process isolation, retained-heap, result-size, or
+deterministic step limits. See
+[Resource controls and cancellation](../advanced/resource-controls-and-cancellation.md).

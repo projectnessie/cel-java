@@ -98,14 +98,16 @@ CEL restricts side effects and does not provide general recursion, but that does
 expression or input cheap. Input-dependent comprehensions, large aggregate traversal, dynamic
 regular expressions, and custom overloads can consume significant CPU and memory.
 
-CEL-Java has parser recursion and source-size limits. It does not currently provide a general
-evaluation step limit, deadline, heap limit, or comprehension-iteration budget. The cost API
-reports a heuristic interval; it does not enforce one.
+CEL-Java has parser recursion and source-size limits plus opt-in controlled operations for
+cooperative cancellation, monotonic elapsed time, executing-thread CPU/allocation, and structural
+AST limits. It does not provide a general evaluation step, retained-heap, result-size, or
+comprehension-iteration budget. The cost API reports a heuristic interval; it does not enforce one.
 
 Applications that accept untrusted expressions or unbounded input must apply their own controls:
-expression admission and feature policy, input-size limits, timeouts or cancellation at an
-appropriate isolation boundary, and limits around custom functions. A thread interruption alone is
-not documented as a complete evaluation-cancellation mechanism.
+expression admission and feature policy, input-size limits, controlled operations, an appropriate
+isolation boundary, and limits around custom functions. Cancellation is cooperative and cannot
+preempt arbitrary Java callbacks. See
+[Resource controls and cancellation](../advanced/resource-controls-and-cancellation.md).
 
 ## Input mutation
 

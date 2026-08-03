@@ -26,6 +26,7 @@ import static org.projectnessie.cel.interpreter.ValueSignal.signal;
 
 import java.util.Iterator;
 import java.util.Map;
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.ref.Val;
 
@@ -72,6 +73,7 @@ final class NativeExactMapEqualityPlan {
   }
 
   boolean eval(Activation activation) {
+    var controller = ActivationControls.controller(activation);
     ResolvedOperand left = resolve(leftSource, activation);
     ResolvedOperand right = resolve(rightSource, activation);
     if (left.failure != null) {
@@ -96,6 +98,7 @@ final class NativeExactMapEqualityPlan {
     try {
       Iterator<? extends Map.Entry<?, ?>> iterator = left.map.entrySet().iterator();
       while (iterator.hasNext()) {
+        controller.checkpoint(Phase.EVALUATE);
         Map.Entry<?, ?> entry = iterator.next();
         Object rawKey = entry.getKey();
         Val key = keyMaterializer.materialize(rawKey);
@@ -117,6 +120,9 @@ final class NativeExactMapEqualityPlan {
     } catch (ValueSignal failure) {
       throw failure;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       throw signal(newErr(failure, failure.toString()));
     }
   }
@@ -128,6 +134,9 @@ final class NativeExactMapEqualityPlan {
     } catch (ValueSignal failure) {
       return new ResolvedOperand(null, failure.value);
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       return new ResolvedOperand(null, newErr(failure, failure.toString()));
     }
     if (raw instanceof Val value && (isError(value) || isUnknown(value))) {
@@ -147,6 +156,9 @@ final class NativeExactMapEqualityPlan {
     try {
       return new SizedOperand(map.size(), null);
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       return new SizedOperand(0, newErr(failure, failure.toString()));
     }
   }

@@ -113,6 +113,14 @@ Resolvers may run more than once and may be called concurrently when a program i
 hidden mutable per-evaluation state in a shared resolver; wrap state in a per-evaluation activation
 instead.
 
+During a controlled operation, CEL-Java checks cancellation and finite budgets immediately before
+and after synchronous resolver, regular-expression, and selected adapter/provider boundaries.
+Elapsed time therefore includes a blocking callback. Thread CPU and allocation counters include
+only work performed on the operation’s execution thread. CEL-Java cannot cooperatively stop
+arbitrary callback code while that code retains control, and work delegated to another thread is
+not charged to the executing-thread counters. Extension implementations should provide their own
+bounded or interruptible behavior when they can block or perform large indivisible work.
+
 ## Custom values and traits
 
 `Val` is CEL-Java’s runtime value contract. Trait interfaces such as `Adder`, `Indexer`, `Sizer`,

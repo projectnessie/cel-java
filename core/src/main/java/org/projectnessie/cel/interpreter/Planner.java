@@ -42,6 +42,7 @@ import com.google.api.expr.v1alpha1.Type.PrimitiveType;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.containers.Container;
@@ -65,6 +66,8 @@ import org.projectnessie.cel.common.types.ref.TypeProvider;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Lister;
 import org.projectnessie.cel.common.types.traits.Trait;
+import org.projectnessie.cel.internal.OperationCheckpoints;
+import org.projectnessie.cel.internal.OperationController;
 import org.projectnessie.cel.interpreter.AttributeFactory.Attribute;
 import org.projectnessie.cel.interpreter.AttributeFactory.Qualifier;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableAttribute;
@@ -91,6 +94,7 @@ final class Planner implements InterpretablePlanner {
   private final PlanningPolicy policy;
   private final RegexEngine regexEngine;
   private final InterpretableDecorator[] decorators;
+  private final OperationController controller;
   private AttributeFactory partialAttrFactory;
   private int planDepth;
   private NativeLocalVariable nativeLocalVariable;
@@ -116,6 +120,7 @@ final class Planner implements InterpretablePlanner {
     this.policy = policy;
     this.regexEngine = requireNonNull(regexEngine);
     this.decorators = decorators;
+    this.controller = OperationCheckpoints.currentController();
   }
 
   PlanningPolicy policy() {
@@ -131,6 +136,7 @@ final class Planner implements InterpretablePlanner {
    */
   @Override
   public Interpretable plan(Expr expr) {
+    controller.checkpoint(Phase.PLAN);
     boolean root = planDepth == 0;
     planDepth++;
     try {
@@ -2540,6 +2546,9 @@ final class Planner implements InterpretablePlanner {
       }
       return true;
     } catch (RuntimeException failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       return false;
     }
   }

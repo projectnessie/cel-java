@@ -23,6 +23,7 @@ import static org.projectnessie.cel.interpreter.Coster.Cost.estimateCost;
 import static org.projectnessie.cel.interpreter.ValueSignal.signal;
 
 import java.util.Collection;
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
@@ -41,12 +42,16 @@ record NativeObjectListTraversal(
 
   boolean traverse(
       Activation activation, NativeLoopBinding binding, NativeObjectLoopConsumer consumer) {
+    var controller = ActivationControls.controller(activation);
     Object raw;
     try {
       raw = source.evalRaw(activation);
     } catch (ValueSignal failure) {
       raw = failure.value;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       throw signal(newErr(failure, failure.toString()));
     }
     if (raw instanceof Val value && (isError(value) || isUnknown(value))) {
@@ -56,6 +61,7 @@ record NativeObjectListTraversal(
     try {
       if (raw instanceof Object[] values && !(raw instanceof Val[])) {
         for (Object value : values) {
+          controller.checkpoint(Phase.EVALUATE);
           binding.setExactObject(value, materializer);
           if (consumer.test(binding)) {
             return true;
@@ -65,6 +71,7 @@ record NativeObjectListTraversal(
       }
       if (raw instanceof Collection<?> values) {
         for (Object value : values) {
+          controller.checkpoint(Phase.EVALUATE);
           binding.setExactObject(value, materializer);
           if (consumer.test(binding)) {
             return true;
@@ -84,6 +91,9 @@ record NativeObjectListTraversal(
     } catch (ValueSignal failure) {
       throw failure;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       throw signal(newErr(failure, failure.toString()));
     }
   }
@@ -150,6 +160,9 @@ final class NativeStringObjectField extends NativeObjectLocalNode
     } catch (ValueSignal failure) {
       throw failure;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       throw signal(newErr(failure, failure.toString()));
     }
   }
@@ -178,6 +191,9 @@ final class NativeObjectFieldPresence extends NativeObjectLocalNode
     } catch (ValueSignal failure) {
       throw failure;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       throw signal(newErr(failure, failure.toString()));
     }
   }
@@ -306,6 +322,9 @@ final class NativeObjectExistsOneFold extends NativeObjectLoopFold {
     } catch (ValueSignal failure) {
       binding.record(failure.value);
     } catch (RuntimeException failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       binding.record(failure);
     }
     return false;

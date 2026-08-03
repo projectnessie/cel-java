@@ -52,12 +52,15 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.checker.Types.Kind;
 import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.Source;
 import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.types.Err.ErrException;
 import org.projectnessie.cel.common.types.ref.FieldType;
+import org.projectnessie.cel.internal.OperationCheckpoints;
+import org.projectnessie.cel.internal.OperationController;
 import org.projectnessie.cel.parser.Parser.ParseResult;
 
 /**
@@ -77,6 +80,7 @@ public final class Checker {
   private Mapping mappings;
   private int freeTypeVarCounter;
   private final SourceInfo sourceInfo;
+  private final OperationController controller;
   private final Map<Long, Type> types = new HashMap<>();
   private final Map<Long, Reference> references = new HashMap<>();
   private final Map<String, FieldType> fieldTypes = new HashMap<>();
@@ -92,6 +96,7 @@ public final class Checker {
     this.mappings = mappings;
     this.freeTypeVarCounter = freeTypeVarCounter;
     this.sourceInfo = sourceInfo;
+    this.controller = OperationCheckpoints.currentController();
   }
 
   /** Result of one low-level type-check operation. */
@@ -162,6 +167,7 @@ public final class Checker {
   }
 
   void check(Expr.Builder e) {
+    controller.checkpoint(Phase.CHECK);
     switch (e.getExprKindCase()) {
       case CONST_EXPR:
         Constant literal = e.getConstExpr();
