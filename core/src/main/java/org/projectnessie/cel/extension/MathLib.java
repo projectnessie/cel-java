@@ -250,9 +250,7 @@ public final class MathLib implements Library {
       return value.doubleValue();
     }
     if (value instanceof UintT) {
-      return Long.toUnsignedString(value.intValue()).equals("18446744073709551615")
-          ? 18446744073709551615.0
-          : Double.parseDouble(Long.toUnsignedString(value.intValue()));
+      return Double.parseDouble(Long.toUnsignedString(value.intValue()));
     }
     return value.intValue();
   }

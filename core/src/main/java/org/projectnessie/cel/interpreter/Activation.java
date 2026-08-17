@@ -245,9 +245,6 @@ public interface Activation {
 
     @Override
     public ResolvedValue resolveName(String name) {
-      if (name.startsWith(".")) {
-        return delegate.resolveName(name);
-      }
       return delegate.resolveName(name);
     }
 

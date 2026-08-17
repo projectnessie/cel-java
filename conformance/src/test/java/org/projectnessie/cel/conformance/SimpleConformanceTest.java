@@ -97,6 +97,7 @@ import org.projectnessie.cel.Env.AstIssuesTuple;
 import org.projectnessie.cel.EnvOption;
 import org.projectnessie.cel.Program;
 import org.projectnessie.cel.Program.EvalResult;
+import org.projectnessie.cel.common.CELError;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.IteratorT;
 import org.projectnessie.cel.common.types.NullT;
@@ -307,18 +308,20 @@ class SimpleConformanceTest {
       CheckedExpr checkedExpr = null;
       if (!test.getDisableCheck()) {
         checkedExpr = ConformanceEvaluator.check(test, parsedExpr);
-        if (!checkedExpr.getTypeMapMap().containsKey(parsedExpr.getExpr().getId())) {
-          throw new AssertionError("no type for top-level expression");
-        }
-        if (test.getResultMatcherCase() == ResultMatcherCase.TYPED_RESULT) {
-          Type expectedType = convert(test.getTypedResult().getDeducedType(), Type.class);
-          Type actualType = checkedExpr.getTypeMapOrThrow(parsedExpr.getExpr().getId());
-          if (!actualType.equals(expectedType)) {
-            throw new AssertionError(
-                "deduced type mismatch, got "
-                    + print(actualType)
-                    + ", want "
-                    + print(expectedType));
+        if (checkedExpr != null) {
+          if (!checkedExpr.getTypeMapMap().containsKey(parsedExpr.getExpr().getId())) {
+            throw new AssertionError("no type for top-level expression");
+          }
+          if (test.getResultMatcherCase() == ResultMatcherCase.TYPED_RESULT) {
+            Type expectedType = convert(test.getTypedResult().getDeducedType(), Type.class);
+            Type actualType = checkedExpr.getTypeMapOrThrow(parsedExpr.getExpr().getId());
+            if (!actualType.equals(expectedType)) {
+              throw new AssertionError(
+                  "deduced type mismatch, got "
+                      + print(actualType)
+                      + ", want "
+                      + print(expectedType));
+            }
           }
         }
       }
@@ -373,6 +376,11 @@ class SimpleConformanceTest {
 
       AstIssuesTuple astIss = env.check(parsedExprToAst(parsedExpr));
       if (astIss.hasIssues()) {
+        if (test.getResultMatcherCase() == ResultMatcherCase.EVAL_ERROR
+            && errorsMatch(
+                convert(test.getEvalError(), ErrorSet.class), astIss.getIssues().getErrors())) {
+          return null;
+        }
         throw new AssertionError("fatal check errors: " + astIss.getIssues().getErrors());
       }
       return astToCheckedExpr(astIss.getAst());
@@ -523,6 +531,18 @@ class SimpleConformanceTest {
       throw new AssertionError(
           testPath + ": got " + print(actual) + ", want error " + print(expected));
     }
+  }
+
+  private static boolean errorsMatch(ErrorSet expected, List<CELError> actual) {
+    return !expected.getErrorsList().isEmpty()
+        && expected.getErrorsList().stream()
+            .allMatch(
+                expectedError ->
+                    !expectedError.getMessage().isEmpty()
+                        && actual.stream()
+                            .anyMatch(
+                                actualError ->
+                                    actualError.getMessage().equals(expectedError.getMessage())));
   }
 
   private static void matchUnknown(String testPath, UnknownSet expected, ExprValue actual) {

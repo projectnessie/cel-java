@@ -79,9 +79,7 @@ public final class NetworkLib implements Library {
             Decls.newFunction(
                 CIDR, Decls.newOverload("cidr_string", singletonList(Decls.String), CIDR_TYPE)),
             Decls.newFunction(
-                IS_IP,
-                Decls.newOverload("is_ip_string", singletonList(Decls.String), Decls.Bool),
-                Decls.newOverload("is_ip_cidr", singletonList(CIDR_TYPE), Decls.Bool)),
+                IS_IP, Decls.newOverload("is_ip_string", singletonList(Decls.String), Decls.Bool)),
             Decls.newFunction(
                 IP_IS_CANONICAL,
                 Decls.newOverload(
@@ -144,7 +142,6 @@ public final class NetworkLib implements Library {
             Overload.unary("cidr_string", NetworkLib::cidr),
             Overload.unary(IS_IP, NetworkLib::isIp),
             Overload.unary("is_ip_string", NetworkLib::isIp),
-            Overload.unary("is_ip_cidr", value -> newErr("no such overload")),
             Overload.unary(IP_IS_CANONICAL, NetworkLib::ipIsCanonical),
             Overload.unary("ip_is_canonical_string", NetworkLib::ipIsCanonical),
             Overload.unary("string_ip", value -> value.convertToType(StringType)),

@@ -57,6 +57,18 @@ class NetworkLibTest {
     assertThat(result.getVal().toString()).contains("parse error");
   }
 
+  @Test
+  void rejectsCidrArgumentToIsIpAtCheckTime() {
+    Env env = newEnv(network());
+
+    Env.AstIssuesTuple compiled = env.compile("isIP(cidr('192.168.0.0/24'))");
+
+    assertThat(compiled.hasIssues()).isTrue();
+    assertThat(compiled.getIssues().getErrors())
+        .extracting(error -> error.getMessage())
+        .containsExactly("found no matching overload for 'isIP' applied to '(net.CIDR)'");
+  }
+
   private static void assertEvaluates(String expression, Object expectedValue) {
     assertThat(evaluate(expression).getVal()).isEqualTo(expectedValue);
   }

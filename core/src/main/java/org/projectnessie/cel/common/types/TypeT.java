@@ -158,6 +158,9 @@ public class TypeT implements Type, Val {
     return typeName();
   }
 
+  /**
+   * Type-value equality follows CEL runtime semantics and compares qualified runtime type names.
+   */
   @Override
   public boolean equals(Object o) {
     if (this == o) {
