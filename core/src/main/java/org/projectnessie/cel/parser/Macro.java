@@ -19,6 +19,8 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 
 import com.google.api.expr.v1alpha1.Expr;
+import com.google.api.expr.v1alpha1.Expr.CreateList;
+import com.google.api.expr.v1alpha1.Expr.CreateStruct.Entry;
 import com.google.api.expr.v1alpha1.Expr.ExprKindCase;
 import com.google.api.expr.v1alpha1.Expr.Select;
 import java.util.List;
@@ -26,6 +28,7 @@ import java.util.function.Supplier;
 import org.projectnessie.cel.common.ErrorWithLocation;
 import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.operators.Operator;
+import org.projectnessie.cel.common.types.Overloads;
 
 public final class Macro {
   /** AccumulatorName is the traditional variable name assigned to the fold accumulator variable. */
@@ -43,16 +46,20 @@ public final class Macro {
            * predicate holds.
            */
           newReceiverMacro(Operator.All.id, 2, Macro::makeAll),
+          newReceiverMacro(Operator.All.id, 3, Macro::makeAll2),
 
           /* The macro "range.exists(var, predicate)", which is true if for at least one element in
            * range the predicate holds.
            */
           newReceiverMacro(Operator.Exists.id, 2, Macro::makeExists),
+          newReceiverMacro(Operator.Exists.id, 3, Macro::makeExists2),
 
           /* The macro "range.exists_one(var, predicate)", which is true if for exactly one element
            * in range the predicate holds.
            */
           newReceiverMacro(Operator.ExistsOne.id, 2, Macro::makeExistsOne),
+          newReceiverMacro(Operator.ExistsOne.id, 3, Macro::makeExistsOne2),
+          newReceiverMacro("existsOne", 3, Macro::makeExistsOne2),
 
           /* The macro "range.map(var, function)", applies the function to the vars in the range. */
           newReceiverMacro(Operator.Map.id, 2, Macro::makeMap),
@@ -65,7 +72,26 @@ public final class Macro {
           /* The macro "range.filter(var, predicate)", filters out the variables for which the
            * predicate is false.
            */
-          newReceiverMacro(Operator.Filter.id, 2, Macro::makeFilter));
+          newReceiverMacro(Operator.Filter.id, 2, Macro::makeFilter),
+
+          /* The macro "range.transformList(index, value, function)" transforms entries to a list. */
+          newReceiverMacro("transformList", 3, Macro::makeTransformList),
+          newReceiverMacro("transformList", 4, Macro::makeTransformList),
+
+          /* The macro "range.transformMap(key, value, function)" transforms map values. */
+          newReceiverMacro("transformMap", 3, Macro::makeTransformMap),
+          newReceiverMacro("transformMap", 4, Macro::makeTransformMap),
+
+          /* The macro "cel.bind(var, value, result)" binds a local variable for use in result. */
+          newReceiverMacro("bind", 3, Macro::makeBind));
+
+  /** TestOnlyBlockMacros includes the test-only macros used by CEL-Spec block conformance tests. */
+  public static final List<Macro> TestOnlyBlockMacros =
+      asList(
+          newReceiverMacro("block", 2, Macro::makeBlock),
+          newReceiverMacro("index", 1, Macro::makeIndex),
+          newReceiverMacro("iterVar", 2, Macro::makeIterVar),
+          newReceiverMacro("accuVar", 2, Macro::makeAccuVar));
 
   /** NoMacros list. */
   public static List<Macro> MoMacros = emptyList();
@@ -138,12 +164,24 @@ public final class Macro {
     return makeQuantifier(QuantifierKind.quantifierAll, eh, target, args);
   }
 
+  static Expr makeAll2(ExprHelper eh, Expr target, List<Expr> args) {
+    return makeQuantifier2(QuantifierKind.quantifierAll, eh, target, args);
+  }
+
   static Expr makeExists(ExprHelper eh, Expr target, List<Expr> args) {
     return makeQuantifier(QuantifierKind.quantifierExists, eh, target, args);
   }
 
+  static Expr makeExists2(ExprHelper eh, Expr target, List<Expr> args) {
+    return makeQuantifier2(QuantifierKind.quantifierExists, eh, target, args);
+  }
+
   static Expr makeExistsOne(ExprHelper eh, Expr target, List<Expr> args) {
     return makeQuantifier(QuantifierKind.quantifierExistsOne, eh, target, args);
+  }
+
+  static Expr makeExistsOne2(ExprHelper eh, Expr target, List<Expr> args) {
+    return makeQuantifier2(QuantifierKind.quantifierExistsOne, eh, target, args);
   }
 
   static Expr makeQuantifier(QuantifierKind kind, ExprHelper eh, Expr target, List<Expr> args) {
@@ -194,6 +232,59 @@ public final class Macro {
     return eh.fold(v, target, AccumulatorName, init, condition, step, result);
   }
 
+  static Expr makeQuantifier2(QuantifierKind kind, ExprHelper eh, Expr target, List<Expr> args) {
+    String v = extractIdent(args.get(0));
+    if (v == null) {
+      Location location = eh.offsetLocation(args.get(0).getId());
+      throw new ErrorWithLocation(location, "argument must be a simple name");
+    }
+    String v2 = extractIdent(args.get(1));
+    if (v2 == null) {
+      Location location = eh.offsetLocation(args.get(1).getId());
+      throw new ErrorWithLocation(location, "argument must be a simple name");
+    }
+
+    Supplier<Expr> accuIdent = () -> eh.ident(AccumulatorName);
+
+    Expr init;
+    Expr condition;
+    Expr step;
+    Expr result;
+    switch (kind) {
+      case quantifierAll:
+        init = eh.literalBool(true);
+        condition = eh.globalCall(Operator.NotStrictlyFalse.id, accuIdent.get());
+        step = eh.globalCall(Operator.LogicalAnd.id, accuIdent.get(), args.get(2));
+        result = accuIdent.get();
+        break;
+      case quantifierExists:
+        init = eh.literalBool(false);
+        condition =
+            eh.globalCall(
+                Operator.NotStrictlyFalse.id,
+                eh.globalCall(Operator.LogicalNot.id, accuIdent.get()));
+        step = eh.globalCall(Operator.LogicalOr.id, accuIdent.get(), args.get(2));
+        result = accuIdent.get();
+        break;
+      case quantifierExistsOne:
+        Expr zeroExpr = eh.literalInt(0);
+        Expr oneExpr = eh.literalInt(1);
+        init = zeroExpr;
+        condition = eh.literalBool(true);
+        step =
+            eh.globalCall(
+                Operator.Conditional.id,
+                args.get(2),
+                eh.globalCall(Operator.Add.id, accuIdent.get(), oneExpr),
+                accuIdent.get());
+        result = eh.globalCall(Operator.Equals.id, accuIdent.get(), oneExpr);
+        break;
+      default:
+        throw new ErrorWithLocation(null, String.format("unrecognized quantifier '%s'", kind));
+    }
+    return eh.fold(v, v2, target, AccumulatorName, init, condition, step, result);
+  }
+
   static Expr makeMap(ExprHelper eh, Expr target, List<Expr> args) {
     String v = extractIdent(args.get(0));
     if (v == null) {
@@ -235,6 +326,185 @@ public final class Macro {
     Expr step = eh.globalCall(Operator.Add.id, accuExpr, eh.newList(args.get(0)));
     step = eh.globalCall(Operator.Conditional.id, filter, step, accuExpr);
     return eh.fold(v, target, AccumulatorName, init, condition, step, accuExpr);
+  }
+
+  static Expr makeTransformList(ExprHelper eh, Expr target, List<Expr> args) {
+    String v = extractIdent(args.get(0));
+    if (v == null) {
+      Location location = eh.offsetLocation(args.get(0).getId());
+      throw new ErrorWithLocation(location, "argument must be a simple name");
+    }
+    String v2 = extractIdent(args.get(1));
+    if (v2 == null) {
+      Location location = eh.offsetLocation(args.get(1).getId());
+      throw new ErrorWithLocation(location, "argument must be a simple name");
+    }
+
+    Expr fn;
+    Expr filter;
+
+    if (args.size() == 4) {
+      filter = args.get(2);
+      fn = args.get(3);
+    } else {
+      filter = null;
+      fn = args.get(2);
+    }
+
+    Expr accuExpr = eh.ident(AccumulatorName);
+    Expr init = eh.newList();
+    Expr condition = eh.literalBool(true);
+    Expr step = eh.globalCall(Operator.Add.id, accuExpr, eh.newList(fn));
+
+    if (filter != null) {
+      step = eh.globalCall(Operator.Conditional.id, filter, step, accuExpr);
+    }
+    return eh.fold(v, v2, target, AccumulatorName, init, condition, step, accuExpr);
+  }
+
+  static Expr makeTransformMap(ExprHelper eh, Expr target, List<Expr> args) {
+    String v = extractIdent(args.get(0));
+    if (v == null) {
+      Location location = eh.offsetLocation(args.get(0).getId());
+      throw new ErrorWithLocation(location, "argument must be a simple name");
+    }
+    String v2 = extractIdent(args.get(1));
+    if (v2 == null) {
+      Location location = eh.offsetLocation(args.get(1).getId());
+      throw new ErrorWithLocation(location, "argument must be a simple name");
+    }
+
+    Expr fn;
+    Expr filter;
+
+    if (args.size() == 4) {
+      filter = args.get(2);
+      fn = args.get(3);
+    } else {
+      filter = null;
+      fn = args.get(2);
+    }
+
+    Expr accuExpr = eh.ident(AccumulatorName);
+    Expr init = eh.newMap(emptyList());
+    Expr condition = eh.literalBool(true);
+    Entry transformedEntry = eh.newMapEntry(eh.ident(v), fn);
+    Expr step = eh.newMap(asList(transformedEntry));
+
+    if (filter != null) {
+      step = eh.globalCall(Operator.Conditional.id, filter, step, accuExpr);
+    }
+    return eh.fold(v, v2, target, AccumulatorName, init, condition, step, accuExpr);
+  }
+
+  static Expr makeBind(ExprHelper eh, Expr target, List<Expr> args) {
+    if (target == null
+        || target.getExprKindCase() != ExprKindCase.IDENT_EXPR
+        || !"cel".equals(target.getIdentExpr().getName())) {
+      Location location = target != null ? eh.offsetLocation(target.getId()) : null;
+      throw new ErrorWithLocation(
+          location, "cel.bind() must be called with receiver identifier cel");
+    }
+
+    String v = extractIdent(args.get(0));
+    if (v == null) {
+      Location location = eh.offsetLocation(args.get(0).getId());
+      throw new ErrorWithLocation(location, "argument must be a simple name");
+    }
+
+    Expr accuExpr = eh.ident(AccumulatorName);
+    Expr dynNull = eh.globalCall(Overloads.TypeConvertDyn, eh.literalNull());
+    return eh.fold(
+        v,
+        eh.newList(args.get(1)),
+        AccumulatorName,
+        dynNull,
+        eh.literalBool(true),
+        args.get(2),
+        accuExpr);
+  }
+
+  static Expr makeBlock(ExprHelper eh, Expr target, List<Expr> args) {
+    validateCelReceiver(eh, target, "cel.block()");
+
+    Expr bindings = args.get(0);
+    if (bindings.getExprKindCase() != ExprKindCase.LIST_EXPR) {
+      Location location = eh.offsetLocation(bindings.getId());
+      throw new ErrorWithLocation(location, "cel.block() first argument must be a list literal");
+    }
+
+    CreateList list = bindings.getListExpr();
+    Expr result = args.get(1);
+    for (int i = list.getElementsCount() - 1; i >= 0; i--) {
+      result = makeLocalBinding(eh, indexName(i), list.getElements(i), result);
+    }
+    return result;
+  }
+
+  static Expr makeIndex(ExprHelper eh, Expr target, List<Expr> args) {
+    validateCelReceiver(eh, target, "cel.index()");
+    return eh.ident(indexName(extractIntegerArgument(eh, args.get(0), "cel.index()")));
+  }
+
+  static Expr makeIterVar(ExprHelper eh, Expr target, List<Expr> args) {
+    validateCelReceiver(eh, target, "cel.iterVar()");
+    return eh.ident(
+        String.format(
+            "@it:%d:%d",
+            extractIntegerArgument(eh, args.get(0), "cel.iterVar()"),
+            extractIntegerArgument(eh, args.get(1), "cel.iterVar()")));
+  }
+
+  static Expr makeAccuVar(ExprHelper eh, Expr target, List<Expr> args) {
+    validateCelReceiver(eh, target, "cel.accuVar()");
+    return eh.ident(
+        String.format(
+            "@ac:%d:%d",
+            extractIntegerArgument(eh, args.get(0), "cel.accuVar()"),
+            extractIntegerArgument(eh, args.get(1), "cel.accuVar()")));
+  }
+
+  private static Expr makeLocalBinding(ExprHelper eh, String variable, Expr value, Expr result) {
+    Expr accuExpr = eh.ident(AccumulatorName);
+    Expr dynNull = eh.globalCall(Overloads.TypeConvertDyn, eh.literalNull());
+    return eh.fold(
+        variable,
+        eh.newList(value),
+        AccumulatorName,
+        dynNull,
+        eh.literalBool(true),
+        result,
+        accuExpr);
+  }
+
+  private static void validateCelReceiver(ExprHelper eh, Expr target, String macroName) {
+    if (target != null
+        && target.getExprKindCase() == ExprKindCase.IDENT_EXPR
+        && "cel".equals(target.getIdentExpr().getName())) {
+      return;
+    }
+
+    Location location = target != null ? eh.offsetLocation(target.getId()) : null;
+    throw new ErrorWithLocation(
+        location, macroName + " must be called with receiver identifier cel");
+  }
+
+  private static int extractIntegerArgument(ExprHelper eh, Expr expr, String macroName) {
+    if (expr.getExprKindCase() != ExprKindCase.CONST_EXPR || !expr.getConstExpr().hasInt64Value()) {
+      Location location = eh.offsetLocation(expr.getId());
+      throw new ErrorWithLocation(location, macroName + " argument must be an integer literal");
+    }
+
+    long value = expr.getConstExpr().getInt64Value();
+    if (value < 0 || value > Integer.MAX_VALUE) {
+      Location location = eh.offsetLocation(expr.getId());
+      throw new ErrorWithLocation(location, macroName + " argument out of range");
+    }
+    return (int) value;
+  }
+
+  private static String indexName(int index) {
+    return "@index" + index;
   }
 
   static String extractIdent(Expr e) {

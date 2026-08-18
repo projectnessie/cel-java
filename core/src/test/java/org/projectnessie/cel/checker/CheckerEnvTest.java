@@ -17,6 +17,8 @@ package org.projectnessie.cel.checker;
 
 import static java.util.Collections.singletonList;
 import static org.projectnessie.cel.checker.CheckerEnv.newStandardCheckerEnv;
+import static org.projectnessie.cel.common.containers.Container.name;
+import static org.projectnessie.cel.common.containers.Container.newContainer;
 import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newRegistry;
 
 import com.google.api.expr.v1alpha1.Type;
@@ -61,6 +63,21 @@ public class CheckerEnvTest {
                             Overloads.ToDyn, singletonList(paramA), Decls.Dyn, typeParamAList))))
         .hasMessage(
             "overlapping overload for name 'dyn' (type '(type_param: \"A\") -> dyn' with overloadId: 'to_dyn' cannot be distinguished from '(type_param: \"A\") -> dyn' with overloadId: 'to_dyn')");
+  }
+
+  @Test
+  void lexicalIdentifierShadowsContainerQualifiedIdentifier() {
+    CheckerEnv env = newStandardCheckerEnv(newContainer(name("com.example")), newRegistry());
+    env.add(Decls.newVar("com.example.y", Decls.Int));
+    env.add(Decls.newVar("y", Decls.Bool));
+
+    Assertions.assertThat(env.lookupIdent("y").getName()).isEqualTo("com.example.y");
+
+    env = env.enterScope();
+    env.add(Decls.newVar("y", Decls.String));
+
+    Assertions.assertThat(env.lookupIdent("y").getName()).isEqualTo("y");
+    Assertions.assertThat(env.lookupIdent(".com.example.y").getName()).isEqualTo("com.example.y");
   }
 
   @Test

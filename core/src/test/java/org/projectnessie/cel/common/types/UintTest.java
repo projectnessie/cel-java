@@ -109,9 +109,12 @@ public class UintTest {
     Value val = uintOf(maxIntJSON).convertToNative(Value.class);
     assertThat(val).isEqualTo(Value.newBuilder().setNumberValue(9007199254740991.0d).build());
 
-    // Value converts to a JSON decimal string
-    val = intOf(maxIntJSON + 1).convertToNative(Value.class);
+    // Value converts to a JSON decimal string.
+    val = uintOf(maxIntJSON + 1).convertToNative(Value.class);
     assertThat(val).isEqualTo(Value.newBuilder().setStringValue("9007199254740992").build());
+
+    val = uintOf(-1L).convertToNative(Value.class);
+    assertThat(val).isEqualTo(Value.newBuilder().setStringValue("18446744073709551615").build());
   }
 
   @Test
@@ -140,6 +143,17 @@ public class UintTest {
     UInt64Value val2 = uintOf(uint64max).convertToNative(UInt64Value.class);
     UInt64Value want2 = UInt64Value.of(uint64max);
     assertThat(val2).isEqualTo(want2);
+  }
+
+  @Test
+  void uintConvertToNative_UInt32WrapperRangeError() {
+    assertThatThrownBy(() -> uintOf(0x100000000L).convertToNative(UInt32Value.class))
+        .isInstanceOf(RuntimeException.class)
+        .hasMessageContaining("range error");
+
+    assertThatThrownBy(() -> uintOf(-1L).convertToNative(UInt32Value.class))
+        .isInstanceOf(RuntimeException.class)
+        .hasMessageContaining("range error");
   }
 
   @Test

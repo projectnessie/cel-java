@@ -965,7 +965,7 @@ class ParserTest {
         "93",
         "{\"a\": 1}.\"a\"",
         "",
-        "ERROR: <input>:1:10: Syntax error: mismatched input '\"a\"' expecting IDENTIFIER\n"
+        "ERROR: <input>:1:10: Syntax error: mismatched input '\"a\"' expecting {IDENTIFIER, ESC_IDENTIFIER}\n"
             + " | {\"a\": 1}.\"a\"\n"
             + " | .........^",
         "",
@@ -1200,7 +1200,7 @@ class ParserTest {
         "122",
         "func{{a}}",
         "",
-        "ERROR: <input>:1:6: Syntax error: extraneous input '{' expecting {'}', ',', IDENTIFIER}\n"
+        "ERROR: <input>:1:6: Syntax error: extraneous input '{' expecting {'}', ',', IDENTIFIER, ESC_IDENTIFIER}\n"
             + " | func{{a}}\n"
             + " | .....^\n"
             + "ERROR: <input>:1:8: Syntax error: mismatched input '}' expecting ':'\n"
@@ -1215,7 +1215,7 @@ class ParserTest {
         "123",
         "msg{:a}",
         "",
-        "ERROR: <input>:1:5: Syntax error: extraneous input ':' expecting {'}', ',', IDENTIFIER}\n"
+        "ERROR: <input>:1:5: Syntax error: extraneous input ':' expecting {'}', ',', IDENTIFIER, ESC_IDENTIFIER}\n"
             + " | msg{:a}\n"
             + " | ....^\n"
             + "ERROR: <input>:1:7: Syntax error: mismatched input '}' expecting ':'\n"

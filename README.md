@@ -22,6 +22,7 @@ The CEL specification can be found [here](https://github.com/google/cel-spec).
   - [Motivation](#motivation)
   - [Arbitrary Java classes](#arbitrary-java-classes)
   - [Unsigned 64-bit `uint`](#unsigned-64-bit-uint)
+  - [Protobuf enum semantics](#protobuf-enum-semantics)
   - [Native image and package verification](#native-image-and-package-verification)
   - [Not yet implemented](#not-yet-implemented)
   - [Unclear double-to-int rounding behavior](#unclear-double-to-int-rounding-behavior)
@@ -393,6 +394,24 @@ but `123u == 123u` and `123 == 123` are.
 
 If you have a `uint32` or `uint64` in protobuf objects, or use `uint`s in CEL expressions, wrap those
 values with `org.projectnessie.cel.common.ULong`.
+
+### Protobuf enum semantics
+
+CEL-Java follows the CEL-Spec v0.25.2 language definition for protobuf enum values: protobuf enum
+constants and enum fields are represented as CEL `int` values.
+
+The upstream CEL-Spec conformance testdata also contains strong-enum cases where enum values
+preserve their enum type. CEL-Java does not currently enable those strong-enum conformance cases.
+They are not part of the v0.25.2 language-definition baseline and are mutually incompatible with the
+legacy enum-as-int conformance sections in a single-mode runtime.
+
+Use numeric enum values directly, or use `int(...)` when writing expressions that should remain clear
+if strong enum support is added in the future:
+
+```cel
+TestAllTypes.NestedEnum.BAR == 1
+int(TestAllTypes.NestedEnum.BAR) == 1
+```
 
 ### Native image and package verification
 

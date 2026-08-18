@@ -138,17 +138,19 @@ public final class PbTypeDescription extends Description implements TypeDescript
           return anyWithEmptyType();
         }
         PbTypeDescription realTypeDescriptor = db.describeType(realTypeName);
-        Message realMsg = realTypeDescriptor.zeroMsg.getParserForType().parseFrom(realValue);
+        Message realMsg =
+            DynamicMessage.parseFrom(
+                realTypeDescriptor.getDescriptor(), realValue, db.extensionRegistry());
         return realTypeDescriptor.maybeUnwrap(db, realMsg);
       }
 
       if (!(zeroMsg instanceof DynamicMessage)) {
         if (msg instanceof Any) {
           Any any = (Any) msg;
-          msg = zeroMsg.getParserForType().parseFrom(any.getValue());
-        } else if (msg instanceof DynamicMessage) {
+          msg = DynamicMessage.parseFrom(getDescriptor(), any.getValue(), db.extensionRegistry());
+        } else if (msg instanceof DynamicMessage && !hasExtensions(msg)) {
           DynamicMessage dyn = (DynamicMessage) msg;
-          msg = zeroMsg.getParserForType().parseFrom(dyn.toByteString());
+          msg = zeroMsg.getParserForType().parseFrom(dyn.toByteString(), db.extensionRegistry());
         }
       }
     } catch (InvalidProtocolBufferException e) {
@@ -273,6 +275,15 @@ public final class PbTypeDescription extends Description implements TypeDescript
     }
 
     return msg;
+  }
+
+  private static boolean hasExtensions(Message message) {
+    for (FieldDescriptor field : message.getAllFields().keySet()) {
+      if (field.isExtension()) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private static java.time.Duration asJavaDuration(Duration d) {

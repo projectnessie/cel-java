@@ -16,6 +16,7 @@
 package org.projectnessie.cel.common.types;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
@@ -146,6 +147,17 @@ public class IntTest {
     Int64Value val2 = intOf(Long.MIN_VALUE).convertToNative(Int64Value.class);
     Int64Value want2 = Int64Value.of(Long.MIN_VALUE);
     assertThat(val2).isEqualTo(want2);
+  }
+
+  @Test
+  void intConvertToNative_Int32WrapperRangeError() {
+    assertThatThrownBy(() -> intOf(1L + Integer.MAX_VALUE).convertToNative(Int32Value.class))
+        .isInstanceOf(RuntimeException.class)
+        .hasMessageContaining("range error");
+
+    assertThatThrownBy(() -> intOf(-1L + Integer.MIN_VALUE).convertToNative(Int32Value.class))
+        .isInstanceOf(RuntimeException.class)
+        .hasMessageContaining("range error");
   }
 
   @Test

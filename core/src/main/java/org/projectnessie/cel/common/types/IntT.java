@@ -139,6 +139,9 @@ public final class IntT extends BaseVal
       return (T) Int64Value.of(i);
     }
     if (typeDesc == Int32Value.class) {
+      if (i < Integer.MIN_VALUE || i > Integer.MAX_VALUE) {
+        Err.throwErrorAsIllegalStateException(rangeError(i, "Java int"));
+      }
       return (T) Int32Value.of((int) i);
     }
     if (typeDesc == Val.class || typeDesc == IntT.class) {

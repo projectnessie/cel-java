@@ -40,6 +40,9 @@ public interface ExprHelper {
   /** LiteralInt creates an Expr value for an int literal. */
   Expr literalInt(long value);
 
+  /** LiteralNull creates an Expr value for a null literal. */
+  Expr literalNull();
+
   /** LiteralString creates am Expr value for a string literal. */
   Expr literalString(String value);
 
@@ -93,6 +96,17 @@ public interface ExprHelper {
    */
   Expr fold(
       String iterVar,
+      Expr iterRange,
+      String accuVar,
+      Expr accuInit,
+      Expr condition,
+      Expr step,
+      Expr result);
+
+  /** Fold creates a fold comprehension instruction with two iteration variables. */
+  Expr fold(
+      String iterVar,
+      String iterVar2,
       Expr iterRange,
       String accuVar,
       Expr accuInit,

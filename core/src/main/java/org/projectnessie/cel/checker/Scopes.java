@@ -59,6 +59,10 @@ public final class Scopes {
     return this;
   }
 
+  boolean hasParent() {
+    return parent != null;
+  }
+
   /**
    * AddIdent adds the ident Decl in the current scope. Note: If the name collides with an existing
    * identifier in the scope, the Decl is overwritten.

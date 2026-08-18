@@ -15,6 +15,11 @@
  */
 package org.projectnessie.cel.extension;
 
+import static java.math.RoundingMode.HALF_EVEN;
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.projectnessie.cel.common.types.IntT.intOf;
+
+import java.math.BigDecimal;
 import java.util.*;
 import java.util.regex.Pattern;
 import org.projectnessie.cel.EnvOption;
@@ -22,6 +27,10 @@ import org.projectnessie.cel.Library;
 import org.projectnessie.cel.ProgramOption;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.Err;
+import org.projectnessie.cel.common.types.StringT;
+import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.common.types.traits.Indexer;
+import org.projectnessie.cel.common.types.traits.Sizer;
 import org.projectnessie.cel.interpreter.functions.Overload;
 
 /**
@@ -239,10 +248,13 @@ public class StringsLib implements Library {
   private static final String LAST_INDEX_OF = "lastIndexOf";
   private static final String LOWER_ASCII = "lowerAscii";
   private static final String REPLACE = "replace";
+  private static final String REVERSE = "reverse";
   private static final String SPLIT = "split";
   private static final String SUBSTR = "substring";
   private static final String TRIM_SPACE = "trim";
   private static final String UPPER_ASCII = "upperAscii";
+  private static final String FORMAT = "format";
+  private static final String QUOTE = "strings.quote";
 
   // whitespace characters definition from
   // https://en.wikipedia.org/wiki/Whitespace_character#Unicode
@@ -327,6 +339,10 @@ public class StringsLib implements Library {
                     Arrays.asList(Decls.String, Decls.String, Decls.String, Decls.Int),
                     Decls.String)),
             Decls.newFunction(
+                REVERSE,
+                Decls.newInstanceOverload(
+                    "string_reverse", Arrays.asList(Decls.String), Decls.String)),
+            Decls.newFunction(
                 SPLIT,
                 Decls.newInstanceOverload(
                     "string_split_string", Arrays.asList(Decls.String, Decls.String), Decls.Dyn),
@@ -349,7 +365,16 @@ public class StringsLib implements Library {
             Decls.newFunction(
                 UPPER_ASCII,
                 Decls.newInstanceOverload(
-                    "string_upper_ascii", Arrays.asList(Decls.String), Decls.String)));
+                    "string_upper_ascii", Arrays.asList(Decls.String), Decls.String)),
+            Decls.newFunction(
+                FORMAT,
+                Decls.newInstanceOverload(
+                    "string_format",
+                    Arrays.asList(Decls.String, Decls.newListType(Decls.Dyn)),
+                    Decls.String)),
+            Decls.newFunction(
+                QUOTE,
+                Decls.newOverload("strings_quote", Arrays.asList(Decls.String), Decls.String)));
     return List.of(option);
   }
 
@@ -363,7 +388,10 @@ public class StringsLib implements Library {
                 null,
                 null,
                 Guards.callInStrStrOutInt(StringsLib::indexOf),
-                Guards.callInStrStrIntOutInt(StringsLib::indexOfOffset)),
+                values ->
+                    values.length == 3
+                        ? Guards.callInStrStrIntOutInt(StringsLib::indexOfOffset).invoke(values)
+                        : Err.maybeNoSuchOverloadErr(null)),
             Overload.overload(
                 JOIN,
                 null,
@@ -375,7 +403,10 @@ public class StringsLib implements Library {
                 null,
                 null,
                 Guards.callInStrStrOutInt(StringsLib::lastIndexOf),
-                Guards.callInStrStrIntOutInt(StringsLib::lastIndexOfOffset)),
+                values ->
+                    values.length == 3
+                        ? Guards.callInStrStrIntOutInt(StringsLib::lastIndexOfOffset).invoke(values)
+                        : Err.maybeNoSuchOverloadErr(null)),
             Overload.unary(LOWER_ASCII, Guards.callInStrOutStr(StringsLib::lowerASCII)),
             Overload.overload(
                 REPLACE,
@@ -391,20 +422,29 @@ public class StringsLib implements Library {
                   }
                   return Err.maybeNoSuchOverloadErr(null);
                 }),
+            Overload.unary(REVERSE, Guards.callInStrOutStr(StringsLib::reverse)),
             Overload.overload(
                 SPLIT,
                 null,
                 null,
                 Guards.callInStrStrOutStrArr(StringsLib::split),
-                Guards.callInStrStrIntOutStrArr(StringsLib::splitN)),
+                values ->
+                    values.length == 3
+                        ? Guards.callInStrStrIntOutStrArr(StringsLib::splitN).invoke(values)
+                        : Err.maybeNoSuchOverloadErr(null)),
             Overload.overload(
                 SUBSTR,
                 null,
                 null,
                 Guards.callInStrIntOutStr(StringsLib::substr),
-                Guards.callInStrIntIntOutStr(StringsLib::substrRange)),
+                values ->
+                    values.length == 3
+                        ? Guards.callInStrIntIntOutStr(StringsLib::substrRange).invoke(values)
+                        : Err.maybeNoSuchOverloadErr(null)),
             Overload.unary(TRIM_SPACE, Guards.callInStrOutStr(StringsLib::trimSpace)),
-            Overload.unary(UPPER_ASCII, Guards.callInStrOutStr(StringsLib::upperASCII)));
+            Overload.unary(UPPER_ASCII, Guards.callInStrOutStr(StringsLib::upperASCII)),
+            Overload.binary(FORMAT, StringsLib::format),
+            Overload.unary(QUOTE, Guards.callInStrOutStr(StringsLib::quote)));
     return List.of(functions);
   }
 
@@ -461,6 +501,51 @@ public class StringsLib implements Library {
 
   static String replace(String str, String old, String replacement) {
     return str.replace(old, replacement);
+  }
+
+  static String reverse(String str) {
+    return new StringBuilder(str).reverse().toString();
+  }
+
+  static String quote(String str) {
+    StringBuilder quoted = new StringBuilder(str.length() + 2);
+    quoted.append('"');
+    for (int offset = 0; offset < str.length(); ) {
+      int codePoint = str.codePointAt(offset);
+      offset += Character.charCount(codePoint);
+      switch (codePoint) {
+        case '\u0007':
+          quoted.append("\\a");
+          break;
+        case '\b':
+          quoted.append("\\b");
+          break;
+        case '\f':
+          quoted.append("\\f");
+          break;
+        case '\n':
+          quoted.append("\\n");
+          break;
+        case '\r':
+          quoted.append("\\r");
+          break;
+        case '\t':
+          quoted.append("\\t");
+          break;
+        case '\u000b':
+          quoted.append("\\v");
+          break;
+        case '\\':
+          quoted.append("\\\\");
+          break;
+        case '"':
+          quoted.append("\\\"");
+          break;
+        default:
+          quoted.appendCodePoint(codePoint);
+      }
+    }
+    return quoted.append('"').toString();
   }
 
   /**
@@ -646,5 +731,275 @@ public class StringsLib implements Library {
       }
     }
     return stringBuilder.toString();
+  }
+
+  private static Val format(Val pattern, Val args) {
+    if (!(pattern instanceof StringT) || !(args instanceof Sizer) || !(args instanceof Indexer)) {
+      return Err.maybeNoSuchOverloadErr(null);
+    }
+    try {
+      return StringT.stringOf(
+          formatPattern((String) pattern.value(), (Sizer) args, (Indexer) args));
+    } catch (FormatException e) {
+      return Err.newErr("%s", e.getMessage());
+    }
+  }
+
+  private static String formatPattern(String pattern, Sizer argsSizer, Indexer argsIndexer) {
+    int argCount = Math.toIntExact(argsSizer.size().intValue());
+    int argIndex = 0;
+    StringBuilder out = new StringBuilder(pattern.length());
+    for (int i = 0; i < pattern.length(); i++) {
+      char ch = pattern.charAt(i);
+      if (ch != '%') {
+        out.append(ch);
+        continue;
+      }
+      if (++i >= pattern.length()) {
+        throw new FormatException("could not parse formatting clause: missing formatting clause");
+      }
+      ch = pattern.charAt(i);
+      if (ch == '%') {
+        out.append('%');
+        continue;
+      }
+      int precision = -1;
+      if (ch == '.') {
+        int precisionStart = ++i;
+        while (i < pattern.length() && Character.isDigit(pattern.charAt(i))) {
+          i++;
+        }
+        if (precisionStart == i || i >= pattern.length()) {
+          throw new FormatException("could not parse formatting clause: malformed precision");
+        }
+        precision = Integer.parseInt(pattern.substring(precisionStart, i));
+        ch = pattern.charAt(i);
+      }
+      if ("sdboxXfe".indexOf(ch) < 0) {
+        throw new FormatException(
+            "could not parse formatting clause: unrecognized formatting clause \"%s\"", ch);
+      }
+      if (argIndex >= argCount) {
+        throw new FormatException("index %d out of range", argIndex);
+      }
+      Val arg = argsIndexer.get(intOf(argIndex++));
+      out.append(formatValue(ch, precision, arg));
+    }
+    return out.toString();
+  }
+
+  private static String formatValue(char clause, int precision, Val arg) {
+    switch (clause) {
+      case 's':
+        return renderStringClause(arg);
+      case 'd':
+        return renderDecimalClause(arg);
+      case 'b':
+        return renderBinaryClause(arg);
+      case 'o':
+        return renderOctalClause(arg);
+      case 'x':
+      case 'X':
+        return renderHexClause(arg, clause == 'X');
+      case 'f':
+        return renderFixedPointClause(arg, precision >= 0 ? precision : 6);
+      case 'e':
+        return renderScientificClause(arg, precision >= 0 ? precision : 6);
+      default:
+        throw new FormatException(
+            "could not parse formatting clause: unrecognized formatting clause \"%s\"", clause);
+    }
+  }
+
+  private static String renderStringClause(Val value) {
+    switch (value.type().typeEnum()) {
+      case String:
+        return value.value().toString();
+      case Bool:
+        return Boolean.toString(value.booleanValue());
+      case Bytes:
+        return new String(value.convertToNative(byte[].class), UTF_8);
+      case Int:
+        return Long.toString(value.intValue());
+      case Uint:
+        return Long.toUnsignedString(value.intValue());
+      case Double:
+        return renderDouble(value.doubleValue());
+      case Null:
+        return "null";
+      case Type:
+      case Duration:
+      case Timestamp:
+        return value.convertToType(StringT.StringType).value().toString();
+      case List:
+        return renderList(value);
+      case Map:
+        return renderMap(value);
+      default:
+        throw new FormatException(
+            "error during formatting: string clause can only be used on strings, bools, bytes, ints, doubles, maps, lists, types, durations, and timestamps, was given %s",
+            value.type().typeName());
+    }
+  }
+
+  private static String renderDecimalClause(Val value) {
+    switch (value.type().typeEnum()) {
+      case Int:
+        return Long.toString(value.intValue());
+      case Uint:
+        return Long.toUnsignedString(value.intValue());
+      case Double:
+        double d = value.doubleValue();
+        if (Double.isNaN(d) || Double.isInfinite(d)) {
+          return renderDouble(d);
+        }
+        break;
+      default:
+    }
+    throw new FormatException(
+        "error during formatting: decimal clause can only be used on integers, was given %s",
+        value.type().typeName());
+  }
+
+  private static String renderBinaryClause(Val value) {
+    switch (value.type().typeEnum()) {
+      case Int:
+        return Long.toBinaryString(value.intValue());
+      case Uint:
+        return Long.toUnsignedString(value.intValue(), 2);
+      case Bool:
+        return value.booleanValue() ? "1" : "0";
+      default:
+        throw new FormatException(
+            "error during formatting: only integers and bools can be formatted as binary, was given %s",
+            value.type().typeName());
+    }
+  }
+
+  private static String renderOctalClause(Val value) {
+    switch (value.type().typeEnum()) {
+      case Int:
+        return Long.toOctalString(value.intValue());
+      case Uint:
+        return Long.toUnsignedString(value.intValue(), 8);
+      default:
+        throw new FormatException(
+            "error during formatting: octal clause can only be used on integers, was given %s",
+            value.type().typeName());
+    }
+  }
+
+  private static String renderHexClause(Val value, boolean upperCase) {
+    String hex;
+    switch (value.type().typeEnum()) {
+      case Int:
+        hex = Long.toHexString(value.intValue());
+        break;
+      case Uint:
+        hex = Long.toUnsignedString(value.intValue(), 16);
+        break;
+      case String:
+        hex = bytesToHex(value.value().toString().getBytes(UTF_8));
+        break;
+      case Bytes:
+        hex = bytesToHex(value.convertToNative(byte[].class));
+        break;
+      default:
+        throw new FormatException(
+            "error during formatting: only integers, byte buffers, and strings can be formatted as hex, was given %s",
+            value.type().typeName());
+    }
+    return upperCase ? hex.toUpperCase(Locale.ROOT) : hex;
+  }
+
+  private static String renderFixedPointClause(Val value, int precision) {
+    switch (value.type().typeEnum()) {
+      case Int:
+      case Uint:
+      case Double:
+        double d = value.doubleValue();
+        if (Double.isNaN(d) || Double.isInfinite(d)) {
+          return renderDouble(d);
+        }
+        return BigDecimal.valueOf(d).setScale(precision, HALF_EVEN).toPlainString();
+      default:
+        throw new FormatException(
+            "error during formatting: fixed-point clause can only be used on doubles, was given %s",
+            value.type().typeName());
+    }
+  }
+
+  private static String renderScientificClause(Val value, int precision) {
+    switch (value.type().typeEnum()) {
+      case Int:
+      case Uint:
+      case Double:
+        double d = value.doubleValue();
+        if (Double.isNaN(d) || Double.isInfinite(d)) {
+          return renderDouble(d);
+        }
+        return String.format(Locale.ROOT, "%." + precision + "e", d);
+      default:
+        throw new FormatException(
+            "error during formatting: scientific clause can only be used on doubles, was given %s",
+            value.type().typeName());
+    }
+  }
+
+  private static String renderList(Val value) {
+    Sizer sizer = (Sizer) value;
+    Indexer indexer = (Indexer) value;
+    int size = Math.toIntExact(sizer.size().intValue());
+    StringBuilder out = new StringBuilder("[");
+    for (int i = 0; i < size; i++) {
+      if (i > 0) {
+        out.append(", ");
+      }
+      out.append(renderStringClause(indexer.get(intOf(i))));
+    }
+    return out.append(']').toString();
+  }
+
+  private static String renderMap(Val value) {
+    org.projectnessie.cel.common.types.IteratorT iterator =
+        ((org.projectnessie.cel.common.types.IterableT) value).iterator();
+    Indexer indexer = (Indexer) value;
+    List<String> entries = new ArrayList<>();
+    while (iterator.hasNext().booleanValue()) {
+      Val key = iterator.next();
+      entries.add(renderStringClause(key) + ": " + renderStringClause(indexer.get(key)));
+    }
+    Collections.sort(entries);
+    return "{" + String.join(", ", entries) + "}";
+  }
+
+  private static String renderDouble(double value) {
+    if (Double.isNaN(value)) {
+      return "NaN";
+    }
+    if (value == Double.POSITIVE_INFINITY) {
+      return "Infinity";
+    }
+    if (value == Double.NEGATIVE_INFINITY) {
+      return "-Infinity";
+    }
+    return Double.toString(value);
+  }
+
+  private static String bytesToHex(byte[] bytes) {
+    char[] hex = new char[bytes.length * 2];
+    char[] digits = "0123456789abcdef".toCharArray();
+    for (int i = 0; i < bytes.length; i++) {
+      int b = bytes[i] & 0xff;
+      hex[i * 2] = digits[b >>> 4];
+      hex[i * 2 + 1] = digits[b & 0x0f];
+    }
+    return new String(hex);
+  }
+
+  private static final class FormatException extends RuntimeException {
+    FormatException(String message, Object... args) {
+      super(String.format(Locale.ROOT, message, args));
+    }
   }
 }

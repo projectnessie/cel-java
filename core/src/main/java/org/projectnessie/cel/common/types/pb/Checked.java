@@ -92,6 +92,8 @@ public final class Checked {
     // Well-known types.
     CheckedWellKnowns.put("google.protobuf.Any", checkedAny);
     CheckedWellKnowns.put("google.protobuf.Duration", checkedDuration);
+    CheckedWellKnowns.put(
+        "google.protobuf.FieldMask", checkedMessageType("google.protobuf.FieldMask"));
     CheckedWellKnowns.put("google.protobuf.Timestamp", checkedTimestamp);
     // Json types.
     CheckedWellKnowns.put("google.protobuf.ListValue", checkedListDyn);

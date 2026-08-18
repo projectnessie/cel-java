@@ -120,13 +120,16 @@ public final class UintT extends BaseVal
       return (T) UInt64Value.of(i);
     }
     if (typeDesc == UInt32Value.class) {
+      if (Long.compareUnsigned(i, 0xffffffffL) > 0) {
+        Err.throwErrorAsIllegalStateException(rangeError(Long.toUnsignedString(i), "uint32"));
+      }
       return (T) UInt32Value.of((int) i);
     }
     if (typeDesc == Val.class || typeDesc == UintT.class) {
       return (T) this;
     }
     if (typeDesc == Value.class) {
-      if (i <= maxIntJSON) {
+      if (Long.compareUnsigned(i, maxIntJSON) <= 0) {
         // JSON can accurately represent 32-bit uints as floating point values.
         return (T) Value.newBuilder().setNumberValue(i).build();
       } else {

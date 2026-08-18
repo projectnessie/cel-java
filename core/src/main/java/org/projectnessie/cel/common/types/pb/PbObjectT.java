@@ -21,8 +21,14 @@ import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.Types.boolOf;
 
 import com.google.protobuf.Any;
+import com.google.protobuf.Descriptors.FieldDescriptor;
+import com.google.protobuf.Descriptors.FieldDescriptor.JavaType;
 import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.Empty;
+import com.google.protobuf.FieldMask;
 import com.google.protobuf.Message;
+import com.google.protobuf.Struct;
+import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
 import org.projectnessie.cel.common.types.ObjectT;
 import org.projectnessie.cel.common.types.StringT;
@@ -57,7 +63,7 @@ public final class PbObjectT extends ObjectT {
       return noSuchOverload(this, "isSet", field);
     }
     String protoFieldStr = (String) field.value();
-    FieldDescription fd = typeDesc().fieldByName(protoFieldStr);
+    FieldDescription fd = fieldDescription(protoFieldStr);
     if (fd == null) {
       return noSuchField(protoFieldStr);
     }
@@ -70,11 +76,27 @@ public final class PbObjectT extends ObjectT {
       return noSuchOverload(this, "get", index);
     }
     String protoFieldStr = (String) index.value();
-    FieldDescription fd = typeDesc().fieldByName(protoFieldStr);
+    FieldDescription fd = fieldDescription(protoFieldStr);
     if (fd == null) {
       return noSuchField(protoFieldStr);
     }
     return nativeToValue(fd.getField(value, adapter));
+  }
+
+  @Override
+  public Val equal(Val other) {
+    if (!(other instanceof PbObjectT)) {
+      return super.equal(other);
+    }
+
+    PbObjectT otherObject = (PbObjectT) other;
+    if (!typeDesc().name().equals(otherObject.typeDesc().name())) {
+      return boolOf(false);
+    }
+    if (containsNaN(message()) || containsNaN(otherObject.message())) {
+      return boolOf(false);
+    }
+    return boolOf(message().equals(otherObject.message()));
   }
 
   @SuppressWarnings("unchecked")
@@ -102,20 +124,15 @@ public final class PbObjectT extends ObjectT {
     }
     if (typeDesc == Value.class) {
       // jsonValueType
-      throw new UnsupportedOperationException("IMPLEMENT proto-to-json");
-      // TODO proto-to-json
-      //		// Marshal the proto to JSON first, and then rehydrate as protobuf.Value as there is no
-      //		// support for direct conversion from proto.Message to protobuf.Value.
-      //		bytes, err := protojson.Marshal(pb)
-      //		if err != nil {
-      //			return nil, err
-      //		}
-      //		json := &structpb.Value{}
-      //		err = protojson.Unmarshal(bytes, json)
-      //		if err != nil {
-      //			return nil, err
-      //		}
-      //		return json, nil
+      if (value instanceof Empty) {
+        return (T) Value.newBuilder().setStructValue(Struct.getDefaultInstance()).build();
+      }
+      if (value instanceof FieldMask) {
+        return (T) Value.newBuilder().setStringValue(fieldMaskJsonValue((FieldMask) value)).build();
+      }
+      if (value instanceof Timestamp) {
+        return adapter.nativeToValue(value).convertToNative(typeDesc);
+      }
     }
     if (typeDesc.isAssignableFrom(this.typeDesc.reflectType()) || typeDesc == Object.class) {
       if (value instanceof Any || value instanceof DynamicMessage) {
@@ -141,8 +158,71 @@ public final class PbObjectT extends ObjectT {
     return (Message) value;
   }
 
+  private static boolean containsNaN(Message message) {
+    for (FieldDescriptor field : message.getAllFields().keySet()) {
+      Object fieldValue = message.getField(field);
+      if (field.isRepeated()) {
+        for (Object element : (Iterable<?>) fieldValue) {
+          if (containsNaN(field, element)) {
+            return true;
+          }
+        }
+      } else if (containsNaN(field, fieldValue)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private static boolean containsNaN(FieldDescriptor field, Object value) {
+    JavaType javaType = field.getJavaType();
+    if (javaType == JavaType.DOUBLE) {
+      return Double.isNaN((Double) value);
+    }
+    if (javaType == JavaType.FLOAT) {
+      return Float.isNaN((Float) value);
+    }
+    return javaType == JavaType.MESSAGE && containsNaN((Message) value);
+  }
+
+  private static String fieldMaskJsonValue(FieldMask fieldMask) {
+    StringBuilder value = new StringBuilder();
+    for (String path : fieldMask.getPathsList()) {
+      if (value.length() > 0) {
+        value.append(',');
+      }
+      value.append(fieldMaskPathJsonValue(path));
+    }
+    return value.toString();
+  }
+
+  private static String fieldMaskPathJsonValue(String path) {
+    StringBuilder value = new StringBuilder(path.length());
+    boolean upperNext = false;
+    for (int i = 0; i < path.length(); i++) {
+      char c = path.charAt(i);
+      if (c == '_') {
+        upperNext = true;
+      } else if (upperNext) {
+        value.append(Character.toUpperCase(c));
+        upperNext = false;
+      } else {
+        value.append(c);
+      }
+    }
+    return value.toString();
+  }
+
   private PbTypeDescription typeDesc() {
     return (PbTypeDescription) typeDesc;
+  }
+
+  private FieldDescription fieldDescription(String fieldName) {
+    FieldDescription field = typeDesc().fieldByName(fieldName);
+    if (field != null || !(adapter instanceof ProtoTypeRegistry)) {
+      return field;
+    }
+    return ((ProtoTypeRegistry) adapter).findFieldDescription(typeDesc().name(), fieldName);
   }
 
   @SuppressWarnings("unchecked")

@@ -127,6 +127,103 @@ public class CELTest {
   }
 
   @Test
+  void comprehensionLocalVariablesShadowNamespacedIdentifiers() {
+    Env env =
+        newEnv(
+            container("com.example"),
+            declarations(
+                Decls.newVar("com.example.y", Decls.Int),
+                Decls.newVar("y", Decls.String),
+                Decls.newVar("com.example.y.z", Decls.Int)));
+
+    AstIssuesTuple astIss = env.compile("[0].exists(y, y == 0)");
+    assertThat(astIss.hasIssues()).isFalse();
+    assertThat(env.program(astIss.getAst()).eval(mapOf("com.example.y", 42L)).getVal())
+        .isSameAs(True);
+
+    astIss = env.compile("['compre'].exists(y, .y == 'y')");
+    assertThat(astIss.hasIssues()).isFalse();
+    assertThat(env.program(astIss.getAst()).eval(mapOf("y", "y")).getVal()).isSameAs(True);
+
+    astIss = env.compile("[{'z': 0}].exists(y, y.z == 0)");
+    assertThat(astIss.hasIssues()).isFalse();
+    assertThat(env.program(astIss.getAst()).eval(mapOf("com.example.y.z", 42L)).getVal())
+        .isSameAs(True);
+  }
+
+  @Test
+  void bindMacroIntroducesLocalVariable() {
+    Env env =
+        newEnv(container("com.example"), declarations(Decls.newVar("com.example.x", Decls.Int)));
+
+    AstIssuesTuple astIss = env.compile("cel.bind(x, 1, x + 1)");
+    assertThat(astIss.hasIssues()).isFalse();
+    assertThat(
+            env.program(astIss.getAst())
+                .eval(mapOf("com.example.x", 42L))
+                .getVal()
+                .equal(IntT.intOf(2)))
+        .isSameAs(True);
+
+    astIss = env.compile("cel.bind(x, {'y': 0}, x.y == 0)");
+    assertThat(astIss.hasIssues()).isFalse();
+    assertThat(env.program(astIss.getAst()).eval(mapOf("com.example.x.y", 42L)).getVal())
+        .isSameAs(True);
+  }
+
+  @Test
+  void blockMacrosIntroduceSequentialLocalVariables() {
+    Env env = newEnv(macros(Macro.TestOnlyBlockMacros));
+
+    AstIssuesTuple astIss =
+        env.compile("cel.block([1, cel.index(0) + 1, cel.index(1) + 1], cel.index(2))");
+
+    assertThat(astIss.hasIssues()).isFalse();
+    assertThat(env.program(astIss.getAst()).eval(emptyMap()).getVal().equal(IntT.intOf(3)))
+        .isSameAs(True);
+  }
+
+  @Test
+  void blockMacrosCanNameComprehensionVariables() {
+    Env env = newEnv(macros(Macro.TestOnlyBlockMacros));
+
+    AstIssuesTuple astIss =
+        env.compile(
+            "[1, 2].map(cel.iterVar(0, 0), "
+                + "[cel.iterVar(0, 0) + cel.iterVar(0, 0)])[1][0] == 4");
+
+    assertThat(astIss.hasIssues()).isFalse();
+    assertThat(env.program(astIss.getAst()).eval(emptyMap()).getVal()).isSameAs(True);
+  }
+
+  @Test
+  void twoVariableComprehensionsBindListIndexAndValue() {
+    Env env = newEnv();
+
+    AstIssuesTuple astIss = env.compile("[2, 4, 6].transformList(i, v, i + v)[2] == 8");
+
+    assertThat(astIss.hasIssues()).isFalse();
+    assertThat(env.program(astIss.getAst()).eval(emptyMap()).getVal()).isSameAs(True);
+    assertThat(
+            env.program(astIss.getAst(), evalOptions(OptExhaustiveEval)).eval(emptyMap()).getVal())
+        .isSameAs(True);
+  }
+
+  @Test
+  void twoVariableComprehensionsBindMapKeyAndValue() {
+    Env env = newEnv();
+
+    AstIssuesTuple astIss =
+        env.compile("{'foo': 'bar'}.transformMap(k, v, k + v)['foo'] == 'foobar'");
+
+    assertThat(astIss.hasIssues()).isFalse();
+    assertThat(env.program(astIss.getAst()).eval(emptyMap()).getVal()).isSameAs(True);
+    assertThat(
+            env.program(astIss.getAst(), evalOptions(OptExhaustiveEval)).eval(emptyMap()).getVal())
+        .isSameAs(True);
+  }
+
+  @Test
   void AstToString() {
     Env stdEnv = newEnv();
     String in = "a + b - (c ? (-d + 4) : e)";

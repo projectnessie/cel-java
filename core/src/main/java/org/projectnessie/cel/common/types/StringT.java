@@ -128,11 +128,19 @@ public final class StringT extends BaseVal implements Adder, Comparer, Matcher, 
         case Double:
           return doubleOf(Double.parseDouble(s));
         case Bool:
-          if ("true".equalsIgnoreCase(s)) {
-            return True;
-          }
-          if ("false".equalsIgnoreCase(s)) {
-            return False;
+          switch (s) {
+            case "1":
+            case "t":
+            case "true":
+            case "TRUE":
+            case "True":
+              return True;
+            case "0":
+            case "f":
+            case "false":
+            case "FALSE":
+            case "False":
+              return False;
           }
           break;
         case Bytes:

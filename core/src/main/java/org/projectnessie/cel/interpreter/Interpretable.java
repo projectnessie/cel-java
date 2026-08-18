@@ -22,6 +22,7 @@ import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.noSuchAttributeException;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.Err.valOrErr;
+import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
 import static org.projectnessie.cel.common.types.Util.isUnknownOrError;
@@ -47,11 +48,12 @@ import org.projectnessie.cel.common.types.Overloads;
 import org.projectnessie.cel.common.types.StringT;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
-import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Container;
 import org.projectnessie.cel.common.types.traits.FieldTester;
+import org.projectnessie.cel.common.types.traits.Lister;
+import org.projectnessie.cel.common.types.traits.Mapper;
 import org.projectnessie.cel.common.types.traits.Negater;
 import org.projectnessie.cel.common.types.traits.Receiver;
 import org.projectnessie.cel.common.types.traits.Sizer;
@@ -934,7 +936,7 @@ public interface Interpretable {
         if (isUnknownOrError(keyVal)) {
           return keyVal;
         }
-        if (keyVal.type().typeEnum() == TypeEnum.Null) {
+        if (!MapT.isSupportedLiteralKeyType(keyVal)) {
           return newErr("unsupported key type");
         }
         Val valVal = vals[i].eval(ctx);
@@ -1040,6 +1042,7 @@ public interface Interpretable {
     // TODO combine with EvalExhaustiveFold
     final String accuVar;
     final String iterVar;
+    final String iterVar2;
     final Interpretable iterRange;
     final Interpretable accu;
     final Interpretable cond;
@@ -1051,6 +1054,7 @@ public interface Interpretable {
         String accuVar,
         Interpretable accu,
         String iterVar,
+        String iterVar2,
         Interpretable iterRange,
         Interpretable cond,
         Interpretable step,
@@ -1058,6 +1062,7 @@ public interface Interpretable {
       super(id);
       this.accuVar = accuVar;
       this.iterVar = iterVar;
+      this.iterVar2 = iterVar2;
       this.iterRange = iterRange;
       this.accu = accu;
       this.cond = cond;
@@ -1081,19 +1086,43 @@ public interface Interpretable {
       VarActivation iterCtx = new VarActivation();
       iterCtx.parent = accuCtx;
       iterCtx.name = iterVar;
+      VarActivation iterCtx2 = null;
+      if (!iterVar2.isEmpty()) {
+        iterCtx2 = new VarActivation();
+        iterCtx2.parent = iterCtx;
+        iterCtx2.name = iterVar2;
+      }
       IteratorT it = ((IterableT) foldRange).iterator();
+      long index = 0L;
       while (it.hasNext() == True) {
         // Modify the iter var in the fold activation.
-        iterCtx.val = it.next();
+        Val next = it.next();
+        Activation loopCtx = iterCtx;
+        if (iterCtx2 != null) {
+          if (foldRange instanceof Lister) {
+            iterCtx.val = intOf(index);
+            iterCtx2.val = next;
+          } else if (foldRange instanceof Mapper) {
+            iterCtx.val = next;
+            iterCtx2.val = ((Mapper) foldRange).get(next);
+          } else {
+            return valOrErr(
+                foldRange, "got '%s', expected list or map type", foldRange.getClass().getName());
+          }
+          loopCtx = iterCtx2;
+        } else {
+          iterCtx.val = next;
+        }
+        index++;
 
         // Evaluate the condition, terminate the loop if false.
-        Val c = cond.eval(iterCtx);
+        Val c = cond.eval(loopCtx);
         if (c == False) {
           break;
         }
 
         // Evalute the evaluation step into accu var.
-        accuCtx.val = step.eval(iterCtx);
+        accuCtx.val = step.eval(loopCtx);
       }
       // Compute the result.
       return result.eval(accuCtx);
@@ -1142,6 +1171,9 @@ public interface Interpretable {
           + ", iterVar='"
           + iterVar
           + '\''
+          + ", iterVar2='"
+          + iterVar2
+          + '\''
           + ", iterRange="
           + iterRange
           + ", accu="
@@ -1158,6 +1190,7 @@ public interface Interpretable {
 
   final class EvalListFold extends AbstractEval implements Coster {
     final String iterVar;
+    final String iterVar2;
     final Interpretable iterRange;
     final Interpretable filter;
     final Interpretable transform;
@@ -1166,12 +1199,14 @@ public interface Interpretable {
     EvalListFold(
         long id,
         String iterVar,
+        String iterVar2,
         Interpretable iterRange,
         Interpretable filter,
         Interpretable transform,
         TypeAdapter adapter) {
       super(id);
       this.iterVar = iterVar;
+      this.iterVar2 = iterVar2;
       this.iterRange = iterRange;
       this.filter = filter;
       this.transform = transform;
@@ -1189,13 +1224,37 @@ public interface Interpretable {
       VarActivation iterCtx = new VarActivation();
       iterCtx.parent = ctx;
       iterCtx.name = iterVar;
+      VarActivation iterCtx2 = null;
+      if (!iterVar2.isEmpty()) {
+        iterCtx2 = new VarActivation();
+        iterCtx2.parent = iterCtx;
+        iterCtx2.name = iterVar2;
+      }
       List<Val> values = new ArrayList<>(listCapacity(foldRange));
       IteratorT it = ((IterableT) foldRange).iterator();
+      long index = 0L;
       while (it.hasNext() == True) {
-        iterCtx.val = it.next();
+        Val next = it.next();
+        Activation loopCtx = iterCtx;
+        if (iterCtx2 != null) {
+          if (foldRange instanceof Lister) {
+            iterCtx.val = intOf(index);
+            iterCtx2.val = next;
+          } else if (foldRange instanceof Mapper) {
+            iterCtx.val = next;
+            iterCtx2.val = ((Mapper) foldRange).get(next);
+          } else {
+            return valOrErr(
+                foldRange, "got '%s', expected list or map type", foldRange.getClass().getName());
+          }
+          loopCtx = iterCtx2;
+        } else {
+          iterCtx.val = next;
+        }
+        index++;
 
         if (filter != null) {
-          Val include = filter.eval(iterCtx);
+          Val include = filter.eval(loopCtx);
           if (include == False) {
             continue;
           }
@@ -1204,7 +1263,7 @@ public interface Interpretable {
           }
         }
 
-        Val value = transform.eval(iterCtx);
+        Val value = transform.eval(loopCtx);
         if (isUnknownOrError(value)) {
           return value;
         }
@@ -1250,6 +1309,149 @@ public interface Interpretable {
           + id
           + ", iterVar='"
           + iterVar
+          + '\''
+          + ", iterVar2='"
+          + iterVar2
+          + '\''
+          + ", iterRange="
+          + iterRange
+          + ", filter="
+          + filter
+          + ", transform="
+          + transform
+          + '}';
+    }
+  }
+
+  final class EvalMapFold extends AbstractEval implements Coster {
+    final String iterVar;
+    final String iterVar2;
+    final Interpretable iterRange;
+    final Interpretable filter;
+    final Interpretable transform;
+    private final TypeAdapter adapter;
+
+    EvalMapFold(
+        long id,
+        String iterVar,
+        String iterVar2,
+        Interpretable iterRange,
+        Interpretable filter,
+        Interpretable transform,
+        TypeAdapter adapter) {
+      super(id);
+      this.iterVar = iterVar;
+      this.iterVar2 = iterVar2;
+      this.iterRange = iterRange;
+      this.filter = filter;
+      this.transform = transform;
+      this.adapter = adapter;
+    }
+
+    @Override
+    public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
+      Val foldRange = iterRange.eval(ctx);
+      if (!foldRange.type().hasTrait(Trait.IterableType)) {
+        return valOrErr(
+            foldRange, "got '%s', expected iterable type", foldRange.getClass().getName());
+      }
+
+      VarActivation iterCtx = new VarActivation();
+      iterCtx.parent = ctx;
+      iterCtx.name = iterVar;
+      VarActivation iterCtx2 = null;
+      if (!iterVar2.isEmpty()) {
+        iterCtx2 = new VarActivation();
+        iterCtx2.parent = iterCtx;
+        iterCtx2.name = iterVar2;
+      }
+      Map<Val, Val> values = new HashMap<>(mapCapacity(foldRange));
+      IteratorT it = ((IterableT) foldRange).iterator();
+      long index = 0L;
+      while (it.hasNext() == True) {
+        Val next = it.next();
+        Val key;
+        Activation loopCtx = iterCtx;
+        if (iterCtx2 != null) {
+          if (foldRange instanceof Lister) {
+            key = intOf(index);
+            iterCtx.val = key;
+            iterCtx2.val = next;
+          } else if (foldRange instanceof Mapper) {
+            key = next;
+            iterCtx.val = key;
+            iterCtx2.val = ((Mapper) foldRange).get(next);
+          } else {
+            return valOrErr(
+                foldRange, "got '%s', expected list or map type", foldRange.getClass().getName());
+          }
+          loopCtx = iterCtx2;
+        } else {
+          key = next;
+          iterCtx.val = next;
+        }
+        index++;
+
+        if (filter != null) {
+          Val include = filter.eval(loopCtx);
+          if (include == False) {
+            continue;
+          }
+          if (include != True) {
+            return noSuchOverload(null, Operator.Conditional.id, include);
+          }
+        }
+
+        Val value = transform.eval(loopCtx);
+        if (isUnknownOrError(value)) {
+          return value;
+        }
+        values.put(key, value);
+      }
+      return MapT.newWrappedMap(adapter, values);
+    }
+
+    private int mapCapacity(Val foldRange) {
+      if (foldRange.type().hasTrait(Trait.SizerType)) {
+        long size = ((Sizer) foldRange).size().intValue();
+        if (size > 0 && size <= Integer.MAX_VALUE) {
+          long capacity = size * 4 / 3 + 1;
+          return capacity <= Integer.MAX_VALUE ? (int) capacity : Integer.MAX_VALUE;
+        }
+      }
+      return 0;
+    }
+
+    @Override
+    public Cost cost() {
+      Cost range = estimateCost(iterRange);
+      Cost result = estimateCost(transform);
+      if (filter != null) {
+        result = result.add(estimateCost(filter));
+      }
+      Val foldRange = iterRange.eval(emptyActivation());
+      if (!foldRange.type().hasTrait(Trait.IterableType)) {
+        return Cost.Unknown;
+      }
+      long rangeCnt = 0L;
+      IteratorT it = ((IterableT) foldRange).iterator();
+      while (it.hasNext() == True) {
+        it.next();
+        rangeCnt++;
+      }
+      return range.add(result.multiply(rangeCnt));
+    }
+
+    @Override
+    public String toString() {
+      return "EvalMapFold{"
+          + "id="
+          + id
+          + ", iterVar='"
+          + iterVar
+          + '\''
+          + ", iterVar2='"
+          + iterVar2
           + '\''
           + ", iterRange="
           + iterRange
@@ -1854,6 +2056,7 @@ public interface Interpretable {
     // TODO combine with EvalFold
     private final String accuVar;
     private final String iterVar;
+    private final String iterVar2;
     private final Interpretable iterRange;
     private final Interpretable accu;
     private final Interpretable cond;
@@ -1866,12 +2069,14 @@ public interface Interpretable {
         String accuVar,
         Interpretable iterRange,
         String iterVar,
+        String iterVar2,
         Interpretable cond,
         Interpretable step,
         Interpretable result) {
       super(id);
       this.accuVar = accuVar;
       this.iterVar = iterVar;
+      this.iterVar2 = iterVar2;
       this.iterRange = iterRange;
       this.accu = accu;
       this.cond = cond;
@@ -1895,16 +2100,40 @@ public interface Interpretable {
       VarActivation iterCtx = new VarActivation();
       iterCtx.parent = accuCtx;
       iterCtx.name = iterVar;
+      VarActivation iterCtx2 = null;
+      if (!iterVar2.isEmpty()) {
+        iterCtx2 = new VarActivation();
+        iterCtx2.parent = iterCtx;
+        iterCtx2.name = iterVar2;
+      }
       IteratorT it = ((IterableT) foldRange).iterator();
+      long index = 0L;
       while (it.hasNext() == True) {
         // Modify the iter var in the fold activation.
-        iterCtx.val = it.next();
+        Val next = it.next();
+        Activation loopCtx = iterCtx;
+        if (iterCtx2 != null) {
+          if (foldRange instanceof Lister) {
+            iterCtx.val = intOf(index);
+            iterCtx2.val = next;
+          } else if (foldRange instanceof Mapper) {
+            iterCtx.val = next;
+            iterCtx2.val = ((Mapper) foldRange).get(next);
+          } else {
+            return valOrErr(
+                foldRange, "got '%s', expected list or map type", foldRange.getClass().getName());
+          }
+          loopCtx = iterCtx2;
+        } else {
+          iterCtx.val = next;
+        }
+        index++;
 
         // Evaluate the condition, but don't terminate the loop as this is exhaustive eval!
-        cond.eval(iterCtx);
+        cond.eval(loopCtx);
 
         // Evalute the evaluation step into accu var.
-        accuCtx.val = step.eval(iterCtx);
+        accuCtx.val = step.eval(loopCtx);
       }
       // Compute the result.
       return result.eval(accuCtx);
@@ -1950,6 +2179,9 @@ public interface Interpretable {
           + ", iterVar='"
           + iterVar
           + '\''
+          + ", iterVar2='"
+          + iterVar2
+          + '\''
           + ", iterRange="
           + iterRange
           + ", accu="
@@ -1984,14 +2216,38 @@ public interface Interpretable {
       VarActivation iterCtx = new VarActivation();
       iterCtx.parent = ctx;
       iterCtx.name = fold.iterVar;
+      VarActivation iterCtx2 = null;
+      if (!fold.iterVar2.isEmpty()) {
+        iterCtx2 = new VarActivation();
+        iterCtx2.parent = iterCtx;
+        iterCtx2.name = fold.iterVar2;
+      }
       List<Val> values = new ArrayList<>(fold.listCapacity(foldRange));
       Val result = null;
       IteratorT it = ((IterableT) foldRange).iterator();
+      long index = 0L;
       while (it.hasNext() == True) {
-        iterCtx.val = it.next();
+        Val next = it.next();
+        Activation loopCtx = iterCtx;
+        if (iterCtx2 != null) {
+          if (foldRange instanceof Lister) {
+            iterCtx.val = intOf(index);
+            iterCtx2.val = next;
+          } else if (foldRange instanceof Mapper) {
+            iterCtx.val = next;
+            iterCtx2.val = ((Mapper) foldRange).get(next);
+          } else {
+            return valOrErr(
+                foldRange, "got '%s', expected list or map type", foldRange.getClass().getName());
+          }
+          loopCtx = iterCtx2;
+        } else {
+          iterCtx.val = next;
+        }
+        index++;
 
-        Val include = fold.filter != null ? fold.filter.eval(iterCtx) : True;
-        Val value = fold.transform.eval(iterCtx);
+        Val include = fold.filter != null ? fold.filter.eval(loopCtx) : True;
+        Val value = fold.transform.eval(loopCtx);
         if (include == False) {
           continue;
         }
@@ -2020,6 +2276,91 @@ public interface Interpretable {
     @Override
     public String toString() {
       return "EvalExhaustiveListFold{" + fold + '}';
+    }
+  }
+
+  /** EvalExhaustiveMapFold evaluates every filter and transform without short-circuiting. */
+  final class EvalExhaustiveMapFold extends AbstractEval implements Coster {
+    private final EvalMapFold fold;
+
+    EvalExhaustiveMapFold(EvalMapFold fold) {
+      super(fold.id);
+      this.fold = fold;
+    }
+
+    @Override
+    public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
+      Val foldRange = fold.iterRange.eval(ctx);
+      if (!foldRange.type().hasTrait(Trait.IterableType)) {
+        return valOrErr(
+            foldRange, "got '%s', expected iterable type", foldRange.getClass().getName());
+      }
+
+      VarActivation iterCtx = new VarActivation();
+      iterCtx.parent = ctx;
+      iterCtx.name = fold.iterVar;
+      VarActivation iterCtx2 = null;
+      if (!fold.iterVar2.isEmpty()) {
+        iterCtx2 = new VarActivation();
+        iterCtx2.parent = iterCtx;
+        iterCtx2.name = fold.iterVar2;
+      }
+      Map<Val, Val> values = new HashMap<>(fold.mapCapacity(foldRange));
+      Val result = null;
+      IteratorT it = ((IterableT) foldRange).iterator();
+      long index = 0L;
+      while (it.hasNext() == True) {
+        Val next = it.next();
+        Val key;
+        Activation loopCtx = iterCtx;
+        if (iterCtx2 != null) {
+          if (foldRange instanceof Lister) {
+            key = intOf(index);
+            iterCtx.val = key;
+            iterCtx2.val = next;
+          } else if (foldRange instanceof Mapper) {
+            key = next;
+            iterCtx.val = key;
+            iterCtx2.val = ((Mapper) foldRange).get(next);
+          } else {
+            return valOrErr(
+                foldRange, "got '%s', expected list or map type", foldRange.getClass().getName());
+          }
+          loopCtx = iterCtx2;
+        } else {
+          key = next;
+          iterCtx.val = next;
+        }
+        index++;
+
+        Val include = fold.filter != null ? fold.filter.eval(loopCtx) : True;
+        Val value = fold.transform.eval(loopCtx);
+        if (include == False) {
+          continue;
+        }
+        if (include != True) {
+          result = noSuchOverload(null, Operator.Conditional.id, include);
+          continue;
+        }
+        if (result == null) {
+          if (isUnknownOrError(value)) {
+            result = value;
+          } else {
+            values.put(key, value);
+          }
+        }
+      }
+      return result != null ? result : MapT.newWrappedMap(fold.adapter, values);
+    }
+
+    @Override
+    public Cost cost() {
+      return fold.cost();
+    }
+
+    @Override
+    public String toString() {
+      return "EvalExhaustiveMapFold{" + fold + '}';
     }
   }
 

@@ -36,6 +36,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import org.projectnessie.cel.common.containers.Container;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.parser.Macro;
@@ -118,6 +119,12 @@ public final class CheckerEnv {
    * such identifier is found in the Env.
    */
   public Decl lookupIdent(String name) {
+    if (!name.startsWith(".") && hasLocalIdent(name)) {
+      Decl ident = declarations.findIdentInScope(name);
+      if (ident != null) {
+        return ident;
+      }
+    }
     for (String candidate : container.resolveCandidateNames(name)) {
       Decl ident = declarations.findIdent(candidate);
       if (ident != null) {
@@ -146,8 +153,23 @@ public final class CheckerEnv {
         declarations.addIdent(decl);
         return decl;
       }
+
+      Val identValue = provider.findIdent(candidate);
+      if (identValue != null && identValue.type().typeEnum() == TypeEnum.String) {
+        Decl decl =
+            Decls.newIdent(
+                candidate,
+                Decls.String,
+                Constant.newBuilder().setStringValue(identValue.value().toString()).build());
+        declarations.addIdent(decl);
+        return decl;
+      }
     }
     return null;
+  }
+
+  boolean hasLocalIdent(String name) {
+    return declarations.hasParent() && declarations.findIdentInScope(name) != null;
   }
 
   /**

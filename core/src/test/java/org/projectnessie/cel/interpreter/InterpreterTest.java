@@ -345,6 +345,10 @@ class InterpreterTest {
       new TestCase(InterpreterTestCase.map_key_null)
           .expr("{null:false}[null]")
           .err("message: unsupported key type"),
+      new TestCase(InterpreterTestCase.map_key_float)
+          .expr("{3.3:15.15, 1.0: 5}[1.0]")
+          .unchecked()
+          .err("message: unsupported key type"),
       new TestCase(InterpreterTestCase.map_value_repeat_key_heterogeneous)
           .expr("{0: 1, 0u: 2}[0.0]")
           .err("message: Failed with repeated key"),
@@ -394,8 +398,12 @@ class InterpreterTest {
               "TestAllTypes{single_double: double('NaN')} == TestAllTypes{single_double: double('NaN')}")
           .container("cel.expr.conformance.proto3")
           .types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance())
-          // The outcome in the generated Java proto code is different than in the conformance-test,
-          // it is NOT: "For proto equality, fields with NaN value are treated as not equal."
+          .out(False),
+      new TestCase(InterpreterTestCase.ne_proto_nan_not_equal)
+          .expr(
+              "TestAllTypes{single_double: double('NaN')} != TestAllTypes{single_double: double('NaN')}")
+          .container("cel.expr.conformance.proto3")
+          .types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance())
           .out(True),
       new TestCase(InterpreterTestCase.eq_bool_not_null)
           .expr("google.protobuf.BoolValue{} != null")

@@ -122,7 +122,24 @@ public class StringTest {
   @Test
   void stringConvertToType() {
     assertThat(stringOf("-1").convertToType(IntType).equal(IntNegOne)).isSameAs(True);
+    assertThat(stringOf("1").convertToType(BoolType).equal(True)).isSameAs(True);
+    assertThat(stringOf("t").convertToType(BoolType).equal(True)).isSameAs(True);
+    assertThat(stringOf("true").convertToType(BoolType).equal(True)).isSameAs(True);
+    assertThat(stringOf("TRUE").convertToType(BoolType).equal(True)).isSameAs(True);
+    assertThat(stringOf("True").convertToType(BoolType).equal(True)).isSameAs(True);
+    assertThat(stringOf("0").convertToType(BoolType).equal(False)).isSameAs(True);
+    assertThat(stringOf("f").convertToType(BoolType).equal(False)).isSameAs(True);
     assertThat(stringOf("false").convertToType(BoolType).equal(False)).isSameAs(True);
+    assertThat(stringOf("FALSE").convertToType(BoolType).equal(False)).isSameAs(True);
+    assertThat(stringOf("False").convertToType(BoolType).equal(False)).isSameAs(True);
+    assertThat(stringOf("TrUe").convertToType(BoolType))
+        .isInstanceOf(Err.class)
+        .extracting(Object::toString)
+        .isEqualTo("type conversion error from 'string' to 'bool'");
+    assertThat(stringOf("FaLsE").convertToType(BoolType))
+        .isInstanceOf(Err.class)
+        .extracting(Object::toString)
+        .isEqualTo("type conversion error from 'string' to 'bool'");
     assertThat(stringOf("1").convertToType(UintType).equal(uintOf(1))).isSameAs(True);
     assertThat(stringOf("2.5").convertToType(DoubleType).equal(doubleOf(2.5))).isSameAs(True);
     assertThat(

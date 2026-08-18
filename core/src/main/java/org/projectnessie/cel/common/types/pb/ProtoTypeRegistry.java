@@ -30,6 +30,7 @@ import static org.projectnessie.cel.common.types.ListT.ListType;
 import static org.projectnessie.cel.common.types.MapT.MapType;
 import static org.projectnessie.cel.common.types.NullT.NullType;
 import static org.projectnessie.cel.common.types.StringT.StringType;
+import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.TimestampT.TimestampType;
 import static org.projectnessie.cel.common.types.TypeT.TypeType;
 import static org.projectnessie.cel.common.types.TypeT.newObjectTypeValue;
@@ -54,6 +55,7 @@ import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.DoubleValue;
 import com.google.protobuf.Duration;
 import com.google.protobuf.Empty;
+import com.google.protobuf.FieldMask;
 import com.google.protobuf.FloatValue;
 import com.google.protobuf.Int32Value;
 import com.google.protobuf.Int64Value;
@@ -79,10 +81,12 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.TypeT;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.common.types.traits.Lister;
 
 public final class ProtoTypeRegistry implements TypeRegistry {
   private static final ProtoTypeRegistry DEFAULT_REGISTRY = newDefaultRegistry();
@@ -132,6 +136,7 @@ public final class ProtoTypeRegistry implements TypeRegistry {
             Arrays.asList(
                 DoubleValue.getDescriptor().getFile(),
                 Empty.getDescriptor().getFile(),
+                FieldMask.getDescriptor().getFile(),
                 Timestamp.getDescriptor().getFile(),
                 UInt64Value.getDescriptor().getFile(),
                 Any.getDescriptor().getFile(),
@@ -205,16 +210,30 @@ public final class ProtoTypeRegistry implements TypeRegistry {
   }
 
   private FieldType loadFieldType(String messageType, String fieldName) {
+    FieldDescription field = findFieldDescription(messageType, fieldName);
+    if (field == null) {
+      return null;
+    }
+    FieldDescription resolvedField = field;
+    return new FieldType(
+        resolvedField.checkedType(),
+        resolvedField::hasField,
+        target -> resolvedField.getField(target, this));
+  }
+
+  FieldDescription findFieldDescription(String messageType, String fieldName) {
     PbTypeDescription msgType = pbdb.describeType(messageType);
     if (msgType == null) {
       return null;
     }
     FieldDescription field = msgType.fieldByName(fieldName);
     if (field == null) {
+      field = pbdb.describeExtension(messageType, fieldName);
+    }
+    if (field == null) {
       return null;
     }
-    return new FieldType(
-        field.checkedType(), field::hasField, target -> field.getField(target, this));
+    return field;
   }
 
   @Override
@@ -226,6 +245,9 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     EnumValueDescription enumVal = pbdb.describeEnum(identName);
     if (enumVal != null) {
       return intOf(enumVal.value());
+    }
+    if (pbdb.describeExtension(identName) != null) {
+      return stringOf(identName);
     }
     return null;
   }
@@ -268,24 +290,114 @@ public final class ProtoTypeRegistry implements TypeRegistry {
       // TODO resolve inefficiency for maps: first converted from a MapT to a native Java map and
       //  then to a protobuf struct. The intermediate step (the Java map) could be omitted.
 
-      Object value = nv.getValue().convertToNative(field.reflectType());
-      if (value.getClass().isArray()) {
-        value = Arrays.asList((Object[]) value);
-      }
-
       FieldDescriptor pbDesc = field.descriptor();
-
-      if (pbDesc.getJavaType() == JavaType.ENUM) {
-        value = intToProtoEnumValues(field, value);
+      if (nv.getValue() == org.projectnessie.cel.common.types.NullT.NullValue
+          && isNullClearedField(pbDesc)) {
+        continue;
       }
 
-      if (pbDesc.isMapField()) {
-        value = toProtoMapStructure(pbDesc, value);
-      }
+      try {
+        Object value = toNativeFieldValue(nv.getValue(), field);
+        if (value.getClass().isArray()) {
+          value = Arrays.asList((Object[]) value);
+        }
 
-      builder.setField(pbDesc, value);
+        if (pbDesc.getJavaType() == JavaType.ENUM) {
+          value = intToProtoEnumValues(field, value);
+        }
+
+        if (pbDesc.isMapField()) {
+          value = toProtoMapStructure(pbDesc, value);
+        }
+
+        builder.setField(pbDesc, value);
+      } catch (RuntimeException e) {
+        return newErr(e, "invalid value for field '%s': %s", name, e.getMessage());
+      }
     }
     return null;
+  }
+
+  private Object toNativeFieldValue(Val value, FieldDescription field) {
+    FieldDescriptor fieldDesc = field.descriptor();
+    if (fieldDesc.isRepeated()
+        && !fieldDesc.isMapField()
+        && isNullPrunedMessageField(fieldDesc)
+        && value instanceof Lister) {
+      return toNativeRepeatedFieldValue((Lister) value, fieldDesc);
+    }
+    return value.convertToNative(field.reflectType());
+  }
+
+  private Object toNativeRepeatedFieldValue(Lister value, FieldDescriptor fieldDesc) {
+    Class<?> elementType = messageNativeType(fieldDesc);
+    int size = (int) value.size().intValue();
+    List<Object> converted = new ArrayList<>(size);
+    for (int i = 0; i < size; i++) {
+      Val element = value.get(intOf(i));
+      if (element == NullT.NullValue && isNullPrunedMessageField(fieldDesc)) {
+        continue;
+      }
+      converted.add(element.convertToNative(elementType));
+    }
+    return converted;
+  }
+
+  private static boolean isNullClearedField(FieldDescriptor field) {
+    if (field.getJavaType() != JavaType.MESSAGE || field.isRepeated() || field.isMapField()) {
+      return false;
+    }
+    Type wellKnownType = Checked.CheckedWellKnowns.get(field.getMessageType().getFullName());
+    return wellKnownType == null || isNullPrunedMessageField(field);
+  }
+
+  private static boolean isNullPrunedMessageField(FieldDescriptor field) {
+    if (field.getJavaType() != JavaType.MESSAGE) {
+      return false;
+    }
+    String typeName = field.getMessageType().getFullName();
+    Type wellKnownType = Checked.CheckedWellKnowns.get(typeName);
+    if (wellKnownType == null) {
+      return false;
+    }
+    return wellKnownType.hasWrapper()
+        || typeName.equals("google.protobuf.Duration")
+        || typeName.equals("google.protobuf.Timestamp");
+  }
+
+  private static Class<?> messageNativeType(FieldDescriptor field) {
+    switch (field.getMessageType().getFullName()) {
+      case "google.protobuf.Any":
+        return Any.class;
+      case "google.protobuf.BoolValue":
+        return BoolValue.class;
+      case "google.protobuf.BytesValue":
+        return BytesValue.class;
+      case "google.protobuf.DoubleValue":
+        return DoubleValue.class;
+      case "google.protobuf.Duration":
+        return Duration.class;
+      case "google.protobuf.FieldMask":
+        return FieldMask.class;
+      case "google.protobuf.FloatValue":
+        return FloatValue.class;
+      case "google.protobuf.Int32Value":
+        return Int32Value.class;
+      case "google.protobuf.Int64Value":
+        return Int64Value.class;
+      case "google.protobuf.StringValue":
+        return StringValue.class;
+      case "google.protobuf.Timestamp":
+        return Timestamp.class;
+      case "google.protobuf.UInt32Value":
+        return UInt32Value.class;
+      case "google.protobuf.UInt64Value":
+        return UInt64Value.class;
+      case "google.protobuf.Value":
+        return Value.class;
+      default:
+        return Message.class;
+    }
   }
 
   /**
@@ -309,8 +421,13 @@ public final class ProtoTypeRegistry implements TypeRegistry {
         // if (!(k instanceof String)) {
         //   return Err.newTypeConversionError(k.getClass().getName(), String.class.getName());
         // }
-        if (valueFieldType == WireFormat.FieldType.MESSAGE && !(v instanceof Message)) {
-          v = nativeToValue(v).convertToNative(Value.class);
+        if (valueFieldType == WireFormat.FieldType.MESSAGE) {
+          if (isNullNativeValue(v) && isNullPrunedMessageField(valueType)) {
+            continue;
+          }
+          if (!(v instanceof Message)) {
+            v = nativeToValue(v).convertToNative(messageNativeType(valueType));
+          }
         }
 
         MapEntry newEntry =
@@ -321,6 +438,10 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     }
 
     return value;
+  }
+
+  private static boolean isNullNativeValue(Object value) {
+    return value == null || value == com.google.protobuf.NullValue.NULL_VALUE;
   }
 
   /**

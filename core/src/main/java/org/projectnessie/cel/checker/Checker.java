@@ -48,8 +48,10 @@ import com.google.api.expr.v1alpha1.Type.MapType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.projectnessie.cel.checker.Types.Kind;
 import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.Source;
@@ -228,9 +230,11 @@ public final class Checker {
     Decl ident = env.lookupIdent(identExpr.getName());
     if (ident != null) {
       setType(e, ident.getIdent().getType());
-      setReference(e, newIdentReference(ident.getName(), ident.getIdent().getValue()));
+      String identName =
+          identExpr.getName().startsWith(".") ? "." + ident.getName() : ident.getName();
+      setReference(e, newIdentReference(identName, ident.getIdent().getValue()));
       // Overwrite the identifier with its fully qualified name.
-      identExpr.setName(ident.getName());
+      identExpr.setName(identName);
       return;
     }
 
@@ -242,7 +246,7 @@ public final class Checker {
     Select.Builder sel = e.getSelectExprBuilder();
     // Before traversing down the tree, try to interpret as qualified name.
     String qname = Container.toQualifiedName(e.build());
-    if (qname != null) {
+    if (qname != null && !isQualifiedLocalVariableSelection(sel.getOperandBuilder())) {
       Decl ident = env.lookupIdent(qname);
       if (ident != null) {
         if (sel.getTestOnly()) {
@@ -303,6 +307,16 @@ public final class Checker {
       resultType = Decls.Bool;
     }
     setType(e, resultType);
+  }
+
+  private boolean isQualifiedLocalVariableSelection(Expr.Builder e) {
+    if (e.getExprKindCase() == Expr.ExprKindCase.IDENT_EXPR) {
+      return env.hasLocalIdent(e.getIdentExpr().getName());
+    }
+    if (e.getExprKindCase() == Expr.ExprKindCase.SELECT_EXPR) {
+      return isQualifiedLocalVariableSelection(e.getSelectExprBuilder().getOperandBuilder());
+    }
+    return false;
   }
 
   void checkCall(Expr.Builder e) {
@@ -415,10 +429,11 @@ public final class Checker {
       }
 
       Type overloadType = Decls.newFunctionType(overload.getResultType(), overload.getParamsList());
-      if (overload.getTypeParamsCount() > 0) {
+      Set<String> typeParams = collectOverloadTypeParams(overload);
+      if (!typeParams.isEmpty()) {
         // Instantiate overload's type with fresh type variables.
         Mapping substitutions = newMapping();
-        for (String typePar : overload.getTypeParamsList()) {
+        for (String typePar : typeParams) {
           substitutions.add(Decls.newTypeParamType(typePar), newTypeVar());
         }
         overloadType = substitute(substitutions, overloadType, false);
@@ -551,14 +566,23 @@ public final class Checker {
     Type accuType = getType(comp.getAccuInitBuilder());
     Type rangeType = getType(comp.getIterRangeBuilder());
     Type varType;
+    Type var2Type = null;
 
     switch (kindOf(rangeType)) {
       case kindList:
-        varType = rangeType.getListType().getElemType();
+        if (comp.getIterVar2().isEmpty()) {
+          varType = rangeType.getListType().getElemType();
+        } else {
+          varType = Decls.Int;
+          var2Type = rangeType.getListType().getElemType();
+        }
         break;
       case kindMap:
         // Ranges over the keys.
         varType = rangeType.getMapType().getKeyType();
+        if (!comp.getIterVar2().isEmpty()) {
+          var2Type = rangeType.getMapType().getValueType();
+        }
         break;
       case kindDyn:
       case kindError:
@@ -569,10 +593,16 @@ public final class Checker {
         isAssignable(Decls.Dyn, rangeType);
         // Set the range iteration variable to type DYN as well.
         varType = Decls.Dyn;
+        if (!comp.getIterVar2().isEmpty()) {
+          var2Type = Decls.Dyn;
+        }
         break;
       default:
         errors.notAComprehensionRange(location(comp.getIterRangeBuilder()), rangeType);
         varType = Decls.Error;
+        if (!comp.getIterVar2().isEmpty()) {
+          var2Type = Decls.Error;
+        }
         break;
     }
 
@@ -583,6 +613,9 @@ public final class Checker {
     // Create a block scope for the loop.
     env = env.enterScope();
     env.add(Decls.newVar(comp.getIterVar(), varType));
+    if (!comp.getIterVar2().isEmpty()) {
+      env.add(Decls.newVar(comp.getIterVar2(), var2Type));
+    }
     // Check the variable references in the condition and step.
     check(comp.getLoopConditionBuilder());
     assertType(comp.getLoopConditionBuilder(), Decls.Bool);
@@ -682,7 +715,7 @@ public final class Checker {
   }
 
   Type getType(Expr.Builder e) {
-    return types.get(e.getId());
+    return substitute(mappings, types.get(e.getId()), false);
   }
 
   void setReference(Expr.Builder e, Reference r) {
@@ -714,6 +747,44 @@ public final class Checker {
 
   static OverloadResolution newResolution(Reference checkedRef, Type t) {
     return new OverloadResolution(checkedRef, t);
+  }
+
+  private static Set<String> collectOverloadTypeParams(Overload overload) {
+    Set<String> typeParams = new LinkedHashSet<>(overload.getTypeParamsList());
+    overload.getParamsList().forEach(type -> collectTypeParams(type, typeParams));
+    collectTypeParams(overload.getResultType(), typeParams);
+    return typeParams;
+  }
+
+  private static void collectTypeParams(Type type, Set<String> typeParams) {
+    switch (kindOf(type)) {
+      case kindTypeParam:
+        typeParams.add(type.getTypeParam());
+        return;
+      case kindAbstract:
+        type.getAbstractType()
+            .getParameterTypesList()
+            .forEach(t -> collectTypeParams(t, typeParams));
+        return;
+      case kindFunction:
+        type.getFunction().getArgTypesList().forEach(t -> collectTypeParams(t, typeParams));
+        collectTypeParams(type.getFunction().getResultType(), typeParams);
+        return;
+      case kindList:
+        collectTypeParams(type.getListType().getElemType(), typeParams);
+        return;
+      case kindMap:
+        MapType mapType = type.getMapType();
+        collectTypeParams(mapType.getKeyType(), typeParams);
+        collectTypeParams(mapType.getValueType(), typeParams);
+        return;
+      case kindType:
+        if (type.getType() != Type.getDefaultInstance()) {
+          collectTypeParams(type.getType(), typeParams);
+        }
+        return;
+      default:
+    }
   }
 
   Location location(Expr.Builder e) {

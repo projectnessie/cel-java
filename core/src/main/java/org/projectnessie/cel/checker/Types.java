@@ -337,6 +337,9 @@ public final class Types {
     if (isDynOrError(t1) || isDynOrError(t2)) {
       return true;
     }
+    if (kind2 == Kind.kindNull) {
+      return internalIsAssignableNull(t1);
+    }
 
     // Test for when the types do not need to agree, but are more specific than dyn.
     switch (kind1) {
@@ -491,6 +494,8 @@ public final class Types {
         return Kind.kindWrapper;
       case NULL:
         return Kind.kindNull;
+      case ABSTRACT_TYPE:
+        return Kind.kindAbstract;
       case TYPE:
         return Kind.kindType;
       case LIST_TYPE:
@@ -507,6 +512,24 @@ public final class Types {
 
   /** mostGeneral returns the more general of two types which are known to unify. */
   static Type mostGeneral(Type t1, Type t2) {
+    Kind kind1 = kindOf(t1);
+    Kind kind2 = kindOf(t2);
+    if (kind1 == Kind.kindNull && internalIsAssignableNull(t2)) {
+      return t2;
+    }
+    if (kind2 == Kind.kindNull && internalIsAssignableNull(t1)) {
+      return t1;
+    }
+    if (kind1 == Kind.kindPrimitive && kind2 == Kind.kindWrapper) {
+      if (t1.getPrimitive() == t2.getWrapper()) {
+        return t2;
+      }
+    }
+    if (kind1 == Kind.kindWrapper && kind2 == Kind.kindPrimitive) {
+      if (t1.getWrapper() == t2.getPrimitive()) {
+        return t1;
+      }
+    }
     if (isEqualOrLessSpecific(t1, t2)) {
       return t1;
     }

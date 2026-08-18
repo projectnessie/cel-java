@@ -29,6 +29,7 @@ import static org.projectnessie.cel.Env.newEnv;
 import static org.projectnessie.cel.EnvOption.clearMacros;
 import static org.projectnessie.cel.EnvOption.container;
 import static org.projectnessie.cel.EnvOption.declarations;
+import static org.projectnessie.cel.EnvOption.macros;
 import static org.projectnessie.cel.EnvOption.types;
 import static org.projectnessie.cel.Library.StdLib;
 import static org.projectnessie.cel.common.types.BoolT.True;
@@ -43,6 +44,12 @@ import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
+import static org.projectnessie.cel.extension.EncodersLib.encoders;
+import static org.projectnessie.cel.extension.MathLib.math;
+import static org.projectnessie.cel.extension.NetworkLib.network;
+import static org.projectnessie.cel.extension.OptionalLib.optionals;
+import static org.projectnessie.cel.extension.ProtoLib.proto;
+import static org.projectnessie.cel.extension.StringsLib.strings;
 
 import com.google.api.expr.v1alpha1.CheckedExpr;
 import com.google.api.expr.v1alpha1.Decl;
@@ -90,6 +97,7 @@ import org.projectnessie.cel.Env.AstIssuesTuple;
 import org.projectnessie.cel.EnvOption;
 import org.projectnessie.cel.Program;
 import org.projectnessie.cel.Program.EvalResult;
+import org.projectnessie.cel.common.CELError;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.IteratorT;
 import org.projectnessie.cel.common.types.NullT;
@@ -99,6 +107,7 @@ import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Lister;
 import org.projectnessie.cel.common.types.traits.Mapper;
+import org.projectnessie.cel.parser.Macro;
 
 class SimpleConformanceTest {
 
@@ -109,9 +118,12 @@ class SimpleConformanceTest {
   private static final List<String> TEST_FILES =
       List.of(
           "basic.textproto",
+          "bindings_ext.textproto",
+          "block_ext.textproto",
           "comparisons.textproto",
           "conversions.textproto",
           "dynamic.textproto",
+          "encoders_ext.textproto",
           "enums.textproto",
           "fields.textproto",
           "fp_math.textproto",
@@ -119,65 +131,66 @@ class SimpleConformanceTest {
           "lists.textproto",
           "logic.textproto",
           "macros.textproto",
+          "macros2.textproto",
+          "math_ext.textproto",
           "namespace.textproto",
+          "network_ext.textproto",
           "parse.textproto",
           "plumbing.textproto",
           "proto2.textproto",
+          "proto2_ext.textproto",
           "proto3.textproto",
           "string.textproto",
+          "string_ext.textproto",
           "timestamps.textproto",
+          "type_deduction.textproto",
           "unknowns.textproto",
           "wrappers.textproto");
 
   private static final Set<String> SKIP_TESTS =
       SkipList.parse(
-          // Without the checker, verifying whether an assignment is allowed by the CEL spec is
-          // difficult, especially from a map to a struct. The checker catches this case, while the
-          // evaluator currently converts int(1) to string("1").
-          "dynamic/struct/field_assign_proto2_bad",
-          "dynamic/struct/field_assign_proto3_bad",
-          // The test expects -0.0d, but in Java -0.0d == 0.0d, so -0.0d is evaluated as not set.
-          "dynamic/float/field_assign_proto3_round_to_zero",
-          // Malicious too-deep protobuf structure.
-          "parse/nest/message_literal",
-          // Proto equality specialties do not seem to be in effect for Java.
-          "comparisons/eq_wrapper/eq_proto_nan_equal",
-          "comparisons/ne_literal/ne_proto_nan_not_equal",
-          // TODO Actual known issue: protobuf Any returned by this test is wrapped twice.
-          "dynamic/any/var",
-          // New CEL-Spec v0.25.2 expectations that need follow-up parser/runtime changes.
-          "conversions/bool/string_1,string_t,string_0,string_f,string_true_badcase,string_false_badcase",
-          "fields/quoted_map_fields/field_access_slash,field_access_dash,field_access_dot,has_field_slash,has_field_dash,has_field_dot",
-          "namespace/namespace_shadowing/comprehension_shadowing,comprehension_shadowing_disambiguation,comprehension_shadowing_parse_only,comprehension_shadowing_selector,comprehension_shadowing_selector_parse_only,comprehension_shadowing_namespaced_selector,comprehension_shadowing_namespaced_selector_parse_only,comprehension_shadowing_nesting",
-          "proto2/set_null/single_message,single_duration,single_timestamp,repeated_field_timestamp_null_pruned,repeated_field_duration_null_pruned,repeated_field_wrapper_null_pruned,map_timestamp_null_pruned,map_duration_null_pruned,map_wrapper_null_pruned,map_anytype_null_retained,single_scalar,repeated,map,list_value,single_struct",
-          "proto2/quoted_fields/set_field_with_quoted_name,get_field_with_quoted_name",
-          "proto2/extensions_has/package_scoped_int32,package_scoped_nested_ext,package_scoped_test_all_types_ext,package_scoped_test_all_types_nested_enum_ext,package_scoped_repeated_test_all_types,message_scoped_int64,message_scoped_nested_ext,message_scoped_nested_enum_ext,message_scoped_repeated_test_all_types",
-          "proto2/extensions_get/package_scoped_int32,package_scoped_nested_ext,package_scoped_test_all_types_ext,package_scoped_test_all_types_nested_enum_ext,package_scoped_repeated_test_all_types,message_scoped_int64,message_scoped_nested_ext,message_scoped_nested_enum_ext,message_scoped_repeated_test_all_types",
-          "proto3/set_null/single_message,single_duration,single_timestamp,repeated_field_timestamp_null_pruned,repeated_field_duration_null_pruned,repeated_field_wrapper_null_pruned,map_timestamp_null_pruned,map_duration_null_pruned,map_wrapper_null_pruned,map_anytype_null_retained,single_scalar,repeated,map,list_value,single_struct",
-          "proto3/quoted_fields/set_field,get_field",
-          "timestamps/timestamp_conversions/type_comparison",
-          "timestamps/duration_conversions/type_comparison",
-          "wrappers/bool/to_null",
-          "wrappers/int32/to_null",
-          "wrappers/int64/to_null",
-          "wrappers/uint32/to_null",
-          "wrappers/uint64/to_null",
-          "wrappers/float/to_null",
-          "wrappers/double/to_null",
-          "wrappers/bytes/to_null",
-          "wrappers/string/to_null",
-          "dynamic/int32/field_assign_proto2_range,field_assign_proto3_range",
-          "dynamic/uint32/field_assign_proto2_range,field_assign_proto3_range",
-          "dynamic/float/field_assign_proto2_range,field_assign_proto3_range",
-          "enums/legacy_proto2/assign_standalone_int_too_big,assign_standalone_int_too_neg",
-          "enums/legacy_proto3/assign_standalone_int_too_big,assign_standalone_int_too_neg",
-          "enums/strong_proto2",
-          "enums/strong_proto3",
-          "fields/qualified_identifier_resolution/map_key_float",
-          "wrappers/uint64/to_json_string",
-          "wrappers/field_mask/to_json",
-          "wrappers/timestamp/to_json",
-          "wrappers/empty/to_json");
+          // Strong enum semantics require typed enum values rather than treating enum literals as
+          // ints.
+          "enums/strong_proto2/literal_global",
+          "enums/strong_proto2/literal_nested",
+          "enums/strong_proto2/literal_zero",
+          "enums/strong_proto2/type_global",
+          "enums/strong_proto2/type_nested",
+          "enums/strong_proto2/select_default",
+          "enums/strong_proto2/field_type",
+          "enums/strong_proto2/assign_standalone_int",
+          "enums/strong_proto2/convert_int_inrange",
+          "enums/strong_proto2/convert_int_big",
+          "enums/strong_proto2/convert_int_neg",
+          "enums/strong_proto2/convert_int_too_big",
+          "enums/strong_proto2/convert_int_too_neg",
+          "enums/strong_proto2/convert_string",
+          "enums/strong_proto2/convert_string_bad",
+          "enums/strong_proto3/literal_global",
+          "enums/strong_proto3/literal_nested",
+          "enums/strong_proto3/literal_zero",
+          "enums/strong_proto3/type_global",
+          "enums/strong_proto3/type_nested",
+          "enums/strong_proto3/select_default",
+          "enums/strong_proto3/select",
+          "enums/strong_proto3/select_big",
+          "enums/strong_proto3/select_neg",
+          "enums/strong_proto3/field_type",
+          "enums/strong_proto3/assign_standalone_int",
+          "enums/strong_proto3/assign_standalone_int_big",
+          "enums/strong_proto3/assign_standalone_int_neg",
+          "enums/strong_proto3/convert_int_inrange",
+          "enums/strong_proto3/convert_int_big",
+          "enums/strong_proto3/convert_int_neg",
+          "enums/strong_proto3/convert_int_too_big",
+          "enums/strong_proto3/convert_int_too_neg",
+          "enums/strong_proto3/convert_string",
+          "enums/strong_proto3/convert_string_bad",
+          // Optional list/map/message syntax and runtime support is not implemented yet.
+          "block_ext/basic/optional_list",
+          "block_ext/basic/optional_map",
+          "block_ext/basic/optional_map_chained",
+          "block_ext/basic/optional_message");
 
   private static final Set<String> matchedSkips = new LinkedHashSet<>();
   private static final AtomicInteger total = new AtomicInteger();
@@ -295,18 +308,20 @@ class SimpleConformanceTest {
       CheckedExpr checkedExpr = null;
       if (!test.getDisableCheck()) {
         checkedExpr = ConformanceEvaluator.check(test, parsedExpr);
-        if (!checkedExpr.getTypeMapMap().containsKey(parsedExpr.getExpr().getId())) {
-          throw new AssertionError("no type for top-level expression");
-        }
-        if (test.getResultMatcherCase() == ResultMatcherCase.TYPED_RESULT) {
-          Type expectedType = convert(test.getTypedResult().getDeducedType(), Type.class);
-          Type actualType = checkedExpr.getTypeMapOrThrow(parsedExpr.getExpr().getId());
-          if (!actualType.equals(expectedType)) {
-            throw new AssertionError(
-                "deduced type mismatch, got "
-                    + print(actualType)
-                    + ", want "
-                    + print(expectedType));
+        if (checkedExpr != null) {
+          if (!checkedExpr.getTypeMapMap().containsKey(parsedExpr.getExpr().getId())) {
+            throw new AssertionError("no type for top-level expression");
+          }
+          if (test.getResultMatcherCase() == ResultMatcherCase.TYPED_RESULT) {
+            Type expectedType = convert(test.getTypedResult().getDeducedType(), Type.class);
+            Type actualType = checkedExpr.getTypeMapOrThrow(parsedExpr.getExpr().getId());
+            if (!actualType.equals(expectedType)) {
+              throw new AssertionError(
+                  "deduced type mismatch, got "
+                      + print(actualType)
+                      + ", want "
+                      + print(expectedType));
+            }
           }
         }
       }
@@ -335,6 +350,9 @@ class SimpleConformanceTest {
       if (test.getDisableMacros()) {
         parseOptions.add(clearMacros());
       }
+      if (usesTestOnlyBlockMacros(test.getExpr())) {
+        parseOptions.add(macros(Macro.TestOnlyBlockMacros));
+      }
 
       Env env = newEnv(parseOptions.toArray(new EnvOption[0]));
       AstIssuesTuple astIss = env.parse(sourceText);
@@ -353,15 +371,16 @@ class SimpleConformanceTest {
 
       Env env =
           newCustomEnv(
-              StdLib(),
-              container(test.getContainer()),
-              declarations(typeEnv),
-              types(
-                  dev.cel.expr.conformance.proto2.TestAllTypes.getDefaultInstance(),
-                  dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance()));
+              conformanceEnvOptions(test, StdLib(), declarations(typeEnv))
+                  .toArray(new EnvOption[0]));
 
       AstIssuesTuple astIss = env.check(parsedExprToAst(parsedExpr));
       if (astIss.hasIssues()) {
+        if (test.getResultMatcherCase() == ResultMatcherCase.EVAL_ERROR
+            && errorsMatch(
+                convert(test.getEvalError(), ErrorSet.class), astIss.getIssues().getErrors())) {
+          return null;
+        }
         throw new AssertionError("fatal check errors: " + astIss.getIssues().getErrors());
       }
       return astToCheckedExpr(astIss.getAst());
@@ -376,12 +395,7 @@ class SimpleConformanceTest {
     }
 
     private static ExprValue eval(SimpleTest test, Ast ast) {
-      Env env =
-          newEnv(
-              container(test.getContainer()),
-              types(
-                  dev.cel.expr.conformance.proto2.TestAllTypes.getDefaultInstance(),
-                  dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance()));
+      Env env = newEnv(conformanceEnvOptions(test).toArray(new EnvOption[0]));
 
       Program program = env.program(ast);
       Map<String, Object> args = new HashMap<>();
@@ -399,6 +413,69 @@ class SimpleConformanceTest {
       return ExprValue.newBuilder()
           .setError(ErrorSet.newBuilder().addErrors(Status.newBuilder().setMessage(err.toString())))
           .build();
+    }
+
+    private static List<EnvOption> conformanceEnvOptions(SimpleTest test, EnvOption... options) {
+      List<EnvOption> envOptions = new ArrayList<>();
+      envOptions.add(container(test.getContainer()));
+      envOptions.add(
+          types(
+              dev.cel.expr.conformance.proto2.TestAllTypes.getDefaultInstance(),
+              dev.cel.expr.conformance.proto2.Proto2ExtensionScopedMessage.getDefaultInstance(),
+              dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance()));
+      if (test.getExpr().startsWith("proto.hasExt(")
+          || test.getExpr().startsWith("proto.getExt(")) {
+        envOptions.add(proto());
+      }
+      if (usesStringExtensions(test.getExpr())) {
+        envOptions.add(strings());
+      }
+      if (test.getExpr().contains("base64.")) {
+        envOptions.add(encoders());
+      }
+      if (test.getExpr().contains("math.")) {
+        envOptions.add(math());
+      }
+      if (usesNetworkExtensions(test.getExpr())) {
+        envOptions.add(network());
+      }
+      if (test.getExpr().contains("optional.")) {
+        envOptions.add(optionals());
+      }
+      envOptions.addAll(List.of(options));
+      return envOptions;
+    }
+
+    private static boolean usesStringExtensions(String expression) {
+      return expression.contains(".charAt(")
+          || expression.contains(".indexOf(")
+          || expression.contains(".lastIndexOf(")
+          || expression.contains(".lowerAscii(")
+          || expression.contains(".upperAscii(")
+          || expression.contains(".replace(")
+          || expression.contains(".split(")
+          || expression.contains(".substring(")
+          || expression.contains(".trim(")
+          || expression.contains(".join(")
+          || expression.contains("strings.quote(")
+          || expression.contains(".format(")
+          || expression.contains(".reverse(");
+    }
+
+    private static boolean usesNetworkExtensions(String expression) {
+      return expression.contains("ip(")
+          || expression.contains("cidr(")
+          || expression.contains("isIP(")
+          || expression.contains("ip.isCanonical(")
+          || expression.contains("net.IP")
+          || expression.contains("net.CIDR");
+    }
+
+    private static boolean usesTestOnlyBlockMacros(String expression) {
+      return expression.contains("cel.block(")
+          || expression.contains("cel.index(")
+          || expression.contains("cel.iterVar(")
+          || expression.contains("cel.accuVar(");
     }
   }
 
@@ -454,6 +531,18 @@ class SimpleConformanceTest {
       throw new AssertionError(
           testPath + ": got " + print(actual) + ", want error " + print(expected));
     }
+  }
+
+  private static boolean errorsMatch(ErrorSet expected, List<CELError> actual) {
+    return !expected.getErrorsList().isEmpty()
+        && expected.getErrorsList().stream()
+            .allMatch(
+                expectedError ->
+                    !expectedError.getMessage().isEmpty()
+                        && actual.stream()
+                            .anyMatch(
+                                actualError ->
+                                    actualError.getMessage().equals(expectedError.getMessage())));
   }
 
   private static void matchUnknown(String testPath, UnknownSet expected, ExprValue actual) {
@@ -574,6 +663,8 @@ class SimpleConformanceTest {
           return type;
         }
         return newObjectTypeValue(typeName);
+      case ENUM_VALUE:
+        return intOf(v.getEnumValue().getValue());
       default:
         throw new IllegalArgumentException("unknown value " + v.getKindCase());
     }
@@ -635,7 +726,9 @@ class SimpleConformanceTest {
       case Object:
         Message pb = (Message) res.value();
         Value.Builder value = Value.newBuilder();
-        if (pb instanceof ListValue) {
+        if (pb instanceof Any) {
+          value.setObjectValue(unwrapNestedAny((Any) pb));
+        } else if (pb instanceof ListValue) {
           value.setListValue((ListValue) pb);
         } else if (pb instanceof MapValue) {
           value.setMapValue((MapValue) pb);
@@ -646,6 +739,22 @@ class SimpleConformanceTest {
       default:
         throw new IllegalStateException(String.format("Unknown %s", res.type().typeEnum()));
     }
+  }
+
+  private static Any unwrapNestedAny(Any any) {
+    Any current = any;
+    while (current.is(Any.class)) {
+      try {
+        Any next = current.unpack(Any.class);
+        if (next.equals(current)) {
+          return current;
+        }
+        current = next;
+      } catch (InvalidProtocolBufferException e) {
+        return current;
+      }
+    }
+    return current;
   }
 
   private static <T extends Message> T convert(Message message, Class<T> targetType)

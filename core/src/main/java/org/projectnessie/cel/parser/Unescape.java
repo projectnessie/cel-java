@@ -90,7 +90,7 @@ public final class Unescape {
     }
 
     // Otherwise the string contains escape characters.
-    ByteBuffer buf = ByteBuffer.allocate(value.length() * 3 / 2);
+    ByteBuffer buf = ByteBuffer.allocate(value.length() * 4);
     for (int i = 0; i < n; i++) {
       char c = value.charAt(i);
       if (c == '\\') {
@@ -215,7 +215,11 @@ public final class Unescape {
       } else {
         // not an escape sequence
         if (!isBytes) {
-          encodeCodePoint(buf, c, cb, enc);
+          int codePoint = value.codePointAt(i);
+          encodeCodePoint(buf, codePoint, cb, enc);
+          if (Character.charCount(codePoint) == 2) {
+            i++;
+          }
         } else {
           buf.put((byte) c);
         }

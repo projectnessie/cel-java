@@ -363,6 +363,7 @@ public final class AstPruner {
               .setComprehensionExpr(
                   Comprehension.newBuilder()
                       .setIterVar(compre.getIterVar())
+                      .setIterVar2(compre.getIterVar2())
                       .setIterRange(newRange)
                       .setAccuVar(compre.getAccuVar())
                       .setAccuInit(compre.getAccuInit())

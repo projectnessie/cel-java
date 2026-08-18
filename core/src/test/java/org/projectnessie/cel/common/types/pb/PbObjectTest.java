@@ -28,7 +28,12 @@ import com.google.api.expr.v1alpha1.Expr;
 import com.google.api.expr.v1alpha1.ParsedExpr;
 import com.google.api.expr.v1alpha1.SourceInfo;
 import com.google.protobuf.Any;
+import com.google.protobuf.Empty;
+import com.google.protobuf.FieldMask;
 import com.google.protobuf.Message;
+import com.google.protobuf.Struct;
+import com.google.protobuf.Timestamp;
+import com.google.protobuf.Value;
 import java.util.Arrays;
 import java.util.Collections;
 import org.junit.jupiter.api.Disabled;
@@ -88,6 +93,26 @@ public class PbObjectTest {
     Any anyVal = objVal.convertToNative(Any.class);
     Message unpackedAny = anyVal.unpack(ParsedExpr.class);
     assertThat(unpackedAny).isEqualTo(objVal.value());
+  }
+
+  @Test
+  void wellKnownProtoObjectsConvertToJsonValue() {
+    TypeRegistry reg = newRegistry(Empty.getDefaultInstance(), FieldMask.getDefaultInstance());
+
+    Val empty = reg.nativeToValue(Empty.getDefaultInstance());
+    assertThat(empty.convertToNative(Value.class))
+        .isEqualTo(Value.newBuilder().setStructValue(Struct.getDefaultInstance()).build());
+
+    Val fieldMask =
+        reg.nativeToValue(FieldMask.newBuilder().addPaths("foo").addPaths("bar_baz").build());
+    assertThat(fieldMask.convertToNative(Value.class))
+        .isEqualTo(Value.newBuilder().setStringValue("foo,barBaz").build());
+
+    Val timestamp =
+        reg.nativeToValue(
+            Timestamp.newBuilder().setSeconds(253402300799L).setNanos(999999999).build());
+    assertThat(timestamp.convertToNative(Value.class))
+        .isEqualTo(Value.newBuilder().setStringValue("9999-12-31T23:59:59.999999999Z").build());
   }
 
   @Test

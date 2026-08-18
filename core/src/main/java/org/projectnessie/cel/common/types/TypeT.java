@@ -55,11 +55,20 @@ public class TypeT implements Type, Val {
     return new ObjectTypeT(name);
   }
 
+  /** NewObjectTypeValue returns a *TypeValue with the supplied traits for a qualified type name. */
+  public static Type newObjectTypeValue(String name, Trait... traits) {
+    return new ObjectTypeT(name, traits);
+  }
+
   static final class ObjectTypeT extends TypeT {
     private final String typeName;
 
     ObjectTypeT(String typeName) {
-      super(TypeEnum.Object, Trait.FieldTesterType, Trait.IndexerType);
+      this(typeName, Trait.FieldTesterType, Trait.IndexerType);
+    }
+
+    ObjectTypeT(String typeName, Trait... traits) {
+      super(TypeEnum.Object, traits);
       this.typeName = typeName;
     }
 
@@ -149,16 +158,19 @@ public class TypeT implements Type, Val {
     return typeName();
   }
 
+  /**
+   * Type-value equality follows CEL runtime semantics and compares qualified runtime type names.
+   */
   @Override
   public boolean equals(Object o) {
     if (this == o) {
       return true;
     }
-    if (o == null || getClass() != o.getClass()) {
+    if (!(o instanceof Type)) {
       return false;
     }
     Type typeValue = (Type) o;
-    return typeEnum == typeValue.typeEnum() && typeName().equals(typeValue.typeName());
+    return typeName().equals(typeValue.typeName());
   }
 
   @Override

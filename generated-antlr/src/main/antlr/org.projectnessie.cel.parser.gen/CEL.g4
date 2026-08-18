@@ -56,7 +56,7 @@ unary
 
 member
     : primary                                                       # PrimaryExpr
-    | member op='.' id=IDENTIFIER (open='(' args=exprList? ')')?    # SelectOrCall
+    | member op='.' id=field (open='(' args=exprList? ')')?         # SelectOrCall
     | member op='[' index=expr ']'                                  # Index
     | member op='{' entries=fieldInitializerList? ','? '}'          # CreateMessage
     ;
@@ -74,7 +74,12 @@ exprList
     ;
 
 fieldInitializerList
-    : fields+=IDENTIFIER cols+=':' values+=expr (',' fields+=IDENTIFIER cols+=':' values+=expr)*
+    : fields+=field cols+=':' values+=expr (',' fields+=field cols+=':' values+=expr)*
+    ;
+
+field
+    : IDENTIFIER
+    | ESC_IDENTIFIER
     ;
 
 mapInitializerList
@@ -188,3 +193,5 @@ STRING
 BYTES : ('b' | 'B') STRING;
 
 IDENTIFIER : (LETTER | '_') ( LETTER | DIGIT | '_')*;
+
+ESC_IDENTIFIER : '`' (ESC_SEQ | ~('\\' | '`' | '\n' | '\r'))* '`';
