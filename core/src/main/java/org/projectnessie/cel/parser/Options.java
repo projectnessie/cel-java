@@ -42,6 +42,12 @@ public final class Options {
     return maxRecursionDepth;
   }
 
+  /**
+   * Returns the maximum number of parser error-recovery attempts.
+   *
+   * <p>This setting is currently not respected because CongoCC stops parsing after the first syntax
+   * error and does not provide error recovery.
+   */
   public int getErrorRecoveryLimit() {
     return errorRecoveryLimit;
   }
@@ -78,6 +84,12 @@ public final class Options {
       return this;
     }
 
+    /**
+     * Sets the maximum number of parser error-recovery attempts.
+     *
+     * <p>This setting is currently not respected because CongoCC stops parsing after the first
+     * syntax error and does not provide error recovery.
+     */
     public Builder errorRecoveryLimit(int errorRecoveryLimit) {
       if (errorRecoveryLimit < -1) {
         throw new IllegalArgumentException(

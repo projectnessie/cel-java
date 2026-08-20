@@ -420,7 +420,7 @@ Native-image and package behavior must be verified in the consuming application'
 prove Quarkus native-image or package compatibility for every application.
 
 Before using CEL conditions in release-critical authorization paths, run JVM condition tests, the
-consuming project's normal build, dependency tree review for protobuf/ANTLR/Jackson conflicts, and
+consuming project's normal build, dependency tree review for protobuf/Jackson conflicts, and
 package/native-image verification if native execution is part of the release path.
 
 ### Not yet implemented

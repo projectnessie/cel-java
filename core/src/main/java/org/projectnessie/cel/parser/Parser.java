@@ -16,6 +16,28 @@
 package org.projectnessie.cel.parser;
 
 import static org.projectnessie.cel.parser.Macro.AllMacros;
+import static org.projectnessie.cel.parser.Token.TokenType.BYTES;
+import static org.projectnessie.cel.parser.Token.TokenType.COLON;
+import static org.projectnessie.cel.parser.Token.TokenType.COMMA;
+import static org.projectnessie.cel.parser.Token.TokenType.DOT;
+import static org.projectnessie.cel.parser.Token.TokenType.EOF;
+import static org.projectnessie.cel.parser.Token.TokenType.EXCLAM;
+import static org.projectnessie.cel.parser.Token.TokenType.FALSE;
+import static org.projectnessie.cel.parser.Token.TokenType.IDENTIFIER;
+import static org.projectnessie.cel.parser.Token.TokenType.LBRACE;
+import static org.projectnessie.cel.parser.Token.TokenType.LBRACKET;
+import static org.projectnessie.cel.parser.Token.TokenType.LPAREN;
+import static org.projectnessie.cel.parser.Token.TokenType.MINUS;
+import static org.projectnessie.cel.parser.Token.TokenType.NULL;
+import static org.projectnessie.cel.parser.Token.TokenType.NUM_FLOAT;
+import static org.projectnessie.cel.parser.Token.TokenType.NUM_INT;
+import static org.projectnessie.cel.parser.Token.TokenType.NUM_UINT;
+import static org.projectnessie.cel.parser.Token.TokenType.QUESTIONMARK;
+import static org.projectnessie.cel.parser.Token.TokenType.RBRACE;
+import static org.projectnessie.cel.parser.Token.TokenType.RBRACKET;
+import static org.projectnessie.cel.parser.Token.TokenType.RPAREN;
+import static org.projectnessie.cel.parser.Token.TokenType.STRING;
+import static org.projectnessie.cel.parser.Token.TokenType.TRUE;
 
 import com.google.api.expr.v1alpha1.Constant;
 import com.google.api.expr.v1alpha1.Expr;
@@ -27,7 +49,6 @@ import com.google.protobuf.NullValue;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.BitSet;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -37,55 +58,12 @@ import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.Source;
 import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.parser.Helper.Balancer;
-import org.projectnessie.cel.parser.gen.CELLexer;
-import org.projectnessie.cel.parser.gen.CELParser;
-import org.projectnessie.cel.parser.gen.CELParser.BoolFalseContext;
-import org.projectnessie.cel.parser.gen.CELParser.BoolTrueContext;
-import org.projectnessie.cel.parser.gen.CELParser.BytesContext;
-import org.projectnessie.cel.parser.gen.CELParser.CalcContext;
-import org.projectnessie.cel.parser.gen.CELParser.ConditionalAndContext;
-import org.projectnessie.cel.parser.gen.CELParser.ConditionalOrContext;
-import org.projectnessie.cel.parser.gen.CELParser.ConstantLiteralContext;
-import org.projectnessie.cel.parser.gen.CELParser.CreateListContext;
-import org.projectnessie.cel.parser.gen.CELParser.CreateMessageContext;
-import org.projectnessie.cel.parser.gen.CELParser.CreateStructContext;
-import org.projectnessie.cel.parser.gen.CELParser.DoubleContext;
-import org.projectnessie.cel.parser.gen.CELParser.ExprContext;
-import org.projectnessie.cel.parser.gen.CELParser.ExprListContext;
-import org.projectnessie.cel.parser.gen.CELParser.FieldContext;
-import org.projectnessie.cel.parser.gen.CELParser.FieldInitializerListContext;
-import org.projectnessie.cel.parser.gen.CELParser.IdentOrGlobalCallContext;
-import org.projectnessie.cel.parser.gen.CELParser.IndexContext;
-import org.projectnessie.cel.parser.gen.CELParser.IntContext;
-import org.projectnessie.cel.parser.gen.CELParser.LogicalNotContext;
-import org.projectnessie.cel.parser.gen.CELParser.MapInitializerListContext;
-import org.projectnessie.cel.parser.gen.CELParser.MemberExprContext;
-import org.projectnessie.cel.parser.gen.CELParser.NegateContext;
-import org.projectnessie.cel.parser.gen.CELParser.NestedContext;
-import org.projectnessie.cel.parser.gen.CELParser.NullContext;
-import org.projectnessie.cel.parser.gen.CELParser.PrimaryExprContext;
-import org.projectnessie.cel.parser.gen.CELParser.RelationContext;
-import org.projectnessie.cel.parser.gen.CELParser.SelectOrCallContext;
-import org.projectnessie.cel.parser.gen.CELParser.StartContext;
-import org.projectnessie.cel.parser.gen.CELParser.StringContext;
-import org.projectnessie.cel.parser.gen.CELParser.UintContext;
-import org.projectnessie.cel.parser.gen.CELParser.UnaryContext;
-import org.projectnessie.cel.shaded.org.antlr.v4.runtime.ANTLRErrorListener;
-import org.projectnessie.cel.shaded.org.antlr.v4.runtime.CommonTokenStream;
-import org.projectnessie.cel.shaded.org.antlr.v4.runtime.DefaultErrorStrategy;
-import org.projectnessie.cel.shaded.org.antlr.v4.runtime.IntStream;
-import org.projectnessie.cel.shaded.org.antlr.v4.runtime.ParserRuleContext;
-import org.projectnessie.cel.shaded.org.antlr.v4.runtime.RecognitionException;
-import org.projectnessie.cel.shaded.org.antlr.v4.runtime.Recognizer;
-import org.projectnessie.cel.shaded.org.antlr.v4.runtime.RuleContext;
-import org.projectnessie.cel.shaded.org.antlr.v4.runtime.Token;
-import org.projectnessie.cel.shaded.org.antlr.v4.runtime.atn.ATNConfigSet;
-import org.projectnessie.cel.shaded.org.antlr.v4.runtime.dfa.DFA;
-import org.projectnessie.cel.shaded.org.antlr.v4.runtime.tree.AbstractParseTreeVisitor;
-import org.projectnessie.cel.shaded.org.antlr.v4.runtime.tree.ErrorNode;
-import org.projectnessie.cel.shaded.org.antlr.v4.runtime.tree.ParseTree;
-import org.projectnessie.cel.shaded.org.antlr.v4.runtime.tree.ParseTreeListener;
-import org.projectnessie.cel.shaded.org.antlr.v4.runtime.tree.TerminalNode;
+import org.projectnessie.cel.parser.ast.ConstantLiteral;
+import org.projectnessie.cel.parser.ast.ExprList;
+import org.projectnessie.cel.parser.ast.Field;
+import org.projectnessie.cel.parser.ast.FieldInitializerList;
+import org.projectnessie.cel.parser.ast.MapInitializerList;
+import org.projectnessie.cel.parser.ast.Start;
 
 public final class Parser {
 
@@ -132,37 +110,27 @@ public final class Parser {
   }
 
   ParseResult parse(Source source) {
-    StringCharStream charStream = new StringCharStream(source.content(), source.description());
-    CELLexer lexer = new CELLexer(charStream);
-    CELParser parser = new CELParser(new CommonTokenStream(lexer, 0));
-
-    RecursionListener parserListener = new RecursionListener(options.getMaxRecursionDepth());
-
-    parser.addParseListener(parserListener);
-
-    parser.setErrorHandler(new RecoveryLimitErrorStrategy(options.getErrorRecoveryLimit()));
-
     Helper helper = new Helper(source);
     Errors errors = new Errors(source);
-
-    InnerParser inner = new InnerParser(helper, errors);
-
-    lexer.addErrorListener(inner);
-    parser.addErrorListener(inner);
-
     Expr expr = null;
-    try {
-      if (charStream.size() > options.getExpressionSizeCodePointLimit()) {
-        errors.reportError(
-            Location.NoLocation,
-            "expression code point size exceeds limit: size: %d, limit %d",
-            charStream.size(),
-            options.getExpressionSizeCodePointLimit());
-      } else {
-        expr = inner.exprVisit(parser.start());
+
+    int codePointCount = source.content().codePointCount(0, source.content().length());
+    if (codePointCount > options.getExpressionSizeCodePointLimit()) {
+      errors.reportError(
+          Location.NoLocation,
+          "expression code point size exceeds limit: size: %d, limit %d",
+          codePointCount,
+          options.getExpressionSizeCodePointLimit());
+    } else {
+      CelGrammarParser parser = new CelGrammarParser(source.description(), source.content());
+      try {
+        parser.Start();
+        expr = new AstBuilder(helper, errors).exprVisit(firstExpressionNode(parser.rootNode()));
+      } catch (ParseException e) {
+        errors.syntaxError(location(e.getLocation()), e.getMessage());
+      } catch (RecursionError e) {
+        errors.reportError(e, Location.NoLocation, "%s", e.getMessage());
       }
-    } catch (RecoveryLimitError | RecursionError e) {
-      errors.reportError(e, Location.NoLocation, "%s", e.getMessage());
     }
 
     if (errors.hasErrors()) {
@@ -170,6 +138,24 @@ public final class Parser {
     }
 
     return new ParseResult(expr, errors, helper.getSourceInfo());
+  }
+
+  private static Node firstExpressionNode(Node root) {
+    if (root instanceof Start) {
+      for (Node child : root.children()) {
+        if (!isToken(child, EOF)) {
+          return child;
+        }
+      }
+    }
+    return root;
+  }
+
+  private static Location location(Node node) {
+    if (node == null) {
+      return Location.NoLocation;
+    }
+    return Location.newLocation(node.getBeginLine(), node.getBeginColumn() - 1);
   }
 
   public static final class ParseResult {
@@ -200,404 +186,312 @@ public final class Parser {
     }
   }
 
-  static final class RecursionListener implements ParseTreeListener {
-    private final int maxDepth;
-    private int depth;
-
-    RecursionListener(int maxDepth) {
-      this.maxDepth = maxDepth;
-    }
-
-    @Override
-    public void visitTerminal(TerminalNode node) {}
-
-    @Override
-    public void visitErrorNode(ErrorNode node) {}
-
-    @Override
-    public void enterEveryRule(ParserRuleContext ctx) {
-      if (ctx != null && ctx.getRuleIndex() == CELParser.RULE_expr) {
-        if (this.depth >= this.maxDepth) {
-          this.depth++;
-          throw new RecursionError(
-              String.format("expression recursion limit exceeded: %d", maxDepth));
-        }
-        this.depth++;
-      }
-    }
-
-    @Override
-    public void exitEveryRule(ParserRuleContext ctx) {
-      if (ctx != null && ctx.getRuleIndex() == CELParser.RULE_expr) {
-        depth--;
-      }
-    }
-  }
-
   static final class RecursionError extends RuntimeException {
-    public RecursionError(String message) {
+    RecursionError(String message) {
       super(message);
     }
   }
 
-  static final class RecoveryLimitError extends RecognitionException {
-    public RecoveryLimitError(
-        String message, Recognizer<?, ?> recognizer, IntStream input, ParserRuleContext ctx) {
-      super(message, recognizer, input, ctx);
-    }
-  }
-
-  static final class RecoveryLimitErrorStrategy extends DefaultErrorStrategy {
-    private final int maxAttempts;
-    private int attempts;
-
-    private RecoveryLimitErrorStrategy(int maxAttempts) {
-      this.maxAttempts = maxAttempts;
-    }
-
-    @Override
-    public void recover(
-        org.projectnessie.cel.shaded.org.antlr.v4.runtime.Parser recognizer,
-        RecognitionException e) {
-      checkAttempts(recognizer);
-      super.recover(recognizer, e);
-    }
-
-    @Override
-    public Token recoverInline(org.projectnessie.cel.shaded.org.antlr.v4.runtime.Parser recognizer)
-        throws RecognitionException {
-      checkAttempts(recognizer);
-      return super.recoverInline(recognizer);
-    }
-
-    void checkAttempts(org.projectnessie.cel.shaded.org.antlr.v4.runtime.Parser recognizer)
-        throws RecognitionException {
-      if (attempts >= maxAttempts) {
-        attempts++;
-        String msg = String.format("error recovery attempt limit exceeded: %d", maxAttempts);
-        recognizer.notifyErrorListeners(null, msg, null);
-        throw new RecoveryLimitError(msg, recognizer, null, null);
-      }
-      attempts++;
-    }
-  }
-
-  final class InnerParser extends AbstractParseTreeVisitor<Object> implements ANTLRErrorListener {
-
+  final class AstBuilder implements CelExprBuilder {
     private final Helper helper;
     private final Errors errors;
+    private int depth;
 
-    InnerParser(Helper helper, Errors errors) {
+    AstBuilder(Helper helper, Errors errors) {
       this.helper = helper;
       this.errors = errors;
     }
 
-    @Override
-    public void syntaxError(
-        Recognizer<?, ?> recognizer,
-        Object offendingSymbol,
-        int line,
-        int charPositionInLine,
-        String msg,
-        RecognitionException e) {
-      errors.syntaxError(Location.newLocation(line, charPositionInLine), msg);
-    }
-
-    @Override
-    public void reportAmbiguity(
-        org.projectnessie.cel.shaded.org.antlr.v4.runtime.Parser recognizer,
-        DFA dfa,
-        int startIndex,
-        int stopIndex,
-        boolean exact,
-        BitSet ambigAlts,
-        ATNConfigSet configs) {
-      // empty
-    }
-
-    @Override
-    public void reportAttemptingFullContext(
-        org.projectnessie.cel.shaded.org.antlr.v4.runtime.Parser recognizer,
-        DFA dfa,
-        int startIndex,
-        int stopIndex,
-        BitSet conflictingAlts,
-        ATNConfigSet configs) {
-      // empty
-    }
-
-    @Override
-    public void reportContextSensitivity(
-        org.projectnessie.cel.shaded.org.antlr.v4.runtime.Parser recognizer,
-        DFA dfa,
-        int startIndex,
-        int stopIndex,
-        int prediction,
-        ATNConfigSet configs) {
-      // empty
-    }
-
-    Expr reportError(Object ctx, String message) {
-      return reportError(ctx, "%s", message);
-    }
-
-    Expr reportError(Object ctx, String format, Object... args) {
-      Location location;
-      if (ctx instanceof Location) {
-        location = (Location) ctx;
-      } else if (ctx instanceof Token || ctx instanceof ParserRuleContext) {
-        Expr err = helper.newExpr(ctx);
-        location = helper.getLocation(err.getId());
-      } else {
-        location = Location.NoLocation;
+    Expr exprVisit(Node node) {
+      if (node == null) {
+        return reportError(Location.NoLocation, "unknown parse element encountered: <<nil>>");
       }
-      Expr err = helper.newExpr(ctx);
-      // Provide arguments to the report error.
-      errors.reportError(location, format, args);
-      return err;
+      if (depth >= options.getMaxRecursionDepth()) {
+        throw new RecursionError(
+            String.format(
+                "expression recursion limit exceeded: %d", options.getMaxRecursionDepth()));
+      }
+      depth++;
+      try {
+        return doExprVisit(node);
+      } finally {
+        depth--;
+      }
     }
 
-    public Expr exprVisit(ParseTree tree) {
-      Object r = visit(tree);
-      return (Expr) r;
+    private Expr doExprVisit(Node node) {
+      if (node instanceof CelExprNode) {
+        return ((CelExprNode) node).toCelExpr(this);
+      }
+      return reportError(
+          node, "unknown parse element encountered: <<%s>>", node.getClass().getSimpleName());
     }
 
     @Override
-    public Object visit(ParseTree tree) {
-      if (tree instanceof RuleContext) {
-        RuleContext ruleContext = (RuleContext) tree;
-        int ruleIndex = ruleContext.getRuleIndex();
-        switch (ruleIndex) {
-          case CELParser.RULE_start:
-            return visitStart((StartContext) tree);
-          case CELParser.RULE_expr:
-            return visitExpr((ExprContext) tree);
-          case CELParser.RULE_conditionalOr:
-            return visitConditionalOr((ConditionalOrContext) tree);
-          case CELParser.RULE_conditionalAnd:
-            return visitConditionalAnd((ConditionalAndContext) tree);
-          case CELParser.RULE_relation:
-            return visitRelation((RelationContext) tree);
-          case CELParser.RULE_calc:
-            return visitCalc((CalcContext) tree);
-          case CELParser.RULE_unary:
-            if (tree instanceof LogicalNotContext) {
-              return visitLogicalNot((LogicalNotContext) tree);
-            } else if (tree instanceof NegateContext) {
-              return visitNegate((NegateContext) tree);
-            } else if (tree instanceof MemberExprContext) {
-              return visitMemberExpr((MemberExprContext) tree);
+    public Expr visitExpr(Node node) {
+      List<Node> children = significantChildren(node);
+      int question = indexOf(children, QUESTIONMARK);
+      if (question < 0) {
+        return exprVisit(firstExpressionChild(children, node));
+      }
+      Expr condition = exprVisit(children.get(0));
+      long opID = helper.id(children.get(question));
+      Expr ifTrue = exprVisit(children.get(question + 1));
+      Expr ifFalse = exprVisit(children.get(question + 3));
+      return globalCallOrMacro(opID, Operator.Conditional.id, condition, ifTrue, ifFalse);
+    }
+
+    @Override
+    public Expr visitBalanced(Node node, Operator operator) {
+      List<Node> children = significantChildren(node);
+      if (children.size() == 1) {
+        return exprVisit(children.get(0));
+      }
+      Expr result = exprVisit(children.get(0));
+      Balancer balancer = helper.newBalancer(operator.id, result);
+      for (int i = 1; i < children.size(); i += 2) {
+        Node op = children.get(i);
+        if (i + 1 >= children.size()) {
+          return reportError(node, "unexpected character, wanted '%s'", tokenText(op));
+        }
+        Expr next = exprVisit(children.get(i + 1));
+        balancer.addTerm(helper.id(op), next);
+      }
+      return balancer.balance();
+    }
+
+    @Override
+    public Expr visitBinary(Node node) {
+      List<Node> children = significantChildren(node);
+      if (children.size() == 1) {
+        return exprVisit(children.get(0));
+      }
+      Expr result = exprVisit(children.get(0));
+      for (int i = 1; i < children.size(); i += 2) {
+        Node opNode = children.get(i);
+        if (i + 1 >= children.size()) {
+          return reportError(node, "operator not found");
+        }
+        Operator op = Operator.find(tokenText(opNode));
+        if (op == null) {
+          return reportError(opNode, "operator not found");
+        }
+        long opID = helper.id(opNode);
+        Expr rhs = exprVisit(children.get(i + 1));
+        result = globalCallOrMacro(opID, op.id, result, rhs);
+      }
+      return result;
+    }
+
+    @Override
+    public Expr visitUnary(Node node) {
+      List<Node> children = significantChildren(node);
+      int opCount = 0;
+      while (opCount < children.size()
+          && (isToken(children.get(opCount), MINUS) || isToken(children.get(opCount), EXCLAM))) {
+        opCount++;
+      }
+      Node operand = children.get(opCount);
+      if (opCount == 0) {
+        return exprVisit(operand);
+      }
+      Node op = children.get(0);
+      boolean logicalNot = isToken(op, EXCLAM);
+      if (opCount % 2 == 0) {
+        return exprVisit(operand);
+      }
+      if (!logicalNot && isIntOrFloatLiteral(operand)) {
+        return visitNegativeNumericLiteral(op, operand);
+      }
+      return globalCallOrMacro(
+          helper.id(op),
+          logicalNot ? Operator.LogicalNot.id : Operator.Negate.id,
+          exprVisit(operand));
+    }
+
+    @Override
+    public Expr visitPrimary(Node node) {
+      List<Node> children = significantChildren(node);
+      if (children.isEmpty()) {
+        return reportError(node, "invalid primary expression");
+      }
+      Node first = children.get(0);
+      if (isToken(first, DOT) || isToken(first, IDENTIFIER)) {
+        return visitIdentOrGlobalCall(children, node);
+      } else if (isToken(first, LPAREN)) {
+        return exprVisit(children.get(1));
+      } else if (isToken(first, LBRACKET)) {
+        return helper.newList(helper.id(first), expressionsBetween(children, 1, RBRACKET));
+      } else if (isToken(first, LBRACE)) {
+        return helper.newMap(
+            helper.id(first), mapEntries(firstChildOfType(children, MapInitializerList.class)));
+      } else if (first instanceof ConstantLiteral || isLiteralToken(first)) {
+        return exprVisit(first);
+      }
+      return reportError(node, "invalid primary expression");
+    }
+
+    private Expr visitIdentOrGlobalCall(List<Node> children, Node ctx) {
+      int i = 0;
+      String prefix = "";
+      if (isToken(children.get(i), DOT)) {
+        prefix = ".";
+        i++;
+      }
+      if (i >= children.size() || !isToken(children.get(i), IDENTIFIER)) {
+        return helper.newExpr(ctx);
+      }
+      Token ident = (Token) children.get(i++);
+      String name = prefix + tokenText(ident);
+      if (reservedIds.contains(tokenText(ident))) {
+        return reportError(ident, "reserved identifier: %s", tokenText(ident));
+      }
+      if (i < children.size() && isToken(children.get(i), LPAREN)) {
+        Node open = children.get(i);
+        return globalCallOrMacro(
+            helper.id(open), name, expressionsBetween(children, i + 1, RPAREN));
+      }
+      return helper.newIdent(ident, name);
+    }
+
+    @Override
+    public Expr visitIdentifier(Token token) {
+      return identOrReserved(token, tokenText(token));
+    }
+
+    private Expr identOrReserved(Token token, String name) {
+      if (reservedIds.contains(name)) {
+        return reportError(token, "reserved identifier: %s", name);
+      }
+      return helper.newIdent(token, name);
+    }
+
+    @Override
+    public Expr visitMember(Node node) {
+      List<Node> children = significantChildren(node);
+      Expr operand = exprVisit(children.get(0));
+      int i = 1;
+      while (i < children.size()) {
+        Node op = children.get(i++);
+        if (isToken(op, DOT)) {
+          if (i >= children.size()) {
+            return helper.newExpr(node);
+          }
+          String id = fieldName(children.get(i++));
+          if (i < children.size() && isToken(children.get(i), LPAREN)) {
+            Node open = children.get(i++);
+            long openID = helper.id(open);
+            List<Expr> args = expressionsBetween(children, i, RPAREN);
+            while (i < children.size() && !isToken(children.get(i), RPAREN)) {
+              i++;
             }
-            return visitUnary((UnaryContext) tree);
-          case CELParser.RULE_member:
-            if (tree instanceof CreateMessageContext) {
-              return visitCreateMessage((CreateMessageContext) tree);
-            } else if (tree instanceof PrimaryExprContext) {
-              return visitPrimaryExpr((PrimaryExprContext) tree);
-            } else if (tree instanceof SelectOrCallContext) {
-              return visitSelectOrCall((SelectOrCallContext) tree);
-            } else if (tree instanceof IndexContext) {
-              return visitIndex((IndexContext) tree);
+            if (i < children.size()) {
+              i++;
             }
-            break;
-          case CELParser.RULE_primary:
-            if (tree instanceof CreateListContext) {
-              return visitCreateList((CreateListContext) tree);
-            } else if (tree instanceof CreateStructContext) {
-              return visitCreateStruct((CreateStructContext) tree);
-            }
-            break;
-          case CELParser.RULE_fieldInitializerList:
-          case CELParser.RULE_mapInitializerList:
-            return visitMapInitializerList((MapInitializerListContext) tree);
-          // case CELParser.RULE_exprList:
-          // case CELParser.RULE_literal:
-          default:
-            return reportError(tree, "parser rule '%d'", ruleIndex);
+            operand = receiverCallOrMacro(openID, id, operand, args);
+          } else {
+            operand = helper.newSelect(op, operand, id);
+          }
+        } else if (isToken(op, LBRACKET)) {
+          long opID = helper.id(op);
+          Expr index = exprVisit(children.get(i++));
+          if (i < children.size() && isToken(children.get(i), RBRACKET)) {
+            i++;
+          }
+          operand = globalCallOrMacro(opID, Operator.Index.id, operand, index);
+        } else if (isToken(op, LBRACE)) {
+          String messageName = extractQualifiedName(operand);
+          FieldInitializerList fields =
+              firstChildOfType(children.subList(i, children.size()), FieldInitializerList.class);
+          if (messageName != null) {
+            operand = helper.newObject(helper.id(op), messageName, objectFields(fields));
+          } else {
+            operand = helper.newExpr(helper.id(op));
+          }
+          while (i < children.size() && !isToken(children.get(i), RBRACE)) {
+            i++;
+          }
+          if (i < children.size()) {
+            i++;
+          }
+        } else {
+          return reportError(op, "unsupported member expression");
         }
       }
-
-      // Report at least one error if the parser reaches an unknown parse element.
-      // Typically, this happens if the parser has already encountered a syntax error elsewhere.
-      if (!errors.hasErrors()) {
-        String txt = "<<nil>>";
-        if (tree != null) {
-          txt = String.format("<<%s>>", tree.getClass().getSimpleName());
-        }
-        return reportError(Location.NoLocation, "unknown parse element encountered: %s", txt);
-      }
-      return helper.newExpr(Location.NoLocation);
+      return operand;
     }
 
-    private Object visitStart(StartContext ctx) {
-      return visit(ctx.expr());
+    @Override
+    public Expr visitLiteral(Node node) {
+      Node token = node;
+      if (node instanceof ConstantLiteral) {
+        List<Node> children = significantChildren(node);
+        token = children.get(children.size() - 1);
+      }
+      if (isToken(token, NUM_INT)) {
+        return intLiteral(token);
+      } else if (isToken(token, NUM_UINT)) {
+        return uintLiteral(token);
+      } else if (isToken(token, NUM_FLOAT)) {
+        return doubleLiteral(token);
+      } else if (isToken(token, STRING)) {
+        return helper.newLiteralString(token, unquoteString(token, tokenText(token)));
+      } else if (isToken(token, BYTES)) {
+        return helper.newLiteralBytes(token, unquoteBytes(token, tokenText(token).substring(1)));
+      } else if (isToken(token, FALSE)) {
+        return helper.newLiteralBool(token, false);
+      } else if (isToken(token, TRUE)) {
+        return helper.newLiteralBool(token, true);
+      } else if (isToken(token, NULL)) {
+        return helper.newLiteral(token, Constant.newBuilder().setNullValue(NullValue.NULL_VALUE));
+      }
+      return reportError(node, "invalid literal");
     }
 
-    private Expr visitExpr(ExprContext ctx) {
-      Expr result = exprVisit(ctx.e);
-      if (ctx.op == null) {
-        return result;
-      }
-      long opID = helper.id(ctx.op);
-      Expr ifTrue = exprVisit(ctx.e1);
-      Expr ifFalse = exprVisit(ctx.e2);
-      return globalCallOrMacro(opID, Operator.Conditional.id, result, ifTrue, ifFalse);
+    private static boolean isIntOrFloatLiteral(Node operand) {
+      return isToken(operand, NUM_INT)
+          || isToken(operand, NUM_FLOAT)
+          || (operand instanceof ConstantLiteral
+              && significantChildren(operand).stream()
+                  .anyMatch(child -> isToken(child, NUM_INT) || isToken(child, NUM_FLOAT)));
     }
 
-    private Expr visitConditionalAnd(ConditionalAndContext ctx) {
-      Expr result = exprVisit(ctx.e);
-      if (ctx.ops == null || ctx.ops.isEmpty()) {
-        return result;
+    private Expr visitNegativeNumericLiteral(Node op, Node operand) {
+      Node token = operand;
+      if (operand instanceof ConstantLiteral) {
+        List<Node> children = significantChildren(operand);
+        token = children.get(children.size() - 1);
       }
-      Balancer b = helper.newBalancer(Operator.LogicalAnd.id, result);
-      List<RelationContext> rest = ctx.e1;
-      for (int i = 0; i < ctx.ops.size(); i++) {
-        Token op = ctx.ops.get(i);
-        if (i >= rest.size()) {
-          return reportError(ctx, "unexpected character, wanted '&&'");
-        }
-        Expr next = exprVisit(rest.get(i));
-        long opID = helper.id(op);
-        b.addTerm(opID, next);
+      if (isToken(token, NUM_INT)) {
+        return intLiteral(op, "-" + tokenText(token));
+      } else if (isToken(token, NUM_FLOAT)) {
+        return doubleLiteral(op, "-" + tokenText(token));
       }
-      return b.balance();
+      return globalCallOrMacro(helper.id(op), Operator.Negate.id, exprVisit(operand));
     }
 
-    private Expr visitConditionalOr(ConditionalOrContext ctx) {
-      Expr result = exprVisit(ctx.e);
-      if (ctx.ops == null || ctx.ops.isEmpty()) {
-        return result;
-      }
-      Balancer b = helper.newBalancer(Operator.LogicalOr.id, result);
-      List<ConditionalAndContext> rest = ctx.e1;
-      for (int i = 0; i < ctx.ops.size(); i++) {
-        Token op = ctx.ops.get(i);
-        if (i >= rest.size()) {
-          return reportError(ctx, "unexpected character, wanted '||'");
-        }
-        Expr next = exprVisit(rest.get(i));
-        long opID = helper.id(op);
-        b.addTerm(opID, next);
-      }
-      return b.balance();
+    private Expr intLiteral(Node token) {
+      return intLiteral(token, tokenText(token));
     }
 
-    private Expr visitRelation(RelationContext ctx) {
-      if (ctx.calc() != null) {
-        return exprVisit(ctx.calc());
-      }
-      String opText = "";
-      if (ctx.op != null) {
-        opText = ctx.op.getText();
-      }
-      Operator op = Operator.find(opText);
-      if (op != null) {
-        Expr lhs = exprVisit(ctx.relation(0));
-        long opID = helper.id(ctx.op);
-        Expr rhs = exprVisit(ctx.relation(1));
-        return globalCallOrMacro(opID, op.id, lhs, rhs);
-      }
-      return reportError(ctx, "operator not found");
-    }
-
-    private Expr visitCalc(CalcContext ctx) {
-      if (ctx.unary() != null) {
-        return exprVisit(ctx.unary());
-      }
-      String opText = "";
-      if (ctx.op != null) {
-        opText = ctx.op.getText();
-      }
-      Operator op = Operator.find(opText);
-      if (op != null) {
-        Expr lhs = exprVisit(ctx.calc(0));
-        long opID = helper.id(ctx.op);
-        Expr rhs = exprVisit(ctx.calc(1));
-        return globalCallOrMacro(opID, op.id, lhs, rhs);
-      }
-      return reportError(ctx, "operator not found");
-    }
-
-    private Expr visitLogicalNot(LogicalNotContext ctx) {
-      if (ctx.ops.size() % 2 == 0) {
-        return exprVisit(ctx.member());
-      }
-      long opID = helper.id(ctx.ops.get(0));
-      Expr target = exprVisit(ctx.member());
-      return globalCallOrMacro(opID, Operator.LogicalNot.id, target);
-    }
-
-    private Expr visitMemberExpr(MemberExprContext ctx) {
-      if (ctx.member() instanceof PrimaryExprContext) {
-        return visitPrimaryExpr((PrimaryExprContext) ctx.member());
-      } else if (ctx.member() instanceof SelectOrCallContext) {
-        return visitSelectOrCall((SelectOrCallContext) ctx.member());
-      } else if (ctx.member() instanceof IndexContext) {
-        return visitIndex((IndexContext) ctx.member());
-      } else if (ctx.member() instanceof CreateMessageContext) {
-        return visitCreateMessage((CreateMessageContext) ctx.member());
-      }
-      return reportError(ctx, "unsupported simple expression");
-    }
-
-    private Expr visitPrimaryExpr(PrimaryExprContext ctx) {
-      if (ctx.primary() instanceof NestedContext) {
-        return visitNested((NestedContext) ctx.primary());
-      } else if (ctx.primary() instanceof IdentOrGlobalCallContext) {
-        return visitIdentOrGlobalCall((IdentOrGlobalCallContext) ctx.primary());
-      } else if (ctx.primary() instanceof CreateListContext) {
-        return visitCreateList((CreateListContext) ctx.primary());
-      } else if (ctx.primary() instanceof CreateStructContext) {
-        return visitCreateStruct((CreateStructContext) ctx.primary());
-      } else if (ctx.primary() instanceof ConstantLiteralContext) {
-        return visitConstantLiteral((ConstantLiteralContext) ctx.primary());
-      }
-
-      return reportError(ctx, "invalid primary expression");
-    }
-
-    private Expr visitConstantLiteral(ConstantLiteralContext ctx) {
-      if (ctx.literal() instanceof IntContext) {
-        return visitInt((IntContext) ctx.literal());
-      } else if (ctx.literal() instanceof UintContext) {
-        return visitUint((UintContext) ctx.literal());
-      } else if (ctx.literal() instanceof DoubleContext) {
-        return visitDouble((DoubleContext) ctx.literal());
-      } else if (ctx.literal() instanceof StringContext) {
-        return visitString((StringContext) ctx.literal());
-      } else if (ctx.literal() instanceof BytesContext) {
-        return visitBytes((BytesContext) ctx.literal());
-      } else if (ctx.literal() instanceof BoolFalseContext) {
-        return visitBoolFalse((BoolFalseContext) ctx.literal());
-      } else if (ctx.literal() instanceof BoolTrueContext) {
-        return visitBoolTrue((BoolTrueContext) ctx.literal());
-      } else if (ctx.literal() instanceof NullContext) {
-        return visitNull((NullContext) ctx.literal());
-      }
-      return reportError(ctx, "invalid literal");
-    }
-
-    private Expr visitInt(IntContext ctx) {
-      String text = ctx.tok.getText();
+    private Expr intLiteral(Node token, String text) {
       int base = 10;
-      if (text.startsWith("0x")) {
+      if (text.startsWith("-0x")) {
+        base = 16;
+        text = "-" + text.substring(3);
+      } else if (text.startsWith("0x")) {
         base = 16;
         text = text.substring(2);
       }
-      if (ctx.sign != null) {
-        text = ctx.sign.getText() + text;
-      }
       try {
-        long i = Long.parseLong(text, base);
-        return helper.newLiteralInt(ctx, i);
+        return helper.newLiteralInt(token, Long.parseLong(text, base));
       } catch (Exception e) {
-        return reportError(ctx, "invalid int literal");
+        return reportError(token, "invalid int literal");
       }
     }
 
-    private Expr visitUint(UintContext ctx) {
-      String text = ctx.tok.getText();
-      // trim the 'u' designator included in the uint literal.
+    private Expr uintLiteral(Node token) {
+      String text = tokenText(token);
       text = text.substring(0, text.length() - 1);
       int base = 10;
       if (text.startsWith("0x")) {
@@ -605,63 +499,100 @@ public final class Parser {
         text = text.substring(2);
       }
       try {
-        long i = Long.parseUnsignedLong(text, base);
-        return helper.newLiteralUint(ctx, i);
+        return helper.newLiteralUint(token, Long.parseUnsignedLong(text, base));
       } catch (Exception e) {
-        return reportError(ctx, "invalid int literal");
+        return reportError(token, "invalid int literal");
       }
     }
 
-    private Expr visitDouble(DoubleContext ctx) {
-      String txt = ctx.tok.getText();
-      if (ctx.sign != null) {
-        txt = ctx.sign.getText() + txt;
-      }
+    private Expr doubleLiteral(Node token) {
+      return doubleLiteral(token, tokenText(token));
+    }
+
+    private Expr doubleLiteral(Node token, String text) {
       try {
-        double f = Double.parseDouble(txt);
-        return helper.newLiteralDouble(ctx, f);
+        return helper.newLiteralDouble(token, Double.parseDouble(text));
       } catch (Exception e) {
-        return reportError(ctx, "invalid double literal");
+        return reportError(token, "invalid double literal");
       }
     }
 
-    private Expr visitString(StringContext ctx) {
-      String s = unquoteString(ctx, ctx.getText());
-      return helper.newLiteralString(ctx, s);
-    }
-
-    private Expr visitBytes(BytesContext ctx) {
-      ByteString b = unquoteBytes(ctx, ctx.tok.getText().substring(1));
-      return helper.newLiteralBytes(ctx, b);
-    }
-
-    private Expr visitBoolFalse(BoolFalseContext ctx) {
-      return helper.newLiteralBool(ctx, false);
-    }
-
-    private Expr visitBoolTrue(BoolTrueContext ctx) {
-      return helper.newLiteralBool(ctx, true);
-    }
-
-    private Expr visitNull(NullContext ctx) {
-      return helper.newLiteral(ctx, Constant.newBuilder().setNullValue(NullValue.NULL_VALUE));
-    }
-
-    private List<Expr> visitList(ExprListContext ctx) {
-      if (ctx == null) {
+    private List<Expr> expressionsIn(ExprList list) {
+      if (list == null) {
         return Collections.emptyList();
       }
-      return visitSlice(ctx.e);
+      List<Expr> result = new ArrayList<>();
+      for (Node child : significantChildren(list)) {
+        if (!isToken(child, COMMA)) {
+          result.add(exprVisit(child));
+        }
+      }
+      return result;
     }
 
-    private List<Expr> visitSlice(List<ExprContext> expressions) {
-      if (expressions == null) {
+    private List<Expr> expressionsBetween(List<Node> children, int start, Token.TokenType end) {
+      List<Expr> result = new ArrayList<>();
+      for (int i = start; i < children.size() && !isToken(children.get(i), end); i++) {
+        Node child = children.get(i);
+        if (isToken(child, COMMA)) {
+          continue;
+        }
+        if (child instanceof ExprList) {
+          result.addAll(expressionsIn((ExprList) child));
+        } else {
+          result.add(exprVisit(child));
+        }
+      }
+      return result;
+    }
+
+    private List<Entry> objectFields(FieldInitializerList fields) {
+      if (fields == null) {
         return Collections.emptyList();
       }
-      List<Expr> result = new ArrayList<>(expressions.size());
-      for (ExprContext e : expressions) {
-        Expr ex = exprVisit(e);
-        result.add(ex);
+      List<Node> children = significantChildren(fields);
+      List<Entry> result = new ArrayList<>();
+      for (int i = 0; i < children.size(); ) {
+        Node field = children.get(i++);
+        if (i >= children.size() || !isToken(children.get(i), COLON)) {
+          break;
+        }
+        Node colon = children.get(i++);
+        if (i >= children.size()) {
+          break;
+        }
+        long colonID = helper.id(colon);
+        Expr value = exprVisit(children.get(i++));
+        result.add(helper.newObjectField(colonID, fieldName(field), value));
+        if (i < children.size() && isToken(children.get(i), COMMA)) {
+          i++;
+        }
+      }
+      return result;
+    }
+
+    private List<Entry> mapEntries(MapInitializerList entries) {
+      if (entries == null) {
+        return Collections.emptyList();
+      }
+      List<Node> children = significantChildren(entries);
+      List<Entry> result = new ArrayList<>();
+      for (int i = 0; i < children.size(); ) {
+        Node keyNode = children.get(i++);
+        if (i >= children.size() || !isToken(children.get(i), COLON)) {
+          break;
+        }
+        Node colon = children.get(i++);
+        long colonID = helper.id(colon);
+        Expr key = exprVisit(keyNode);
+        if (i >= children.size()) {
+          break;
+        }
+        Expr value = exprVisit(children.get(i++));
+        result.add(helper.newMapEntry(colonID, key, value));
+        if (i < children.size() && isToken(children.get(i), COMMA)) {
+          i++;
+        }
       }
       return result;
     }
@@ -678,151 +609,9 @@ public final class Parser {
           String prefix = extractQualifiedName(s.getOperand());
           return prefix + "." + s.getField();
       }
-      // TODO: Add a method to Source to get location from character offset.
       Location location = helper.getLocation(e.getId());
       reportError(location, "expected a qualified name");
       return null;
-    }
-
-    // Visit a parse tree of field initializers.
-    List<Entry> visitIFieldInitializerList(FieldInitializerListContext ctx) {
-      if (ctx == null || ctx.fields == null) {
-        // This is the result of a syntax error handled elswhere, return empty.
-        return Collections.emptyList();
-      }
-
-      List<Entry> result = new ArrayList<>(ctx.fields.size());
-      List<Token> cols = ctx.cols;
-      List<ExprContext> vals = ctx.values;
-      for (int i = 0; i < ctx.fields.size(); i++) {
-        FieldContext f = ctx.fields.get(i);
-        if (i >= cols.size() || i >= vals.size()) {
-          // This is the result of a syntax error detected elsewhere.
-          return Collections.emptyList();
-        }
-        long initID = helper.id(cols.get(i));
-        Expr value = exprVisit(vals.get(i));
-        Entry field = helper.newObjectField(initID, fieldName(f), value);
-        result.add(field);
-      }
-      return result;
-    }
-
-    private Expr visitIdentOrGlobalCall(IdentOrGlobalCallContext ctx) {
-      String identName = "";
-      if (ctx.leadingDot != null) {
-        identName = ".";
-      }
-      // Handle the error case where no valid identifier is specified.
-      if (ctx.id == null) {
-        return helper.newExpr(ctx);
-      }
-      // Handle reserved identifiers.
-      String id = ctx.id.getText();
-      if (reservedIds.contains(id)) {
-        return reportError(ctx, "reserved identifier: %s", id);
-      }
-      identName += id;
-      if (ctx.op != null) {
-        long opID = helper.id(ctx.op);
-        return globalCallOrMacro(opID, identName, visitList(ctx.args));
-      }
-      return helper.newIdent(ctx.id, identName);
-    }
-
-    private Expr visitNested(NestedContext ctx) {
-      return exprVisit(ctx.e);
-    }
-
-    private Expr visitSelectOrCall(SelectOrCallContext ctx) {
-      Expr operand = exprVisit(ctx.member());
-      // Handle the error case where no valid identifier is specified.
-      if (ctx.id == null) {
-        return helper.newExpr(ctx);
-      }
-      String id = fieldName(ctx.id);
-      if (ctx.open != null) {
-        long opID = helper.id(ctx.open);
-        return receiverCallOrMacro(opID, id, operand, visitList(ctx.args));
-      }
-      return helper.newSelect(ctx.op, operand, id);
-    }
-
-    private String fieldName(FieldContext ctx) {
-      String text = ctx.getText();
-      if (text.length() >= 2 && text.charAt(0) == '`' && text.charAt(text.length() - 1) == '`') {
-        return text.substring(1, text.length() - 1);
-      }
-      return text;
-    }
-
-    private List<Entry> visitMapInitializerList(MapInitializerListContext ctx) {
-      if (ctx == null || ctx.keys.isEmpty()) {
-        // This is the result of a syntax error handled elswhere, return empty.
-        return Collections.emptyList();
-      }
-
-      List<Entry> result = new ArrayList<>(ctx.cols.size());
-      List<ExprContext> keys = ctx.keys;
-      List<ExprContext> vals = ctx.values;
-      for (int i = 0; i < ctx.cols.size(); i++) {
-        Token col = ctx.cols.get(i);
-        long colID = helper.id(col);
-        if (i >= keys.size() || i >= vals.size()) {
-          // This is the result of a syntax error detected elsewhere.
-          return Collections.emptyList();
-        }
-        Expr key = exprVisit(keys.get(i));
-        Expr value = exprVisit(vals.get(i));
-        Entry entry = helper.newMapEntry(colID, key, value);
-        result.add(entry);
-      }
-      return result;
-    }
-
-    private Expr visitNegate(NegateContext ctx) {
-      if (ctx.ops.size() % 2 == 0) {
-        return exprVisit(ctx.member());
-      }
-      long opID = helper.id(ctx.ops.get(0));
-      Expr target = exprVisit(ctx.member());
-      return globalCallOrMacro(opID, Operator.Negate.id, target);
-    }
-
-    private Expr visitIndex(IndexContext ctx) {
-      Expr target = exprVisit(ctx.member());
-      long opID = helper.id(ctx.op);
-      Expr index = exprVisit(ctx.index);
-      return globalCallOrMacro(opID, Operator.Index.id, target, index);
-    }
-
-    private Expr visitUnary(UnaryContext ctx) {
-      return helper.newLiteralString(ctx, "<<error>>");
-    }
-
-    private Expr visitCreateList(CreateListContext ctx) {
-      long listID = helper.id(ctx.op);
-      return helper.newList(listID, visitList(ctx.elems));
-    }
-
-    private Expr visitCreateMessage(CreateMessageContext ctx) {
-      Expr target = exprVisit(ctx.member());
-      long objID = helper.id(ctx.op);
-      String messageName = extractQualifiedName(target);
-      if (messageName != null) {
-        List<Entry> entries = visitIFieldInitializerList(ctx.entries);
-        return helper.newObject(objID, messageName, entries);
-      }
-      return helper.newExpr(objID);
-    }
-
-    private Expr visitCreateStruct(CreateStructContext ctx) {
-      long structID = helper.id(ctx.op);
-      if (ctx.entries != null) {
-        return helper.newMap(structID, visitMapInitializerList(ctx.entries));
-      } else {
-        return helper.newMap(structID, Collections.emptyList());
-      }
     }
 
     Expr globalCallOrMacro(long exprID, String function, Expr... args) {
@@ -881,12 +670,109 @@ public final class Parser {
     String unquoteString(Object ctx, String value) {
       try {
         ByteBuffer buf = Unescape.unescape(value, false);
-
         return Unescape.toUtf8(buf);
       } catch (Exception e) {
         reportError(ctx, e.toString());
         return value;
       }
     }
+
+    Expr reportError(Object ctx, String message) {
+      return reportError(ctx, "%s", message);
+    }
+
+    Expr reportError(Object ctx, String format, Object... args) {
+      Location loc = Location.NoLocation;
+      if (ctx instanceof Location) {
+        loc = (Location) ctx;
+      } else if (ctx instanceof Node) {
+        loc = location((Node) ctx);
+      }
+      Expr err = helper.newExpr(ctx);
+      errors.reportError(loc, format, args);
+      return err;
+    }
+
+    private static String fieldName(Node node) {
+      if (node instanceof Field) {
+        return fieldName(significantChildren(node).get(0));
+      }
+      String text = tokenText(node);
+      if (text.length() >= 2 && text.charAt(0) == '`' && text.charAt(text.length() - 1) == '`') {
+        return text.substring(1, text.length() - 1);
+      }
+      return text;
+    }
+
+    private static Node firstExpressionChild(List<Node> children, Node ctx) {
+      for (Node child : children) {
+        if (!isStructuralToken(child)) {
+          return child;
+        }
+      }
+      return ctx;
+    }
+  }
+
+  private static List<Node> significantChildren(Node node) {
+    if (node == null) {
+      return Collections.emptyList();
+    }
+    List<Node> children = new ArrayList<>();
+    for (Node child : node.children()) {
+      if (!isToken(child, EOF)) {
+        children.add(child);
+      }
+    }
+    return children;
+  }
+
+  private static boolean isLiteralToken(Node node) {
+    return isToken(node, NUM_INT)
+        || isToken(node, NUM_UINT)
+        || isToken(node, NUM_FLOAT)
+        || isToken(node, STRING)
+        || isToken(node, BYTES)
+        || isToken(node, TRUE)
+        || isToken(node, FALSE)
+        || isToken(node, NULL);
+  }
+
+  private static boolean isStructuralToken(Node node) {
+    return isToken(node, COMMA)
+        || isToken(node, COLON)
+        || isToken(node, LPAREN)
+        || isToken(node, RPAREN)
+        || isToken(node, LBRACKET)
+        || isToken(node, RBRACKET)
+        || isToken(node, LBRACE)
+        || isToken(node, RBRACE);
+  }
+
+  private static boolean isToken(Node node, Token.TokenType type) {
+    return node instanceof Token && node.getType() == type;
+  }
+
+  private static String tokenText(Node node) {
+    return node == null ? "" : node.getSource();
+  }
+
+  private static int indexOf(List<Node> children, Token.TokenType type) {
+    for (int i = 0; i < children.size(); i++) {
+      if (isToken(children.get(i), type)) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  @SuppressWarnings("unchecked")
+  private static <T extends Node> T firstChildOfType(List<Node> children, Class<T> type) {
+    for (Node child : children) {
+      if (type.isInstance(child)) {
+        return (T) child;
+      }
+    }
+    return null;
   }
 }

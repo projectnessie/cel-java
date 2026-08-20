@@ -37,7 +37,6 @@ dependencies {
   api(project(":cel-tools"))
   api(project(":cel-jackson"))
   api(project(":cel-jackson3"))
-  api(project(":cel-generated-antlr"))
 
   compileOnly(project(":cel-generated-pb"))
   compileOnly(libs.protobuf.java)
@@ -47,7 +46,6 @@ dependencies {
   standaloneShadow(project(":cel-tools"))
   standaloneShadow(project(":cel-jackson"))
   standaloneShadow(project(":cel-jackson3"))
-  standaloneShadow(project(":cel-generated-antlr"))
   standaloneShadow(project(":cel-generated-pb"))
   standaloneShadow(libs.protobuf.java)
   standaloneShadow(libs.agrona)

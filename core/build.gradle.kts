@@ -24,13 +24,16 @@ plugins {
   `java-test-fixtures`
 }
 
+val congocc = configurations.create("congocc")
+
 configurations.named("jmhImplementation") { extendsFrom(configurations.testFixturesApi.get()) }
 
 dependencies {
-  implementation(project(":cel-generated-antlr"))
   compileOnly(project(":cel-generated-pb"))
 
   implementation(libs.agrona)
+
+  congocc(libs.congocc)
 
   testImplementation(project(":cel-generated-pb"))
   testFixturesApi(platform(libs.junit.bom))
@@ -46,12 +49,58 @@ dependencies {
   jmhAnnotationProcessor(libs.jmh.generator.annprocess)
 }
 
+abstract class Generate : JavaExec() {
+  init {
+    outputs.cacheIf { true }
+  }
+
+  @get:InputDirectory
+  @get:PathSensitive(PathSensitivity.RELATIVE)
+  abstract val sourceDir: DirectoryProperty
+
+  @get:OutputDirectory abstract val outputDir: DirectoryProperty
+}
+
+val generateCelGrammar =
+  tasks.register<Generate>("generateCelGrammar") {
+    val generatedDir = layout.buildDirectory.dir("generated/sources/congocc/cel")
+    val projectDir = layout.projectDirectory
+
+    sourceDir = projectDir.dir("src/main/congocc/cel")
+    outputDir = generatedDir
+
+    classpath(congocc)
+    mainClass = "org.congocc.app.Main"
+    workingDir(projectDir)
+
+    doFirst { generatedDir.get().asFile.deleteRecursively() }
+
+    argumentProviders.add(
+      CommandLineArgumentProvider {
+        val sourceFile = sourceDir.file("cel-java.ccc").get().asFile.relativeTo(projectDir.asFile)
+        val base =
+          listOf(
+            "-d",
+            generatedDir.get().asFile.toString(),
+            "-jdk17",
+            "-n",
+            sourceFile.toString(),
+          )
+        if (logger.isInfoEnabled) base else base + "-q"
+      }
+    )
+  }
+
 jmh { jmhVersion.set(libs.versions.jmh.get()) }
+
+sourceSets.main { java.srcDir(generateCelGrammar) }
 
 sourceSets.test {
   java.srcDir(layout.buildDirectory.dir("generated/source/proto/test/java"))
   java.destinationDirectory.set(layout.buildDirectory.dir("classes/java/generatedTest"))
 }
+
+tasks.named("compileJava") { dependsOn(generateCelGrammar) }
 
 tasks.named("check") { dependsOn(tasks.named("jmh")) }
 

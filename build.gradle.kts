@@ -102,7 +102,6 @@ idea.project.settings {
     afterSync(
       ":cel-generated-pb:jar",
       ":cel-generated-pb:testJar",
-      ":cel-generated-antlr:shadowJar",
     )
   }
 }

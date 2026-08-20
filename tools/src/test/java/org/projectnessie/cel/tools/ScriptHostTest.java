@@ -141,8 +141,8 @@ class ScriptHostTest {
 
     assertThatThrownBy(() -> scriptHost.buildScript("-.,").build())
         .isInstanceOf(ScriptCreateException.class)
-        .hasMessageStartingWith(
-            "parse failed: ERROR: <input>:1:3: Syntax error: mismatched input ',' expecting IDENTIFIER");
+        .hasMessageContaining("Found string \",\" of type COMMA")
+        .hasMessageContaining("Was expecting: IDENTIFIER");
   }
 
   @Test

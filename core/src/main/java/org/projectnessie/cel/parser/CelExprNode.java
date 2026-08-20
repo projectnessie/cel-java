@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 The Authors of CEL-Java
+ * Copyright (C) 2026 The Authors of CEL-Java
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,25 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.projectnessie.cel.parser;
 
-plugins {
-  `java-platform`
-  `maven-publish`
-  signing
-  id("cel-conventions")
+import com.google.api.expr.v1alpha1.Expr;
+
+public interface CelExprNode {
+  Expr toCelExpr(CelExprBuilder builder);
 }
-
-dependencies {
-  constraints {
-    api(project(":cel-core"))
-    api(project(":cel-generated-pb"))
-    api(project(":cel-generated-pb3"))
-    api(project(":cel-conformance"))
-    api(project(":cel-jackson"))
-    api(project(":cel-jackson3"))
-    api(project(":cel-tools"))
-    api(project(":cel-standalone"))
-  }
-}
-
-javaPlatform { allowDependencies() }

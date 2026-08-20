@@ -1,0 +1,151 @@
+/*
+ * Copyright (C) 2026 The Authors of CEL-Java
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+PARSER_PACKAGE="org.projectnessie.cel.parser";
+PARSER_CLASS=CelGrammarParser;
+LEXER_CLASS=CelGrammarLexer;
+NODE_PACKAGE="org.projectnessie.cel.parser.ast";
+
+INCLUDE "cel.ccc"
+
+INJECT PARSER_CLASS :
+{
+  private boolean nextTokenStartsExpression() {
+    TokenType type = getToken(1).getType();
+    return switch (type) {
+      case LBRACKET, LBRACE, LPAREN, DOT, MINUS, EXCLAM, TRUE, FALSE, NULL, NUM_UINT, NUM_FLOAT,
+          NUM_INT, STRING, BYTES, IDENTIFIER -> true;
+      default -> false;
+    };
+  }
+}
+
+INJECT ParseException :
+{
+  @SuppressWarnings("unchecked")
+  public java.util.Set<Token.TokenType> getExpectedTokenTypes() {
+    java.util.Set x = expectedTypes;
+    return x;
+  }
+}
+
+INJECT Expr : implements CelExprNode;
+INJECT Expr :
+{
+  @Override
+  public com.google.api.expr.v1alpha1.Expr toCelExpr(CelExprBuilder builder) {
+    return builder.visitExpr(this);
+  }
+}
+
+INJECT ConditionalOr : implements CelExprNode;
+INJECT ConditionalOr :
+{
+  @Override
+  public com.google.api.expr.v1alpha1.Expr toCelExpr(CelExprBuilder builder) {
+    return builder.visitBalanced(this, org.projectnessie.cel.common.operators.Operator.LogicalOr);
+  }
+}
+
+INJECT ConditionalAnd : implements CelExprNode;
+INJECT ConditionalAnd :
+{
+  @Override
+  public com.google.api.expr.v1alpha1.Expr toCelExpr(CelExprBuilder builder) {
+    return builder.visitBalanced(this, org.projectnessie.cel.common.operators.Operator.LogicalAnd);
+  }
+}
+
+INJECT Relation : implements CelExprNode;
+INJECT Relation :
+{
+  @Override
+  public com.google.api.expr.v1alpha1.Expr toCelExpr(CelExprBuilder builder) {
+    return builder.visitBinary(this);
+  }
+}
+
+INJECT Calc : implements CelExprNode;
+INJECT Calc :
+{
+  @Override
+  public com.google.api.expr.v1alpha1.Expr toCelExpr(CelExprBuilder builder) {
+    return builder.visitBinary(this);
+  }
+}
+
+INJECT Multiplicative : implements CelExprNode;
+INJECT Multiplicative :
+{
+  @Override
+  public com.google.api.expr.v1alpha1.Expr toCelExpr(CelExprBuilder builder) {
+    return builder.visitBinary(this);
+  }
+}
+
+INJECT Unary : implements CelExprNode;
+INJECT Unary :
+{
+  @Override
+  public com.google.api.expr.v1alpha1.Expr toCelExpr(CelExprBuilder builder) {
+    return builder.visitUnary(this);
+  }
+}
+
+INJECT Member : implements CelExprNode;
+INJECT Member :
+{
+  @Override
+  public com.google.api.expr.v1alpha1.Expr toCelExpr(CelExprBuilder builder) {
+    return builder.visitMember(this);
+  }
+}
+
+INJECT Primary : implements CelExprNode;
+INJECT Primary :
+{
+  @Override
+  public com.google.api.expr.v1alpha1.Expr toCelExpr(CelExprBuilder builder) {
+    return builder.visitPrimary(this);
+  }
+}
+
+INJECT ConstantLiteral : implements CelExprNode;
+INJECT ConstantLiteral :
+{
+  @Override
+  public com.google.api.expr.v1alpha1.Expr toCelExpr(CelExprBuilder builder) {
+    return builder.visitLiteral(this);
+  }
+}
+
+INJECT Literal : implements CelExprNode;
+INJECT Literal :
+{
+  @Override
+  public com.google.api.expr.v1alpha1.Expr toCelExpr(CelExprBuilder builder) {
+    return builder.visitLiteral(this);
+  }
+}
+
+INJECT Identifier : implements CelExprNode;
+INJECT Identifier :
+{
+  @Override
+  public com.google.api.expr.v1alpha1.Expr toCelExpr(CelExprBuilder builder) {
+    return builder.visitIdentifier(this);
+  }
+}
