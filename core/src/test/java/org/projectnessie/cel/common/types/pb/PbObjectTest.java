@@ -22,8 +22,10 @@ import static org.projectnessie.cel.common.types.IntT.IntZero;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.TypeT.TypeType;
+import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newEmptyRegistry;
 import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newRegistry;
 
+import com.google.api.expr.v1alpha1.CheckedExpr;
 import com.google.api.expr.v1alpha1.Expr;
 import com.google.api.expr.v1alpha1.ParsedExpr;
 import com.google.api.expr.v1alpha1.SourceInfo;
@@ -67,6 +69,20 @@ public class PbObjectTest {
   }
 
   @Test
+  void registerMessageIncludesDirectAndTransitiveDependencies() {
+    ProtoTypeRegistry registry = newEmptyRegistry();
+
+    registry.registerMessage(CheckedExpr.getDefaultInstance());
+
+    assertThat(registry.findType(CheckedExpr.getDescriptor().getFullName())).isNotNull();
+    assertThat(registry.findType(Expr.getDescriptor().getFullName())).isNotNull();
+    assertThat(registry.findType(com.google.protobuf.Duration.getDescriptor().getFullName()))
+        .isNotNull();
+    assertThat(registry.findType(Timestamp.getDescriptor().getFullName())).isNotNull();
+  }
+
+  @Test
+  @SuppressWarnings("removal")
   void protoObjectConvertToNative() throws Exception {
     TypeRegistry reg = newRegistry(Expr.getDefaultInstance());
     ParsedExpr msg =
@@ -96,6 +112,7 @@ public class PbObjectTest {
   }
 
   @Test
+  @SuppressWarnings("removal")
   void wellKnownProtoObjectsConvertToJsonValue() {
     TypeRegistry reg = newRegistry(Empty.getDefaultInstance(), FieldMask.getDefaultInstance());
 

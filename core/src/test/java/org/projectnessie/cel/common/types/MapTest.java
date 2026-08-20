@@ -17,26 +17,184 @@ package org.projectnessie.cel.common.types;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
+import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.IntT.intOf;
+import static org.projectnessie.cel.common.types.IteratorT.IteratorType;
+import static org.projectnessie.cel.common.types.MapT.newMaybeWrappedMap;
 import static org.projectnessie.cel.common.types.MapT.newWrappedMap;
+import static org.projectnessie.cel.common.types.NullT.NullValue;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
+import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
 import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newRegistry;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.Struct;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
+import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.common.types.traits.Trait;
 
 public class MapTest {
 
   @Test
+  void numericHashCodeMatchesHeterogeneousCelEquality() {
+    long[] values = {0L, 1L, 1L << 40, 1L << 53, (1L << 53) + 1, Long.MAX_VALUE};
+    for (long value : values) {
+      Val intValue = intOf(value);
+      Val uintValue = uintOf(value);
+      Val doubleValue = doubleOf(value);
+
+      assertThat(intValue).isEqualTo(uintValue);
+      assertThat(intValue.hashCode()).isEqualTo(uintValue.hashCode());
+      assertThat(intValue).isEqualTo(doubleValue);
+      assertThat(intValue.hashCode()).isEqualTo(doubleValue.hashCode());
+    }
+
+    assertThat(doubleOf(-0.0d)).isEqualTo(doubleOf(0.0d));
+    assertThat(doubleOf(-0.0d).hashCode()).isEqualTo(doubleOf(0.0d).hashCode());
+  }
+
+  @Test
+  void largeHeterogeneousNumericKeys() {
+    long key = 1L << 40;
+    MapT map =
+        (MapT)
+            newWrappedMap(
+                newRegistry(), new HashMap<>(Map.of(intOf(key), stringOf("large value"))));
+
+    assertThat(map.find(intOf(key))).isEqualTo(stringOf("large value"));
+    assertThat(map.find(uintOf(key))).isEqualTo(stringOf("large value"));
+    assertThat(map.find(doubleOf(key))).isEqualTo(stringOf("large value"));
+
+    Map<Object, Object> duplicateKeys = new HashMap<>();
+    duplicateKeys.put(key, "signed");
+    duplicateKeys.put((double) key, "double");
+    assertThat(newMaybeWrappedMap(newRegistry(), duplicateKeys)).matches(Err::isError);
+  }
+
+  @Test
+  void containsPropagatesErrorAndUnknownKeys() {
+    MapT map =
+        (MapT) newWrappedMap(newRegistry(), new HashMap<>(Map.of(stringOf("key"), intOf(1))));
+    Val error = newErr("key failed");
+    Val unknown = unknownOf(42);
+
+    assertThat(map.contains(error)).isSameAs(error);
+    assertThat(map.contains(unknown)).isSameAs(unknown);
+  }
+
+  @Test
+  void equalityPropagatesErrorFromOtherMap() {
+    Val error = newErr("value failed");
+    MapT left =
+        (MapT) newWrappedMap(newRegistry(), new HashMap<>(Map.of(stringOf("key"), intOf(1))));
+    MapT right = (MapT) newWrappedMap(newRegistry(), new HashMap<>(Map.of(stringOf("key"), error)));
+
+    assertThat(left.equal(right)).isSameAs(error);
+  }
+
+  @Test
+  void nativeMapEqualityRetainsCelValueSemantics() {
+    MapT integer = (MapT) newMaybeWrappedMap(DefaultTypeAdapter.Instance, Map.of("key", 50_000L));
+    MapT floatingPoint =
+        (MapT) newMaybeWrappedMap(DefaultTypeAdapter.Instance, Map.of("key", 50_000.0d));
+    MapT positiveZero = (MapT) newMaybeWrappedMap(DefaultTypeAdapter.Instance, Map.of("key", 0.0d));
+    MapT negativeZero =
+        (MapT) newMaybeWrappedMap(DefaultTypeAdapter.Instance, Map.of("key", -0.0d));
+    MapT nan = (MapT) newMaybeWrappedMap(DefaultTypeAdapter.Instance, Map.of("key", Double.NaN));
+    MapT nanCopy =
+        (MapT) newMaybeWrappedMap(DefaultTypeAdapter.Instance, Map.of("key", Double.NaN));
+    Val error = newErr("value failed");
+    MapT erroneous = (MapT) newMaybeWrappedMap(DefaultTypeAdapter.Instance, Map.of("key", error));
+
+    assertThat(integer.equal(floatingPoint)).isSameAs(True);
+    assertThat(integer).isEqualTo(floatingPoint);
+    assertThat(positiveZero.equal(negativeZero)).isSameAs(True);
+    assertThat(positiveZero).isEqualTo(negativeZero);
+    assertThat(nan.equal(nanCopy)).isSameAs(False);
+    assertThat(nan).isNotEqualTo(nanCopy);
+    assertThat(integer.equal(erroneous)).isSameAs(error);
+  }
+
+  @Test
+  void nativeMapSnapshotsStructureAndAdaptsValuesOnDemand() {
+    Object selectedValue = Long.valueOf(50_000L);
+    AtomicInteger selectedValueAdaptations = new AtomicInteger();
+    TypeAdapter adapter =
+        value -> {
+          if (value == selectedValue) {
+            selectedValueAdaptations.incrementAndGet();
+          }
+          return DefaultTypeAdapter.Instance.nativeToValue(value);
+        };
+    Map<String, Object> source = new HashMap<>();
+    source.put("selected", selectedValue);
+    source.put("other", 60_000L);
+
+    MapT map = (MapT) newMaybeWrappedMap(adapter, source);
+
+    assertThat(selectedValueAdaptations).hasValue(0);
+    assertThat(map.size()).isEqualTo(intOf(2));
+    assertThat(map.contains(stringOf("selected"))).isSameAs(True);
+    assertThat(selectedValueAdaptations).hasValue(0);
+
+    source.put("selected", 70_000L);
+    source.put("added", 80_000L);
+    assertThat(map.size()).isEqualTo(intOf(2));
+    assertThat(map.find(stringOf("added"))).isNull();
+    assertThat(map.find(stringOf("selected"))).isEqualTo(intOf(50_000));
+    assertThat(selectedValueAdaptations).hasValue(1);
+  }
+
+  @Test
+  void nativeMapDistinguishesNullValueFromMissingKey() {
+    Map<String, Object> source = new HashMap<>();
+    source.put("null", null);
+    MapT map = (MapT) newMaybeWrappedMap(DefaultTypeAdapter.Instance, source);
+
+    assertThat(map.contains(stringOf("null"))).isSameAs(True);
+    assertThat(map.find(stringOf("null"))).isSameAs(NullValue);
+    assertThat(map.contains(stringOf("missing"))).isSameAs(BoolT.False);
+    assertThat(map.find(stringOf("missing"))).isNull();
+  }
+
+  @Test
+  @SuppressWarnings("removal")
+  void nativeMapConversionsAdaptCapturedValues() {
+    MapT map =
+        (MapT)
+            newMaybeWrappedMap(
+                DefaultTypeAdapter.Instance, Map.of("one", 1L, "nested", Map.of("two", 2L)));
+
+    assertThat(map.value()).isEqualTo(Map.of("one", 1L, "nested", Map.of("two", 2L)));
+    assertThat(map.convertToNative(Map.class))
+        .isEqualTo(Map.of("one", 1L, "nested", Map.of("two", 2L)));
+    assertThat(map.convertToNative(Struct.class).getFieldsMap()).containsOnlyKeys("one", "nested");
+  }
+
+  @Test
+  void mapJavaEqualityAndHashCodeWorkAcrossRepresentations() {
+    MapT nativeMap = (MapT) newMaybeWrappedMap(DefaultTypeAdapter.Instance, Map.of("key", 50_000L));
+    MapT valMap =
+        (MapT) newWrappedMap(DefaultTypeAdapter.Instance, Map.of(stringOf("key"), intOf(50_000L)));
+
+    assertThat(nativeMap).isEqualTo(valMap);
+    assertThat(valMap).isEqualTo(nativeMap);
+    assertThat(nativeMap.hashCode()).isEqualTo(valMap.hashCode());
+  }
+
+  @Test
+  @SuppressWarnings("removal")
   void heterogenousKeys() {
     Map<Val, Val> javaMap =
         ImmutableMap.of(
@@ -89,12 +247,22 @@ public class MapTest {
     assertThat(celMap.find(intOf(42))).isNull();
 
     IteratorT iter = celMap.iterator();
+    int iteratorHash = iter.hashCode();
+    assertThat(iter.type()).isSameAs(IteratorType);
+    assertThat(iter.type().hasTrait(Trait.IteratorType)).isTrue();
+    assertThat(iter).hasToString("iterator");
+    assertThat(iter.equals(iter)).isTrue();
+    assertThat(iter.equals(celMap.iterator())).isFalse();
     Map<Val, Val> mapFromIter = new HashMap<>();
     while (iter.hasNext() == True) {
       Val key = iter.next();
       mapFromIter.put(key, celMap.find(key));
     }
     assertThat(mapFromIter).hasSize(javaMap.size()).containsAllEntriesOf(javaMap);
+    assertThat(iter.next()).matches(Err::isError).hasToString("no more elements");
+    assertThat(iter.next()).matches(Err::isError).hasToString("no more elements");
+    assertThat(iter.hashCode()).isEqualTo(iteratorHash);
+    assertThat(iter).hasToString("iterator");
 
     assertThat(celMap.convertToNative(Map.class))
         .isEqualTo(
@@ -102,6 +270,7 @@ public class MapTest {
   }
 
   @Test
+  @SuppressWarnings("removal")
   void mapToProtobufStructRequiresStringKeys() {
     MapT stringKeyMap =
         (MapT) newWrappedMap(newRegistry(), ImmutableMap.of(stringOf("one"), doubleOf(1.0d)));

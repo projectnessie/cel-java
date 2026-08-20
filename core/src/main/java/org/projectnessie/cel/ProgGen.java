@@ -19,10 +19,11 @@ import static org.projectnessie.cel.CEL.estimateCost;
 import static org.projectnessie.cel.Prog.emptyEvalState;
 import static org.projectnessie.cel.interpreter.EvalState.newEvalState;
 
+import org.projectnessie.cel.internal.OperationController;
 import org.projectnessie.cel.interpreter.Coster;
 import org.projectnessie.cel.interpreter.EvalState;
 
-final class ProgGen implements Program, Coster {
+final class ProgGen implements Program, Coster, ControllableProgram {
   private final ProgFactory factory;
 
   ProgGen(ProgFactory factory) {
@@ -32,6 +33,12 @@ final class ProgGen implements Program, Coster {
   /** Eval implements the Program interface method. */
   @Override
   public EvalResult eval(Object input) {
+    EvalState state = newEvalState();
+    return factory.apply(state).eval(input);
+  }
+
+  @Override
+  public EvalResult evalControlled(Object input, OperationController controller) {
     // The factory based Eval() differs from the standard evaluation model in that it generates a
     // new EvalState instance for each call to ensure that unique evaluations yield unique stateful
     // results.
@@ -43,7 +50,10 @@ final class ProgGen implements Program, Coster {
     Program p = factory.apply(state);
 
     // Evaluate the input, returning the result and the 'state' within EvalDetails.
-    return p.eval(input);
+    if (!(p instanceof ControllableProgram controllable)) {
+      throw new IllegalStateException("generated CEL program is not controllable");
+    }
+    return controllable.evalControlled(input, controller);
   }
 
   /** Cost implements the Coster interface method. */

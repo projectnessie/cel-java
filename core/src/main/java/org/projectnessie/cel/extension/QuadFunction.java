@@ -15,7 +15,17 @@
  */
 package org.projectnessie.cel.extension;
 
+/**
+ * Function of four arguments used by extension implementations.
+ *
+ * @param <A> first argument type
+ * @param <B> second argument type
+ * @param <C> third argument type
+ * @param <D> fourth argument type
+ * @param <R> result type
+ */
 @FunctionalInterface
 public interface QuadFunction<A, B, C, D, R> {
+  /** Applies this function to four arguments. */
   R apply(A a, B b, C c, D d);
 }

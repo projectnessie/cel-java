@@ -27,19 +27,26 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.EnvOption;
 import org.projectnessie.cel.Library;
 import org.projectnessie.cel.ProgramOption;
+import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.ListT;
 import org.projectnessie.cel.common.types.MapT;
+import org.projectnessie.cel.common.types.Overloads;
 import org.projectnessie.cel.common.types.StringT;
+import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
+import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.interpreter.ActivationFunction;
 import org.projectnessie.cel.interpreter.functions.Overload;
 import org.projectnessie.cel.toolstests.Dummy;
 
+@SuppressWarnings("deprecation")
 class ScriptHostTest {
   private static final String AUTHORIZATION_EXPRESSION =
       "resource.service == \"storage.googleapis.com\""
@@ -63,7 +70,7 @@ class ScriptHostTest {
     arguments.put("x", "hello");
     arguments.put("y", "world");
 
-    String result = script.execute(String.class, arguments);
+    String result = script.executeWithActivation(String.class, arguments);
 
     assertThat(result).isEqualTo("hello world");
   }
@@ -81,7 +88,7 @@ class ScriptHostTest {
             .build();
 
     String result =
-        script.execute(
+        script.executeWithActivation(
             String.class,
             arg -> {
               if ("x".equals(arg)) {
@@ -89,7 +96,7 @@ class ScriptHostTest {
               } else if ("y".equals(arg)) {
                 return "world";
               } else {
-                return null;
+                return ActivationFunction.ABSENT;
               }
             });
 
@@ -101,12 +108,12 @@ class ScriptHostTest {
     ScriptHost scriptHost = ScriptHost.newBuilder().build();
 
     Script listScript = scriptHost.buildScript("[1, 2, 3]").build();
-    Val list = listScript.execute(Val.class, Collections.emptyMap());
+    Val list = listScript.executeWithActivation(Val.class, Collections.emptyMap());
     assertThat(list).isInstanceOf(ListT.class);
     assertThat((Object[]) list.value()).containsExactly(1L, 2L, 3L);
 
     Script mapScript = scriptHost.buildScript("{\"a\": 1, \"b\": 2}").build();
-    Val map = mapScript.execute(Val.class, Collections.emptyMap());
+    Val map = mapScript.executeWithActivation(Val.class, Collections.emptyMap());
     assertThat(map).isInstanceOf(MapT.class);
     Map<String, Long> expectedMap = new HashMap<>();
     expectedMap.put("a", 1L);
@@ -118,9 +125,65 @@ class ScriptHostTest {
   void executeObjectStillConvertsToNativeResult() throws Exception {
     Script script = ScriptHost.newBuilder().build().buildScript("[1, 2, 3]").build();
 
-    Object result = script.execute(Object.class, Collections.emptyMap());
+    Object result = script.executeWithActivation(Object.class, Collections.emptyMap());
 
     assertThat(result).isEqualTo(Arrays.asList(1L, 2L, 3L));
+  }
+
+  @Test
+  void optimizationFoldsConstantConversionAtBuildWhileDisableOptimizeDefersIt() throws Exception {
+    AtomicInteger optimizedCalls = new AtomicInteger();
+    Script optimized =
+        ScriptHost.newBuilder()
+            .build()
+            .buildScript("int(\"ignored\")")
+            .withLibraries(new CountingStringToIntLibrary(optimizedCalls))
+            .build();
+
+    assertThat(optimizedCalls).hasValue(1);
+    assertThat(optimized.executeWithActivation(Integer.class, Collections.emptyMap()))
+        .isEqualTo(42);
+    assertThat(optimized.executeWithActivation(Integer.class, Collections.emptyMap()))
+        .isEqualTo(42);
+    assertThat(optimizedCalls).hasValue(1);
+
+    AtomicInteger unoptimizedCalls = new AtomicInteger();
+    Script unoptimized =
+        ScriptHost.newBuilder()
+            .disableOptimize()
+            .build()
+            .buildScript("int(\"ignored\")")
+            .withLibraries(new CountingStringToIntLibrary(unoptimizedCalls))
+            .build();
+
+    assertThat(unoptimizedCalls).hasValue(0);
+    assertThat(unoptimized.executeWithActivation(Integer.class, Collections.emptyMap()))
+        .isEqualTo(42);
+    assertThat(unoptimized.executeWithActivation(Integer.class, Collections.emptyMap()))
+        .isEqualTo(42);
+    assertThat(unoptimizedCalls).hasValue(2);
+  }
+
+  @Test
+  void selectsRegexEngineForAllScripts() throws Exception {
+    Script javaScript =
+        ScriptHost.newBuilder().build().buildScript("'ab'.matches('a(?=b)')").build();
+    assertThat(javaScript.execute(Boolean.class, Map.of())).isTrue();
+
+    ScriptHost re2Host = ScriptHost.newBuilder().regexEngine(RegexEngine.RE2).build();
+    Script portable = re2Host.buildScript("'abc'.matches('b')").build();
+    Script javaOnly = re2Host.buildScript("'ab'.matches('a(?=b)')").build();
+
+    assertThat(portable.execute(Boolean.class, Map.of())).isTrue();
+    assertThatThrownBy(() -> javaOnly.execute(Boolean.class, Map.of()))
+        .isInstanceOf(ScriptExecutionException.class);
+  }
+
+  @Test
+  void rejectsNullRegexEngine() {
+    assertThatThrownBy(() -> ScriptHost.newBuilder().regexEngine(null))
+        .isInstanceOf(NullPointerException.class)
+        .hasMessage("regexEngine");
   }
 
   @Test
@@ -130,7 +193,8 @@ class ScriptHostTest {
     // create the script, will be parsed and checked
     Script script = scriptHost.buildScript("1/0 != 0").build();
 
-    assertThatThrownBy(() -> script.execute(String.class, singletonMap("x", "hello world")))
+    assertThatThrownBy(
+            () -> script.executeWithActivation(String.class, singletonMap("x", "hello world")))
         .isInstanceOf(ScriptExecutionException.class)
         .hasMessage("divide by zero");
   }
@@ -177,7 +241,7 @@ class ScriptHostTest {
 
     Script script = scriptHost.buildScript("foo()").withLibraries(new MyLib()).build();
 
-    assertThat(script.execute(Integer.class, Collections.emptyMap())).isEqualTo(42);
+    assertThat(script.executeWithActivation(Integer.class, Collections.emptyMap())).isEqualTo(42);
   }
 
   @Test
@@ -202,7 +266,61 @@ class ScriptHostTest {
     arguments.put("inp", pojo);
     arguments.put("checkName", checkName);
 
-    assertThat(script.execute(Boolean.class, arguments)).isTrue();
+    assertThat(script.executeWithActivation(Boolean.class, arguments)).isTrue();
+  }
+
+  @Test
+  void suppliedRegistryIsSnapshottedAndBuilderTypesAccumulateIdempotently() throws Exception {
+    ProtoTypeRegistry supplied = ProtoTypeRegistry.newEmptyRegistry();
+    ScriptHost host = ScriptHost.newBuilder().registry(supplied).build();
+    String messageType = Dummy.MyPojo.getDescriptor().getFullName();
+
+    for (int i = 0; i < 3; i++) {
+      Script script =
+          host.buildScript("inp.Property1")
+              .withDeclarations(Decls.newVar("inp", Decls.newObjectType(messageType)))
+              .withTypes(Dummy.MyPojo.getDefaultInstance())
+              .build();
+      assertThat(
+              script.executeWithActivation(
+                  String.class,
+                  Map.of("inp", Dummy.MyPojo.newBuilder().setProperty1("value").build())))
+          .isEqualTo("value");
+    }
+
+    assertThat(supplied.findType(messageType)).isNull();
+
+    Script scriptWithoutRepeatedType =
+        host.buildScript("inp.Property1")
+            .withDeclarations(Decls.newVar("inp", Decls.newObjectType(messageType)))
+            .build();
+    assertThat(
+            scriptWithoutRepeatedType.executeWithActivation(
+                String.class,
+                Map.of("inp", Dummy.MyPojo.newBuilder().setProperty1("accumulated").build())))
+        .isEqualTo("accumulated");
+  }
+
+  @Test
+  void repeatedProtoTypesAreIdempotentForGeneralAndExactRegistries() throws Exception {
+    for (TypeRegistry registry :
+        List.of(ProtoTypeRegistry.newRegistry(), ProtoTypeRegistry.newExactAggregateRegistry())) {
+      ScriptHost host = ScriptHost.newBuilder().registry(registry).build();
+      for (int i = 0; i < 3; i++) {
+        Script script =
+            host.buildScript("inp.Property1")
+                .withDeclarations(
+                    Decls.newVar(
+                        "inp", Decls.newObjectType(Dummy.MyPojo.getDescriptor().getFullName())))
+                .withTypes(Dummy.MyPojo.getDefaultInstance())
+                .build();
+        assertThat(
+                script.executeWithActivation(
+                    String.class,
+                    Map.of("inp", Dummy.MyPojo.newBuilder().setProperty1("value").build())))
+            .isEqualTo("value");
+      }
+    }
   }
 
   @Test
@@ -277,7 +395,7 @@ class ScriptHostTest {
     Map<String, Object> arguments = authorizationArguments("storage.googleapis.com");
     arguments.remove("resource.name");
 
-    assertThatThrownBy(() -> script.execute(Boolean.class, arguments))
+    assertThatThrownBy(() -> script.executeWithActivation(Boolean.class, arguments))
         .isInstanceOf(ScriptExecutionException.class);
     assertThat(grants(script, arguments)).isFalse();
   }
@@ -325,7 +443,7 @@ class ScriptHostTest {
             .withLibraries(new AttributeLibrary("prod"))
             .build();
 
-    assertThatThrownBy(() -> script.execute(Boolean.class, Collections.emptyMap()))
+    assertThatThrownBy(() -> script.executeWithActivation(Boolean.class, Collections.emptyMap()))
         .isInstanceOf(ScriptExecutionException.class)
         .hasMessageContaining("forced getAttribute error");
     assertThat(grants(script, Collections.emptyMap())).isFalse();
@@ -375,7 +493,7 @@ class ScriptHostTest {
         .isFalse();
     assertThatThrownBy(
             () ->
-                script.execute(
+                script.executeWithActivation(
                     Boolean.class,
                     Collections.singletonMap(
                         "resource.name", "projects/_/buckets/example/objects/reports/q1.csv")))
@@ -415,9 +533,34 @@ class ScriptHostTest {
 
   private static boolean grants(Script script, Map<String, Object> arguments) {
     try {
-      return Boolean.TRUE.equals(script.execute(Boolean.class, arguments));
+      return Boolean.TRUE.equals(script.executeWithActivation(Boolean.class, arguments));
     } catch (ScriptException | RuntimeException e) {
       return false;
+    }
+  }
+
+  private static final class CountingStringToIntLibrary implements Library {
+    private final AtomicInteger calls;
+
+    private CountingStringToIntLibrary(AtomicInteger calls) {
+      this.calls = calls;
+    }
+
+    @Override
+    public List<EnvOption> getCompileOptions() {
+      return Collections.emptyList();
+    }
+
+    @Override
+    public List<ProgramOption> getProgramOptions() {
+      return Collections.singletonList(
+          ProgramOption.functions(
+              Overload.unary(
+                  Overloads.StringToInt,
+                  ignored -> {
+                    calls.incrementAndGet();
+                    return IntT.intOf(42);
+                  })));
     }
   }
 
@@ -450,7 +593,7 @@ class ScriptHostTest {
                     if (!(keyVal instanceof StringT) || !(defaultVal instanceof StringT)) {
                       return newErr("invalid arguments to getAttribute");
                     }
-                    String key = keyVal.convertToNative(String.class);
+                    String key = keyVal.value().toString();
                     if ("error".equals(key)) {
                       return newErr("forced getAttribute error");
                     }
@@ -485,8 +628,8 @@ class ScriptHostTest {
                     if (!(valueVal instanceof StringT) || !(prefixVal instanceof StringT)) {
                       return newErr("invalid arguments to extractAfter");
                     }
-                    String value = valueVal.convertToNative(String.class);
-                    String prefix = prefixVal.convertToNative(String.class);
+                    String value = valueVal.value().toString();
+                    String prefix = prefixVal.value().toString();
                     if ("error".equals(prefix)) {
                       return newErr("forced extractAfter error");
                     }

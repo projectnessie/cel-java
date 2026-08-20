@@ -18,5 +18,11 @@ package org.projectnessie.cel.common.types.traits;
 import org.projectnessie.cel.common.types.IterableT;
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** Lister interface which aggregates the traits of a list. */
+/**
+ * Complete runtime contract for a CEL list value.
+ *
+ * <p>Implementations support list concatenation, membership, integer indexing, iteration, and
+ * sizing in addition to the base {@link Val} contract. The iteration order is the CEL list order
+ * and must agree with indexing.
+ */
 public interface Lister extends Val, Adder, Container, Indexer, IterableT, Sizer {}

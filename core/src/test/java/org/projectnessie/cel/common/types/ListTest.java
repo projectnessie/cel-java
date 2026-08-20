@@ -22,6 +22,7 @@ import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.IntT.intOf;
+import static org.projectnessie.cel.common.types.IteratorT.IteratorType;
 import static org.projectnessie.cel.common.types.ListT.ListType;
 import static org.projectnessie.cel.common.types.ListT.newGenericArrayList;
 import static org.projectnessie.cel.common.types.ListT.newStringArrayList;
@@ -47,6 +48,7 @@ import org.projectnessie.cel.common.types.traits.Container;
 import org.projectnessie.cel.common.types.traits.Indexer;
 import org.projectnessie.cel.common.types.traits.Lister;
 import org.projectnessie.cel.common.types.traits.Sizer;
+import org.projectnessie.cel.common.types.traits.Trait;
 
 @TestInstance(Lifecycle.PER_CLASS)
 public abstract class ListTest<CONSTRUCT> {
@@ -217,6 +219,7 @@ public abstract class ListTest<CONSTRUCT> {
     checkList(doubleTc, doubleListVal);
   }
 
+  @SuppressWarnings("removal")
   Lister checkList(TestData<CONSTRUCT> tc, Val listVal) {
     assertThat(listVal)
         .isInstanceOf(Lister.class)
@@ -236,6 +239,7 @@ public abstract class ListTest<CONSTRUCT> {
     // Sizer.size()
     int size = tc.sourceSize();
     assertThat(list.size()).isEqualTo(intOf(tc.sourceSize()));
+    assertThat(list.nativeSize()).isEqualTo(size);
 
     for (int i = 0; i < size; i++) {
       Object src = tc.sourceGet(i);
@@ -243,6 +247,7 @@ public abstract class ListTest<CONSTRUCT> {
 
       // Indexer.get()
       Val elem = list.get(intOf(i));
+      assertThat(list.nativeGetAt(i)).isEqualTo(elem);
       Object nat = elem.convertToNative((src instanceof Val) ? (Class) Val.class : src.getClass());
 
       assertThat(src).isOfAnyClassIn(nat.getClass());
@@ -267,7 +272,12 @@ public abstract class ListTest<CONSTRUCT> {
 
     // IterableT.iterate()
     IteratorT iter = list.iterator();
-    assertThat(iter).isNotNull();
+    int iteratorHash = iter.hashCode();
+    assertThat(iter).isNotNull().hasToString("iterator");
+    assertThat(iter.equals(iter)).isTrue();
+    assertThat(iter.equals(list.iterator())).isFalse();
+    assertThat(iter.type()).isSameAs(IteratorType);
+    assertThat(iter.type().hasTrait(Trait.IteratorType)).isTrue();
     List<Val> collected = new ArrayList<>();
     for (int index = 0; iter.hasNext() == True; index++) {
       Val next = iter.next();
@@ -284,6 +294,8 @@ public abstract class ListTest<CONSTRUCT> {
       assertThat(iter.hasNext()).isSameAs(False);
       assertThat(iter.next()).matches(Err::isError);
     }
+    assertThat(iter.hashCode()).isEqualTo(iteratorHash);
+    assertThat(iter).hasToString("iterator");
 
     // Adder.add()
     assertThat(list.add(NullValue)).matches(Err::isError);

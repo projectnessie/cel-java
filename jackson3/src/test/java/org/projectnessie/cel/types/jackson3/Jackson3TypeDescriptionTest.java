@@ -26,6 +26,7 @@ import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.types.jackson3.Jackson3Registry.newRegistry;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.api.expr.v1alpha1.Type.ListType;
 import com.google.api.expr.v1alpha1.Type.MapType;
 import com.google.api.expr.v1alpha1.Type.TypeKindCase;
@@ -41,6 +42,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.IntT;
@@ -50,14 +52,57 @@ import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.ObjectT;
 import org.projectnessie.cel.common.types.TypeT;
 import org.projectnessie.cel.common.types.pb.Checked;
+import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.types.jackson3.types.AnEnum;
+import org.projectnessie.cel.types.jackson3.types.ArrayObject;
 import org.projectnessie.cel.types.jackson3.types.CollectionsObject;
 import org.projectnessie.cel.types.jackson3.types.EnumWithConstantBody;
 import org.projectnessie.cel.types.jackson3.types.InnerType;
 import tools.jackson.databind.JavaType;
 
 class Jackson3TypeDescriptionTest {
+
+  static final class AccessorObject {
+    public final String field;
+
+    @JsonProperty private final String hidden;
+
+    private final String original;
+
+    AccessorObject(String field, String hidden, String original) {
+      this.field = field;
+      this.hidden = hidden;
+      this.original = original;
+    }
+
+    @JsonProperty("renamed")
+    public String getOriginal() {
+      return original;
+    }
+  }
+
+  record AccessorRecord(@JsonProperty("record_name") String name) {}
+
+  static final class InvalidMapKeyObject {
+    public Map<Double, String> invalidMap;
+  }
+
+  static final class UnsupportedBooleanArray {
+    public boolean[] values;
+  }
+
+  static final class UnsupportedShortArray {
+    public short[] values;
+  }
+
+  static final class UnsupportedCharArray {
+    public char[] values;
+  }
+
+  static final class UnsupportedFloatArray {
+    public float[] values;
+  }
 
   @Test
   void basics() {
@@ -118,6 +163,99 @@ class Jackson3TypeDescriptionTest {
 
     assertThatThrownBy(() -> reg.enumDescription(InnerType.class))
         .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  void cachedPropertyAccessorsPreserveDiscoveredMembers() {
+    Jackson3Registry reg = (Jackson3Registry) newRegistry();
+    AccessorObject value = new AccessorObject("field-value", "hidden-value", "method-value");
+    reg.register(AccessorObject.class);
+
+    FieldType field = reg.findFieldType(AccessorObject.class.getName(), "field");
+    FieldType hidden = reg.findFieldType(AccessorObject.class.getName(), "hidden");
+    FieldType renamed = reg.findFieldType(AccessorObject.class.getName(), "renamed");
+
+    assertThat(field.getFrom.getFrom(value)).isEqualTo("field-value");
+    assertThat(hidden.getFrom.getFrom(value)).isEqualTo("hidden-value");
+    assertThat(renamed.getFrom.getFrom(value)).isEqualTo("method-value");
+    assertThat(renamed.isSet.isSet(value)).isTrue();
+
+    ObjectT object = (ObjectT) reg.nativeToValue(value);
+    assertThat(object.get(stringOf("field"))).isEqualTo(stringOf("field-value"));
+    assertThat(object.get(stringOf("hidden"))).isEqualTo(stringOf("hidden-value"));
+    assertThat(object.get(stringOf("renamed"))).isEqualTo(stringOf("method-value"));
+
+    AccessorRecord record = new AccessorRecord("record-value");
+    reg.register(AccessorRecord.class);
+    FieldType recordName = reg.findFieldType(AccessorRecord.class.getName(), "record_name");
+    assertThat(recordName.getFrom.getFrom(record)).isEqualTo("record-value");
+  }
+
+  @Test
+  void rejectsUnsupportedMapKeyTypes() {
+    Jackson3Registry reg = (Jackson3Registry) newRegistry();
+
+    assertThatThrownBy(() -> reg.register(InvalidMapKeyObject.class))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("Unsupported CEL map key type")
+        .hasMessageContaining("java.lang.Double");
+  }
+
+  @Test
+  void arrayFieldTypesMatchRuntimeAdaptation() {
+    Jackson3Registry reg = (Jackson3Registry) newRegistry();
+    reg.register(ArrayObject.class);
+
+    checkArrayFieldType(reg, "bytes", Checked.checkedBytes);
+    checkArrayFieldType(reg, "ints", Decls.newListType(Checked.checkedInt));
+    checkArrayFieldType(reg, "longs", Decls.newListType(Checked.checkedInt));
+    checkArrayFieldType(reg, "doubles", Decls.newListType(Checked.checkedDouble));
+    checkArrayFieldType(reg, "strings", Decls.newListType(Checked.checkedString));
+    checkArrayFieldType(reg, "boxedInts", Decls.newListType(Checked.checkedInt));
+    checkArrayFieldType(reg, "uints", Decls.newListType(Checked.checkedUint));
+    checkArrayFieldType(reg, "enums", Decls.newListType(Checked.checkedInt));
+    checkArrayFieldType(
+        reg,
+        "objects",
+        Decls.newListType(
+            com.google.api.expr.v1alpha1.Type.newBuilder()
+                .setMessageType(InnerType.class.getName())
+                .build()));
+    checkArrayFieldType(reg, "dynamic", Checked.checkedListDyn);
+    checkArrayFieldType(reg, "values", Checked.checkedListDyn);
+    checkArrayFieldType(
+        reg, "nestedInts", Decls.newListType(Decls.newListType(Checked.checkedInt)));
+    checkArrayFieldType(reg, "nestedBytes", Decls.newListType(Checked.checkedBytes));
+  }
+
+  @Test
+  void rejectsUnsupportedPrimitiveArrays() {
+    Map.of(
+            UnsupportedBooleanArray.class,
+            "boolean[]",
+            UnsupportedShortArray.class,
+            "short[]",
+            UnsupportedCharArray.class,
+            "char[]",
+            UnsupportedFloatArray.class,
+            "float[]")
+        .forEach(
+            (type, typeName) -> {
+              Jackson3Registry reg = (Jackson3Registry) newRegistry();
+              assertThatThrownBy(() -> reg.register(type))
+                  .isInstanceOf(IllegalArgumentException.class)
+                  .hasMessageContaining("Unsupported Java array type")
+                  .hasMessageContaining(typeName);
+            });
+  }
+
+  private static void checkArrayFieldType(
+      Jackson3Registry reg, String property, com.google.api.expr.v1alpha1.Type expectedType) {
+    JacksonFieldType fieldType =
+        (JacksonFieldType) reg.findFieldType(ArrayObject.class.getName(), property);
+    assertThat(fieldType).isNotNull();
+    assertThat(fieldType.propertyWriter().getType().isArrayType()).isTrue();
+    assertThat(fieldType.type).isEqualTo(expectedType);
   }
 
   @Test
@@ -184,14 +322,6 @@ class Jackson3TypeDescriptionTest {
         Checked.checkedString,
         ByteString.class,
         Checked.checkedBytes);
-    checkMapType(
-        reg,
-        "floatDoubleMap",
-        Float.class,
-        Checked.checkedDouble,
-        Double.class,
-        Checked.checkedDouble);
-
     // verify the list-type-fields
 
     checkListType(reg, "stringList", String.class, Checked.checkedString);
@@ -335,8 +465,6 @@ class Jackson3TypeDescriptionTest {
     collectionsObject.stringJavaDurationMap = singletonMap("a", java.time.Duration.ofSeconds(1));
     collectionsObject.stringBytesMap =
         singletonMap("a", ByteString.copyFrom(new byte[] {(byte) 1}));
-    collectionsObject.floatDoubleMap = singletonMap(1f, 2d);
-
     // populate (primitive) list types
 
     collectionsObject.stringList = asList("a", "b", "c");

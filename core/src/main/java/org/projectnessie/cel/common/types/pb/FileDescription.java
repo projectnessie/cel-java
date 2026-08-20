@@ -25,7 +25,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** FileDescription holds a map of all types and enum values declared within a proto file. */
+/**
+ * Flattened metadata for the messages, enum constants, and extensions declared by one protobuf
+ * file.
+ *
+ * <p>Nested declarations are indexed by fully qualified protobuf name. Instances are normally
+ * created and owned by {@link Db}; applications normally interact through {@link
+ * ProtoTypeRegistry}.
+ */
 public final class FileDescription {
 
   private final Map<String, PbTypeDescription> types;
@@ -61,8 +68,10 @@ public final class FileDescription {
   }
 
   /**
-   * NewFileDescription returns a FileDescription instance with a complete listing of all the
-   * message types and enum values declared within any scope in the file.
+   * Describes all message types, enum constants, and extensions declared at any scope in a file.
+   *
+   * @param fileDesc protobuf file descriptor to inspect
+   * @return a new flattened description
    */
   public static FileDescription newFileDescription(FileDescriptor fileDesc) {
     FileMetadata metadata = FileMetadata.collectFileMetadata(fileDesc);
@@ -80,42 +89,65 @@ public final class FileDescription {
   }
 
   /**
-   * GetEnumDescription returns an EnumDescription for a qualified enum value name declared within
-   * the .proto file.
+   * Returns a file description whose mutable containers and type representation bindings are
+   * independent of this description.
+   */
+  FileDescription copy() {
+    Map<String, PbTypeDescription> copiedTypes = new HashMap<>(types.size());
+    types.forEach((name, type) -> copiedTypes.put(name, type.copy()));
+    return new FileDescription(copiedTypes, new HashMap<>(enums), new HashMap<>(extensions));
+  }
+
+  /**
+   * Looks up an enum constant declared in the file.
+   *
+   * @param enumName qualified enum-constant name, optionally beginning with a dot
+   * @return its description, or {@code null} if the qualified name is unknown
    */
   public EnumValueDescription getEnumDescription(String enumName) {
     return enums.get(sanitizeProtoName(enumName));
   }
 
-  /** GetEnumNames returns the string names of all enum values in the file. */
+  /** Returns a new array containing all qualified enum-constant names in unspecified order. */
   public String[] getEnumNames() {
     return enums.keySet().toArray(new String[0]);
   }
 
-  /** GetExtensionDescription returns a field description for a qualified extension name. */
+  /**
+   * Looks up an extension declared in the file.
+   *
+   * @param extensionName qualified extension name, optionally beginning with a dot
+   * @return its field description, or {@code null} if the qualified name is unknown
+   */
   public FieldDescription getExtensionDescription(String extensionName) {
     return extensions.get(sanitizeProtoName(extensionName));
   }
 
-  /** GetExtensionNames returns the string names of all extensions in the file. */
+  /** Returns a new array containing all qualified extension names in unspecified order. */
   public String[] getExtensionNames() {
     return extensions.keySet().toArray(new String[0]);
   }
 
-  /** GetExtensionDescriptions returns all extension field descriptions in the file. */
+  /**
+   * Returns all extension descriptions.
+   *
+   * <p>The iterable is a live, registry-owned view and must be treated as read-only.
+   */
   public Iterable<FieldDescription> getExtensionDescriptions() {
     return extensions.values();
   }
 
   /**
-   * GetTypeDescription returns a TypeDescription for a qualified protobuf message type name
-   * declared within the .proto file.
+   * Looks up a message type declared in the file.
+   *
+   * @param typeName qualified message name, optionally beginning with a dot
+   * @return its description, or {@code null} if the qualified name is unknown
    */
   public PbTypeDescription getTypeDescription(String typeName) {
     return types.get(sanitizeProtoName(typeName));
   }
 
-  /** GetTypeNames returns the list of all type names contained within the file. */
+  /** Returns a new array containing all qualified message type names in unspecified order. */
   public String[] getTypeNames() {
     return types.keySet().toArray(new String[0]);
   }

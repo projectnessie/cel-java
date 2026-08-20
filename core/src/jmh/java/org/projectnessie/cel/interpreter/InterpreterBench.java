@@ -80,11 +80,11 @@ public class InterpreterBench {
   @Benchmark
   @Threads(1)
   public void interpreterSingle(Case state) {
-    state.program.interpretable.eval(state.program.activation);
+    state.program.interpretable().eval(state.program.activation());
   }
 
   @Benchmark
   public void interpreterParallel(Case state) {
-    state.program.interpretable.eval(state.program.activation);
+    state.program.interpretable().eval(state.program.activation());
   }
 }

@@ -36,7 +36,10 @@ if (testNativeRequested) {
 }
 
 dependencies {
-  implementation(platform(libs.quarkus.bom))
+  // This smoke project deliberately verifies Protobuf 3, while the Quarkus BOM tracks Protobuf 4.
+  implementation(platform(libs.quarkus.bom)) {
+    exclude(group = "com.google.protobuf", module = "protobuf-java")
+  }
   implementation("io.quarkus:quarkus-arc")
   implementation("io.quarkus:quarkus-rest-jackson")
   implementation(project(":cel-core"))

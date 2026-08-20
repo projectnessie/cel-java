@@ -35,7 +35,7 @@ import org.projectnessie.cel.Env.AstIssuesTuple;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
 import org.projectnessie.cel.tools.Script;
-import org.projectnessie.cel.tools.ScriptHost;
+import org.projectnessie.cel.tools.ScriptCompiler;
 
 @Warmup(iterations = 1, time = 1500, timeUnit = TimeUnit.MILLISECONDS)
 @Measurement(iterations = 5, time = 300, timeUnit = TimeUnit.MILLISECONDS)
@@ -51,17 +51,17 @@ public class CompileBuildBench {
     public String expression;
 
     String source() {
-      switch (expression) {
-        case "simplePredicate":
-          return "resource == 'projects/p1' && user == 'alice'";
-        case "deepSelectors":
-          return "request.auth.claims.email.endsWith('@example.com')"
-              + " && request.resource.labels['env'] == 'prod'";
-        case "macroPipeline":
-          return "items.filter(i, i.score > 10).map(i, i.name).exists(n, n.startsWith('a'))";
-        default:
-          throw new IllegalArgumentException("Unknown compile benchmark expression: " + expression);
-      }
+      return switch (expression) {
+        case "simplePredicate" -> "resource == 'projects/p1' && user == 'alice'";
+        case "deepSelectors" ->
+            "request.auth.claims.email.endsWith('@example.com')"
+                + " && request.resource.labels['env'] == 'prod'";
+        case "macroPipeline" ->
+            "items.filter(i, i.score > 10).map(i, i.name).exists(n, n.startsWith('a'))";
+        default ->
+            throw new IllegalArgumentException(
+                "Unknown compile benchmark expression: " + expression);
+      };
     }
   }
 
@@ -82,16 +82,32 @@ public class CompileBuildBench {
   }
 
   @Benchmark
-  public void scriptHostBuild(CompileState state, Blackhole blackhole) throws Exception {
-    ScriptHost host = ScriptHost.newBuilder().build();
+  public void envControlledCompileAndProgram(CompileState state, Blackhole blackhole) {
+    Env env =
+        newEnv(
+            declarations(
+                Decls.newVar("resource", Decls.String),
+                Decls.newVar("user", Decls.String),
+                Decls.newVar("request", Decls.Dyn),
+                Decls.newVar("items", Decls.newListType(Decls.Dyn))));
+    AstIssuesTuple ast = env.compileCancelable(state.source()).execute();
+    if (ast.hasIssues()) {
+      throw ast.getIssues().err();
+    }
+    blackhole.consume(env.programCancelable(ast.getAst()).execute());
+  }
+
+  @Benchmark
+  public void scriptCompilerBuild(CompileState state, Blackhole blackhole) throws Exception {
     Script script =
-        host.buildScript(state.source())
+        ScriptCompiler.newBuilder()
             .withDeclarations(
                 Decls.newVar("resource", Decls.String),
                 Decls.newVar("user", Decls.String),
                 Decls.newVar("request", Decls.Dyn),
                 Decls.newVar("items", Decls.newListType(Decls.Dyn)))
-            .build();
+            .build()
+            .compile(state.source());
     blackhole.consume(script);
   }
 

@@ -24,6 +24,7 @@ import com.google.api.expr.v1alpha1.Type;
 import org.projectnessie.cel.common.debug.Debug;
 import org.projectnessie.cel.common.debug.Debug.Adorner;
 
+/** Formats an expression with type and reference annotations from a checked expression. */
 public final class Printer {
 
   static final class SemanticAdorner implements Adorner {
@@ -35,11 +36,10 @@ public final class Printer {
 
     @Override
     public String getMetadata(Object elem) {
-      if (!(elem instanceof Expr)) {
+      if (!(elem instanceof Expr e)) {
         return "";
       }
       StringBuilder result = new StringBuilder();
-      Expr e = (Expr) elem;
       Type t = checks.getTypeMapMap().get(e.getId());
       if (t != null) {
         result.append("~");
@@ -73,8 +73,10 @@ public final class Printer {
   }
 
   /**
-   * Print returns a string representation of the Expr message, annotated with types from the
-   * CheckedExpr. The Expr must be a sub-expression embedded in the CheckedExpr.
+   * Returns a debug representation annotated with checked types and resolved references.
+   *
+   * @param e expression contained in {@code checks}
+   * @param checks checked expression supplying type and reference maps
    */
   public static String print(Expr e, CheckedExpr checks) {
     SemanticAdorner a = new SemanticAdorner(checks);

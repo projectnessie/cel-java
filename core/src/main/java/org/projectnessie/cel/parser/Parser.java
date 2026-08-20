@@ -52,19 +52,31 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import org.projectnessie.cel.OperationAbortedException;
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.common.ErrorWithLocation;
 import org.projectnessie.cel.common.Errors;
 import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.Source;
 import org.projectnessie.cel.common.operators.Operator;
+import org.projectnessie.cel.internal.OperationCheckpoints;
+import org.projectnessie.cel.internal.OperationController;
 import org.projectnessie.cel.parser.Helper.Balancer;
 import org.projectnessie.cel.parser.ast.ConstantLiteral;
 import org.projectnessie.cel.parser.ast.ExprList;
 import org.projectnessie.cel.parser.ast.Field;
 import org.projectnessie.cel.parser.ast.FieldInitializerList;
+import org.projectnessie.cel.parser.ast.ListInitializerList;
 import org.projectnessie.cel.parser.ast.MapInitializerList;
 import org.projectnessie.cel.parser.ast.Start;
 
+/**
+ * Low-level CEL parser.
+ *
+ * <p>Applications normally parse and check source through {@link org.projectnessie.cel.Env}. These
+ * static entry points are useful when a caller needs a parsed protobuf expression, source metadata,
+ * and parse diagnostics without type checking.
+ */
 public final class Parser {
 
   private static final Set<String> reservedIds =
@@ -92,24 +104,30 @@ public final class Parser {
           "while");
 
   private final Options options;
+  private final OperationController controller;
 
+  /** Parses a source with all standard macros enabled. */
   public static ParseResult parseAllMacros(Source source) {
     return parse(Options.builder().macros(AllMacros).build(), source);
   }
 
+  /** Parses a source with exactly the supplied macro set and default resource limits. */
   public static ParseResult parseWithMacros(Source source, List<Macro> macros) {
     return parse(Options.builder().macros(macros).build(), source);
   }
 
+  /** Parses a source using the supplied limits and macro configuration. */
   public static ParseResult parse(Options options, Source source) {
     return new Parser(options).parse(source);
   }
 
   Parser(Options options) {
     this.options = options;
+    this.controller = OperationCheckpoints.currentController();
   }
 
   ParseResult parse(Source source) {
+    controller.checkpointNow(Phase.PARSE);
     Helper helper = new Helper(source);
     Errors errors = new Errors(source);
     Expr expr = null;
@@ -125,6 +143,7 @@ public final class Parser {
       CelGrammarParser parser = new CelGrammarParser(source.description(), source.content());
       try {
         parser.Start();
+        controller.checkpointNow(Phase.AST_BUILD);
         expr = new AstBuilder(helper, errors).exprVisit(firstExpressionNode(parser.rootNode()));
       } catch (ParseException e) {
         errors.syntaxError(location(e.getLocation()), e.getMessage());
@@ -158,29 +177,40 @@ public final class Parser {
     return Location.newLocation(node.getBeginLine(), node.getBeginColumn() - 1);
   }
 
+  /**
+   * Result of one parse operation.
+   *
+   * <p>If parsing reports errors, {@link #getExpr()} is {@code null}. Source information and the
+   * diagnostic collection remain available in both success and failure cases.
+   */
   public static final class ParseResult {
     private final Expr expr;
     private final Errors errors;
     private final SourceInfo sourceInfo;
 
+    /** Creates a parse result from its expression, diagnostics, and source metadata. */
     public ParseResult(Expr expr, Errors errors, SourceInfo sourceInfo) {
       this.expr = expr;
       this.errors = errors;
       this.sourceInfo = sourceInfo;
     }
 
+    /** Returns the parsed expression, or {@code null} when parsing failed. */
     public Expr getExpr() {
       return expr;
     }
 
+    /** Returns parse diagnostics. */
     public Errors getErrors() {
       return errors;
     }
 
+    /** Returns source metadata collected while parsing. */
     public SourceInfo getSourceInfo() {
       return sourceInfo;
     }
 
+    /** Returns whether parsing produced at least one error diagnostic. */
     public boolean hasErrors() {
       return errors.hasErrors();
     }
@@ -203,6 +233,7 @@ public final class Parser {
     }
 
     Expr exprVisit(Node node) {
+      controller.checkpoint(Phase.AST_BUILD);
       if (node == null) {
         return reportError(Location.NoLocation, "unknown parse element encountered: <<nil>>");
       }
@@ -321,7 +352,11 @@ public final class Parser {
       } else if (isToken(first, LPAREN)) {
         return exprVisit(children.get(1));
       } else if (isToken(first, LBRACKET)) {
-        return helper.newList(helper.id(first), expressionsBetween(children, 1, RBRACKET));
+        long listID = helper.id(first);
+        ListInitializerList list = firstChildOfType(children, ListInitializerList.class);
+        ListElements elements =
+            list != null ? listElements(list) : listElements(children.subList(1, children.size()));
+        return helper.newList(listID, elements.expressions(), elements.optionalIndices());
       } else if (isToken(first, LBRACE)) {
         return helper.newMap(
             helper.id(first), mapEntries(firstChildOfType(children, MapInitializerList.class)));
@@ -377,8 +412,17 @@ public final class Parser {
           if (i >= children.size()) {
             return helper.newExpr(node);
           }
+          boolean optional = false;
+          Node optionalNode = null;
+          if (isToken(children.get(i), QUESTIONMARK)) {
+            optional = true;
+            optionalNode = children.get(i++);
+          }
           String id = fieldName(children.get(i++));
           if (i < children.size() && isToken(children.get(i), LPAREN)) {
+            if (optional) {
+              return reportError(optionalNode, "optional select does not support function calls");
+            }
             Node open = children.get(i++);
             long openID = helper.id(open);
             List<Expr> args = expressionsBetween(children, i, RPAREN);
@@ -389,16 +433,30 @@ public final class Parser {
               i++;
             }
             operand = receiverCallOrMacro(openID, id, operand, args);
+          } else if (optional) {
+            operand =
+                globalCallOrMacro(
+                    helper.id(optionalNode),
+                    Operator.OptionalSelect.id,
+                    operand,
+                    helper.newLiteralString(optionalNode, id));
           } else {
             operand = helper.newSelect(op, operand, id);
           }
         } else if (isToken(op, LBRACKET)) {
           long opID = helper.id(op);
+          boolean optional = false;
+          if (isToken(children.get(i), QUESTIONMARK)) {
+            optional = true;
+            opID = helper.id(children.get(i++));
+          }
           Expr index = exprVisit(children.get(i++));
           if (i < children.size() && isToken(children.get(i), RBRACKET)) {
             i++;
           }
-          operand = globalCallOrMacro(opID, Operator.Index.id, operand, index);
+          operand =
+              globalCallOrMacro(
+                  opID, optional ? Operator.OptionalIndex.id : Operator.Index.id, operand, index);
         } else if (isToken(op, LBRACE)) {
           String messageName = extractQualifiedName(operand);
           FieldInitializerList fields =
@@ -530,6 +588,34 @@ public final class Parser {
       return result;
     }
 
+    private ListElements listElements(ListInitializerList list) {
+      if (list == null) {
+        return new ListElements(Collections.emptyList(), Collections.emptyList());
+      }
+      return listElements(significantChildren(list));
+    }
+
+    private ListElements listElements(List<Node> children) {
+      List<Expr> expressions = new ArrayList<>();
+      List<Integer> optionalIndices = new ArrayList<>();
+      boolean optional = false;
+      for (Node child : children) {
+        if (isToken(child, COMMA) || isToken(child, RBRACKET)) {
+          continue;
+        }
+        if (isToken(child, QUESTIONMARK)) {
+          optional = true;
+          continue;
+        }
+        if (optional) {
+          optionalIndices.add(expressions.size());
+          optional = false;
+        }
+        expressions.add(exprVisit(child));
+      }
+      return new ListElements(expressions, optionalIndices);
+    }
+
     private List<Expr> expressionsBetween(List<Node> children, int start, Token.TokenType end) {
       List<Expr> result = new ArrayList<>();
       for (int i = start; i < children.size() && !isToken(children.get(i), end); i++) {
@@ -553,6 +639,11 @@ public final class Parser {
       List<Node> children = significantChildren(fields);
       List<Entry> result = new ArrayList<>();
       for (int i = 0; i < children.size(); ) {
+        boolean optional = false;
+        if (isToken(children.get(i), QUESTIONMARK)) {
+          optional = true;
+          i++;
+        }
         Node field = children.get(i++);
         if (i >= children.size() || !isToken(children.get(i), COLON)) {
           break;
@@ -563,7 +654,7 @@ public final class Parser {
         }
         long colonID = helper.id(colon);
         Expr value = exprVisit(children.get(i++));
-        result.add(helper.newObjectField(colonID, fieldName(field), value));
+        result.add(helper.newObjectField(colonID, fieldName(field), value, optional));
         if (i < children.size() && isToken(children.get(i), COMMA)) {
           i++;
         }
@@ -578,6 +669,11 @@ public final class Parser {
       List<Node> children = significantChildren(entries);
       List<Entry> result = new ArrayList<>();
       for (int i = 0; i < children.size(); ) {
+        boolean optional = false;
+        if (isToken(children.get(i), QUESTIONMARK)) {
+          optional = true;
+          i++;
+        }
         Node keyNode = children.get(i++);
         if (i >= children.size() || !isToken(children.get(i), COLON)) {
           break;
@@ -589,7 +685,7 @@ public final class Parser {
           break;
         }
         Expr value = exprVisit(children.get(i++));
-        result.add(helper.newMapEntry(colonID, key, value));
+        result.add(helper.newMapEntry(colonID, key, value, optional));
         if (i < children.size() && isToken(children.get(i), COMMA)) {
           i++;
         }
@@ -645,7 +741,12 @@ public final class Parser {
 
       ExprHelperImpl eh = new ExprHelperImpl(helper, exprID);
       try {
-        return macro.expander().expand(eh, target, args);
+        controller.checkpointNow(Phase.AST_BUILD);
+        var expanded = macro.expander().expand(eh, target, args);
+        controller.checkpointNow(Phase.AST_BUILD);
+        return expanded;
+      } catch (OperationAbortedException e) {
+        throw e;
       } catch (ErrorWithLocation err) {
         Location loc = err.getLocation();
         if (loc == null) {
@@ -775,4 +876,6 @@ public final class Parser {
     }
     return null;
   }
+
+  private record ListElements(List<Expr> expressions, List<Integer> optionalIndices) {}
 }

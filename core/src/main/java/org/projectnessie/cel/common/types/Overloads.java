@@ -15,6 +15,13 @@
  */
 package org.projectnessie.cel.common.types;
 
+/**
+ * Standard CEL overload identifiers.
+ *
+ * <p>Checker declarations and interpreter implementations must use the same identifier to connect a
+ * checked call to its runtime operation. These constants are protocol-level names, not user-visible
+ * CEL function syntax.
+ */
 public final class Overloads {
   private Overloads() {}
 
@@ -236,20 +243,19 @@ public final class Overloads {
   // IsTypeConversionFunction returns whether the input function is a standard library type
   // conversion function.
   public static boolean isTypeConversionFunction(String function) {
-    switch (function) {
-      case TypeConvertBool:
-      case TypeConvertBytes:
-      case TypeConvertDouble:
-      case TypeConvertDuration:
-      case TypeConvertDyn:
-      case TypeConvertInt:
-      case TypeConvertString:
-      case TypeConvertTimestamp:
-      case TypeConvertType:
-      case TypeConvertUint:
-        return true;
-      default:
-        return false;
-    }
+    return switch (function) {
+      case TypeConvertBool,
+          TypeConvertBytes,
+          TypeConvertDouble,
+          TypeConvertDuration,
+          TypeConvertDyn,
+          TypeConvertInt,
+          TypeConvertString,
+          TypeConvertTimestamp,
+          TypeConvertType,
+          TypeConvertUint ->
+          true;
+      default -> false;
+    };
   }
 }

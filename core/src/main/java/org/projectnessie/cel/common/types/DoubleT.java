@@ -19,7 +19,6 @@ import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.Err.rangeError;
-import static org.projectnessie.cel.common.types.IntT.IntZero;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.IntT.intOfCompare;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
@@ -58,7 +57,25 @@ public final class DoubleT extends BaseVal
           Trait.NegatorType,
           Trait.SubtractorType);
 
+  public static final DoubleT DoubleNegOne = new DoubleT(-1d);
+  public static final DoubleT DoubleNegZero = new DoubleT(-0d);
+  public static final DoubleT DoubleZero = new DoubleT(0d);
+  public static final DoubleT DoubleOne = new DoubleT(1d);
+
   public static DoubleT doubleOf(double d) {
+    var raw = Double.doubleToRawLongBits(d);
+    if (raw == 0L) {
+      return DoubleZero;
+    }
+    if (raw == 0x8000000000000000L) {
+      return DoubleNegZero;
+    }
+    if (raw == 0x3ff0000000000000L) {
+      return DoubleOne;
+    }
+    if (raw == 0xbff0000000000000L) {
+      return DoubleNegOne;
+    }
     return new DoubleT(d);
   }
 
@@ -83,7 +100,7 @@ public final class DoubleT extends BaseVal
   }
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"removal", "unchecked"})
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
     if (typeDesc == Double.class || typeDesc == double.class || typeDesc == Object.class) {
@@ -175,18 +192,11 @@ public final class DoubleT extends BaseVal
   public Val compare(Val other) {
     switch (other.type().typeEnum()) {
       case Uint:
+        return intOfCompare(NumericComparison.compareDoubleUint(d, other.intValue()));
       case Int:
+        return intOfCompare(NumericComparison.compareDoubleInt(d, other.intValue()));
       case Double:
-        Val converted = other.convertToType(type());
-        if (converted.type().typeEnum() == TypeEnum.Err) {
-          return converted;
-        }
-        double od = ((DoubleT) converted).d;
-        if (d == od) {
-          // work around for special case of -0.0d == 0.0d (IEEE 754)
-          return IntZero;
-        }
-        return intOfCompare(Double.compare(d, od));
+        return intOfCompare(NumericComparison.compareDouble(d, other.doubleValue()));
       default:
         return noSuchOverload(this, "compare", other);
     }
@@ -197,15 +207,11 @@ public final class DoubleT extends BaseVal
   public Val equal(Val other) {
     switch (other.type().typeEnum()) {
       case Uint:
+        return boolOf(NumericComparison.equalDoubleUint(d, other.intValue()));
       case Int:
+        return boolOf(NumericComparison.equalDoubleInt(d, other.intValue()));
       case Double:
-        Val converted = other.convertToType(type());
-        if (converted.type().typeEnum() == TypeEnum.Err) {
-          return converted;
-        }
-        double o = ((DoubleT) converted).d;
-        // TODO: Handle NaNs properly.
-        return boolOf(d == o);
+        return boolOf(NumericComparison.equalDouble(d, other.doubleValue()));
       case Null:
       case Bool:
       case Bytes:
@@ -270,7 +276,6 @@ public final class DoubleT extends BaseVal
 
   @Override
   public int hashCode() {
-    // Used to allow heterogeneous numeric map keys
-    return (int) d;
+    return Types.numericHashCode(d);
   }
 }

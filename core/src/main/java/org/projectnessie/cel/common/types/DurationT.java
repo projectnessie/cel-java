@@ -117,9 +117,7 @@ public final class DurationT extends BaseVal
     this.d = d;
   }
 
-  /**
-   * Verifies that the range of this duration conforms to Go's constraints, see above code comment.
-   */
+  /** Returns this value or a CEL error when it is outside the CEL duration range. */
   public Val rangeCheck() {
     if (d.getSeconds() < minDurationSeconds || d.getSeconds() > maxDurationSeconds) {
       return errDurationOutOfRange;
@@ -158,7 +156,7 @@ public final class DurationT extends BaseVal
   }
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"removal", "unchecked"})
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
     if (Duration.class.isAssignableFrom(typeDesc)) {
@@ -212,30 +210,23 @@ public final class DurationT extends BaseVal
   /** ConvertToType implements ref.Val.ConvertToType. */
   @Override
   public Val convertToType(Type typeValue) {
-    switch (typeValue.typeEnum()) {
-      case String:
-        return stringOf(toPbString());
-      case Int:
-        return IntT.intOf(toJavaLong());
-      case Duration:
-        return this;
-      case Type:
-        return DurationType;
-    }
-    return newTypeConversionError(DurationType, typeValue);
+    return switch (typeValue.typeEnum()) {
+      case String -> stringOf(toPbString());
+      case Int -> IntT.intOf(toJavaLong());
+      case Duration -> this;
+      case Type -> DurationType;
+      default -> newTypeConversionError(DurationType, typeValue);
+    };
   }
 
   /** Equal implements ref.Val.Equal. */
   @Override
   public Val equal(Val other) {
-    switch (other.type().typeEnum()) {
-      case Duration:
-        return boolOf(d.equals(((DurationT) other).d));
-      case Null:
-        return False;
-      default:
-        return noSuchOverload(this, "equal", other);
-    }
+    return switch (other.type().typeEnum()) {
+      case Duration -> boolOf(d.equals(((DurationT) other).d));
+      case Null -> False;
+      default -> noSuchOverload(this, "equal", other);
+    };
   }
 
   /** Negate implements traits.Negater.Negate. */

@@ -15,41 +15,8 @@
  */
 package org.projectnessie.cel.interpreter;
 
-import static org.projectnessie.cel.common.types.BoolT.False;
-import static org.projectnessie.cel.common.types.BoolT.True;
-import static org.projectnessie.cel.common.types.Err.throwErrorAsIllegalStateException;
-import static org.projectnessie.cel.common.types.IntT.IntZero;
-import static org.projectnessie.cel.interpreter.Activation.emptyActivation;
-import static org.projectnessie.cel.interpreter.Interpretable.newConstValue;
-
-import java.util.HashSet;
-import java.util.Set;
-import org.projectnessie.cel.common.types.IteratorT;
-import org.projectnessie.cel.common.types.Overloads;
-import org.projectnessie.cel.common.types.Util;
-import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.Val;
-import org.projectnessie.cel.common.types.traits.Lister;
-import org.projectnessie.cel.interpreter.AttributeFactory.ConditionalAttribute;
-import org.projectnessie.cel.interpreter.Interpretable.EvalAnd;
-import org.projectnessie.cel.interpreter.Interpretable.EvalExhaustiveAnd;
-import org.projectnessie.cel.interpreter.Interpretable.EvalExhaustiveConditional;
-import org.projectnessie.cel.interpreter.Interpretable.EvalExhaustiveFold;
-import org.projectnessie.cel.interpreter.Interpretable.EvalExhaustiveListFold;
-import org.projectnessie.cel.interpreter.Interpretable.EvalExhaustiveMapFold;
-import org.projectnessie.cel.interpreter.Interpretable.EvalExhaustiveOr;
-import org.projectnessie.cel.interpreter.Interpretable.EvalFold;
-import org.projectnessie.cel.interpreter.Interpretable.EvalList;
-import org.projectnessie.cel.interpreter.Interpretable.EvalListFold;
-import org.projectnessie.cel.interpreter.Interpretable.EvalMap;
-import org.projectnessie.cel.interpreter.Interpretable.EvalMapFold;
-import org.projectnessie.cel.interpreter.Interpretable.EvalOr;
-import org.projectnessie.cel.interpreter.Interpretable.EvalSetMembership;
-import org.projectnessie.cel.interpreter.Interpretable.EvalWatch;
-import org.projectnessie.cel.interpreter.Interpretable.EvalWatchAttr;
-import org.projectnessie.cel.interpreter.Interpretable.EvalWatchConst;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableAttribute;
-import org.projectnessie.cel.interpreter.Interpretable.InterpretableCall;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableConst;
 
 /**
@@ -58,15 +25,22 @@ import org.projectnessie.cel.interpreter.Interpretable.InterpretableConst;
  */
 @FunctionalInterface
 public interface InterpretableDecorator {
+  /**
+   * Decorates or replaces one plan node.
+   *
+   * <p>Decorators are invoked during planning and must preserve the node's CEL semantics unless
+   * their documented purpose explicitly changes evaluation behavior.
+   */
   Interpretable decorate(Interpretable i);
 
-  /** evalObserver is a functional interface that accepts an expression id and an observed value. */
+  /** Receives the value produced for an expression identifier. */
   @FunctionalInterface
   interface EvalObserver {
+    /** Records one evaluated expression value. */
     void observe(long id, Val v);
   }
 
-  /** decObserveEval records evaluation state into an EvalState object. */
+  /** Returns a decorator that reports every evaluated node to the observer. */
   static InterpretableDecorator decObserveEval(EvalObserver observer) {
     return i -> {
       if ((i instanceof EvalWatch)
@@ -86,21 +60,20 @@ public interface InterpretableDecorator {
   }
 
   /**
-   * decDisableShortcircuits ensures that all branches of an expression will be evaluated, no
-   * short-circuiting.
+   * Returns a decorator that evaluates all branches for exhaustive-state observation.
+   *
+   * <p>This intentionally replaces ordinary short-circuit behavior and should be used only for
+   * exhaustive evaluation/state collection.
    */
   static InterpretableDecorator decDisableShortcircuits() {
     return i -> {
-      if (i instanceof EvalOr) {
-        EvalOr expr = (EvalOr) i;
+      if (i instanceof EvalOr expr) {
         return new EvalExhaustiveOr(expr.id, expr.lhs, expr.rhs);
       }
-      if (i instanceof EvalAnd) {
-        EvalAnd expr = (EvalAnd) i;
+      if (i instanceof EvalAnd expr) {
         return new EvalExhaustiveAnd(expr.id, expr.lhs, expr.rhs);
       }
-      if (i instanceof EvalFold) {
-        EvalFold expr = (EvalFold) i;
+      if (i instanceof EvalFold expr) {
         return new EvalExhaustiveFold(
             expr.id,
             expr.accu,
@@ -112,14 +85,13 @@ public interface InterpretableDecorator {
             expr.step,
             expr.result);
       }
-      if (i instanceof EvalListFold) {
-        return new EvalExhaustiveListFold((EvalListFold) i);
+      if (i instanceof EvalListFold fold) {
+        return new EvalExhaustiveListFold(fold);
       }
-      if (i instanceof EvalMapFold) {
-        return new EvalExhaustiveMapFold((EvalMapFold) i);
+      if (i instanceof EvalMapFold fold) {
+        return new EvalExhaustiveMapFold(fold);
       }
-      if (i instanceof InterpretableAttribute) {
-        InterpretableAttribute expr = (InterpretableAttribute) i;
+      if (i instanceof InterpretableAttribute expr) {
         if (expr.attr() instanceof ConditionalAttribute) {
           return new EvalExhaustiveConditional(
               i.id(), expr.adapter(), (ConditionalAttribute) expr.attr());
@@ -130,108 +102,18 @@ public interface InterpretableDecorator {
   }
 
   /**
-   * decOptimize optimizes the program plan by looking for common evaluation patterns and
-   * conditionally precomputating the result.
+   * Returns the built-in plan optimizer.
    *
    * <ul>
-   *   <li>build list and map values with constant elements.
-   *   <li>convert 'in' operations to set membership tests if possible.
+   *   <li>Build list and map values with constant elements.
+   *   <li>Evaluate supported constant calls and conversions.
+   *   <li>Convert eligible membership calls to constant-set lookups.
    * </ul>
+   *
+   * <p>Unsupported or semantically unsafe shapes retain their existing nodes. The optimizer does
+   * not guarantee that a particular expression is folded or specialized.
    */
   static InterpretableDecorator decOptimize() {
-    return i -> {
-      if (i instanceof EvalList) {
-        return maybeBuildListLiteral(i, (EvalList) i);
-      }
-      if (i instanceof EvalMap) {
-        return maybeBuildMapLiteral(i, (EvalMap) i);
-      }
-      if (i instanceof InterpretableCall) {
-        InterpretableCall inst = (InterpretableCall) i;
-        if (inst.overloadID().equals(Overloads.InList)) {
-          return maybeOptimizeSetMembership(i, inst);
-        }
-        if (Overloads.isTypeConversionFunction(inst.function())) {
-          return maybeOptimizeConstUnary(i, inst);
-        }
-      }
-      return i;
-    };
-  }
-
-  static Interpretable maybeOptimizeConstUnary(Interpretable i, InterpretableCall call) {
-    Interpretable[] args = call.args();
-    if (args.length != 1) {
-      return i;
-    }
-    if (!(args[0] instanceof InterpretableConst)) {
-      return i;
-    }
-    Val val = call.eval(emptyActivation());
-    throwErrorAsIllegalStateException(val);
-    return newConstValue(call.id(), val);
-  }
-
-  static Interpretable maybeBuildListLiteral(Interpretable i, EvalList l) {
-    for (Interpretable elem : l.elems) {
-      if (!(elem instanceof InterpretableConst)) {
-        return i;
-      }
-    }
-    return newConstValue(l.id(), l.eval(emptyActivation()));
-  }
-
-  static Interpretable maybeBuildMapLiteral(Interpretable i, EvalMap mp) {
-    for (int idx = 0; idx < mp.keys.length; idx++) {
-      if (!(mp.keys[idx] instanceof InterpretableConst)) {
-        return i;
-      }
-      if (!(mp.vals[idx] instanceof InterpretableConst)) {
-        return i;
-      }
-    }
-    return newConstValue(mp.id(), mp.eval(emptyActivation()));
-  }
-
-  /**
-   * maybeOptimizeSetMembership may convert an 'in' operation against a list to map key membership
-   * test if the following conditions are true:
-   *
-   * <ul>
-   *   <li>the list is a constant with homogeneous element types.
-   *   <li>the elements are all of primitive type.
-   * </ul>
-   */
-  static Interpretable maybeOptimizeSetMembership(Interpretable i, InterpretableCall inlist) {
-    Interpretable[] args = inlist.args();
-    Interpretable lhs = args[0];
-    Interpretable rhs = args[1];
-    if (!(rhs instanceof InterpretableConst)) {
-      return i;
-    }
-    InterpretableConst l = (InterpretableConst) rhs;
-    // When the incoming binary call is flagged with as the InList overload, the value will
-    // always be convertible to a `traits.Lister` type.
-    Lister list = (Lister) l.value();
-    if (list.size() == IntZero) {
-      return newConstValue(inlist.id(), False);
-    }
-    IteratorT it = list.iterator();
-    Type typ = null;
-    Set<Val> valueSet = new HashSet<>();
-    while (it.hasNext() == True) {
-      Val elem = it.next();
-      if (!Util.isPrimitiveType(elem)) {
-        // Note, non-primitive type are not yet supported.
-        return i;
-      }
-      if (typ == null) {
-        typ = elem.type();
-      } else if (!typ.typeName().equals(elem.type().typeName())) {
-        return i;
-      }
-      valueSet.add(elem);
-    }
-    return new EvalSetMembership(inlist, lhs, typ.typeName(), valueSet);
+    return BuiltInOptimizer.INSTANCE;
   }
 }

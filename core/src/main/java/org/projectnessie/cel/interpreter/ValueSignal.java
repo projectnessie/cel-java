@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 The Authors of CEL-Java
+ * Copyright (C) 2026 The Authors of CEL-Java
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,19 +13,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.projectnessie.cel.parser;
+package org.projectnessie.cel.interpreter;
 
-import org.projectnessie.cel.common.Location;
+import static java.util.Objects.requireNonNull;
 
-public final class ParseError extends RuntimeException {
-  private final Location location;
+import org.projectnessie.cel.common.types.ref.Val;
 
-  public ParseError(Location location, String message) {
-    super(message);
-    this.location = location;
+/** Stackless transport for an already produced CEL value inside a typed evaluation island. */
+final class ValueSignal extends RuntimeException {
+  final Val value;
+
+  ValueSignal(Val value) {
+    super(null, null, false, false);
+    this.value = requireNonNull(value, "value");
   }
 
-  public Location getLocation() {
-    return location;
+  static ValueSignal signal(Val value) {
+    return new ValueSignal(value);
   }
 }

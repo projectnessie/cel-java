@@ -207,7 +207,7 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
   }
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"removal", "unchecked"})
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
     if (typeDesc == ZonedDateTime.class) {
@@ -269,18 +269,16 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
   /** ConvertToType implements ref.Val.ConvertToType. */
   @Override
   public Val convertToType(Type typeValue) {
-    switch (typeValue.typeEnum()) {
-      case String:
+    return switch (typeValue.typeEnum()) {
+      case String -> {
         DateTimeFormatter df = (t.getNano() > 0L) ? rfc3339nanoFormatter : rfc3339formatter;
-        return stringOf(df.format(t));
-      case Int:
-        return intOf(t.toEpochSecond());
-      case Timestamp:
-        return this;
-      case Type:
-        return TimestampType;
-    }
-    return newTypeConversionError(TimestampType, typeValue);
+        yield stringOf(df.format(t));
+      }
+      case Int -> intOf(t.toEpochSecond());
+      case Timestamp -> this;
+      case Type -> TimestampType;
+      default -> newTypeConversionError(TimestampType, typeValue);
+    };
   }
 
   /** Only used for format a string, never for parsing. */
@@ -345,14 +343,11 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
   /** Equal implements ref.Val.Equal. */
   @Override
   public Val equal(Val other) {
-    switch (other.type().typeEnum()) {
-      case Timestamp:
-        return boolOf(t.equals(((TimestampT) other).t));
-      case Null:
-        return False;
-      default:
-        return noSuchOverload(this, "equal", other);
-    }
+    return switch (other.type().typeEnum()) {
+      case Timestamp -> boolOf(t.equals(((TimestampT) other).t));
+      case Null -> False;
+      default -> noSuchOverload(this, "equal", other);
+    };
   }
 
   /** Receive implements traits.Reciever.Receive. */

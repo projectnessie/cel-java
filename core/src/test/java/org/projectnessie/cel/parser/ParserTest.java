@@ -1364,16 +1364,14 @@ class ParserTest {
 
     @Override
     public String getMetadata(Object elem) {
-      if (elem instanceof Expr) {
-        Expr e = (Expr) elem;
+      if (elem instanceof Expr e) {
         if (e.getExprKindCase() == ExprKindCase.CONST_EXPR) {
           return String.format(
               "^#%d:*expr.Constant_%s#", e.getId(), e.getConstExpr().getConstantKindCase().name());
         } else {
           return String.format("^#%d:*expr.Expr_%s#", e.getId(), e.getExprKindCase().name());
         }
-      } else if (elem instanceof Entry) {
-        Entry entry = (Entry) elem;
+      } else if (elem instanceof Entry entry) {
         return String.format("^#%d:%s#", entry.getId(), "*expr.Expr_CreateStruct_Entry");
       }
       return "";

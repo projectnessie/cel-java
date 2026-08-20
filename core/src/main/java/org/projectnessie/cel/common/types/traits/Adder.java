@@ -17,12 +17,13 @@ package org.projectnessie.cel.common.types.traits;
 
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** Adder interface to support '+' operator overloads. */
+/** Capability for values that support the CEL binary {@code +} operator. */
 public interface Adder {
   /**
-   * Add returns a combination of the current value and other value.
+   * Adds or concatenates {@code other} to this value according to the implementing CEL type.
    *
-   * <p>If the other value is an unsupported type, an error is returned.
+   * @param other right-hand operand
+   * @return the result, or a CEL error or unknown value when the operation cannot produce a value
    */
   Val add(Val other);
 }

@@ -29,10 +29,11 @@ import org.projectnessie.cel.ProgramOption;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.BytesT;
 import org.projectnessie.cel.common.types.StringT;
+import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.interpreter.functions.Overload;
 
-/** EncodersLib provides CEL helper functions for common binary-to-text encodings. */
+/** CEL extension providing common binary-to-text encoding functions. */
 public final class EncodersLib implements Library {
   private static final String BASE64_ENCODE = "base64.encode";
   private static final String BASE64_DECODE = "base64.decode";
@@ -41,6 +42,7 @@ public final class EncodersLib implements Library {
 
   private EncodersLib() {}
 
+  /** Returns an environment option installing the encoder declarations and implementations. */
   public static EnvOption encoders() {
     return Library.Lib(new EncodersLib());
   }
@@ -73,7 +75,7 @@ public final class EncodersLib implements Library {
     if (!(value instanceof BytesT)) {
       return noSuchOverload(value, BASE64_ENCODE, BASE64_ENCODE_OVERLOAD, new Val[] {value});
     }
-    byte[] bytes = value.convertToNative(byte[].class);
+    byte[] bytes = DefaultTypeAdapter.Instance.valueToNative(value, byte[].class);
     return stringOf(Base64.getEncoder().encodeToString(bytes));
   }
 
@@ -81,7 +83,7 @@ public final class EncodersLib implements Library {
     if (!(value instanceof StringT)) {
       return noSuchOverload(value, BASE64_DECODE, BASE64_DECODE_OVERLOAD, new Val[] {value});
     }
-    String text = value.convertToNative(String.class);
+    String text = DefaultTypeAdapter.Instance.valueToNative(value, String.class);
     try {
       return bytesOf(Base64.getDecoder().decode(text));
     } catch (IllegalArgumentException e) {
