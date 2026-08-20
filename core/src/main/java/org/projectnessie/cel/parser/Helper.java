@@ -195,8 +195,7 @@ final class Helper {
 
   long id(Object ctx) {
     Location location;
-    if (ctx instanceof Node) {
-      Node node = (Node) ctx;
+    if (ctx instanceof Node node) {
       location = source.newLocation(node.getBeginLine(), node.getBeginColumn() - 1);
     } else if (ctx instanceof Location) {
       location = (Location) ctx;

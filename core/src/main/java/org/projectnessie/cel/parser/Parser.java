@@ -300,7 +300,7 @@ public final class Parser {
       if (opCount % 2 == 0) {
         return exprVisit(operand);
       }
-      if (!logicalNot && isNegativeNumericLiteral(operand)) {
+      if (!logicalNot && isIntOrFloatLiteral(operand)) {
         return visitNegativeNumericLiteral(op, operand);
       }
       return globalCallOrMacro(
@@ -448,7 +448,7 @@ public final class Parser {
       return reportError(node, "invalid literal");
     }
 
-    private boolean isNegativeNumericLiteral(Node operand) {
+    private static boolean isIntOrFloatLiteral(Node operand) {
       return isToken(operand, NUM_INT)
           || isToken(operand, NUM_FLOAT)
           || (operand instanceof ConstantLiteral
@@ -693,7 +693,7 @@ public final class Parser {
       return err;
     }
 
-    private String fieldName(Node node) {
+    private static String fieldName(Node node) {
       if (node instanceof Field) {
         return fieldName(significantChildren(node).get(0));
       }
@@ -704,7 +704,7 @@ public final class Parser {
       return text;
     }
 
-    private Node firstExpressionChild(List<Node> children, Node ctx) {
+    private static Node firstExpressionChild(List<Node> children, Node ctx) {
       for (Node child : children) {
         if (!isStructuralToken(child)) {
           return child;

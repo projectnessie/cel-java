@@ -752,7 +752,7 @@ class ParserTest {
         "75",
         "{",
         "",
-        "ERROR: <input>:1:2: Syntax error: mismatched input '<EOF>' expecting {'[', '{', '}', '(', '.', ',', '-', '!', 'true', 'false', 'null', NUM_FLOAT, NUM_INT, NUM_UINT, STRING, BYTES, IDENTIFIER}\n"
+        "ERROR: <input>:1:1: Syntax error: mismatched input '<EOF>' expecting {'[', '{', '}', '(', '.', ',', '-', '!', 'true', 'false', 'null', NUM_FLOAT, NUM_INT, NUM_UINT, STRING, BYTES, IDENTIFIER}\n"
             + " | {\n"
             + " | .^",
         "",
@@ -1257,7 +1257,7 @@ class ParserTest {
         "127",
         "--",
         "",
-        "ERROR: <input>:1:3: Syntax error: mismatched input '<EOF>' expecting {'[', '{', '(', '.', '-', '!', 'true', 'false', 'null', NUM_FLOAT, NUM_INT, NUM_UINT, STRING, BYTES, IDENTIFIER}\n"
+        "ERROR: <input>:1:1: Syntax error: mismatched input '<EOF>' expecting {'[', '{', '(', '.', '-', '!', 'true', 'false', 'null', NUM_FLOAT, NUM_INT, NUM_UINT, STRING, BYTES, IDENTIFIER}\n"
             + " | --\n"
             + " | ..^\n"
             + "ERROR: <input>:1:3: Syntax error: no viable alternative at input '-'\n"
@@ -1297,8 +1297,8 @@ class ParserTest {
    * @param num just the index of the test case
    * @param i contains the input expression to be parsed.
    * @param p contains the type/id adorned debug output of the expression tree.
-   * @param e contains the expected error output for a failed parse, or "" if the parse is expected
-   *     to be successful.
+   * @param e contains the expected error output for semantic failures, or the expected first error
+   *     location for syntax failures; it is "" if the parse is expected to be successful.
    * @param l contains the expected source adorned debug output of the expression tree.
    */
   @ParameterizedTest
@@ -1310,12 +1310,13 @@ class ParserTest {
     String actualErr = parseResult.getErrors().toDisplayString();
     if (e.isEmpty()) {
       assertThat(actualErr).isEmpty();
+    } else if (e.contains(": Syntax error:")) {
+      // Parser implementations may format syntax diagnostics differently, but they must point to
+      // the same first invalid source location.
+      assertThat(actualErr).startsWith(firstErrorLocation(e) + ": Syntax error:");
     } else {
-      assertThat(actualErr).isNotEmpty();
+      assertThat(actualErr).isEqualTo(e);
     }
-    // Hint for my future self and others: if the above "isEqualTo" fails but the strings look
-    // similar,
-    // look into the char[] representation... unicode can be very surprising.
 
     String actualWithKind =
         Debug.toAdornedDebugString(parseResult.getExpr(), new KindAndIdAdorner());
@@ -1327,6 +1328,11 @@ class ParserTest {
               parseResult.getExpr(), new LocationAdorner(parseResult.getSourceInfo()));
       assertThat(actualWithLocation).isEqualTo(l);
     }
+  }
+
+  private static String firstErrorLocation(String errors) {
+    int locationStart = "ERROR: <input>:".length();
+    return errors.substring(0, errors.indexOf(": ", locationStart));
   }
 
   @Test
