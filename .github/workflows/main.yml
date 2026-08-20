@@ -43,17 +43,10 @@ jobs:
         with:
           cache-read-only: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' }}
 
-      - name: Spotless Check
-          # Spotless must run in a different invocation, because
-          # it has some weird Gradle configuration/variant issue
-        if: ${{ matrix.java-version == '21' }}
-        run: ./gradlew spotlessCheck --scan
-
       - name: Build
         run: >
           ./gradlew --rerun-tasks ${{ env.ADDITIONAL_GRADLE_OPTS }}
           assemble check publishToMavenLocal
-          -x jmh -x spotlessCheck -x testNative
           --scan
 
       - name: Quarkus native smoke
@@ -64,9 +57,6 @@ jobs:
         # The buildToolIntegration* tasks require publishToMavenLocal, run it as a separate step,
         # because these tasks intentionally do not depend on the publishToMavenLocal tasks.
         run: ./gradlew buildToolIntegrations
-
-      - name: Microbenchmarks
-        run: ./gradlew jmh
 
       - name: Capture test results
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

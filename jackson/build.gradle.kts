@@ -51,6 +51,4 @@ dependencies {
 
 jmh { jmhVersion.set(libs.versions.jmh.get()) }
 
-tasks.named("check") { dependsOn(tasks.named("jmh")) }
-
 tasks.named("assemble") { dependsOn(tasks.named("jmhJar")) }

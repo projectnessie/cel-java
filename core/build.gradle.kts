@@ -102,6 +102,4 @@ sourceSets.test {
 
 tasks.named("compileJava") { dependsOn(generateCelGrammar) }
 
-tasks.named("check") { dependsOn(tasks.named("jmh")) }
-
 tasks.named("assemble") { dependsOn(tasks.named("jmhJar")) }
