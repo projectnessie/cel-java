@@ -16,6 +16,8 @@
 package org.projectnessie.cel.conformance;
 
 import static java.util.stream.Collectors.toCollection;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.abort;
 import static org.junit.jupiter.api.DynamicContainer.dynamicContainer;
@@ -31,7 +33,9 @@ import static org.projectnessie.cel.EnvOption.container;
 import static org.projectnessie.cel.EnvOption.declarations;
 import static org.projectnessie.cel.EnvOption.macros;
 import static org.projectnessie.cel.EnvOption.types;
+import static org.projectnessie.cel.EvalOption.OptDisableNativeEval;
 import static org.projectnessie.cel.Library.StdLib;
+import static org.projectnessie.cel.ProgramOption.evalOptions;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.BytesT.bytesOf;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
@@ -86,10 +90,14 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.DynamicNode;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestFactory;
 import org.projectnessie.cel.Ast;
 import org.projectnessie.cel.Env;
@@ -103,6 +111,7 @@ import org.projectnessie.cel.common.types.IteratorT;
 import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.TypeT;
 import org.projectnessie.cel.common.types.Types;
+import org.projectnessie.cel.common.types.UnknownT;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Lister;
@@ -112,8 +121,10 @@ import org.projectnessie.cel.parser.Macro;
 class SimpleConformanceTest {
 
   private static final Path TESTDATA_DIR = testdataDir();
-  private static final TextFormat.Printer TEXT_PRINTER =
-      TextFormat.printer().emittingSingleLine(true);
+  private static final Pattern PROTO3_NUMERIC_ENUM_ANY =
+      Pattern.compile(
+          "\\[type\\.googleapis\\.com/cel\\.expr\\.conformance\\.proto3\\.TestAllTypes\\]"
+              + "\\s*\\{\\s*standalone_enum:\\s*(-?\\d+)\\s*\\}");
 
   private static final List<String> TEST_FILES =
       List.of(
@@ -135,6 +146,7 @@ class SimpleConformanceTest {
           "math_ext.textproto",
           "namespace.textproto",
           "network_ext.textproto",
+          "optionals.textproto",
           "parse.textproto",
           "plumbing.textproto",
           "proto2.textproto",
@@ -185,22 +197,34 @@ class SimpleConformanceTest {
           "enums/strong_proto3/convert_int_too_big",
           "enums/strong_proto3/convert_int_too_neg",
           "enums/strong_proto3/convert_string",
-          "enums/strong_proto3/convert_string_bad",
-          // Optional list/map/message syntax and runtime support is not implemented yet.
-          "block_ext/basic/optional_list",
-          "block_ext/basic/optional_map",
-          "block_ext/basic/optional_map_chained",
-          "block_ext/basic/optional_message");
+          "enums/strong_proto3/convert_string_bad");
 
   private static final Set<String> matchedSkips = new LinkedHashSet<>();
   private static final AtomicInteger total = new AtomicInteger();
   private static final AtomicInteger passed = new AtomicInteger();
   private static final AtomicInteger skipped = new AtomicInteger();
 
+  private enum EvaluationMode {
+    NATIVE_ENABLED("native evaluation enabled"),
+    NATIVE_DISABLED("native evaluation disabled");
+
+    private final String displayName;
+
+    EvaluationMode(String displayName) {
+      this.displayName = displayName;
+    }
+  }
+
   @TestFactory
   Stream<DynamicNode> simpleConformance() {
     List<DynamicNode> files = new ArrayList<>();
-    TEST_FILES.forEach(fileName -> files.add(dynamicContainer(fileName, fileTests(fileName))));
+    for (EvaluationMode mode : EvaluationMode.values()) {
+      files.add(
+          dynamicContainer(
+              mode.displayName,
+              TEST_FILES.stream()
+                  .map(fileName -> dynamicContainer(fileName, fileTests(fileName, mode)))));
+    }
     files.add(dynamicTest("skip list matches testdata", this::assertAllSkipsMatched));
     return files.stream();
   }
@@ -208,11 +232,11 @@ class SimpleConformanceTest {
   @AfterAll
   static void printSummary() {
     System.out.printf(
-        "Conformance tests: %d total, %d passed, %d skipped%n",
+        "Conformance test executions: %d total, %d passed, %d skipped%n",
         total.get(), passed.get(), skipped.get());
   }
 
-  private Stream<DynamicNode> fileTests(String fileName) {
+  private Stream<DynamicNode> fileTests(String fileName, EvaluationMode mode) {
     SimpleTestFile file;
     try {
       file = parseSimpleFile(TESTDATA_DIR.resolve(fileName));
@@ -221,15 +245,17 @@ class SimpleConformanceTest {
     }
 
     return file.getSectionList().stream()
-        .map(
-            section ->
-                dynamicContainer(
-                    section.getName(),
-                    section.getTestList().stream()
-                        .map(test -> dynamicTest(test.getName(), () -> run(file, section, test)))));
+        .map(section -> dynamicContainer(section.getName(), sectionTests(file, section, mode)));
   }
 
-  private void run(SimpleTestFile file, SimpleTestSection section, SimpleTest test)
+  private Stream<DynamicNode> sectionTests(
+      SimpleTestFile file, SimpleTestSection section, EvaluationMode mode) {
+    return section.getTestList().stream()
+        .map(test -> dynamicTest(test.getName(), () -> run(file, section, test, mode)));
+  }
+
+  private void run(
+      SimpleTestFile file, SimpleTestSection section, SimpleTest test, EvaluationMode mode)
       throws InvalidProtocolBufferException {
     total.incrementAndGet();
     String sectionPath = file.getName() + "/" + section.getName();
@@ -245,7 +271,7 @@ class SimpleConformanceTest {
       abort("Skipped conformance test " + testPath);
     }
 
-    ConformanceCaseRunner.run(testPath, test);
+    ConformanceCaseRunner.run(mode, testPath, test);
     passed.incrementAndGet();
   }
 
@@ -274,8 +300,35 @@ class SimpleConformanceTest {
     TextFormat.Parser.newBuilder()
         .setTypeRegistry(typeRegistry)
         .build()
-        .merge(Files.readString(testFile, StandardCharsets.UTF_8), extensionRegistry, builder);
+        .merge(
+            encodeProto3NumericEnumAnyValues(Files.readString(testFile, StandardCharsets.UTF_8)),
+            extensionRegistry,
+            builder);
     return builder.build();
+  }
+
+  private static String encodeProto3NumericEnumAnyValues(String testData) {
+    // Protobuf 3's text-format parser rejects unknown numeric proto3 enum values, although its
+    // generated builders and binary format preserve them. Rewrite these narrowly shaped expanded
+    // Any literals to the equivalent raw Any representation so the conformance cases remain intact.
+    Matcher matcher = PROTO3_NUMERIC_ENUM_ANY.matcher(testData);
+    StringBuilder encoded = new StringBuilder(testData.length());
+    while (matcher.find()) {
+      int enumValue = Integer.parseInt(matcher.group(1));
+      Any any =
+          Any.pack(
+              dev.cel.expr.conformance.proto3.TestAllTypes.newBuilder()
+                  .setStandaloneEnumValue(enumValue)
+                  .build());
+      String replacement =
+          "type_url: \""
+              + any.getTypeUrl()
+              + "\" value: \""
+              + TextFormat.escapeBytes(any.getValue())
+              + "\"";
+      matcher.appendReplacement(encoded, Matcher.quoteReplacement(replacement));
+    }
+    return matcher.appendTail(encoded).toString();
   }
 
   private static Path testdataDir() {
@@ -295,7 +348,7 @@ class SimpleConformanceTest {
   private static final class ConformanceCaseRunner {
     private ConformanceCaseRunner() {}
 
-    private static void run(String testPath, SimpleTest test)
+    private static void run(EvaluationMode mode, String testPath, SimpleTest test)
         throws InvalidProtocolBufferException {
       if (test.getName().isEmpty()) {
         throw new IllegalArgumentException("simple test has no name");
@@ -330,9 +383,10 @@ class SimpleConformanceTest {
         return;
       }
 
-      match(testPath, test, ConformanceEvaluator.evalParsed(test, parsedExpr));
+      String evaluationPath = mode.displayName + "/" + testPath;
+      match(evaluationPath, test, ConformanceEvaluator.evalParsed(mode, test, parsedExpr));
       if (checkedExpr != null) {
-        match(testPath, test, ConformanceEvaluator.evalChecked(test, checkedExpr));
+        match(evaluationPath, test, ConformanceEvaluator.evalChecked(mode, test, checkedExpr));
       }
     }
   }
@@ -352,6 +406,9 @@ class SimpleConformanceTest {
       }
       if (usesTestOnlyBlockMacros(test.getExpr())) {
         parseOptions.add(macros(Macro.TestOnlyBlockMacros));
+      }
+      if (usesOptionals(test.getExpr())) {
+        parseOptions.add(optionals());
       }
 
       Env env = newEnv(parseOptions.toArray(new EnvOption[0]));
@@ -386,18 +443,23 @@ class SimpleConformanceTest {
       return astToCheckedExpr(astIss.getAst());
     }
 
-    private static ExprValue evalParsed(SimpleTest test, ParsedExpr parsedExpr) {
-      return eval(test, parsedExprToAst(parsedExpr));
+    private static ExprValue evalParsed(
+        EvaluationMode mode, SimpleTest test, ParsedExpr parsedExpr) {
+      return eval(mode, test, parsedExprToAst(parsedExpr));
     }
 
-    private static ExprValue evalChecked(SimpleTest test, CheckedExpr checkedExpr) {
-      return eval(test, checkedExprToAst(checkedExpr));
+    private static ExprValue evalChecked(
+        EvaluationMode mode, SimpleTest test, CheckedExpr checkedExpr) {
+      return eval(mode, test, checkedExprToAst(checkedExpr));
     }
 
-    private static ExprValue eval(SimpleTest test, Ast ast) {
+    private static ExprValue eval(EvaluationMode mode, SimpleTest test, Ast ast) {
       Env env = newEnv(conformanceEnvOptions(test).toArray(new EnvOption[0]));
 
-      Program program = env.program(ast);
+      Program program =
+          mode == EvaluationMode.NATIVE_ENABLED
+              ? env.program(ast)
+              : env.program(ast, evalOptions(OptDisableNativeEval));
       Map<String, Object> args = new HashMap<>();
       test.getBindingsMap()
           .forEach(
@@ -406,7 +468,7 @@ class SimpleConformanceTest {
 
       EvalResult res = program.eval(args);
       if (!isError(res.getVal())) {
-        return refValueToExprValue(res.getVal());
+        return refValueToExprValue(env.getTypeAdapter(), res.getVal());
       }
 
       Err err = (Err) res.getVal();
@@ -439,7 +501,7 @@ class SimpleConformanceTest {
       if (usesNetworkExtensions(test.getExpr())) {
         envOptions.add(network());
       }
-      if (test.getExpr().contains("optional.")) {
+      if (usesOptionals(test.getExpr())) {
         envOptions.add(optionals());
       }
       envOptions.addAll(List.of(options));
@@ -460,6 +522,13 @@ class SimpleConformanceTest {
           || expression.contains("strings.quote(")
           || expression.contains(".format(")
           || expression.contains(".reverse(");
+    }
+
+    private static boolean usesOptionals(String expression) {
+      return expression.contains("optional.")
+          || expression.contains(".?")
+          || expression.contains("[?")
+          || expression.contains("{?");
     }
 
     private static boolean usesNetworkExtensions(String expression) {
@@ -550,6 +619,12 @@ class SimpleConformanceTest {
       throw new AssertionError(
           testPath + ": got " + print(actual) + ", want unknown " + print(expected));
     }
+    Set<Long> expectedIds = new TreeSet<>(expected.getExprsList());
+    Set<Long> actualIds = new TreeSet<>(actual.getUnknown().getExprsList());
+    if (!expectedIds.equals(actualIds)) {
+      throw new AssertionError(
+          testPath + ": unknown expression IDs got " + actualIds + ", want " + expectedIds);
+    }
   }
 
   private static boolean valuesEqual(Value expected, Value actual) {
@@ -613,16 +688,23 @@ class SimpleConformanceTest {
   }
 
   private static Val exprValueToRefValue(TypeAdapter adapter, ExprValue ev) {
-    switch (ev.getKindCase()) {
-      case VALUE:
-        return valueToRefValue(adapter, ev.getValue());
-      case ERROR:
-        return newErr("XXX add details later");
-      case UNKNOWN:
-        return unknownOf(ev.getUnknown().getExprs(0));
-      default:
-        throw new IllegalArgumentException("unknown ExprValue kind " + ev.getKindCase());
+    return switch (ev.getKindCase()) {
+      case VALUE -> valueToRefValue(adapter, ev.getValue());
+      case ERROR -> newErr("XXX add details later");
+      case UNKNOWN -> unknownSetToRefValue(ev.getUnknown());
+      default -> throw new IllegalArgumentException("unknown ExprValue kind " + ev.getKindCase());
+    };
+  }
+
+  private static UnknownT unknownSetToRefValue(UnknownSet unknown) {
+    if (unknown.getExprsCount() == 0) {
+      throw new IllegalArgumentException("unknown ExprValue contains no expression ids");
     }
+    long[] additionalExpressionIds = new long[unknown.getExprsCount() - 1];
+    for (int i = 1; i < unknown.getExprsCount(); i++) {
+      additionalExpressionIds[i - 1] = unknown.getExprs(i);
+    }
+    return unknownOf(unknown.getExprs(0), additionalExpressionIds);
   }
 
   private static Val valueToRefValue(TypeAdapter adapter, Value v) {
@@ -670,23 +752,130 @@ class SimpleConformanceTest {
     }
   }
 
-  private static ExprValue refValueToExprValue(Val res) {
+  private static ExprValue refValueToExprValue(TypeAdapter adapter, Val res) {
     if (isUnknown(res)) {
-      return ExprValue.newBuilder()
-          .setUnknown(UnknownSet.newBuilder().addExprs(res.intValue()))
-          .build();
+      UnknownSet.Builder unknown = UnknownSet.newBuilder();
+      for (long expressionId : ((UnknownT) res).expressionIds()) {
+        unknown.addExprs(expressionId);
+      }
+      return ExprValue.newBuilder().setUnknown(unknown).build();
     }
-    return ExprValue.newBuilder().setValue(refValueToValue(res)).build();
+    return ExprValue.newBuilder().setValue(refValueToValue(adapter, res)).build();
   }
 
-  private static Value refValueToValue(Val res) {
+  @Test
+  void unknownExprValueRoundTripsAllCanonicalExpressionIds() {
+    ExprValue wireValue =
+        ExprValue.newBuilder()
+            .setUnknown(UnknownSet.newBuilder().addExprs(3L).addExprs(1L).addExprs(3L))
+            .build();
+
+    Val imported = exprValueToRefValue(null, wireValue);
+    assertThat(imported).isInstanceOf(UnknownT.class);
+    ExprValue exported = refValueToExprValue(null, imported);
+
+    assertThat(exported.getUnknown().getExprsList()).containsExactly(1L, 3L);
+
+    Val singleton =
+        exprValueToRefValue(
+            null, ExprValue.newBuilder().setUnknown(UnknownSet.newBuilder().addExprs(9L)).build());
+    assertThat(refValueToExprValue(null, singleton).getUnknown().getExprsList())
+        .containsExactly(9L);
+  }
+
+  @Test
+  void emptyUnknownExprValueIsRejected() {
+    ExprValue wireValue =
+        ExprValue.newBuilder().setUnknown(UnknownSet.getDefaultInstance()).build();
+
+    assertThatThrownBy(() -> exprValueToRefValue(null, wireValue))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("unknown ExprValue contains no expression ids");
+  }
+
+  @Test
+  void exactUnknownMatcherComparesSetsIndependentOfWireOrder() {
+    UnknownSet expected = UnknownSet.newBuilder().addExprs(3L).addExprs(1L).addExprs(3L).build();
+    ExprValue actual =
+        ExprValue.newBuilder()
+            .setUnknown(UnknownSet.newBuilder().addExprs(1L).addExprs(3L))
+            .build();
+
+    matchUnknown("unknown/test", expected, actual);
+
+    assertThatThrownBy(
+            () ->
+                matchUnknown(
+                    "unknown/test",
+                    expected,
+                    ExprValue.newBuilder()
+                        .setUnknown(UnknownSet.newBuilder().addExprs(1L).addExprs(2L))
+                        .build()))
+        .isInstanceOf(AssertionError.class)
+        .hasMessage("unknown/test: unknown expression IDs got [1, 2], want [1, 3]");
+    assertThatThrownBy(
+            () ->
+                matchUnknown(
+                    "unknown/missing",
+                    expected,
+                    ExprValue.newBuilder()
+                        .setUnknown(UnknownSet.newBuilder().addExprs(1L))
+                        .build()))
+        .isInstanceOf(AssertionError.class)
+        .hasMessage("unknown/missing: unknown expression IDs got [1], want [1, 3]");
+    assertThatThrownBy(
+            () ->
+                matchUnknown(
+                    "unknown/extra",
+                    expected,
+                    ExprValue.newBuilder()
+                        .setUnknown(UnknownSet.newBuilder().addExprs(1L).addExprs(3L).addExprs(4L))
+                        .build()))
+        .isInstanceOf(AssertionError.class)
+        .hasMessage("unknown/extra: unknown expression IDs got [1, 3, 4], want [1, 3]");
+    assertThatThrownBy(
+            () ->
+                matchUnknown(
+                    "unknown/kind",
+                    expected,
+                    ExprValue.newBuilder().setValue(Value.newBuilder().setBoolValue(true)).build()))
+        .isInstanceOf(AssertionError.class)
+        .hasMessageContaining("unknown/kind:")
+        .hasMessageContaining("want unknown");
+  }
+
+  @Test
+  void anyUnknownMatcherRemainsKindOnly() throws InvalidProtocolBufferException {
+    SimpleTest wildcard =
+        SimpleTest.newBuilder()
+            .setAnyUnknowns(dev.cel.expr.conformance.test.UnknownSetMatcher.getDefaultInstance())
+            .build();
+    ExprValue multiple =
+        ExprValue.newBuilder()
+            .setUnknown(UnknownSet.newBuilder().addExprs(5L).addExprs(7L))
+            .build();
+
+    match("unknown/wildcard", wildcard, multiple);
+    assertThatThrownBy(
+            () ->
+                match(
+                    "unknown/wildcard",
+                    wildcard,
+                    ExprValue.newBuilder().setValue(Value.newBuilder().setBoolValue(true)).build()))
+        .isInstanceOf(AssertionError.class)
+        .hasMessageContaining("want one of several unknowns");
+  }
+
+  private static Value refValueToValue(TypeAdapter adapter, Val res) {
     switch (res.type().typeEnum()) {
       case Bool:
         return Value.newBuilder().setBoolValue(res.booleanValue()).build();
       case Bytes:
-        return Value.newBuilder().setBytesValue(res.convertToNative(ByteString.class)).build();
+        return Value.newBuilder()
+            .setBytesValue(adapter.valueToNative(res, ByteString.class))
+            .build();
       case Double:
-        return Value.newBuilder().setDoubleValue(res.convertToNative(Double.class)).build();
+        return Value.newBuilder().setDoubleValue(adapter.valueToDouble(res)).build();
       case Int:
         return Value.newBuilder().setInt64Value(res.intValue()).build();
       case Null:
@@ -699,17 +888,17 @@ class SimpleConformanceTest {
         return Value.newBuilder().setUint64Value(res.intValue()).build();
       case Duration:
         return Value.newBuilder()
-            .setObjectValue(Any.pack(res.convertToNative(Duration.class)))
+            .setObjectValue(Any.pack(adapter.valueToNative(res, Duration.class)))
             .build();
       case Timestamp:
         return Value.newBuilder()
-            .setObjectValue(Any.pack(res.convertToNative(Timestamp.class)))
+            .setObjectValue(Any.pack(adapter.valueToNative(res, Timestamp.class)))
             .build();
       case List:
         Lister lister = (Lister) res;
         ListValue.Builder elements = ListValue.newBuilder();
         for (IteratorT i = lister.iterator(); i.hasNext() == True; ) {
-          elements.addValues(refValueToValue(i.next()));
+          elements.addValues(refValueToValue(adapter, i.next()));
         }
         return Value.newBuilder().setListValue(elements).build();
       case Map:
@@ -719,8 +908,8 @@ class SimpleConformanceTest {
           Val key = i.next();
           entries
               .addEntriesBuilder()
-              .setKey(refValueToValue(key))
-              .setValue(refValueToValue(mapper.get(key)));
+              .setKey(refValueToValue(adapter, key))
+              .setValue(refValueToValue(adapter, mapper.get(key)));
         }
         return Value.newBuilder().setMapValue(entries).build();
       case Object:
@@ -774,7 +963,7 @@ class SimpleConformanceTest {
   }
 
   private static String print(Message message) {
-    return TEXT_PRINTER.printToString(message);
+    return TextFormat.shortDebugString(message);
   }
 
   private static final class SkipList {

@@ -95,6 +95,7 @@ public class TypeT implements Type, Val {
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
   @Override
+  @SuppressWarnings("removal")
   public <T> T convertToNative(Class<T> typeDesc) {
     throw new UnsupportedOperationException("type conversion not supported for 'type'");
   }
@@ -102,13 +103,11 @@ public class TypeT implements Type, Val {
   /** ConvertToType implements ref.Val.ConvertToType. */
   @Override
   public Val convertToType(Type typeVal) {
-    switch (typeVal.typeEnum()) {
-      case Type:
-        return TypeType;
-      case String:
-        return stringOf(typeName());
-    }
-    return newTypeConversionError(TypeType, typeVal);
+    return switch (typeVal.typeEnum()) {
+      case Type -> TypeType;
+      case String -> stringOf(typeName());
+      default -> newTypeConversionError(TypeType, typeVal);
+    };
   }
 
   /** Equal implements ref.Val.Equal. */
@@ -166,10 +165,9 @@ public class TypeT implements Type, Val {
     if (this == o) {
       return true;
     }
-    if (!(o instanceof Type)) {
+    if (!(o instanceof Type typeValue)) {
       return false;
     }
-    Type typeValue = (Type) o;
     return typeName().equals(typeValue.typeName());
   }
 

@@ -23,9 +23,10 @@ import org.projectnessie.cel.common.Errors;
 import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.Source;
 
-/** TypeErrors is a specialization of Errors. */
+/** Type-checking diagnostics associated with one CEL source. */
 public final class TypeErrors extends Errors {
 
+  /** Creates an empty type-diagnostic collection for the supplied source. */
   public TypeErrors(Source source) {
     super(source);
   }
@@ -115,10 +116,6 @@ public final class TypeErrors extends Errors {
         "expected type '%s' but found '%s'",
         formatCheckedType(expected),
         formatCheckedType(actual));
-  }
-
-  public void unknownType(Location l, String info) {
-    //    reportError(l, "unknown type%s", info != null ? " for: " + info : "");
   }
 
   static String formatFunction(Type resultType, List<Type> argTypes, boolean isInstance) {

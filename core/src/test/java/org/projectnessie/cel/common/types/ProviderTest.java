@@ -18,22 +18,29 @@ package org.projectnessie.cel.common.types;
 import static com.google.protobuf.NullValue.NULL_VALUE;
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNullPointerException;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.projectnessie.cel.Util.mapOf;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.BytesT.bytesOf;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
+import static org.projectnessie.cel.common.types.DurationT.DurationType;
 import static org.projectnessie.cel.common.types.DurationT.durationOf;
+import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.IntT.IntZero;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.ListT.newGenericArrayList;
 import static org.projectnessie.cel.common.types.MapT.newMaybeWrappedMap;
 import static org.projectnessie.cel.common.types.NullT.NullValue;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
+import static org.projectnessie.cel.common.types.TimestampT.TimestampType;
 import static org.projectnessie.cel.common.types.TimestampT.ZoneIdZ;
 import static org.projectnessie.cel.common.types.TimestampT.timestampOf;
+import static org.projectnessie.cel.common.types.TypeT.newObjectTypeValue;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newEmptyRegistry;
+import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newExactAggregateRegistry;
 import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newRegistry;
 
 import com.google.api.expr.v1alpha1.CheckedExpr;
@@ -41,9 +48,13 @@ import com.google.api.expr.v1alpha1.Constant;
 import com.google.api.expr.v1alpha1.Expr;
 import com.google.api.expr.v1alpha1.ParsedExpr;
 import com.google.api.expr.v1alpha1.SourceInfo;
+import com.google.protobuf.Any;
 import com.google.protobuf.BoolValue;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.BytesValue;
+import com.google.protobuf.DescriptorProtos.DescriptorProto;
+import com.google.protobuf.DescriptorProtos.FileDescriptorProto;
+import com.google.protobuf.Descriptors.FileDescriptor;
 import com.google.protobuf.DoubleValue;
 import com.google.protobuf.FloatValue;
 import com.google.protobuf.Int32Value;
@@ -60,15 +71,19 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
+import org.projectnessie.cel.common.types.ref.Type;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Indexer;
 import org.projectnessie.cel.common.types.traits.Lister;
+import org.projectnessie.cel.common.types.traits.Trait;
 import org.projectnessie.cel.test.proto3.OutOfOrderEnumOuterClass;
 
 public class ProviderTest {
@@ -82,6 +97,163 @@ public class ProviderTest {
     reg = newRegistry();
     reg2 = reg.copy();
     assertThat(reg).isEqualTo(reg2);
+  }
+
+  @Test
+  void equivalentTypeRegistrationIsIdempotentAndPreservesFirstInstance() {
+    ProtoTypeRegistry registry = newEmptyRegistry();
+    Type first = newObjectTypeValue("example.RuntimeType", Trait.ReceiverType);
+    Type equivalent = newObjectTypeValue("example.RuntimeType", Trait.ReceiverType);
+
+    registry.registerType(first);
+    registry.registerType(equivalent);
+    registry.register(equivalent);
+
+    assertThat(registry.findIdent(first.typeName())).isSameAs(first);
+  }
+
+  @Test
+  void conflictingTypeKindAndTraitsAreRejectedWithoutReplacement() {
+    ProtoTypeRegistry registry = newRegistry();
+
+    assertThatThrownBy(() -> registry.registerType(newObjectTypeValue(IntType.typeName())))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage(
+            "type registration conflict for 'int': existing kind 'Int', input kind 'Object'");
+    assertThat(registry.findIdent(IntType.typeName())).isSameAs(IntType);
+
+    Type first = newObjectTypeValue("example.Traits");
+    registry.registerType(first);
+    assertThatThrownBy(
+            () -> registry.registerType(newObjectTypeValue("example.Traits", Trait.ReceiverType)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage(
+            "type registration conflict for 'example.Traits': "
+                + "existing traits [FieldTesterType, IndexerType], "
+                + "input traits [ReceiverType]");
+    assertThat(registry.findIdent(first.typeName())).isSameAs(first);
+  }
+
+  @Test
+  void typeRegistrationBatchIsFailureAtomic() {
+    ProtoTypeRegistry registry = newEmptyRegistry();
+    Type existing = newObjectTypeValue("example.Existing", Trait.ReceiverType);
+    registry.registerType(existing);
+
+    Type pending = newObjectTypeValue("example.Pending");
+    Type conflict = newObjectTypeValue(existing.typeName());
+    assertThatThrownBy(() -> registry.registerType(pending, conflict))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThat(registry.findIdent(pending.typeName())).isNull();
+    assertThat(registry.findIdent(existing.typeName())).isSameAs(existing);
+
+    Type duplicate = newObjectTypeValue("example.Duplicate");
+    Type conflictingDuplicate = newObjectTypeValue(duplicate.typeName(), Trait.ReceiverType);
+    assertThatThrownBy(() -> registry.registerType(duplicate, conflictingDuplicate))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThat(registry.findIdent(duplicate.typeName())).isNull();
+
+    Type equivalentDuplicate = newObjectTypeValue("example.EquivalentDuplicate");
+    registry.registerType(equivalentDuplicate, newObjectTypeValue(equivalentDuplicate.typeName()));
+    assertThat(registry.findIdent(equivalentDuplicate.typeName())).isSameAs(equivalentDuplicate);
+
+    Type beforeNull = newObjectTypeValue("example.BeforeNull");
+    assertThatNullPointerException()
+        .isThrownBy(() -> registry.registerType(beforeNull, null))
+        .withMessage("types element");
+    assertThat(registry.findIdent(beforeNull.typeName())).isNull();
+    assertThatNullPointerException()
+        .isThrownBy(() -> registry.registerType((Type[]) null))
+        .withMessage("types");
+  }
+
+  @Test
+  void copiedAndExactRegistriesRetainConflictContractAndIsolation() {
+    ProtoTypeRegistry registry = newEmptyRegistry();
+    Type first = newObjectTypeValue("example.Copied");
+    registry.registerType(first);
+
+    ProtoTypeRegistry copy = registry.copy();
+    copy.registerType(newObjectTypeValue(first.typeName()));
+    assertThat(copy.findIdent(first.typeName())).isSameAs(first);
+    assertThatThrownBy(
+            () -> copy.registerType(newObjectTypeValue(first.typeName(), Trait.ReceiverType)))
+        .isInstanceOf(IllegalArgumentException.class);
+
+    Type copyOnly = newObjectTypeValue("example.CopyOnly");
+    copy.registerType(copyOnly);
+    assertThat(copy.findIdent(copyOnly.typeName())).isSameAs(copyOnly);
+    assertThat(registry.findIdent(copyOnly.typeName())).isNull();
+
+    TypeRegistry exact = newExactAggregateRegistry();
+    assertThatThrownBy(() -> exact.registerType(newObjectTypeValue(IntType.typeName())))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThat(exact.findIdent(IntType.typeName())).isSameAs(IntType);
+  }
+
+  @Test
+  void protobufWellKnownRuntimeTypesRemainCanonical() {
+    ProtoTypeRegistry registry = newRegistry();
+
+    assertThat(registry.findIdent(DurationType.typeName())).isSameAs(DurationType);
+    assertThat(registry.findIdent(TimestampType.typeName())).isSameAs(TimestampType);
+    assertThat(registry.findIdent(Any.getDescriptor().getFullName()))
+        .isInstanceOf(Type.class)
+        .extracting(value -> ((Type) value).typeEnum())
+        .isEqualTo(TypeEnum.Object);
+
+    registry.registerDescriptor(com.google.protobuf.Duration.getDescriptor().getFile());
+    registry.registerMessage(Timestamp.getDefaultInstance());
+
+    assertThat(registry.findIdent(DurationType.typeName())).isSameAs(DurationType);
+    assertThat(registry.findIdent(TimestampType.typeName())).isSameAs(TimestampType);
+  }
+
+  @Test
+  void protobufMessageNamedLikePrimitiveIsNotCanonicalized() throws Exception {
+    FileDescriptor descriptor =
+        FileDescriptor.buildFrom(
+            FileDescriptorProto.newBuilder()
+                .setName("primitive-name.proto")
+                .addMessageType(DescriptorProto.newBuilder().setName(IntType.typeName()))
+                .build(),
+            new FileDescriptor[0]);
+    ProtoTypeRegistry registry = newRegistry();
+
+    assertThatThrownBy(() -> registry.registerDescriptor(descriptor))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage(
+            "type registration conflict for 'int': existing kind 'Int', input kind 'Object'");
+    assertThat(registry.findIdent(IntType.typeName())).isSameAs(IntType);
+    assertThat(registry.findType(IntType.typeName())).isNull();
+  }
+
+  @Test
+  void descriptorAndMessageConflictsAreRejectedBeforeDatabaseMutation() {
+    String typeName = TestAllTypes.getDescriptor().getFullName();
+    String siblingTypeName = TestAllTypes.getDescriptor().getNestedTypes().get(0).getFullName();
+    Type conflicting = newObjectTypeValue(typeName, Trait.ReceiverType);
+
+    ProtoTypeRegistry descriptorRegistry = newEmptyRegistry();
+    descriptorRegistry.registerType(conflicting);
+    assertThatThrownBy(
+            () -> descriptorRegistry.registerDescriptor(TestAllTypes.getDescriptor().getFile()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("type registration conflict for '" + typeName + "'");
+    assertThat(descriptorRegistry.findIdent(typeName)).isSameAs(conflicting);
+    assertThat(descriptorRegistry.findType(typeName)).isNull();
+    assertThat(descriptorRegistry.findIdent(siblingTypeName)).isNull();
+    assertThat(descriptorRegistry.findType(siblingTypeName)).isNull();
+
+    ProtoTypeRegistry messageRegistry = newEmptyRegistry();
+    messageRegistry.registerType(conflicting);
+    assertThatThrownBy(() -> messageRegistry.registerMessage(TestAllTypes.getDefaultInstance()))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("type registration conflict for '" + typeName + "'");
+    assertThat(messageRegistry.findIdent(typeName)).isSameAs(conflicting);
+    assertThat(messageRegistry.findType(typeName)).isNull();
+    assertThat(messageRegistry.findIdent(siblingTypeName)).isNull();
+    assertThat(messageRegistry.findType(siblingTypeName)).isNull();
   }
 
   @Test
@@ -164,7 +336,7 @@ public class ProviderTest {
     assertThat(srcInfo)
         .extracting(
             SourceInfo::getLocation, SourceInfo::getLineOffsetsList, SourceInfo::getPositionsMap)
-        .containsExactly("TestTypeRegistryNewValue", asList(0, 2), mapOf(1L, 2L, 3L, 4L));
+        .containsExactly("TestTypeRegistryNewValue", asList(0, 2), mapOf(1L, 2, 3L, 4));
   }
 
   @Test
@@ -185,7 +357,7 @@ public class ProviderTest {
                             mapOf("string_value", stringOf("oneof")))))));
 
     assertThat(exp).matches(v -> !Err.isError(v));
-    CheckedExpr ce = exp.convertToNative(CheckedExpr.class);
+    CheckedExpr ce = reg.valueToNative(exp, CheckedExpr.class);
     assertThat(ce)
         .extracting(CheckedExpr::getExpr)
         .extracting(Expr::getConstExpr)
@@ -200,7 +372,7 @@ public class ProviderTest {
         reg.newValue(
             "cel.expr.conformance.proto3.TestAllTypes", mapOf("single_int32_wrapper", intOf(123)));
     assertThat(exp).matches(v -> !Err.isError(v));
-    TestAllTypes ce = exp.convertToNative(TestAllTypes.class);
+    TestAllTypes ce = reg.valueToNative(exp, TestAllTypes.class);
     assertThat(ce)
         .extracting(TestAllTypes::getSingleInt32Wrapper)
         .extracting(Int32Value::getValue)
@@ -215,7 +387,7 @@ public class ProviderTest {
             "cel.expr.conformance.proto3.TestAllTypes", mapOf("single_int32_wrapper", NullValue));
 
     assertThat(exp).matches(v -> !Err.isError(v));
-    TestAllTypes ce = exp.convertToNative(TestAllTypes.class);
+    TestAllTypes ce = reg.valueToNative(exp, TestAllTypes.class);
     assertThat(ce.hasSingleInt32Wrapper()).isFalse();
   }
 
@@ -234,7 +406,7 @@ public class ProviderTest {
                 NullValue));
 
     assertThat(exp).matches(v -> !Err.isError(v));
-    TestAllTypes ce = exp.convertToNative(TestAllTypes.class);
+    TestAllTypes ce = reg.valueToNative(exp, TestAllTypes.class);
     assertThat(ce.hasSingleNestedMessage()).isFalse();
     assertThat(ce.hasSingleDuration()).isFalse();
     assertThat(ce.hasSingleTimestamp()).isFalse();
@@ -257,7 +429,7 @@ public class ProviderTest {
                 newGenericArrayList(reg, new Val[] {intOf(1), NullValue})));
 
     assertThat(exp).matches(v -> !Err.isError(v));
-    TestAllTypes ce = exp.convertToNative(TestAllTypes.class);
+    TestAllTypes ce = reg.valueToNative(exp, TestAllTypes.class);
     assertThat(ce.getRepeatedTimestampList())
         .containsExactly(Timestamp.newBuilder().setSeconds(1).build());
     assertThat(ce.getRepeatedDurationList())
@@ -287,7 +459,7 @@ public class ProviderTest {
                 newMaybeWrappedMap(reg, mapOf(true, NullValue, false, intOf(1)))));
 
     assertThat(exp).matches(v -> !Err.isError(v));
-    TestAllTypes ce = exp.convertToNative(TestAllTypes.class);
+    TestAllTypes ce = reg.valueToNative(exp, TestAllTypes.class);
     assertThat(ce.getMapBoolTimestampMap())
         .containsExactlyEntriesOf(mapOf(false, Timestamp.newBuilder().setSeconds(1).build()));
     assertThat(ce.getMapBoolDurationMap())
@@ -298,6 +470,47 @@ public class ProviderTest {
   }
 
   @Test
+  void typeRegistryNewValue_ConvertsMapEntriesDirectly() {
+    TypeRegistry reg = newRegistry(TestAllTypes.getDefaultInstance());
+    Val nestedMessage =
+        reg.newValue(
+            "cel.expr.conformance.proto3.TestAllTypes.NestedMessage", mapOf("bb", intOf(42)));
+
+    Val exp =
+        reg.newValue(
+            "cel.expr.conformance.proto3.TestAllTypes",
+            mapOf(
+                "map_bool_bytes",
+                new DirectConversionMap(reg, mapOf(true, bytesOf("bytes"))),
+                "map_bool_int32",
+                new DirectConversionMap(reg, mapOf(true, intOf(Integer.MIN_VALUE))),
+                "map_bool_uint32",
+                new DirectConversionMap(reg, mapOf(true, uintOf(0xffff_ffffL))),
+                "map_bool_uint64",
+                new DirectConversionMap(reg, mapOf(true, uintOf(-1L))),
+                "map_bool_float",
+                new DirectConversionMap(reg, mapOf(true, doubleOf(1.25))),
+                "map_bool_enum",
+                new DirectConversionMap(reg, mapOf(true, intOf(TestAllTypes.NestedEnum.BAR_VALUE))),
+                "map_bool_null_value",
+                new DirectConversionMap(reg, mapOf(true, NullValue)),
+                "map_bool_message",
+                new DirectConversionMap(reg, mapOf(true, nestedMessage))));
+
+    assertThat(exp).matches(v -> !Err.isError(v));
+    TestAllTypes value = reg.valueToNative(exp, TestAllTypes.class);
+    assertThat(value.getMapBoolBytesMap()).containsEntry(true, ByteString.copyFromUtf8("bytes"));
+    assertThat(value.getMapBoolInt32Map()).containsEntry(true, Integer.MIN_VALUE);
+    assertThat(value.getMapBoolUint32Map()).containsEntry(true, -1);
+    assertThat(value.getMapBoolUint64Map()).containsEntry(true, -1L);
+    assertThat(value.getMapBoolFloatMap()).containsEntry(true, 1.25F);
+    assertThat(value.getMapBoolEnumMap()).containsEntry(true, TestAllTypes.NestedEnum.BAR);
+    assertThat(value.getMapBoolNullValueMap()).containsEntry(true, NULL_VALUE);
+    assertThat(value.getMapBoolMessageMap())
+        .containsEntry(true, TestAllTypes.NestedMessage.newBuilder().setBb(42).build());
+  }
+
+  @Test
   void typeRegistryNewValue_InvalidNullFieldAssignmentsReturnErrors() {
     TypeRegistry reg = newRegistry(TestAllTypes.getDefaultInstance());
     String typeName = "cel.expr.conformance.proto3.TestAllTypes";
@@ -305,8 +518,66 @@ public class ProviderTest {
     assertThat(reg.newValue(typeName, mapOf("single_bool", NullValue))).matches(Err::isError);
     assertThat(reg.newValue(typeName, mapOf("repeated_int32", NullValue))).matches(Err::isError);
     assertThat(reg.newValue(typeName, mapOf("map_string_string", NullValue))).matches(Err::isError);
+    assertThat(
+            reg.newValue(
+                typeName, mapOf("map_bool_enum", newMaybeWrappedMap(reg, mapOf(true, NullValue)))))
+        .matches(Err::isError);
     assertThat(reg.newValue(typeName, mapOf("list_value", NullValue))).matches(Err::isError);
     assertThat(reg.newValue(typeName, mapOf("single_struct", NullValue))).matches(Err::isError);
+  }
+
+  private static final class DirectConversionMap extends MapT {
+    private final MapT delegate;
+
+    private DirectConversionMap(TypeRegistry registry, Map<?, ?> value) {
+      this.delegate = (MapT) newMaybeWrappedMap(registry, value);
+    }
+
+    @Override
+    @SuppressWarnings("removal")
+    public <T> T convertToNative(Class<T> typeDesc) {
+      throw new AssertionError("protobuf map conversion must not materialize a native Java map");
+    }
+
+    @Override
+    public Val convertToType(org.projectnessie.cel.common.types.ref.Type typeValue) {
+      return delegate.convertToType(typeValue);
+    }
+
+    @Override
+    public IteratorT iterator() {
+      return delegate.iterator();
+    }
+
+    @Override
+    public Val equal(Val other) {
+      return delegate.equal(other);
+    }
+
+    @Override
+    public Object value() {
+      return delegate.value();
+    }
+
+    @Override
+    public Val contains(Val value) {
+      return delegate.contains(value);
+    }
+
+    @Override
+    public Val get(Val index) {
+      return delegate.get(index);
+    }
+
+    @Override
+    public Val size() {
+      return delegate.size();
+    }
+
+    @Override
+    public Val find(Val key) {
+      return delegate.find(key);
+    }
   }
 
   @Test
@@ -356,67 +627,80 @@ public class ProviderTest {
     TypeRegistry reg = newRegistry(ParsedExpr.getDefaultInstance());
 
     // Core type conversion tests.
-    expectValueToNative(True, true);
-    expectValueToNative(True, True);
+    expectValueToNative(reg, True, true);
+    expectValueToNative(reg, True, True);
     expectValueToNative(
-        newGenericArrayList(reg, new Val[] {True, False}), new Object[] {true, false});
-    expectValueToNative(newGenericArrayList(reg, new Val[] {True, False}), new Val[] {True, False});
-    expectValueToNative(intOf(-1), -1);
-    expectValueToNative(intOf(2), 2L);
-    expectValueToNative(intOf(-1), -1);
-    expectValueToNative(newGenericArrayList(reg, new Val[] {intOf(4)}), new Object[] {4L});
-    expectValueToNative(newGenericArrayList(reg, new Val[] {intOf(5)}), new Val[] {intOf(5)});
-    expectValueToNative(uintOf(3), ULong.valueOf(3));
-    expectValueToNative(uintOf(4), ULong.valueOf(4));
-    expectValueToNative(uintOf(5), 5);
+        reg, newGenericArrayList(reg, new Val[] {True, False}), new Object[] {true, false});
     expectValueToNative(
-        newGenericArrayList(reg, new Val[] {uintOf(4)}), new Object[] {4L}); // loses "ULong" here
-    expectValueToNative(newGenericArrayList(reg, new Val[] {uintOf(5)}), new Val[] {uintOf(5)});
-    expectValueToNative(doubleOf(5.5d), 5.5f);
-    expectValueToNative(doubleOf(-5.5d), -5.5d);
-    expectValueToNative(newGenericArrayList(reg, new Val[] {doubleOf(-5.5)}), new Object[] {-5.5});
+        reg, newGenericArrayList(reg, new Val[] {True, False}), new Val[] {True, False});
+    expectValueToNative(reg, intOf(-1), -1);
+    expectValueToNative(reg, intOf(2), 2L);
+    expectValueToNative(reg, intOf(-1), -1);
+    expectValueToNative(reg, newGenericArrayList(reg, new Val[] {intOf(4)}), new Object[] {4L});
+    expectValueToNative(reg, newGenericArrayList(reg, new Val[] {intOf(5)}), new Val[] {intOf(5)});
+    expectValueToNative(reg, uintOf(3), ULong.valueOf(3));
+    expectValueToNative(reg, uintOf(4), ULong.valueOf(4));
+    expectValueToNative(reg, uintOf(5), 5);
     expectValueToNative(
-        newGenericArrayList(reg, new Val[] {doubleOf(-5.5)}), new Val[] {doubleOf(-5.5)});
-    expectValueToNative(doubleOf(-5.5), doubleOf(-5.5));
-    expectValueToNative(stringOf("hello"), "hello");
-    expectValueToNative(stringOf("hello"), stringOf("hello"));
-    expectValueToNative(NullValue, NULL_VALUE);
-    expectValueToNative(NullValue, NullValue);
-    expectValueToNative(newGenericArrayList(reg, new Val[] {NullValue}), new Object[] {null});
-    expectValueToNative(newGenericArrayList(reg, new Val[] {NullValue}), new Val[] {NullValue});
-    expectValueToNative(bytesOf("world"), "world".getBytes(StandardCharsets.UTF_8));
-    expectValueToNative(bytesOf("world"), "world".getBytes(StandardCharsets.UTF_8));
+        reg,
+        newGenericArrayList(reg, new Val[] {uintOf(4)}),
+        new Object[] {4L}); // loses "ULong" here
     expectValueToNative(
+        reg, newGenericArrayList(reg, new Val[] {uintOf(5)}), new Val[] {uintOf(5)});
+    expectValueToNative(reg, doubleOf(5.5d), 5.5f);
+    expectValueToNative(reg, doubleOf(-5.5d), -5.5d);
+    expectValueToNative(
+        reg, newGenericArrayList(reg, new Val[] {doubleOf(-5.5)}), new Object[] {-5.5});
+    expectValueToNative(
+        reg, newGenericArrayList(reg, new Val[] {doubleOf(-5.5)}), new Val[] {doubleOf(-5.5)});
+    expectValueToNative(reg, doubleOf(-5.5), doubleOf(-5.5));
+    expectValueToNative(reg, stringOf("hello"), "hello");
+    expectValueToNative(reg, stringOf("hello"), stringOf("hello"));
+    expectValueToNative(reg, NullValue, NULL_VALUE);
+    expectValueToNative(reg, NullValue, NullValue);
+    expectValueToNative(reg, newGenericArrayList(reg, new Val[] {NullValue}), new Object[] {null});
+    expectValueToNative(
+        reg, newGenericArrayList(reg, new Val[] {NullValue}), new Val[] {NullValue});
+    expectValueToNative(reg, bytesOf("world"), "world".getBytes(StandardCharsets.UTF_8));
+    expectValueToNative(reg, bytesOf("world"), "world".getBytes(StandardCharsets.UTF_8));
+    expectValueToNative(
+        reg,
         newGenericArrayList(reg, new Val[] {bytesOf("hello")}),
         new Object[] {ByteString.copyFromUtf8("hello")});
     expectValueToNative(
-        newGenericArrayList(reg, new Val[] {bytesOf("hello")}), new Val[] {bytesOf("hello")});
+        reg, newGenericArrayList(reg, new Val[] {bytesOf("hello")}), new Val[] {bytesOf("hello")});
     expectValueToNative(
+        reg,
         newGenericArrayList(reg, new Val[] {intOf(1), intOf(2), intOf(3)}),
         new Object[] {1L, 2L, 3L});
-    expectValueToNative(durationOf(Duration.ofSeconds(500)), Duration.ofSeconds(500));
+    expectValueToNative(reg, durationOf(Duration.ofSeconds(500)), Duration.ofSeconds(500));
     expectValueToNative(
+        reg,
         durationOf(Duration.ofSeconds(500)),
         com.google.protobuf.Duration.newBuilder().setSeconds(500).build());
-    expectValueToNative(durationOf(Duration.ofSeconds(500)), durationOf(Duration.ofSeconds(500)));
     expectValueToNative(
+        reg, durationOf(Duration.ofSeconds(500)), durationOf(Duration.ofSeconds(500)));
+    expectValueToNative(
+        reg,
         timestampOf(Timestamp.newBuilder().setSeconds(12345).build()),
         Instant.ofEpochSecond(12345, 0).atZone(ZoneIdZ));
     expectValueToNative(
+        reg,
         timestampOf(Timestamp.newBuilder().setSeconds(12345).build()),
         timestampOf(Timestamp.newBuilder().setSeconds(12345).build()));
     expectValueToNative(
+        reg,
         timestampOf(Timestamp.newBuilder().setSeconds(12345).build()),
         Timestamp.newBuilder().setSeconds(12345).build());
     expectValueToNative(
-        newMaybeWrappedMap(reg, mapOf(1L, 1L, 2L, 1L, 3L, 1L)), mapOf(1L, 1L, 2L, 1L, 3L, 1L));
+        reg, newMaybeWrappedMap(reg, mapOf(1L, 1L, 2L, 1L, 3L, 1L)), mapOf(1L, 1L, 2L, 1L, 3L, 1L));
 
     // Null conversion tests.
-    expectValueToNative(NullValue, NULL_VALUE);
+    expectValueToNative(reg, NullValue, NULL_VALUE);
 
     // Proto conversion tests.
     ParsedExpr parsedExpr = ParsedExpr.getDefaultInstance();
-    expectValueToNative(reg.nativeToValue(parsedExpr), parsedExpr);
+    expectValueToNative(reg, reg.nativeToValue(parsedExpr), parsedExpr);
   }
 
   @Test
@@ -572,12 +856,22 @@ public class ProviderTest {
     TypeRegistry reg = newEmptyRegistry();
     Val val = reg.nativeToValue(new nonConvertible());
     assertThat(val).matches(Err::isError);
+
+    for (Object array :
+        new Object[] {
+          new boolean[0], new short[0], new char[0], new float[0],
+        }) {
+      assertThat(reg.nativeToValue(array))
+          .matches(Err::isError)
+          .asString()
+          .contains("unsupported Java array type", array.getClass().getTypeName());
+    }
   }
 
   static class nonConvertible {}
 
-  static void expectValueToNative(Val in, Object out) {
-    Object val = in.convertToNative(out.getClass());
+  static void expectValueToNative(TypeRegistry registry, Val in, Object out) {
+    Object val = registry.valueToNative(in, out.getClass());
     assertThat(val).isNotNull();
 
     if (val instanceof byte[]) {

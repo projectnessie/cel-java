@@ -27,7 +27,9 @@ import java.util.List;
 import java.util.Set;
 import org.projectnessie.cel.common.types.Err.ErrException;
 import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.internal.OperationController;
 import org.projectnessie.cel.interpreter.Activation;
+import org.projectnessie.cel.interpreter.ActivationControls;
 import org.projectnessie.cel.interpreter.AttributeFactory;
 import org.projectnessie.cel.interpreter.Coster;
 import org.projectnessie.cel.interpreter.Dispatcher;
@@ -37,12 +39,13 @@ import org.projectnessie.cel.interpreter.InterpretableDecorator;
 import org.projectnessie.cel.interpreter.Interpreter;
 
 /** prog is the internal implementation of the Program interface. */
-final class Prog implements Program, Coster {
+final class Prog implements Program, Coster, ControllableProgram {
   static final EvalState emptyEvalState = newEvalState();
 
   final Env e;
   final Set<EvalOption> evalOpts = EnumSet.noneOf(EvalOption.class);
   final List<InterpretableDecorator> decorators = new ArrayList<>();
+  RegexEngine regexEngine = RegexEngine.JAVA;
   Activation defaultVars;
   final Dispatcher dispatcher;
   Interpreter interpreter;
@@ -59,12 +62,14 @@ final class Prog implements Program, Coster {
   Prog(
       Env e,
       Set<EvalOption> evalOpts,
+      RegexEngine regexEngine,
       Activation defaultVars,
       Dispatcher dispatcher,
       Interpreter interpreter,
       EvalState state) {
     this.e = e;
     this.evalOpts.addAll(evalOpts);
+    this.regexEngine = regexEngine;
     this.defaultVars = defaultVars;
     this.dispatcher = dispatcher;
     this.interpreter = interpreter;
@@ -74,9 +79,23 @@ final class Prog implements Program, Coster {
   /** Eval implements the Program interface method. */
   @Override
   public EvalResult eval(Object input) {
+    return evalInternal(input, null);
+  }
+
+  @Override
+  public EvalResult evalControlled(Object input, OperationController controller) {
+    return evalInternal(input, controller);
+  }
+
+  private EvalResult evalInternal(Object input, OperationController controller) {
     Val v;
 
-    EvalDetails evalDetails = new EvalDetails(state);
+    EvalState resultState =
+        evalOpts.contains(EvalOption.OptTrackState)
+                || evalOpts.contains(EvalOption.OptExhaustiveEval)
+            ? state
+            : newEvalState();
+    EvalDetails evalDetails = new EvalDetails(resultState);
 
     try {
       // Build a hierarchical activation if there are default vars set.
@@ -86,7 +105,16 @@ final class Prog implements Program, Coster {
         vars = newHierarchicalActivation(defaultVars, vars);
       }
 
+      if (controller != null) {
+        vars = ActivationControls.controlled(vars, controller);
+        controller.checkpointNow(OperationAbortedException.Phase.EVALUATE);
+      }
       v = interpretable.eval(vars);
+      if (controller != null) {
+        controller.checkpointNow(OperationAbortedException.Phase.EVALUATE);
+      }
+    } catch (OperationAbortedException e) {
+      throw e;
     } catch (ErrException e) {
       v = e.getErr();
     } catch (Exception e) {

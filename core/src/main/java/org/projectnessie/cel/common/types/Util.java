@@ -17,32 +17,22 @@ package org.projectnessie.cel.common.types;
 
 import org.projectnessie.cel.common.types.ref.Val;
 
+/** Small predicates shared by built-in CEL value operations. */
 public final class Util {
 
-  /** IsUnknownOrError returns whether the input element ref.Val is an ErrType or UnknonwType. */
+  /** Returns whether a value is a CEL error or unknown. */
   public static boolean isUnknownOrError(Val val) {
-    switch (val.type().typeEnum()) {
-      case Unknown:
-      case Err:
-        return true;
-    }
-    return false;
+    return switch (val.type().typeEnum()) {
+      case Unknown, Err -> true;
+      default -> false;
+    };
   }
 
-  /**
-   * IsPrimitiveType returns whether the input element ref.Val is a primitive type. Note, primitive
-   * types do not include well-known types such as Duration and Timestamp.
-   */
+  /** Returns whether a value has a primitive CEL type, excluding well-known types. */
   public static boolean isPrimitiveType(Val val) {
-    switch (val.type().typeEnum()) {
-      case Bool:
-      case Bytes:
-      case Double:
-      case Int:
-      case String:
-      case Uint:
-        return true;
-    }
-    return false;
+    return switch (val.type().typeEnum()) {
+      case Bool, Bytes, Double, Int, String, Uint -> true;
+      default -> false;
+    };
   }
 }

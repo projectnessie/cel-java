@@ -52,16 +52,27 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.checker.Types.Kind;
 import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.Source;
 import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.types.Err.ErrException;
 import org.projectnessie.cel.common.types.ref.FieldType;
+import org.projectnessie.cel.internal.OperationCheckpoints;
+import org.projectnessie.cel.internal.OperationController;
 import org.projectnessie.cel.parser.Parser.ParseResult;
 
+/**
+ * Low-level CEL type checker.
+ *
+ * <p>Applications normally use {@link org.projectnessie.cel.Env#check(org.projectnessie.cel.Ast)}.
+ * Direct callers must provide a successful parse result and a fully configured {@link CheckerEnv}.
+ * One {@link CheckResult} contains the checked protobuf expression and any type diagnostics.
+ */
 public final class Checker {
 
+  /** Standard CEL declarations installed by a standard checker environment. */
   public static final List<Decl> StandardDeclarations = Standard.makeStandardDeclarations();
 
   private CheckerEnv env;
@@ -69,6 +80,7 @@ public final class Checker {
   private Mapping mappings;
   private int freeTypeVarCounter;
   private final SourceInfo sourceInfo;
+  private final OperationController controller;
   private final Map<Long, Type> types = new HashMap<>();
   private final Map<Long, Reference> references = new HashMap<>();
   private final Map<String, FieldType> fieldTypes = new HashMap<>();
@@ -84,8 +96,10 @@ public final class Checker {
     this.mappings = mappings;
     this.freeTypeVarCounter = freeTypeVarCounter;
     this.sourceInfo = sourceInfo;
+    this.controller = OperationCheckpoints.currentController();
   }
 
+  /** Result of one low-level type-check operation. */
   public static final class CheckResult {
     private final CheckedExpr expr;
     private final TypeErrors errors;
@@ -95,14 +109,17 @@ public final class Checker {
       this.errors = errors;
     }
 
+    /** Returns the checked expression produced by the checker. */
     public CheckedExpr getCheckedExpr() {
       return expr;
     }
 
+    /** Returns the type-checking diagnostics. */
     public TypeErrors getErrors() {
       return errors;
     }
 
+    /** Returns whether type checking produced at least one error diagnostic. */
     public boolean hasErrors() {
       return errors.hasErrors();
     }
@@ -114,10 +131,16 @@ public final class Checker {
   }
 
   /**
-   * Check performs type checking, giving a typed AST. The input is a ParsedExpr proto and an env
-   * which encapsulates type binding of variables, declarations of built-in functions, descriptions
-   * of protocol buffers, and a registry for errors. Returns a CheckedExpr proto, which might not be
-   * usable if there are errors in the error registry.
+   * Type-checks a successfully parsed expression.
+   *
+   * <p>The checker environment supplies the container, type provider, variables, functions, and
+   * overloads. Callers must inspect {@link CheckResult#hasErrors()} before using the checked
+   * expression to create a program.
+   *
+   * @param parsedExpr successful parse result with a non-null expression
+   * @param source source used to render diagnostics
+   * @param env fully configured checker environment
+   * @return checked expression and diagnostics
    */
   public static CheckResult Check(ParseResult parsedExpr, Source source, CheckerEnv env) {
     TypeErrors errors = new TypeErrors(source);
@@ -144,6 +167,7 @@ public final class Checker {
   }
 
   void check(Expr.Builder e) {
+    controller.checkpoint(Phase.CHECK);
     switch (e.getExprKindCase()) {
       case CONST_EXPR:
         Constant literal = e.getConstExpr();
@@ -285,6 +309,13 @@ public final class Checker {
           resultType = fieldType.type;
         }
         break;
+      case kindAbstract:
+        if (isOptionalType(targetType)) {
+          resultType = Decls.newAbstractType("optional_type", Collections.singletonList(Decls.Dyn));
+        } else {
+          errors.typeDoesNotSupportFieldSelection(location(e), targetType);
+        }
+        break;
       case kindTypeParam:
         // Set the operand type to DYN to prevent assignment to a potentionally incorrect type
         // at a later point in type-checking. The isAssignable call will update the type
@@ -307,6 +338,10 @@ public final class Checker {
       resultType = Decls.Bool;
     }
     setType(e, resultType);
+  }
+
+  private static boolean isOptionalType(Type type) {
+    return type.hasAbstractType() && "optional_type".equals(type.getAbstractType().getName());
   }
 
   private boolean isQualifiedLocalVariableSelection(Expr.Builder e) {
@@ -469,10 +504,21 @@ public final class Checker {
   void checkCreateList(Expr.Builder e) {
     CreateList.Builder create = e.getListExprBuilder();
     Type elemType = null;
+    boolean[] optionalIndices = new boolean[create.getElementsCount()];
+    for (int index : create.getOptionalIndicesList()) {
+      optionalIndices[index] = true;
+    }
     for (int i = 0; i < create.getElementsBuilderList().size(); i++) {
       Expr.Builder el = create.getElementsBuilderList().get(i);
       check(el);
-      elemType = joinTypes(location(el), elemType, getType(el));
+      Type type = getType(el);
+      if (optionalIndices[i]) {
+        Type unwrapped = optionalValueType(type);
+        if (unwrapped != null) {
+          type = unwrapped;
+        }
+      }
+      elemType = joinTypes(location(el), elemType, type);
     }
     if (elemType == null) {
       // If the list is empty, assign free type var to elem type.
@@ -501,7 +547,14 @@ public final class Checker {
 
       Expr.Builder val = ent.getValueBuilder();
       check(val);
-      valueType = joinTypes(location(val), valueType, getType(val));
+      Type type = getType(val);
+      if (ent.getOptionalEntry()) {
+        Type unwrapped = optionalValueType(type);
+        if (unwrapped != null) {
+          type = unwrapped;
+        }
+      }
+      valueType = joinTypes(location(val), valueType, type);
     }
     if (keyType == null) {
       // If the map is empty, assign free type variables to typeKey and value type.
@@ -553,10 +606,24 @@ public final class Checker {
       if (t != null) {
         fieldType = t.type;
       }
-      if (!isAssignable(fieldType, getType(value))) {
+      Type valueType = getType(value);
+      if (ent.getOptionalEntry()) {
+        Type unwrapped = optionalValueType(valueType);
+        if (unwrapped != null) {
+          valueType = unwrapped;
+        }
+      }
+      if (!isAssignable(fieldType, valueType)) {
         errors.fieldTypeMismatch(locationByID(ent.getId()), field, fieldType, getType(value));
       }
     }
+  }
+
+  private static Type optionalValueType(Type type) {
+    if (!isOptionalType(type) || type.getAbstractType().getParameterTypesCount() == 0) {
+      return null;
+    }
+    return type.getAbstractType().getParameterTypes(0);
   }
 
   void checkComprehension(Expr.Builder e) {

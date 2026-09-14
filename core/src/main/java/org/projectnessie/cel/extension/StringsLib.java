@@ -17,7 +17,6 @@ package org.projectnessie.cel.extension;
 
 import static java.math.RoundingMode.HALF_EVEN;
 import static java.nio.charset.StandardCharsets.UTF_8;
-import static org.projectnessie.cel.common.types.IntT.intOf;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -28,6 +27,7 @@ import org.projectnessie.cel.ProgramOption;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.StringT;
+import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Indexer;
 import org.projectnessie.cel.common.types.traits.Sizer;
@@ -40,14 +40,14 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <p>Note: Currently the overloading isn't supported.
  *
- * <h3>CharAt</h3>
+ * <h2>CharAt</h2>
  *
  * <p>Returns the character at the given position. If the position is negative, or greater than the
  * length of the string, the function will produce an error:
  *
  * <pre>    {@code <string>.charAt(<int>) -> <string>}</pre>
  *
- * <h4>Examples:</h4>
+ * <h3>Examples:</h3>
  *
  * <pre>    {@code 'hello'.charAt(4)  // return 'o'}</pre>
  *
@@ -55,7 +55,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code 'hello'.charAt(-1) // error}</pre>
  *
- * <h3>IndexOf</h3>
+ * <h2>IndexOf</h2>
  *
  * <p>Returns the integer index of the first occurrence of the search string. If the search string
  * is not found the function returns -1.
@@ -68,7 +68,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code <string>.indexOf(<string>, <int>) -> <int>}</pre>
  *
- * <h4>Examples:</h4>
+ * <h3>Examples:</h3>
  *
  * <pre>    {@code 'hello mellow'.indexOf('')         // returns 0}</pre>
  *
@@ -82,7 +82,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code 'hello mellow'.indexOf('ello', 20) // error}</pre>
  *
- * <h3>Join</h3>
+ * <h2>Join</h2>
  *
  * <p>Returns a new string where the elements of string list are concatenated.
  *
@@ -93,7 +93,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code <list<string>>.join(<string>) -> <string>}</pre>
  *
- * <h4>Examples:</h4>
+ * <h3>Examples:</h3>
  *
  * <pre>    {@code ['hello', 'mellow'].join()    // returns 'hellomellow'}</pre>
  *
@@ -103,7 +103,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code [].join('/')                  // returns ''}</pre>
  *
- * <h3>LastIndexOf</h3>
+ * <h2>LastIndexOf</h2>
  *
  * <p>Returns the integer index at the start of the last occurrence of the search string. If the
  * search string is not found the function returns -1.
@@ -116,7 +116,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code <string>.lastIndexOf(<string>, <int>) -> <int>}</pre>
  *
- * <h4>Examples:</h4>
+ * <h3>Examples:</h3>
  *
  * <pre>    {@code 'hello mellow'.lastIndexOf('')         // returns 12}</pre>
  *
@@ -128,7 +128,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code 'hello mellow'.lastIndexOf('ello', -1) // error}</pre>
  *
- * <h3>LowerAscii</h4>
+ * <h2>LowerAscii</h2>
  *
  * <p>Returns a new string where all ASCII characters are lower-cased.
  *
@@ -136,13 +136,13 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code <string>.lowerAscii() -> <string>}</pre>
  *
- * <h4>Examples:</h4>
+ * <h3>Examples:</h3>
  *
  * <pre>    {@code 'TacoCat'.lowerAscii()     // returns 'tacocat'}</pre>
  *
  * <pre>    {@code 'TacoCÆt Xii'.lowerAscii() // returns 'tacocÆt xii'}</pre>
  *
- * <h3>Replace</h3>
+ * <h2>Replace</h2>
  *
  * <p>Returns a new string based on the target, which replaces the occurrences of a search string
  * with a replacement string if present. The function accepts an optional limit on the number of
@@ -155,7 +155,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code <string>.replace(<string>, <string>, <int>) -> <string>}</pre>
  *
- * <h4>Examples:</h4>
+ * <h3>Examples:</h3>
  *
  * <pre>    {@code 'hello hello'.replace('he', 'we')     // returns 'wello wello'}</pre>
  *
@@ -165,7 +165,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code 'hello hello'.replace('he', 'we', 0)  // returns 'hello hello'}</pre>
  *
- * <h3>Split</h3>
+ * <h2>Split</h2>
  *
  * <p>Returns a list of strings split from the input by the given separator. The function accepts an
  * optional argument specifying a limit on the number of substrings produced by the split.
@@ -178,7 +178,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code <string>.split(<string>, <int>) -> <list<string>>}</pre>
  *
- * <h4>Examples:</h4>
+ * <h3>Examples:</h3>
  *
  * <pre>    {@code 'hello hello hello'.split(' ')     // returns ['hello', 'hello', 'hello']}</pre>
  *
@@ -190,7 +190,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code 'hello hello hello'.split(' ', -1) // returns ['hello', 'hello', 'hello']}</pre>
  *
- * <h3>Substring</h3>
+ * <h2>Substring</h2>
  *
  * <p>Returns the substring given a numeric range corresponding to character positions. Optionally
  * may omit the trailing range for a substring from a given character position until the end of a
@@ -204,7 +204,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code <string>.substring(<int>,<int>)-><string>}</pre>
  *
- * <h4>Examples:</h4>
+ * <h3>Examples:</h3>
  *
  * <pre>    {@code 'tacocat'.substring(4)    // returns 'cat'}</pre>
  *
@@ -214,7 +214,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code 'tacocat'.substring(2, 1) // error}</pre>
  *
- * <h3>Trim</h3>
+ * <h2>Trim</h2>
  *
  * <p>Returns a new string which removes the leading and trailing whitespace in the target string.
  * The trim function uses the Unicode definition of whitespace which does not include the zero-width
@@ -222,11 +222,11 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code <string>.trim() -> <string>}</pre>
  *
- * <h4>Examples:</h4>
+ * <h3>Examples:</h3>
  *
  * <pre>    {@code ' \ttrim\n '.trim() // returns 'trim'}</pre>
  *
- * <h3>UpperAscii</h3>
+ * <h2>UpperAscii</h2>
  *
  * <p>Returns a new string where all ASCII characters are upper-cased.
  *
@@ -234,7 +234,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code <string>.upperAscii() -> <string>}</pre>
  *
- * <h4>Examples:</h4>
+ * <h3>Examples:</h3>
  *
  * <pre>    {@code 'TacoCat'.upperAscii()     // returns 'TACOCAT'}</pre>
  *
@@ -286,6 +286,9 @@ public class StringsLib implements Library {
           (char) 0x205F,
           (char) 0x3000);
 
+  /**
+   * Returns an environment option installing the string extension declarations and implementations.
+   */
   public static EnvOption strings() {
     return Library.Lib(new StringsLib());
   }
@@ -297,84 +300,79 @@ public class StringsLib implements Library {
             Decls.newFunction(
                 CHAR_AT,
                 Decls.newInstanceOverload(
-                    "string_char_at_int", Arrays.asList(Decls.String, Decls.Int), Decls.String)),
+                    "string_char_at_int", List.of(Decls.String, Decls.Int), Decls.String)),
             Decls.newFunction(
                 INDEX_OF,
                 Decls.newInstanceOverload(
-                    "string_index_of_string", Arrays.asList(Decls.String, Decls.String), Decls.Int),
+                    "string_index_of_string", List.of(Decls.String, Decls.String), Decls.Int),
                 Decls.newInstanceOverload(
                     "string_index_of_string_int",
-                    Arrays.asList(Decls.String, Decls.String, Decls.Int),
+                    List.of(Decls.String, Decls.String, Decls.Int),
                     Decls.Int)),
             Decls.newFunction(
                 JOIN,
                 Decls.newInstanceOverload(
-                    "list_join", Arrays.asList(Decls.newListType(Decls.String)), Decls.String),
+                    "list_join", List.of(Decls.newListType(Decls.String)), Decls.String),
                 Decls.newInstanceOverload(
                     "list_join_string",
-                    Arrays.asList(Decls.newListType(Decls.String), Decls.String),
+                    List.of(Decls.newListType(Decls.String), Decls.String),
                     Decls.String)),
             Decls.newFunction(
                 LAST_INDEX_OF,
                 Decls.newInstanceOverload(
-                    "string_last_index_of_string",
-                    Arrays.asList(Decls.String, Decls.String),
-                    Decls.Int),
+                    "string_last_index_of_string", List.of(Decls.String, Decls.String), Decls.Int),
                 Decls.newInstanceOverload(
                     "string_last_index_of_string_int",
-                    Arrays.asList(Decls.String, Decls.String, Decls.Int),
+                    List.of(Decls.String, Decls.String, Decls.Int),
                     Decls.Int)),
             Decls.newFunction(
                 LOWER_ASCII,
                 Decls.newInstanceOverload(
-                    "string_lower_ascii", Arrays.asList(Decls.String), Decls.String)),
+                    "string_lower_ascii", List.of(Decls.String), Decls.String)),
             Decls.newFunction(
                 REPLACE,
                 Decls.newInstanceOverload(
                     "string_replace_string_string",
-                    Arrays.asList(Decls.String, Decls.String, Decls.String),
+                    List.of(Decls.String, Decls.String, Decls.String),
                     Decls.String),
                 Decls.newInstanceOverload(
                     "string_replace_string_string_int",
-                    Arrays.asList(Decls.String, Decls.String, Decls.String, Decls.Int),
+                    List.of(Decls.String, Decls.String, Decls.String, Decls.Int),
                     Decls.String)),
             Decls.newFunction(
                 REVERSE,
-                Decls.newInstanceOverload(
-                    "string_reverse", Arrays.asList(Decls.String), Decls.String)),
+                Decls.newInstanceOverload("string_reverse", List.of(Decls.String), Decls.String)),
             Decls.newFunction(
                 SPLIT,
                 Decls.newInstanceOverload(
-                    "string_split_string", Arrays.asList(Decls.String, Decls.String), Decls.Dyn),
+                    "string_split_string", List.of(Decls.String, Decls.String), Decls.Dyn),
                 Decls.newInstanceOverload(
                     "string_split_string_int",
-                    Arrays.asList(Decls.String, Decls.String, Decls.Int),
+                    List.of(Decls.String, Decls.String, Decls.Int),
                     Decls.Dyn)),
             Decls.newFunction(
                 SUBSTR,
                 Decls.newInstanceOverload(
-                    "string_substring_int", Arrays.asList(Decls.String, Decls.Int), Decls.String),
+                    "string_substring_int", List.of(Decls.String, Decls.Int), Decls.String),
                 Decls.newInstanceOverload(
                     "string_substring_int_int",
-                    Arrays.asList(Decls.String, Decls.Int, Decls.Int),
+                    List.of(Decls.String, Decls.Int, Decls.Int),
                     Decls.String)),
             Decls.newFunction(
                 TRIM_SPACE,
-                Decls.newInstanceOverload(
-                    "string_trim", Arrays.asList(Decls.String), Decls.String)),
+                Decls.newInstanceOverload("string_trim", List.of(Decls.String), Decls.String)),
             Decls.newFunction(
                 UPPER_ASCII,
                 Decls.newInstanceOverload(
-                    "string_upper_ascii", Arrays.asList(Decls.String), Decls.String)),
+                    "string_upper_ascii", List.of(Decls.String), Decls.String)),
             Decls.newFunction(
                 FORMAT,
                 Decls.newInstanceOverload(
                     "string_format",
-                    Arrays.asList(Decls.String, Decls.newListType(Decls.Dyn)),
+                    List.of(Decls.String, Decls.newListType(Decls.Dyn)),
                     Decls.String)),
             Decls.newFunction(
-                QUOTE,
-                Decls.newOverload("strings_quote", Arrays.asList(Decls.String), Decls.String)));
+                QUOTE, Decls.newOverload("strings_quote", List.of(Decls.String), Decls.String)));
     return List.of(option);
   }
 
@@ -388,6 +386,7 @@ public class StringsLib implements Library {
                 null,
                 null,
                 Guards.callInStrStrOutInt(StringsLib::indexOf),
+                Guards.callInStrStrIntOutIntTernary(StringsLib::indexOfOffset),
                 values ->
                     values.length == 3
                         ? Guards.callInStrStrIntOutInt(StringsLib::indexOfOffset).invoke(values)
@@ -403,6 +402,7 @@ public class StringsLib implements Library {
                 null,
                 null,
                 Guards.callInStrStrOutInt(StringsLib::lastIndexOf),
+                Guards.callInStrStrIntOutIntTernary(StringsLib::lastIndexOfOffset),
                 values ->
                     values.length == 3
                         ? Guards.callInStrStrIntOutInt(StringsLib::lastIndexOfOffset).invoke(values)
@@ -413,6 +413,8 @@ public class StringsLib implements Library {
                 null,
                 null,
                 null,
+                Guards.callInStrStrStrOutStrTernary(StringsLib::replace),
+                Guards.callInStrStrStrIntOutStrQuaternary(StringsLib::replaceN),
                 values -> {
                   if (values.length == 3) {
                     return Guards.callInStrStrStrOutStr(StringsLib::replace).invoke(values);
@@ -428,6 +430,7 @@ public class StringsLib implements Library {
                 null,
                 null,
                 Guards.callInStrStrOutStrArr(StringsLib::split),
+                Guards.callInStrStrIntOutStrArrTernary(StringsLib::splitN),
                 values ->
                     values.length == 3
                         ? Guards.callInStrStrIntOutStrArr(StringsLib::splitN).invoke(values)
@@ -437,6 +440,7 @@ public class StringsLib implements Library {
                 null,
                 null,
                 Guards.callInStrIntOutStr(StringsLib::substr),
+                Guards.callInStrIntIntOutStrTernary(StringsLib::substrRange),
                 values ->
                     values.length == 3
                         ? Guards.callInStrIntIntOutStr(StringsLib::substrRange).invoke(values)
@@ -549,16 +553,10 @@ public class StringsLib implements Library {
   }
 
   /**
-   * replace first n non-overlapping instance of {old} replaced by {replacement}. It works as <a
-   * ref="https://pkg.go.dev/strings#Replace">strings.Replace in Go</a> to have consistent behavior
-   * as cel in Go
+   * Replaces the first {@code n} non-overlapping occurrences of {@code old}.
    *
-   * <p>if {@code n == 0}, there is no change to the string
-   *
-   * <p>if {@code n < 0}, there is no limit on the number of replacement
-   *
-   * <p>if {old} is empty, it matches at the beginning of the string and after each UTF-8 sequence,
-   * yielding up to k+1 replacements for a k-rune string
+   * <p>A zero limit leaves the string unchanged; a negative limit replaces every occurrence. An
+   * empty search string matches at the start and between characters.
    */
   static String replaceN(String str, String old, String replacement, int n) {
     if (n == 0 || old.equals(replacement)) {
@@ -572,7 +570,7 @@ public class StringsLib implements Library {
     int count = 0;
 
     for (; count < n && index < str.length(); count++) {
-      if (old.length() == 0) {
+      if (old.isEmpty()) {
         stringBuilder.append(replacement).append(str, index, index + 1);
         index++;
       } else {
@@ -623,7 +621,7 @@ public class StringsLib implements Library {
     if (n == 1) {
       return new String[] {s};
     }
-    if (sep.length() == 0) {
+    if (sep.isEmpty()) {
       return explode(s, n);
     }
 
@@ -646,11 +644,8 @@ public class StringsLib implements Library {
   }
 
   /**
-   * explode splits s into an array of UTF-8 strings, one string per Unicode character up to a
-   * maximum of n (n < 0 means no limit).
-   *
-   * <p>ported from <a href="https://github.com/golang/go/blob/master/src/strings/strings.go">Go:
-   * strings.explode()</a>
+   * Splits a string into at most {@code n} character strings, with a negative limit meaning no
+   * limit.
    */
   private static String[] explode(String s, int n) {
     if (n < 0 || n > s.length()) {
@@ -746,7 +741,7 @@ public class StringsLib implements Library {
   }
 
   private static String formatPattern(String pattern, Sizer argsSizer, Indexer argsIndexer) {
-    int argCount = Math.toIntExact(argsSizer.size().intValue());
+    int argCount = argsSizer.nativeSize();
     int argIndex = 0;
     StringBuilder out = new StringBuilder(pattern.length());
     for (int i = 0; i < pattern.length(); i++) {
@@ -782,64 +777,45 @@ public class StringsLib implements Library {
       if (argIndex >= argCount) {
         throw new FormatException("index %d out of range", argIndex);
       }
-      Val arg = argsIndexer.get(intOf(argIndex++));
+      Val arg = argsIndexer.nativeGetAt(argIndex++);
       out.append(formatValue(ch, precision, arg));
     }
     return out.toString();
   }
 
   private static String formatValue(char clause, int precision, Val arg) {
-    switch (clause) {
-      case 's':
-        return renderStringClause(arg);
-      case 'd':
-        return renderDecimalClause(arg);
-      case 'b':
-        return renderBinaryClause(arg);
-      case 'o':
-        return renderOctalClause(arg);
-      case 'x':
-      case 'X':
-        return renderHexClause(arg, clause == 'X');
-      case 'f':
-        return renderFixedPointClause(arg, precision >= 0 ? precision : 6);
-      case 'e':
-        return renderScientificClause(arg, precision >= 0 ? precision : 6);
-      default:
-        throw new FormatException(
-            "could not parse formatting clause: unrecognized formatting clause \"%s\"", clause);
-    }
+    return switch (clause) {
+      case 's' -> renderStringClause(arg);
+      case 'd' -> renderDecimalClause(arg);
+      case 'b' -> renderBinaryClause(arg);
+      case 'o' -> renderOctalClause(arg);
+      case 'x', 'X' -> renderHexClause(arg, clause == 'X');
+      case 'f' -> renderFixedPointClause(arg, precision >= 0 ? precision : 6);
+      case 'e' -> renderScientificClause(arg, precision >= 0 ? precision : 6);
+      default ->
+          throw new FormatException(
+              "could not parse formatting clause: unrecognized formatting clause \"%s\"", clause);
+    };
   }
 
   private static String renderStringClause(Val value) {
-    switch (value.type().typeEnum()) {
-      case String:
-        return value.value().toString();
-      case Bool:
-        return Boolean.toString(value.booleanValue());
-      case Bytes:
-        return new String(value.convertToNative(byte[].class), UTF_8);
-      case Int:
-        return Long.toString(value.intValue());
-      case Uint:
-        return Long.toUnsignedString(value.intValue());
-      case Double:
-        return renderDouble(value.doubleValue());
-      case Null:
-        return "null";
-      case Type:
-      case Duration:
-      case Timestamp:
-        return value.convertToType(StringT.StringType).value().toString();
-      case List:
-        return renderList(value);
-      case Map:
-        return renderMap(value);
-      default:
-        throw new FormatException(
-            "error during formatting: string clause can only be used on strings, bools, bytes, ints, doubles, maps, lists, types, durations, and timestamps, was given %s",
-            value.type().typeName());
-    }
+    return switch (value.type().typeEnum()) {
+      case String -> value.value().toString();
+      case Bool -> Boolean.toString(value.booleanValue());
+      case Bytes ->
+          new String(DefaultTypeAdapter.Instance.valueToNative(value, byte[].class), UTF_8);
+      case Int -> Long.toString(value.intValue());
+      case Uint -> Long.toUnsignedString(value.intValue());
+      case Double -> renderDouble(value.doubleValue());
+      case Null -> "null";
+      case Type, Duration, Timestamp -> value.convertToType(StringT.StringType).value().toString();
+      case List -> renderList(value);
+      case Map -> renderMap(value);
+      default ->
+          throw new FormatException(
+              "error during formatting: string clause can only be used on strings, bools, bytes, ints, doubles, maps, lists, types, durations, and timestamps, was given %s",
+              value.type().typeName());
+    };
   }
 
   private static String renderDecimalClause(Val value) {
@@ -862,53 +838,40 @@ public class StringsLib implements Library {
   }
 
   private static String renderBinaryClause(Val value) {
-    switch (value.type().typeEnum()) {
-      case Int:
-        return Long.toBinaryString(value.intValue());
-      case Uint:
-        return Long.toUnsignedString(value.intValue(), 2);
-      case Bool:
-        return value.booleanValue() ? "1" : "0";
-      default:
-        throw new FormatException(
-            "error during formatting: only integers and bools can be formatted as binary, was given %s",
-            value.type().typeName());
-    }
+    return switch (value.type().typeEnum()) {
+      case Int -> Long.toBinaryString(value.intValue());
+      case Uint -> Long.toUnsignedString(value.intValue(), 2);
+      case Bool -> value.booleanValue() ? "1" : "0";
+      default ->
+          throw new FormatException(
+              "error during formatting: only integers and bools can be formatted as binary, was given %s",
+              value.type().typeName());
+    };
   }
 
   private static String renderOctalClause(Val value) {
-    switch (value.type().typeEnum()) {
-      case Int:
-        return Long.toOctalString(value.intValue());
-      case Uint:
-        return Long.toUnsignedString(value.intValue(), 8);
-      default:
-        throw new FormatException(
-            "error during formatting: octal clause can only be used on integers, was given %s",
-            value.type().typeName());
-    }
+    return switch (value.type().typeEnum()) {
+      case Int -> Long.toOctalString(value.intValue());
+      case Uint -> Long.toUnsignedString(value.intValue(), 8);
+      default ->
+          throw new FormatException(
+              "error during formatting: octal clause can only be used on integers, was given %s",
+              value.type().typeName());
+    };
   }
 
   private static String renderHexClause(Val value, boolean upperCase) {
-    String hex;
-    switch (value.type().typeEnum()) {
-      case Int:
-        hex = Long.toHexString(value.intValue());
-        break;
-      case Uint:
-        hex = Long.toUnsignedString(value.intValue(), 16);
-        break;
-      case String:
-        hex = bytesToHex(value.value().toString().getBytes(UTF_8));
-        break;
-      case Bytes:
-        hex = bytesToHex(value.convertToNative(byte[].class));
-        break;
-      default:
-        throw new FormatException(
-            "error during formatting: only integers, byte buffers, and strings can be formatted as hex, was given %s",
-            value.type().typeName());
-    }
+    String hex =
+        switch (value.type().typeEnum()) {
+          case Int -> Long.toHexString(value.intValue());
+          case Uint -> Long.toUnsignedString(value.intValue(), 16);
+          case String -> bytesToHex(value.value().toString().getBytes(UTF_8));
+          case Bytes -> bytesToHex(DefaultTypeAdapter.Instance.valueToNative(value, byte[].class));
+          default ->
+              throw new FormatException(
+                  "error during formatting: only integers, byte buffers, and strings can be formatted as hex, was given %s",
+                  value.type().typeName());
+        };
     return upperCase ? hex.toUpperCase(Locale.ROOT) : hex;
   }
 
@@ -949,13 +912,13 @@ public class StringsLib implements Library {
   private static String renderList(Val value) {
     Sizer sizer = (Sizer) value;
     Indexer indexer = (Indexer) value;
-    int size = Math.toIntExact(sizer.size().intValue());
+    int size = sizer.nativeSize();
     StringBuilder out = new StringBuilder("[");
     for (int i = 0; i < size; i++) {
       if (i > 0) {
         out.append(", ");
       }
-      out.append(renderStringClause(indexer.get(intOf(i))));
+      out.append(renderStringClause(indexer.nativeGetAt(i)));
     }
     return out.append(']').toString();
   }

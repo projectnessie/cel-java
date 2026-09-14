@@ -21,6 +21,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Immutable parser limits and macro configuration.
+ *
+ * <p>Defaults limit recursion to 250 levels and source size to 100,000 Unicode code points. These
+ * are parser resource limits; they are not runtime evaluation budgets.
+ */
 public final class Options {
   private final int maxRecursionDepth;
   private final int errorRecoveryLimit;
@@ -38,6 +44,7 @@ public final class Options {
     this.macros = macros;
   }
 
+  /** Returns the maximum parser recursion depth. */
   public int getMaxRecursionDepth() {
     return maxRecursionDepth;
   }
@@ -52,18 +59,22 @@ public final class Options {
     return errorRecoveryLimit;
   }
 
+  /** Returns the maximum source size measured in Unicode code points. */
   public int getExpressionSizeCodePointLimit() {
     return expressionSizeCodePointLimit;
   }
 
+  /** Returns the macro registered for a parser lookup key, or {@code null} when absent. */
   public Macro getMacro(String name) {
     return macros.get(name);
   }
 
+  /** Returns a builder initialized with parser limits and no macros. */
   public static Builder builder() {
     return new Builder();
   }
 
+  /** Builder for immutable parser options. Builder instances are not thread-safe. */
   public static final class Builder {
     private final Map<String, Macro> macros = new HashMap<>();
     private int maxRecursionDepth = 250;
@@ -72,6 +83,12 @@ public final class Options {
 
     private Builder() {}
 
+    /**
+     * Sets the parser recursion limit.
+     *
+     * @param maxRecursionDepth non-negative limit, or {@code -1} for no configured limit
+     * @throws IllegalArgumentException if the value is less than {@code -1}
+     */
     public Builder maxRecursionDepth(int maxRecursionDepth) {
       if (maxRecursionDepth < -1) {
         throw new IllegalArgumentException(
@@ -103,6 +120,12 @@ public final class Options {
       return this;
     }
 
+    /**
+     * Sets the source-size limit measured in Unicode code points.
+     *
+     * @param expressionSizeCodePointLimit non-negative limit, or {@code -1} for no configured limit
+     * @throws IllegalArgumentException if the value is less than {@code -1}
+     */
     public Builder expressionSizeCodePointLimit(int expressionSizeCodePointLimit) {
       if (expressionSizeCodePointLimit < -1) {
         throw new IllegalArgumentException(
@@ -116,10 +139,12 @@ public final class Options {
       return this;
     }
 
+    /** Adds or replaces macros by their name, arity, and call-style lookup key. */
     public Builder macros(Macro... macros) {
       return macros(asList(macros));
     }
 
+    /** Adds or replaces macros by their name, arity, and call-style lookup key. */
     public Builder macros(List<Macro> macros) {
       for (Macro macro : macros) {
         this.macros.put(macro.macroKey(), macro);
@@ -127,6 +152,7 @@ public final class Options {
       return this;
     }
 
+    /** Builds an immutable snapshot of the configured parser options. */
     public Options build() {
       return new Options(
           maxRecursionDepth, errorRecoveryLimit, expressionSizeCodePointLimit, Map.copyOf(macros));

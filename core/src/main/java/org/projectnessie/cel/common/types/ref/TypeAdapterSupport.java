@@ -18,6 +18,8 @@ package org.projectnessie.cel.common.types.ref;
 import static org.projectnessie.cel.common.types.BytesT.bytesOf;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.DurationT.durationOf;
+import static org.projectnessie.cel.common.types.Err.newErr;
+import static org.projectnessie.cel.common.types.Err.rangeError;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.ListT.newDoubleArrayList;
 import static org.projectnessie.cel.common.types.ListT.newGenericArrayList;
@@ -27,6 +29,7 @@ import static org.projectnessie.cel.common.types.ListT.newJSONList;
 import static org.projectnessie.cel.common.types.ListT.newLongArrayList;
 import static org.projectnessie.cel.common.types.ListT.newStringArrayList;
 import static org.projectnessie.cel.common.types.ListT.newValArrayList;
+import static org.projectnessie.cel.common.types.MapT.newCheckedMap;
 import static org.projectnessie.cel.common.types.MapT.newJSONStruct;
 import static org.projectnessie.cel.common.types.MapT.newMaybeWrappedMap;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
@@ -35,6 +38,7 @@ import static org.projectnessie.cel.common.types.TimestampT.timestampOf;
 import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 
+import com.google.api.expr.v1alpha1.Type;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import com.google.protobuf.EnumValue;
@@ -56,10 +60,20 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
 import org.projectnessie.cel.common.ULong;
+import org.projectnessie.cel.common.types.BoolT;
+import org.projectnessie.cel.common.types.DoubleT;
+import org.projectnessie.cel.common.types.Err;
+import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.NullT;
+import org.projectnessie.cel.common.types.UintT;
 
 /**
- * Helper class for {@link TypeAdapter} implementations to convert from a Java type to a CEL type.
+ * Standard conversion helpers for {@link TypeAdapter} implementations.
+ *
+ * <p>{@link #maybeNativeToValue(TypeAdapter, Object)} recognizes the built-in Java, Protobuf, and
+ * aggregate representations handled by CEL-Java. Custom adapters commonly call it first and handle
+ * a {@code null} return as “not recognized.” The primitive methods and CEL-to-Java methods provide
+ * the default semantics used by {@link TypeAdapter}.
  */
 public final class TypeAdapterSupport {
   private TypeAdapterSupport() {}
@@ -106,6 +120,18 @@ public final class TypeAdapterSupport {
         });
   }
 
+  /**
+   * Converts a supported standard Java value to CEL, if this helper recognizes its runtime type.
+   *
+   * <p>Java {@code null} is recognized as CEL null. Collections and maps may retain their backing
+   * Java objects through the returned CEL aggregate; callers must not mutate such inputs while an
+   * evaluation is using them.
+   *
+   * @param a adapter used recursively for aggregate elements
+   * @param value Java value to inspect
+   * @return the converted CEL value, a CEL error for an unsupported Java array type, or Java {@code
+   *     null} when this helper does not recognize the runtime type
+   */
   public static Val maybeNativeToValue(TypeAdapter a, Object value) {
     if (value == null) {
       return NullT.NullValue;
@@ -119,14 +145,16 @@ public final class TypeAdapterSupport {
     if (value instanceof Object[]) {
       return newGenericArrayList(a, (Object[]) value);
     }
+    if (value.getClass().isArray()) {
+      return newErr("unsupported Java array type '%s'", value.getClass().getTypeName());
+    }
     if (value instanceof List) {
       return newGenericList(a, (List<?>) value);
     }
     if (value instanceof Collection) {
       return newGenericArrayList(a, ((Collection<?>) value).toArray());
     }
-    if (value instanceof Optional) {
-      Optional<?> optional = (Optional<?>) value;
+    if (value instanceof Optional<?> optional) {
       return optional.map(a::nativeToValue).orElse(NullT.NullValue);
     }
     if (value instanceof Map) {
@@ -151,5 +179,327 @@ public final class TypeAdapterSupport {
     }
 
     return null;
+  }
+
+  static Val nativeAggregateToValue(TypeAdapter adapter, Object value, Type checkedType) {
+    if (checkedType == null) {
+      return newErr("exact aggregate materialization requires a checked CEL type");
+    }
+    return switch (checkedType.getTypeKindCase()) {
+      case LIST_TYPE ->
+          checkedList(adapter, value, checkedType.getListType().getElemType(), checkedType);
+      case MAP_TYPE ->
+          checkedMap(
+              adapter,
+              value,
+              checkedType.getMapType().getKeyType(),
+              checkedType.getMapType().getValueType(),
+              checkedType);
+      default -> checkedScalar(adapter, value, checkedType);
+    };
+  }
+
+  private static Val checkedList(
+      TypeAdapter adapter, Object value, Type elementType, Type checkedType) {
+    if (value == null) {
+      return incompatible(null, checkedType);
+    }
+    if (value instanceof long[] values) {
+      if (elementType.getTypeKindCase() != Type.TypeKindCase.PRIMITIVE) {
+        return incompatible(value, checkedType);
+      }
+      return switch (elementType.getPrimitive()) {
+        case INT64 -> newLongArrayList(adapter, values);
+        case UINT64 -> newGenericArrayList(adapter, unsignedValues(values));
+        default -> incompatible(value, checkedType);
+      };
+    }
+    TypeAdapter elementAdapter = new CheckedTypeAdapter(adapter, elementType);
+    if (value instanceof int[] values
+        && elementType.getTypeKindCase() == Type.TypeKindCase.PRIMITIVE
+        && elementType.getPrimitive() == Type.PrimitiveType.INT64) {
+      return newIntArrayList(adapter, values);
+    }
+    if (value instanceof double[] values
+        && elementType.getTypeKindCase() == Type.TypeKindCase.PRIMITIVE
+        && elementType.getPrimitive() == Type.PrimitiveType.DOUBLE) {
+      return newDoubleArrayList(adapter, values);
+    }
+    if (value instanceof String[] values
+        && elementType.getTypeKindCase() == Type.TypeKindCase.PRIMITIVE
+        && elementType.getPrimitive() == Type.PrimitiveType.STRING) {
+      return newGenericArrayList(elementAdapter, values);
+    }
+    if (value instanceof Val[]) {
+      return incompatible(value, checkedType);
+    }
+    if (value instanceof Object[] values) {
+      return newGenericArrayList(elementAdapter, values);
+    }
+    if (value instanceof List<?> values) {
+      return newGenericList(elementAdapter, values);
+    }
+    if (value instanceof Collection<?> values) {
+      return newGenericArrayList(elementAdapter, values.toArray());
+    }
+    return incompatible(value, checkedType);
+  }
+
+  private static ULong[] unsignedValues(long[] values) {
+    ULong[] unsigned = new ULong[values.length];
+    for (int i = 0; i < values.length; i++) {
+      unsigned[i] = ULong.valueOf(values[i]);
+    }
+    return unsigned;
+  }
+
+  private static Val checkedMap(
+      TypeAdapter adapter, Object value, Type keyType, Type valueType, Type checkedType) {
+    if (value == null) {
+      return incompatible(null, checkedType);
+    }
+    if (!(value instanceof Map<?, ?> values)) {
+      return incompatible(value, checkedType);
+    }
+    return newCheckedMap(
+        new CheckedTypeAdapter(adapter, keyType),
+        new CheckedTypeAdapter(adapter, valueType),
+        values);
+  }
+
+  private static Val checkedScalar(TypeAdapter adapter, Object value, Type checkedType) {
+    if (value instanceof Val) {
+      return incompatible(value, checkedType);
+    }
+    return switch (checkedType.getTypeKindCase()) {
+      case NULL -> value == null ? NullT.NullValue : incompatible(value, checkedType);
+      case DYN -> adapter.nativeToValue(value);
+      case WRAPPER ->
+          value == null
+              ? NullT.NullValue
+              : checkedPrimitive(value, checkedType.getWrapper(), checkedType);
+      case PRIMITIVE -> checkedPrimitive(value, checkedType.getPrimitive(), checkedType);
+      case LIST_TYPE, MAP_TYPE -> throw new IllegalStateException("aggregate handled separately");
+      case WELL_KNOWN, MESSAGE_TYPE, TYPE, ABSTRACT_TYPE ->
+          value != null ? adapter.nativeToValue(value) : incompatible(null, checkedType);
+      case FUNCTION, TYPE_PARAM, ERROR, TYPEKIND_NOT_SET -> incompatible(value, checkedType);
+    };
+  }
+
+  private static Val checkedPrimitive(
+      Object value, Type.PrimitiveType primitive, Type checkedType) {
+    return switch (primitive) {
+      case BOOL -> value instanceof Boolean bool ? boolOf(bool) : incompatible(value, checkedType);
+      case INT64 ->
+          value instanceof Byte
+                  || value instanceof Short
+                  || value instanceof Integer
+                  || value instanceof Long
+              ? intOf(((Number) value).longValue())
+              : incompatible(value, checkedType);
+      case UINT64 ->
+          value instanceof ULong unsigned
+              ? uintOf(unsigned.longValue())
+              : value instanceof Long bits ? uintOf(bits) : incompatible(value, checkedType);
+      case DOUBLE ->
+          value instanceof Float || value instanceof Double
+              ? doubleOf(((Number) value).doubleValue())
+              : incompatible(value, checkedType);
+      case STRING ->
+          value instanceof String string ? stringOf(string) : incompatible(value, checkedType);
+      case BYTES ->
+          value instanceof byte[] bytes
+              ? bytesOf(bytes)
+              : value instanceof ByteString bytes
+                  ? bytesOf(bytes)
+                  : incompatible(value, checkedType);
+      default -> incompatible(value, checkedType);
+    };
+  }
+
+  private static Val incompatible(Object value, Type checkedType) {
+    return newErr(
+        "exact aggregate value of Java type '%s' is incompatible with checked CEL type '%s'",
+        value == null ? "null" : value.getClass().getName(), checkedType);
+  }
+
+  private static final class CheckedTypeAdapter implements TypeAdapter {
+    private final TypeAdapter adapter;
+    private final Type checkedType;
+
+    private CheckedTypeAdapter(TypeAdapter adapter, Type checkedType) {
+      this.adapter = adapter;
+      this.checkedType = checkedType;
+    }
+
+    @Override
+    public Val nativeToValue(Object value) {
+      return nativeAggregateToValue(adapter, value, checkedType);
+    }
+  }
+
+  /**
+   * Returns the standard CEL boolean value.
+   *
+   * @param value primitive value
+   * @return CEL boolean
+   */
+  public static Val nativeToValue(boolean value) {
+    return boolOf(value);
+  }
+
+  /**
+   * Returns a CEL int value.
+   *
+   * @param value primitive value
+   * @return CEL int
+   */
+  public static Val nativeToValue(byte value) {
+    return intOf(value);
+  }
+
+  /**
+   * Returns a CEL int value.
+   *
+   * @param value primitive value
+   * @return CEL int
+   */
+  public static Val nativeToValue(short value) {
+    return intOf(value);
+  }
+
+  /**
+   * Returns a CEL int value.
+   *
+   * @param value primitive value
+   * @return CEL int
+   */
+  public static Val nativeToValue(int value) {
+    return intOf(value);
+  }
+
+  /**
+   * Returns a CEL int value.
+   *
+   * @param value primitive value
+   * @return CEL int
+   */
+  public static Val nativeToValue(long value) {
+    return intOf(value);
+  }
+
+  /**
+   * Returns a CEL double value.
+   *
+   * @param value primitive value
+   * @return CEL double
+   */
+  public static Val nativeToValue(float value) {
+    return doubleOf(value);
+  }
+
+  /**
+   * Returns a CEL double value.
+   *
+   * @param value primitive value
+   * @return CEL double
+   */
+  public static Val nativeToValue(double value) {
+    return doubleOf(value);
+  }
+
+  /**
+   * Converts a CEL value to the requested Java representation using primitive specializations where
+   * available.
+   *
+   * @param adapter adapter whose primitive conversion methods define the conversion semantics
+   * @param value CEL value to convert
+   * @param targetType requested Java class or primitive class
+   * @return the converted Java value
+   * @throws RuntimeException if conversion is unsupported or out of range
+   */
+  @SuppressWarnings("unchecked")
+  public static <T> T valueToNative(TypeAdapter adapter, Val value, Class<T> targetType) {
+    if (targetType == boolean.class) {
+      return (T) Boolean.valueOf(adapter.valueToBoolean(value));
+    }
+    if (targetType == int.class) {
+      return (T) Integer.valueOf(adapter.valueToInt(value));
+    }
+    if (targetType == long.class) {
+      return (T) Long.valueOf(adapter.valueToLong(value));
+    }
+    if (targetType == double.class) {
+      return (T) Double.valueOf(adapter.valueToDouble(value));
+    }
+    return legacyValueToNative(value, targetType);
+  }
+
+  /**
+   * Converts a CEL boolean to a Java primitive.
+   *
+   * @param value CEL value to convert
+   * @return primitive boolean
+   * @throws RuntimeException if {@code value} is not convertible to boolean
+   */
+  public static boolean valueToBoolean(Val value) {
+    if (value instanceof BoolT boolValue) {
+      return boolValue.booleanValue();
+    }
+    return legacyValueToNative(value, boolean.class);
+  }
+
+  /**
+   * Converts a CEL int or uint to a range-checked Java {@code int}.
+   *
+   * @param value CEL value to convert
+   * @return primitive value
+   * @throws RuntimeException if {@code value} is not an integer or is outside the Java {@code int}
+   *     range
+   */
+  public static int valueToInt(Val value) {
+    if (value instanceof IntT || value instanceof UintT) {
+      long longValue = value.intValue();
+      if (longValue < Integer.MIN_VALUE || longValue > Integer.MAX_VALUE) {
+        Err.throwErrorAsIllegalStateException(rangeError(longValue, "Java int"));
+      }
+      return (int) longValue;
+    }
+    return legacyValueToNative(value, int.class);
+  }
+
+  /**
+   * Converts a CEL int or uint to Java {@code long} bits.
+   *
+   * <p>For CEL uint, the returned primitive preserves the unsigned value's raw bits.
+   *
+   * @param value CEL value to convert
+   * @return primitive signed value or raw unsigned bits
+   * @throws RuntimeException if {@code value} is not convertible to {@code long}
+   */
+  public static long valueToLong(Val value) {
+    if (value instanceof IntT || value instanceof UintT) {
+      return value.intValue();
+    }
+    return legacyValueToNative(value, long.class);
+  }
+
+  /**
+   * Converts a CEL double to a Java primitive.
+   *
+   * @param value CEL value to convert
+   * @return primitive double
+   * @throws RuntimeException if {@code value} is not convertible to {@code double}
+   */
+  public static double valueToDouble(Val value) {
+    if (value instanceof DoubleT doubleValue) {
+      return doubleValue.doubleValue();
+    }
+    return legacyValueToNative(value, double.class);
+  }
+
+  @SuppressWarnings("removal")
+  private static <T> T legacyValueToNative(Val value, Class<T> targetType) {
+    return value.convertToNative(targetType);
   }
 }

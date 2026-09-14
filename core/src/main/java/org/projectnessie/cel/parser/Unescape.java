@@ -25,6 +25,12 @@ import java.nio.charset.CharsetEncoder;
 import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 
+/**
+ * Decodes CEL string and bytes literal contents.
+ *
+ * <p>This low-level utility expects the content between literal delimiters and applies CEL escape
+ * syntax. Parse source through {@link Parser} unless literal decoding is specifically required.
+ */
 public final class Unescape {
 
   /**

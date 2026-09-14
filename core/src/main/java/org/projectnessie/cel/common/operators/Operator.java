@@ -22,6 +22,13 @@ import static java.util.Map.ofEntries;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * CEL parser operators and macros with their internal function identifiers.
+ *
+ * <p>The parser rewrites symbolic operators to the {@link #id} used for checking and overload
+ * dispatch. {@link #precedence} is used while parsing and unparsing; {@link #reverse} is the
+ * corresponding source token when one exists.
+ */
 public enum Operator {
 
   // Symbolic operators.
@@ -42,6 +49,8 @@ public enum Operator {
   Modulo("_%_", 3, "%"),
   Negate("-_", 2, "-"),
   Index("_[_]", 1, null),
+  OptionalSelect("@optional_select"),
+  OptionalIndex("@optional_index"),
   // Macros, must have a valid identifier.
   Has("has"),
   All("all"),
@@ -58,10 +67,16 @@ public enum Operator {
 
   private static final Map<String, Operator> operators;
   private static final Map<String, Operator> operatorsById;
+
   // precedence of the operator, where the higher value means higher.
 
+  /** Internal function identifier stored in the expression tree. */
   public final String id;
+
+  /** Source token used when unparsing, or {@code null} when no symbolic token exists. */
   public final String reverse;
+
+  /** Parser precedence, where a larger value binds more tightly. */
   public final int precedence;
 
   Operator(String id) {
@@ -97,16 +112,17 @@ public enum Operator {
     operatorsById = copyOf(byId);
   }
 
+  /** Returns the operator with the supplied internal identifier, or {@code null} when absent. */
   public static Operator byId(String id) {
     return operatorsById.get(id);
   }
 
-  // Find the internal function name for an operator, if the input text is one.
+  /** Returns the symbolic operator represented by source text, or {@code null} when absent. */
   public static Operator find(String text) {
     return operators.get(text);
   }
 
-  // FindReverse returns the unmangled, text representation of the operator.
+  /** Returns the source token for an internal operator identifier, or {@code null} when absent. */
   public static String findReverse(String id) {
     Operator op = byId(id);
     return op != null ? op.reverse : null;

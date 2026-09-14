@@ -1,0 +1,1006 @@
+/*
+ * Copyright (C) 2021 The Authors of CEL-Java
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.projectnessie.cel;
+
+import static java.util.concurrent.TimeUnit.SECONDS;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.projectnessie.cel.CEL.attributePattern;
+import static org.projectnessie.cel.CEL.partialVars;
+import static org.projectnessie.cel.Env.newEnv;
+import static org.projectnessie.cel.EnvOption.customTypeAdapter;
+import static org.projectnessie.cel.EnvOption.customTypeProvider;
+import static org.projectnessie.cel.EnvOption.declarations;
+import static org.projectnessie.cel.EnvOption.types;
+import static org.projectnessie.cel.EvalOption.OptDisableNativeEval;
+import static org.projectnessie.cel.EvalOption.OptPartialEval;
+import static org.projectnessie.cel.ProgramOption.evalOptions;
+import static org.projectnessie.cel.common.types.StringT.stringOf;
+
+import java.nio.charset.StandardCharsets;
+import java.util.AbstractMap;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import org.junit.jupiter.api.Test;
+import org.projectnessie.cel.Env.AstIssuesTuple;
+import org.projectnessie.cel.checker.Decls;
+import org.projectnessie.cel.common.ULong;
+import org.projectnessie.cel.common.types.Err;
+import org.projectnessie.cel.common.types.NullT;
+import org.projectnessie.cel.common.types.UnknownT;
+import org.projectnessie.cel.common.types.ref.ExactAggregateFieldProvider;
+import org.projectnessie.cel.common.types.ref.ExactAggregateTypeAdapter;
+import org.projectnessie.cel.common.types.ref.StandardScalarFieldProvider;
+import org.projectnessie.cel.common.types.ref.StandardScalarTypeAdapter;
+import org.projectnessie.cel.common.types.ref.TypeRegistry;
+import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.types.jackson3.Jackson3Registry;
+import org.projectnessie.cel.types.jackson3.types.AnEnum;
+import org.projectnessie.cel.types.jackson3.types.ArrayObject;
+import org.projectnessie.cel.types.jackson3.types.InnerType;
+
+class Jackson3NativePlanTest {
+  @Test
+  void registryDeclaresStandardScalarSemantics() {
+    assertThat(Jackson3Registry.newRegistry()).isInstanceOf(StandardScalarTypeAdapter.class);
+    assertThat(Jackson3Registry.newRegistry()).isInstanceOf(StandardScalarFieldProvider.class);
+    assertThat(Jackson3Registry.newRegistry()).isNotInstanceOf(ExactAggregateTypeAdapter.class);
+    assertThat(Jackson3Registry.newRegistry()).isNotInstanceOf(ExactAggregateFieldProvider.class);
+  }
+
+  @Test
+  void exactObjectMapIndexConvertsOnlyTheSelectedMessage() {
+    TypeRegistry registry = Jackson3Registry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            types(ObjectMapInput.class, NestedObject.class),
+            declarations(
+                Decls.newVar("input", Decls.newObjectType(ObjectMapInput.class.getName()))));
+    Ast selection = compile(env, "input.objects['target'].value");
+    Ast comparison = compile(env, "input.objects['target'].value == 'selected'");
+    Ast presence = compile(env, "has(input.objects['target'].value)");
+
+    Val value =
+        assertEnabledDisabledEquivalent(
+            env,
+            selection,
+            Map.of("input", new ObjectMapInput(Map.of("target", new NestedObject("selected")))));
+    assertThat(value.value()).isEqualTo("selected");
+    Val present =
+        assertEnabledDisabledEquivalent(
+            env,
+            presence,
+            Map.of("input", new ObjectMapInput(Map.of("target", new NestedObject("selected")))));
+    assertThat(present.booleanValue()).isTrue();
+
+    Val missing =
+        assertEnabledDisabledEquivalent(
+            env, selection, Map.of("input", new ObjectMapInput(Map.of())));
+    assertThat(missing).matches(Err::isError);
+    Val missingPresence =
+        assertEnabledDisabledEquivalent(
+            env, presence, Map.of("input", new ObjectMapInput(Map.of())));
+    assertThat(missingPresence).matches(Err::isError);
+
+    Map<String, NestedObject> nullable = new HashMap<>();
+    nullable.put("target", null);
+    Val nullValue =
+        assertEnabledDisabledEquivalent(
+            env, selection, Map.of("input", new ObjectMapInput(nullable)));
+    assertThat(nullValue).matches(Err::isError);
+
+    Val incompatible =
+        assertEnabledDisabledEquivalent(
+            env, selection, Map.of("input", new ObjectMapInput(incompatibleObjectMap())));
+    assertThat(incompatible).matches(Err::isError);
+
+    Program enabled = env.program(selection);
+    NestedObject selectedObject = new NestedObject("selected");
+    ObjectMapInput lookupOnlyInput =
+        new ObjectMapInput(new LookupOnlyMap<>("target", selectedObject));
+    Val selected = enabled.eval(Map.of("input", lookupOnlyInput)).getVal();
+    assertThat(selected.value()).isEqualTo("selected");
+    assertThat(lookupOnlyInput.objectsReadCount()).isEqualTo(1);
+    assertThat(selectedObject.valueReadCount()).isEqualTo(1);
+
+    Prog partialEnabled = (Prog) env.program(selection, evalOptions(OptPartialEval));
+    Prog partialDisabled =
+        (Prog) env.program(selection, evalOptions(OptPartialEval, OptDisableNativeEval));
+    Object partialInput =
+        partialVars(
+            Map.of("input", new ObjectMapInput(Map.of("target", new NestedObject("selected")))),
+            attributePattern("input")
+                .qualString("objects")
+                .qualString("target")
+                .qualString("value"));
+    assertEquivalent(
+        partialEnabled.eval(partialInput).getVal(), partialDisabled.eval(partialInput).getVal());
+
+    Prog partialComparisonEnabled = (Prog) env.program(comparison, evalOptions(OptPartialEval));
+    Prog partialComparisonDisabled =
+        (Prog) env.program(comparison, evalOptions(OptPartialEval, OptDisableNativeEval));
+    assertEquivalent(
+        partialComparisonEnabled.eval(partialInput).getVal(),
+        partialComparisonDisabled.eval(partialInput).getVal());
+  }
+
+  @Test
+  void exactRegistryAndCopiesPreserveExplicitAggregateContract() {
+    TypeRegistry exact = Jackson3Registry.newExactAggregateRegistry();
+    exact.register(AggregateInput.class);
+    TypeRegistry exactCopy = exact.copy();
+    TypeRegistry defaultCopy = Jackson3Registry.newRegistry().copy();
+
+    assertThat(exact).isInstanceOf(ExactAggregateTypeAdapter.class);
+    assertThat(exact).isInstanceOf(ExactAggregateFieldProvider.class);
+    assertThat(exact).isInstanceOf(StandardScalarTypeAdapter.class);
+    assertThat(exact).isInstanceOf(StandardScalarFieldProvider.class);
+    assertThat(exactCopy).isInstanceOf(ExactAggregateTypeAdapter.class);
+    assertThat(exactCopy).isInstanceOf(ExactAggregateFieldProvider.class);
+    assertThat(exactCopy.findType(AggregateInput.class.getName())).isNotNull();
+    assertThat(defaultCopy).isNotInstanceOf(ExactAggregateTypeAdapter.class);
+    assertThat(defaultCopy).isNotInstanceOf(ExactAggregateFieldProvider.class);
+  }
+
+  @Test
+  void exactRegistryMaterializesCheckedSignedUnsignedAndNestedAggregates() {
+    TypeRegistry registry = Jackson3Registry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            declarations(
+                Decls.newVar("signed", Decls.newListType(Decls.Int)),
+                Decls.newVar("unsigned", Decls.newListType(Decls.Uint)),
+                Decls.newVar(
+                    "nested", Decls.newMapType(Decls.String, Decls.newListType(Decls.Uint)))));
+    Ast ast =
+        compile(
+            env,
+            "signed == [1, -1] && "
+                + "unsigned == [1u, 18446744073709551615u] && "
+                + "nested == {'bits': [18446744073709551615u]}");
+    Program enabled = env.program(ast);
+    Prog disabled = (Prog) env.program(ast, evalOptions(OptDisableNativeEval));
+    Map<String, Object> input =
+        Map.of(
+            "signed", new long[] {1L, -1L},
+            "unsigned", List.of(1L, -1L),
+            "nested", Map.of("bits", new long[] {-1L}));
+
+    assertThat(disabled.interpretable.getClass().getSimpleName()).isNotEqualTo("NativeIsland");
+    assertEquivalent(enabled.eval(input).getVal(), disabled.eval(input).getVal());
+    assertThat(enabled.eval(input).getVal().booleanValue()).isTrue();
+  }
+
+  @Test
+  void exactRegistryPreservesPresentNullAndReportsTypeMismatchInBothModes() {
+    TypeRegistry registry = Jackson3Registry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            declarations(
+                Decls.newVar("nullable", Decls.newMapType(Decls.String, Decls.Null)),
+                Decls.newVar("numbers", Decls.newListType(Decls.Int))));
+    Ast nullAst = compile(env, "nullable['present'] == null && !('absent' in nullable)");
+    Ast mismatchAst = compile(env, "numbers[0] == 1");
+    Map<String, Object> nullable = new HashMap<>();
+    nullable.put("present", null);
+
+    assertEnabledDisabledEquivalent(
+        env, nullAst, Map.of("nullable", nullable, "numbers", List.of(1L)));
+    Val mismatch =
+        assertEnabledDisabledEquivalent(
+            env, mismatchAst, Map.of("nullable", nullable, "numbers", List.of("wrong")));
+    assertThat(mismatch).matches(Err::isError);
+  }
+
+  @Test
+  void exactRegistryMaterializesCheckedAggregateFieldsInBothModes() {
+    TypeRegistry registry = Jackson3Registry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            types(AggregateInput.class),
+            declarations(
+                Decls.newVar("input", Decls.newObjectType(AggregateInput.class.getName()))));
+    Ast ast =
+        compile(
+            env,
+            "input.numbers == [1, 2] && "
+                + "input.unsigned == [1u, 18446744073709551615u] && "
+                + "input.nested == {'bits': [3, 4]} && "
+                + "input.tags == ['first', 'second'] && "
+                + "input.optionalNumbers == [5, 6]");
+    AggregateInput input =
+        new AggregateInput(
+            List.of(1L, 2L),
+            List.of(ULong.valueOf(1L), ULong.valueOf(-1L)),
+            Map.of("bits", List.of(3L, 4L)),
+            new LinkedHashSet<>(List.of("first", "second")),
+            Optional.of(List.of(5L, 6L)));
+
+    Val result = assertEnabledDisabledEquivalent(env, ast, Map.of("input", input));
+    assertThat(result.booleanValue()).isTrue();
+    assertThat(input.numbersReadCount()).isEqualTo(2);
+    assertThat(input.optionalNumbersReadCount()).isEqualTo(2);
+  }
+
+  @Test
+  void exactRegistryMaterializesCanonicalArrayFieldsInBothModes() {
+    TypeRegistry registry = Jackson3Registry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            types(ArrayObject.class),
+            declarations(Decls.newVar("input", Decls.newObjectType(ArrayObject.class.getName()))));
+    Ast ast =
+        compile(
+            env,
+            "input.ints == [1, 2]"
+                + " && input.longs[0] == 3"
+                + " && input.doubles[0] == 4.5"
+                + " && input.strings[0] == 'string'"
+                + " && input.boxedInts[0] == 5"
+                + " && input.uints[0] == 6u"
+                + " && input.objects[0].intProp == 7"
+                + " && input.dynamic[0] == 'dynamic'"
+                + " && input.nestedInts[0][1] == 9"
+                + " && input.nestedBytes[0] == b'bytes'");
+
+    Val result = assertEnabledDisabledEquivalent(env, ast, Map.of("input", arrayObject()));
+
+    assertThat(result.booleanValue()).isTrue();
+  }
+
+  @Test
+  void exactRegistryRejectsNoncanonicalArrayFieldsInBothModes() {
+    TypeRegistry registry = Jackson3Registry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            types(ArrayObject.class),
+            declarations(Decls.newVar("input", Decls.newObjectType(ArrayObject.class.getName()))));
+    ArrayObject input = arrayObject();
+    input.values = new Val[] {stringOf("embedded")};
+    input.enums = new AnEnum[] {AnEnum.ENUM_VALUE_2};
+
+    Val embeddedValue =
+        assertEnabledDisabledEquivalent(
+            env, compile(env, "input.values[0]"), Map.of("input", input));
+    Val enumValue =
+        assertEnabledDisabledEquivalent(
+            env, compile(env, "input.enums[0]"), Map.of("input", input));
+
+    assertThat(embeddedValue).matches(Err::isError);
+    assertThat(enumValue).matches(Err::isError);
+  }
+
+  @Test
+  @SuppressWarnings("resource")
+  void exactObjectListNestedQuantifiersPreserveAccessOrderPartialAndConcurrentEvaluation()
+      throws Exception {
+    TypeRegistry registry = Jackson3Registry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            types(ObservedAddress.class),
+            declarations(
+                Decls.newVar(
+                    "self",
+                    Decls.newListType(Decls.newObjectType(ObservedAddress.class.getName())))));
+    Ast ast =
+        compile(
+            env,
+            "self.all(a1, a1.type == 'IPAddress' && has(a1.value)"
+                + " ? self.exists_one(a2, a2.type == a1.type"
+                + " && has(a2.value) && a2.value == a1.value) : true)");
+    Prog enabled = (Prog) env.program(ast);
+    Prog disabled = (Prog) env.program(ast, evalOptions(OptDisableNativeEval));
+    List<String> enabledEvents = new ArrayList<>();
+    List<String> disabledEvents = new ArrayList<>();
+
+    Val enabledResult = enabled.eval(Map.of("self", observedAddresses(enabledEvents))).getVal();
+    Val disabledResult = disabled.eval(Map.of("self", observedAddresses(disabledEvents))).getVal();
+
+    assertThat(enabled.interpretable.getClass().getSimpleName()).isEqualTo("NativeIsland");
+    assertThat(disabled.interpretable.getClass().getSimpleName()).isNotEqualTo("NativeIsland");
+    assertEquivalent(enabledResult, disabledResult);
+    assertThat(enabledResult.booleanValue()).isTrue();
+    assertThat(enabledEvents).hasSize(29).containsExactlyElementsOf(disabledEvents);
+
+    Prog partialEnabled = (Prog) env.program(ast, evalOptions(OptPartialEval));
+    Prog partialDisabled =
+        (Prog) env.program(ast, evalOptions(OptPartialEval, OptDisableNativeEval));
+    for (String unknownVariable : List.of("self", "unrelated")) {
+      List<String> partialEnabledEvents = new ArrayList<>();
+      List<String> partialDisabledEvents = new ArrayList<>();
+      Val partialEnabledResult =
+          partialEnabled
+              .eval(
+                  partialVars(
+                      Map.of("self", observedAddresses(partialEnabledEvents)),
+                      attributePattern(unknownVariable)))
+              .getVal();
+      Val partialDisabledResult =
+          partialDisabled
+              .eval(
+                  partialVars(
+                      Map.of("self", observedAddresses(partialDisabledEvents)),
+                      attributePattern(unknownVariable)))
+              .getVal();
+
+      assertEquivalent(partialEnabledResult, partialDisabledResult);
+      assertThat(partialEnabledEvents)
+          .as(unknownVariable)
+          .containsExactlyElementsOf(partialDisabledEvents);
+      if (unknownVariable.equals("self")) {
+        assertThat(partialEnabledResult).isInstanceOf(UnknownT.class);
+        assertThat(partialEnabledEvents).isEmpty();
+      } else {
+        assertThat(partialEnabledResult.booleanValue()).isTrue();
+        assertThat(partialEnabledEvents).hasSize(29);
+      }
+    }
+
+    ExecutorService executor = Executors.newFixedThreadPool(4);
+    try {
+      List<Future<Boolean>> concurrentResults = new ArrayList<>();
+      for (int i = 0; i < 100; i++) {
+        boolean unique = (i & 1) == 0;
+        concurrentResults.add(
+            executor.submit(
+                () ->
+                    enabled
+                        .eval(Map.of("self", observedAddresses(new ArrayList<>(), unique)))
+                        .getVal()
+                        .booleanValue()));
+      }
+      for (int i = 0; i < concurrentResults.size(); i++) {
+        assertThat(concurrentResults.get(i).get(5, SECONDS)).isEqualTo((i & 1) == 0);
+      }
+    } finally {
+      executor.shutdownNow();
+      assertThat(executor.awaitTermination(5, SECONDS)).isTrue();
+    }
+  }
+
+  @Test
+  void exactAggregateFieldsBecomeNativeSourcesWithoutGetterReplay() {
+    TypeRegistry registry = Jackson3Registry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            types(AggregateInput.class),
+            declarations(
+                Decls.newVar("input", Decls.newObjectType(AggregateInput.class.getName()))));
+
+    for (String expression :
+        List.of(
+            "size(input.numbers)",
+            "input.numbers[1]",
+            "input.numbers.exists(number, number == 2)")) {
+      Ast ast = compile(env, expression);
+      Prog enabled = (Prog) env.program(ast);
+      Prog disabled = (Prog) env.program(ast, evalOptions(OptDisableNativeEval));
+      AggregateInput enabledInput = aggregateInput();
+      AggregateInput disabledInput = aggregateInput();
+
+      assertThat(enabled.interpretable.getClass().getSimpleName())
+          .as(expression)
+          .isEqualTo("NativeIsland");
+      assertThat(disabled.interpretable.getClass().getSimpleName())
+          .as(expression)
+          .isNotEqualTo("NativeIsland");
+      assertEquivalent(
+          enabled.eval(Map.of("input", enabledInput)).getVal(),
+          disabled.eval(Map.of("input", disabledInput)).getVal());
+      assertThat(enabledInput.numbersReadCount()).as(expression).isEqualTo(1);
+      assertThat(disabledInput.numbersReadCount()).as(expression).isEqualTo(1);
+    }
+  }
+
+  @Test
+  void exactMapFieldsSupportCheckedDynamicStringLookupForEveryScalarKind() {
+    TypeRegistry registry = Jackson3Registry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            types(DynamicMapInput.class),
+            declarations(
+                Decls.newVar("input", Decls.newObjectType(DynamicMapInput.class.getName())),
+                Decls.newVar("key", Decls.String),
+                Decls.newVar("prefix", Decls.String),
+                Decls.newVar("suffix", Decls.String)));
+    DynamicMapInput input = dynamicMapInput();
+    Map<String, Object> activation =
+        Map.of("input", input, "key", "one", "prefix", "o", "suffix", "ne");
+
+    for (String expression :
+        List.of(
+            "input.booleans[key]",
+            "input.integers[key]",
+            "input.unsigned[key]",
+            "input.doubles[key]",
+            "input.texts[key]",
+            "input.integers[input.lookupKey]",
+            "input.integers[prefix + suffix]")) {
+      Ast ast = compile(env, expression);
+      Prog enabled = (Prog) env.program(ast);
+      Prog disabled = (Prog) env.program(ast, evalOptions(OptDisableNativeEval));
+
+      assertThat(enabled.interpretable.getClass().getSimpleName())
+          .as(expression)
+          .isEqualTo("NativeIsland");
+      assertThat(disabled.interpretable.getClass().getSimpleName())
+          .as(expression)
+          .isNotEqualTo("NativeIsland");
+      Val result = enabled.eval(activation).getVal();
+      assertEquivalent(result, disabled.eval(activation).getVal());
+      assertThat(result).as(expression).isNotInstanceOf(Err.class);
+    }
+  }
+
+  @Test
+  void exactMapFieldsSupportConstantAndCheckedDynamicBooleanAndSignedIntegerKeys() {
+    TypeRegistry registry = Jackson3Registry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            types(ExactKeyMapInput.class),
+            declarations(
+                Decls.newVar("input", Decls.newObjectType(ExactKeyMapInput.class.getName())),
+                Decls.newVar("boolKey", Decls.Bool),
+                Decls.newVar("intKey", Decls.Int)));
+    ExactKeyMapInput input =
+        new ExactKeyMapInput(
+            Map.of(false, 10L, true, 11L), Map.of(-1, 20L, 1, 21L, Integer.MAX_VALUE, 22L));
+
+    record KeyEvaluation(String expression, boolean boolKey, long intKey, Object expected) {}
+    for (var evaluation :
+        List.of(
+            new KeyEvaluation("input.byInteger[1]", true, Integer.MAX_VALUE, 21L),
+            new KeyEvaluation("1 in input.byInteger", true, Integer.MAX_VALUE, true),
+            new KeyEvaluation("2 in input.byInteger", true, Integer.MAX_VALUE, false),
+            new KeyEvaluation("input.byInteger[intKey]", true, Integer.MAX_VALUE, 22L),
+            new KeyEvaluation("input.byInteger[intKey]", true, -1L, 20L),
+            new KeyEvaluation("input.byBoolean[boolKey]", true, Integer.MAX_VALUE, 11L),
+            new KeyEvaluation("input.byBoolean[boolKey]", false, Integer.MAX_VALUE, 10L))) {
+      Ast ast = compile(env, evaluation.expression());
+      Prog enabled = (Prog) env.program(ast);
+      Prog disabled = (Prog) env.program(ast, evalOptions(OptDisableNativeEval));
+      Map<String, Object> activation =
+          Map.of(
+              "input", input,
+              "boolKey", evaluation.boolKey(),
+              "intKey", evaluation.intKey());
+
+      assertThat(enabled.interpretable.getClass().getSimpleName())
+          .as(evaluation.expression())
+          .isEqualTo("NativeIsland");
+      assertThat(disabled.interpretable.getClass().getSimpleName())
+          .as(evaluation.expression())
+          .isNotEqualTo("NativeIsland");
+      Val result = enabled.eval(activation).getVal();
+      assertEquivalent(result, disabled.eval(activation).getVal());
+      assertThat(result.value()).as(evaluation.expression()).isEqualTo(evaluation.expected());
+    }
+
+    Ast missing = compile(env, "input.byInteger[intKey]");
+    Val result =
+        assertEnabledDisabledEquivalent(
+            env, missing, Map.of("input", input, "boolKey", false, "intKey", Long.MAX_VALUE));
+    assertThat(result).matches(Err::isError);
+  }
+
+  @Test
+  void checkedDynamicNullMapLookupDistinguishesPresentNullFromAbsent() {
+    TypeRegistry registry = Jackson3Registry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            declarations(
+                Decls.newVar("nulls", Decls.newMapType(Decls.String, Decls.Null)),
+                Decls.newVar("key", Decls.String)));
+    Map<String, Object> nulls = new HashMap<>();
+    nulls.put("present", null);
+    Ast lookup = compile(env, "nulls[key]");
+
+    assertThat(((Prog) env.program(lookup)).interpretable.getClass().getSimpleName())
+        .isEqualTo("NativeIsland");
+
+    Val present =
+        assertEnabledDisabledEquivalent(env, lookup, Map.of("nulls", nulls, "key", "present"));
+    Val absent =
+        assertEnabledDisabledEquivalent(env, lookup, Map.of("nulls", nulls, "key", "absent"));
+
+    assertThat(present).isSameAs(NullT.NullValue);
+    assertThat(absent).matches(Err::isError);
+  }
+
+  @Test
+  void repeatedExactListFieldsSupportNativeConcatSizeAndIndex() {
+    TypeRegistry registry = Jackson3Registry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            types(AggregateInput.class),
+            declarations(
+                Decls.newVar("input", Decls.newObjectType(AggregateInput.class.getName()))));
+
+    for (var evaluation :
+        Map.of(
+                "size(input.numbers + input.numbers + input.numbers)", 6L,
+                "(input.numbers + input.numbers + input.numbers)[4]", 1L)
+            .entrySet()) {
+      String expression = evaluation.getKey();
+      Ast ast = compile(env, expression);
+      Prog enabled = (Prog) env.program(ast);
+      Prog disabled = (Prog) env.program(ast, evalOptions(OptDisableNativeEval));
+      AggregateInput enabledInput = aggregateInput();
+      AggregateInput disabledInput = aggregateInput();
+
+      assertThat(enabled.interpretable.getClass().getSimpleName())
+          .as(expression)
+          .isEqualTo("NativeIsland");
+      assertThat(disabled.interpretable.getClass().getSimpleName())
+          .as(expression)
+          .isNotEqualTo("NativeIsland");
+      Val enabledResult = enabled.eval(Map.of("input", enabledInput)).getVal();
+      Val disabledResult = disabled.eval(Map.of("input", disabledInput)).getVal();
+      assertEquivalent(enabledResult, disabledResult);
+      assertThat(enabledResult.intValue()).as(expression).isEqualTo(evaluation.getValue());
+      assertThat(enabledInput.numbersReadCount()).as(expression).isEqualTo(3);
+      assertThat(disabledInput.numbersReadCount()).as(expression).isEqualTo(3);
+    }
+  }
+
+  @Test
+  void repeatedExactNonScalarListFieldsSupportNativeConcatSize() {
+    TypeRegistry registry = Jackson3Registry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            types(NestedAggregateInput.class),
+            declarations(
+                Decls.newVar("input", Decls.newObjectType(NestedAggregateInput.class.getName()))));
+    Ast ast = compile(env, "size(input.entries + input.entries + input.entries)");
+    Prog enabled = (Prog) env.program(ast);
+    Prog disabled = (Prog) env.program(ast, evalOptions(OptDisableNativeEval));
+    NestedAggregateInput enabledInput = nestedAggregateInput();
+    NestedAggregateInput disabledInput = nestedAggregateInput();
+
+    assertThat(enabled.interpretable.getClass().getSimpleName()).isEqualTo("NativeIsland");
+    assertThat(disabled.interpretable.getClass().getSimpleName()).isNotEqualTo("NativeIsland");
+    Val enabledResult = enabled.eval(Map.of("input", enabledInput)).getVal();
+    assertEquivalent(enabledResult, disabled.eval(Map.of("input", disabledInput)).getVal());
+    assertThat(enabledResult.intValue()).isEqualTo(6L);
+    assertThat(enabledInput.entriesReadCount()).isEqualTo(3);
+    assertThat(disabledInput.entriesReadCount()).isEqualTo(3);
+  }
+
+  @Test
+  void exactRegistryReportsEmptyOptionalAggregateWithoutReplayingGetter() {
+    TypeRegistry registry = Jackson3Registry.newExactAggregateRegistry();
+    Env env =
+        newEnv(
+            customTypeAdapter(registry),
+            customTypeProvider(registry),
+            types(AggregateInput.class),
+            declarations(
+                Decls.newVar("input", Decls.newObjectType(AggregateInput.class.getName()))));
+    Ast ast = compile(env, "input.optionalNumbers == [5, 6]");
+    AggregateInput input =
+        new AggregateInput(
+            List.of(1L, 2L),
+            List.of(ULong.valueOf(1L)),
+            Map.of("bits", List.of(3L, 4L)),
+            Set.of("first"),
+            Optional.empty());
+
+    Val result = assertEnabledDisabledEquivalent(env, ast, Map.of("input", input));
+
+    assertThat(result).matches(Err::isError);
+    assertThat(input.optionalNumbersReadCount()).isEqualTo(2);
+  }
+
+  @Test
+  void evaluatesTopLevelStringSelectionLikeCurrentEvaluator() {
+    Jackson3Registry registry = (Jackson3Registry) Jackson3Registry.newRegistry();
+    Env env = env(registry);
+    Ast ast = compile(env, "input.text == expected");
+
+    Prog nativeProgram = (Prog) env.program(ast);
+    Program currentProgram = env.program(ast, evalOptions(OptDisableNativeEval));
+    assertThat(nativeProgram.interpretable.getClass().getSimpleName()).isEqualTo("NativeIsland");
+
+    assertEquivalent(
+        nativeProgram.eval(Map.of("input", new Input("cel", 42L), "expected", "cel")).getVal(),
+        currentProgram.eval(Map.of("input", new Input("cel", 42L), "expected", "cel")).getVal());
+
+    assertEquivalent(
+        nativeProgram.eval(Map.of("input", new Input(null, 42L), "expected", "cel")).getVal(),
+        currentProgram.eval(Map.of("input", new Input(null, 42L), "expected", "cel")).getVal());
+
+    assertEquivalent(
+        nativeProgram.eval(Map.of("input", "wrong object", "expected", "cel")).getVal(),
+        currentProgram.eval(Map.of("input", "wrong object", "expected", "cel")).getVal());
+
+    assertEquivalent(
+        nativeProgram.eval(Map.of("expected", "cel")).getVal(),
+        currentProgram.eval(Map.of("expected", "cel")).getVal());
+
+    Map<String, Object> nullInput = new HashMap<>();
+    nullInput.put("input", null);
+    nullInput.put("expected", "cel");
+    assertEquivalent(
+        nativeProgram.eval(nullInput).getVal(), currentProgram.eval(nullInput).getVal());
+  }
+
+  @Test
+  void copiedRegistryRemainsEligible() {
+    Jackson3Registry original = (Jackson3Registry) Jackson3Registry.newRegistry();
+    original.register(Input.class);
+    TypeRegistry copied = original.copy();
+
+    assertThat(copied).isInstanceOf(StandardScalarTypeAdapter.class);
+    Env env = env((Jackson3Registry) copied);
+    Prog program = (Prog) env.program(compile(env, "input.text == 'cel'"));
+
+    assertThat(program.interpretable.getClass().getSimpleName()).isEqualTo("NativeIsland");
+    assertThat(program.eval(Map.of("input", new Input("cel", 42L))).getVal().booleanValue())
+        .isTrue();
+  }
+
+  @Test
+  void numericSelectionStaysOnCurrentEvaluator() {
+    Jackson3Registry registry = (Jackson3Registry) Jackson3Registry.newRegistry();
+    Env env = env(registry);
+    Prog program = (Prog) env.program(compile(env, "input.number == 42"));
+
+    assertThat(program.interpretable).isNotNull();
+    assertThat(program.interpretable.getClass().getSimpleName()).isNotEqualTo("NativeIsland");
+    assertThat(program.eval(Map.of("input", new Input("cel", 42L))).getVal().booleanValue())
+        .isTrue();
+  }
+
+  private static Env env(Jackson3Registry registry) {
+    return newEnv(
+        customTypeAdapter(registry),
+        customTypeProvider(registry),
+        types(Input.class),
+        declarations(
+            Decls.newVar("input", Decls.newObjectType(Input.class.getName())),
+            Decls.newVar("expected", Decls.String)));
+  }
+
+  private static Ast compile(Env env, String expression) {
+    AstIssuesTuple result = env.compile(expression);
+    assertThat(result.hasIssues()).as(expression).isFalse();
+    return result.getAst();
+  }
+
+  private static void assertEquivalent(Val actual, Val expected) {
+    assertThat(actual.getClass()).isEqualTo(expected.getClass());
+    assertThat(actual.type()).isSameAs(expected.type());
+    assertThat(actual.toString()).isEqualTo(expected.toString());
+    if (actual instanceof Err actualError && expected instanceof Err expectedError) {
+      assertThat(actualError.hasCause()).isEqualTo(expectedError.hasCause());
+      if (actualError.hasCause()) {
+        assertThat(actualError.getCause().getClass())
+            .isEqualTo(expectedError.getCause().getClass());
+        assertThat(actualError.getCause().getMessage())
+            .isEqualTo(expectedError.getCause().getMessage());
+      }
+      return;
+    }
+    assertThat(actual.value()).isEqualTo(expected.value());
+  }
+
+  private static Val assertEnabledDisabledEquivalent(Env env, Ast ast, Object input) {
+    Program enabled = env.program(ast);
+    Prog disabled = (Prog) env.program(ast, evalOptions(OptDisableNativeEval));
+
+    assertThat(disabled.interpretable.getClass().getSimpleName()).isNotEqualTo("NativeIsland");
+    Val result = enabled.eval(input).getVal();
+    assertEquivalent(result, disabled.eval(input).getVal());
+    return result;
+  }
+
+  private static AggregateInput aggregateInput() {
+    return new AggregateInput(
+        List.of(1L, 2L),
+        List.of(ULong.valueOf(1L), ULong.valueOf(-1L)),
+        Map.of("bits", List.of(3L, 4L)),
+        new LinkedHashSet<>(List.of("first", "second")),
+        Optional.of(List.of(5L, 6L)));
+  }
+
+  private static ArrayObject arrayObject() {
+    ArrayObject value = new ArrayObject();
+    value.bytes = "root".getBytes(StandardCharsets.UTF_8);
+    value.ints = new int[] {1, 2};
+    value.longs = new long[] {3};
+    value.doubles = new double[] {4.5d};
+    value.strings = new String[] {"string"};
+    value.boxedInts = new Integer[] {5};
+    value.uints = new ULong[] {ULong.valueOf(6)};
+    InnerType object = new InnerType();
+    object.intProp = 7;
+    value.objects = new InnerType[] {object};
+    value.dynamic = new Object[] {"dynamic"};
+    value.nestedInts = new int[][] {{8, 9}};
+    value.nestedBytes = new byte[][] {"bytes".getBytes(StandardCharsets.UTF_8)};
+    return value;
+  }
+
+  private static NestedAggregateInput nestedAggregateInput() {
+    return new NestedAggregateInput(List.of(Map.of("value", 1L), Map.of("value", 2L)));
+  }
+
+  private static List<ObservedAddress> observedAddresses(List<String> events) {
+    return observedAddresses(events, true);
+  }
+
+  private static List<ObservedAddress> observedAddresses(List<String> events, boolean unique) {
+    return List.of(
+        new ObservedAddress("first", "IPAddress", "192.0.2.1", events),
+        new ObservedAddress("other", "Hostname", "example.test", events),
+        new ObservedAddress("last", "IPAddress", unique ? "192.0.2.2" : "192.0.2.1", events));
+  }
+
+  private static DynamicMapInput dynamicMapInput() {
+    return new DynamicMapInput(
+        Map.of("one", true),
+        Map.of("one", 1L),
+        Map.of("one", ULong.valueOf(-1L)),
+        Map.of("one", -0.0d),
+        Map.of("one", "value"));
+  }
+
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  private static Map<String, NestedObject> incompatibleObjectMap() {
+    return (Map) Map.of("target", "not a nested object");
+  }
+
+  @SuppressWarnings({"unused", "ClassCanBeRecord"})
+  public static final class Input {
+    private final String text;
+    private final long number;
+
+    public Input(String text, long number) {
+      this.text = text;
+      this.number = number;
+    }
+
+    public String getText() {
+      return text;
+    }
+
+    public long getNumber() {
+      return number;
+    }
+  }
+
+  @SuppressWarnings("unused")
+  public static final class ObjectMapInput {
+    private final Map<String, NestedObject> objects;
+    private int objectsReadCount;
+
+    public ObjectMapInput(Map<String, NestedObject> objects) {
+      this.objects = objects;
+    }
+
+    public Map<String, NestedObject> getObjects() {
+      objectsReadCount++;
+      return objects;
+    }
+
+    int objectsReadCount() {
+      return objectsReadCount;
+    }
+  }
+
+  @SuppressWarnings("unused")
+  public static final class NestedObject {
+    private final String value;
+    private int valueReadCount;
+
+    public NestedObject(String value) {
+      this.value = value;
+    }
+
+    public String getValue() {
+      valueReadCount++;
+      return value;
+    }
+
+    int valueReadCount() {
+      return valueReadCount;
+    }
+  }
+
+  @SuppressWarnings({"unused", "ClassCanBeRecord"})
+  public static final class ObservedAddress {
+    private final String id;
+    private final String type;
+    private final String value;
+    private final List<String> events;
+
+    public ObservedAddress(String id, String type, String value, List<String> events) {
+      this.id = id;
+      this.type = type;
+      this.value = value;
+      this.events = events;
+    }
+
+    public String getType() {
+      events.add(id + ".type");
+      return type;
+    }
+
+    public String getValue() {
+      events.add(id + ".value");
+      return value;
+    }
+  }
+
+  private static final class LookupOnlyMap<K, V> extends AbstractMap<K, V> {
+    private final K key;
+    private final V value;
+
+    private LookupOnlyMap(K key, V value) {
+      this.key = key;
+      this.value = value;
+    }
+
+    @Override
+    public V get(Object requestedKey) {
+      return key.equals(requestedKey) ? value : null;
+    }
+
+    @SuppressWarnings("NullableProblems")
+    @Override
+    public Set<Entry<K, V>> entrySet() {
+      throw new AssertionError("constant exact lookup must not traverse the source map");
+    }
+  }
+
+  @SuppressWarnings("unused")
+  public static final class AggregateInput {
+    private final List<Long> numbers;
+    private final List<ULong> unsigned;
+    private final Map<String, List<Long>> nested;
+    private final Set<String> tags;
+    private final Optional<List<Long>> optionalNumbers;
+    private int numbersReadCount;
+    private int optionalNumbersReadCount;
+
+    public AggregateInput(
+        List<Long> numbers,
+        List<ULong> unsigned,
+        Map<String, List<Long>> nested,
+        Set<String> tags,
+        Optional<List<Long>> optionalNumbers) {
+      this.numbers = numbers;
+      this.unsigned = unsigned;
+      this.nested = nested;
+      this.tags = tags;
+      this.optionalNumbers = optionalNumbers;
+    }
+
+    public List<Long> getNumbers() {
+      numbersReadCount++;
+      return numbers;
+    }
+
+    public List<ULong> getUnsigned() {
+      return unsigned;
+    }
+
+    public Map<String, List<Long>> getNested() {
+      return nested;
+    }
+
+    public Set<String> getTags() {
+      return tags;
+    }
+
+    public Optional<List<Long>> getOptionalNumbers() {
+      optionalNumbersReadCount++;
+      return optionalNumbers;
+    }
+
+    int numbersReadCount() {
+      return numbersReadCount;
+    }
+
+    int optionalNumbersReadCount() {
+      return optionalNumbersReadCount;
+    }
+  }
+
+  @SuppressWarnings("unused")
+  public static final class NestedAggregateInput {
+    private final List<Map<String, Long>> entries;
+    private int entriesReadCount;
+
+    public NestedAggregateInput(List<Map<String, Long>> entries) {
+      this.entries = entries;
+    }
+
+    public List<Map<String, Long>> getEntries() {
+      entriesReadCount++;
+      return entries;
+    }
+
+    int entriesReadCount() {
+      return entriesReadCount;
+    }
+  }
+
+  @SuppressWarnings("unused")
+  public record DynamicMapInput(
+      Map<String, Boolean> booleans,
+      Map<String, Long> integers,
+      Map<String, ULong> unsigned,
+      Map<String, Double> doubles,
+      Map<String, String> texts) {
+
+    public String getLookupKey() {
+      return "one";
+    }
+  }
+
+  @SuppressWarnings({"unused", "ClassCanBeRecord"})
+  public static final class ExactKeyMapInput {
+    private final Map<Boolean, Long> byBoolean;
+    private final Map<Integer, Long> byInteger;
+
+    public ExactKeyMapInput(Map<Boolean, Long> byBoolean, Map<Integer, Long> byInteger) {
+      this.byBoolean = byBoolean;
+      this.byInteger = byInteger;
+    }
+
+    public Map<Boolean, Long> getByBoolean() {
+      return byBoolean;
+    }
+
+    public Map<Integer, Long> getByInteger() {
+      return byInteger;
+    }
+  }
+}

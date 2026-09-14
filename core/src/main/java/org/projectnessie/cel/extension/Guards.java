@@ -25,9 +25,18 @@ import org.projectnessie.cel.common.types.ListT;
 import org.projectnessie.cel.common.types.StringT;
 import org.projectnessie.cel.interpreter.functions.BinaryOp;
 import org.projectnessie.cel.interpreter.functions.FunctionOp;
+import org.projectnessie.cel.interpreter.functions.QuaternaryOp;
+import org.projectnessie.cel.interpreter.functions.TernaryOp;
 import org.projectnessie.cel.interpreter.functions.UnaryOp;
 
-/** function invocation guards for common call signatures within extension functions. */
+/**
+ * Adapters for common extension-function signatures.
+ *
+ * <p>Each adapter extracts the expected primitive values from CEL arguments, invokes the supplied
+ * Java function, converts its result back to a CEL value, and converts a thrown {@link
+ * RuntimeException} into a CEL error. Callers must register the adapter only with a declaration
+ * whose checked argument types match the adapter name.
+ */
 public final class Guards {
 
   private Guards() {}
@@ -37,6 +46,9 @@ public final class Guards {
       try {
         return StringT.stringOf(func.apply(((String) lhs.value()), getIntValue((IntT) rhs)));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -52,6 +64,25 @@ public final class Guards {
                 (getIntValue((IntT) values[1])),
                 (getIntValue((IntT) values[2]))));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
+        return Err.newErr(e, "%s", e.getMessage());
+      }
+    };
+  }
+
+  public static TernaryOp callInStrIntIntOutStrTernary(
+      TriFunction<String, Integer, Integer, String> func) {
+    return (first, second, third) -> {
+      try {
+        return StringT.stringOf(
+            func.apply(
+                (String) first.value(), getIntValue((IntT) second), getIntValue((IntT) third)));
+      } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -62,6 +93,9 @@ public final class Guards {
       try {
         return IntT.intOf(func.apply(((String) lhs.value()), ((String) rhs.value())));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -77,6 +111,24 @@ public final class Guards {
                 ((String) values[1].value()),
                 (getIntValue((IntT) values[2]))));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
+        return Err.newErr(e, "%s", e.getMessage());
+      }
+    };
+  }
+
+  public static TernaryOp callInStrStrIntOutIntTernary(
+      TriFunction<String, String, Integer, Integer> func) {
+    return (first, second, third) -> {
+      try {
+        return IntT.intOf(
+            func.apply((String) first.value(), (String) second.value(), getIntValue((IntT) third)));
+      } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -87,6 +139,9 @@ public final class Guards {
       try {
         return ListT.newStringArrayList(func.apply(((String) lhs.value()), ((String) rhs.value())));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -102,6 +157,24 @@ public final class Guards {
                 ((String) values[1].value()),
                 getIntValue((IntT) values[2])));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
+        return Err.newErr(e, "%s", e.getMessage());
+      }
+    };
+  }
+
+  public static TernaryOp callInStrStrIntOutStrArrTernary(
+      TriFunction<String, String, Integer, String[]> func) {
+    return (first, second, third) -> {
+      try {
+        return ListT.newStringArrayList(
+            func.apply((String) first.value(), (String) second.value(), getIntValue((IntT) third)));
+      } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -116,6 +189,24 @@ public final class Guards {
                 ((String) values[1].value()),
                 ((String) values[2].value())));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
+        return Err.newErr(e, "%s", e.getMessage());
+      }
+    };
+  }
+
+  public static TernaryOp callInStrStrStrOutStrTernary(
+      TriFunction<String, String, String, String> func) {
+    return (first, second, third) -> {
+      try {
+        return StringT.stringOf(
+            func.apply((String) first.value(), (String) second.value(), (String) third.value()));
+      } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -132,6 +223,28 @@ public final class Guards {
                 ((String) values[2].value()),
                 getIntValue((IntT) values[3])));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
+        return Err.newErr(e, "%s", e.getMessage());
+      }
+    };
+  }
+
+  public static QuaternaryOp callInStrStrStrIntOutStrQuaternary(
+      QuadFunction<String, String, String, Integer, String> func) {
+    return (first, second, third, fourth) -> {
+      try {
+        return StringT.stringOf(
+            func.apply(
+                (String) first.value(),
+                (String) second.value(),
+                (String) third.value(),
+                getIntValue((IntT) fourth)));
+      } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -142,6 +255,9 @@ public final class Guards {
       try {
         return StringT.stringOf(func.apply(((String) val.value())));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -153,6 +269,9 @@ public final class Guards {
         Object[] objects = (Object[]) val.value();
         return StringT.stringOf(func.apply(Arrays.copyOf(objects, objects.length, String[].class)));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };
@@ -166,6 +285,9 @@ public final class Guards {
             func.apply(
                 Arrays.copyOf(objects, objects.length, String[].class), ((String) rhs.value())));
       } catch (RuntimeException e) {
+        if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return Err.newErr(e, "%s", e.getMessage());
       }
     };

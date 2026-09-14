@@ -143,7 +143,9 @@ public class BytesTest {
 
   @Test
   void bytesSize() {
-    assertThat(bytesOf("1234567890").size().equal(intOf(10))).isSameAs(True);
+    BytesT value = bytesOf("1234567890");
+    assertThat(value.size().equal(intOf(10))).isSameAs(True);
+    assertThat(value.nativeSize()).isEqualTo(10);
   }
 
   @Test
