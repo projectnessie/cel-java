@@ -135,6 +135,7 @@ class SimpleConformanceTest {
           "math_ext.textproto",
           "namespace.textproto",
           "network_ext.textproto",
+          "optionals.textproto",
           "parse.textproto",
           "plumbing.textproto",
           "proto2.textproto",
@@ -185,12 +186,7 @@ class SimpleConformanceTest {
           "enums/strong_proto3/convert_int_too_big",
           "enums/strong_proto3/convert_int_too_neg",
           "enums/strong_proto3/convert_string",
-          "enums/strong_proto3/convert_string_bad",
-          // Optional list/map/message syntax and runtime support is not implemented yet.
-          "block_ext/basic/optional_list",
-          "block_ext/basic/optional_map",
-          "block_ext/basic/optional_map_chained",
-          "block_ext/basic/optional_message");
+          "enums/strong_proto3/convert_string_bad");
 
   private static final Set<String> matchedSkips = new LinkedHashSet<>();
   private static final AtomicInteger total = new AtomicInteger();
@@ -353,6 +349,9 @@ class SimpleConformanceTest {
       if (usesTestOnlyBlockMacros(test.getExpr())) {
         parseOptions.add(macros(Macro.TestOnlyBlockMacros));
       }
+      if (usesOptionals(test.getExpr())) {
+        parseOptions.add(optionals());
+      }
 
       Env env = newEnv(parseOptions.toArray(new EnvOption[0]));
       AstIssuesTuple astIss = env.parse(sourceText);
@@ -439,7 +438,7 @@ class SimpleConformanceTest {
       if (usesNetworkExtensions(test.getExpr())) {
         envOptions.add(network());
       }
-      if (test.getExpr().contains("optional.")) {
+      if (usesOptionals(test.getExpr())) {
         envOptions.add(optionals());
       }
       envOptions.addAll(List.of(options));
@@ -460,6 +459,13 @@ class SimpleConformanceTest {
           || expression.contains("strings.quote(")
           || expression.contains(".format(")
           || expression.contains(".reverse(");
+    }
+
+    private static boolean usesOptionals(String expression) {
+      return expression.contains("optional.")
+          || expression.contains(".?")
+          || expression.contains("[?")
+          || expression.contains("{?");
     }
 
     private static boolean usesNetworkExtensions(String expression) {

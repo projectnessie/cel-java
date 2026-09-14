@@ -285,6 +285,13 @@ public final class Checker {
           resultType = fieldType.type;
         }
         break;
+      case kindAbstract:
+        if (isOptionalType(targetType)) {
+          resultType = Decls.newAbstractType("optional_type", Collections.singletonList(Decls.Dyn));
+        } else {
+          errors.typeDoesNotSupportFieldSelection(location(e), targetType);
+        }
+        break;
       case kindTypeParam:
         // Set the operand type to DYN to prevent assignment to a potentionally incorrect type
         // at a later point in type-checking. The isAssignable call will update the type
@@ -307,6 +314,10 @@ public final class Checker {
       resultType = Decls.Bool;
     }
     setType(e, resultType);
+  }
+
+  private static boolean isOptionalType(Type type) {
+    return type.hasAbstractType() && "optional_type".equals(type.getAbstractType().getName());
   }
 
   private boolean isQualifiedLocalVariableSelection(Expr.Builder e) {
@@ -469,10 +480,21 @@ public final class Checker {
   void checkCreateList(Expr.Builder e) {
     CreateList.Builder create = e.getListExprBuilder();
     Type elemType = null;
+    boolean[] optionalIndices = new boolean[create.getElementsCount()];
+    for (int index : create.getOptionalIndicesList()) {
+      optionalIndices[index] = true;
+    }
     for (int i = 0; i < create.getElementsBuilderList().size(); i++) {
       Expr.Builder el = create.getElementsBuilderList().get(i);
       check(el);
-      elemType = joinTypes(location(el), elemType, getType(el));
+      Type type = getType(el);
+      if (optionalIndices[i]) {
+        Type unwrapped = optionalValueType(type);
+        if (unwrapped != null) {
+          type = unwrapped;
+        }
+      }
+      elemType = joinTypes(location(el), elemType, type);
     }
     if (elemType == null) {
       // If the list is empty, assign free type var to elem type.
@@ -501,7 +523,14 @@ public final class Checker {
 
       Expr.Builder val = ent.getValueBuilder();
       check(val);
-      valueType = joinTypes(location(val), valueType, getType(val));
+      Type type = getType(val);
+      if (ent.getOptionalEntry()) {
+        Type unwrapped = optionalValueType(type);
+        if (unwrapped != null) {
+          type = unwrapped;
+        }
+      }
+      valueType = joinTypes(location(val), valueType, type);
     }
     if (keyType == null) {
       // If the map is empty, assign free type variables to typeKey and value type.
@@ -553,10 +582,24 @@ public final class Checker {
       if (t != null) {
         fieldType = t.type;
       }
-      if (!isAssignable(fieldType, getType(value))) {
+      Type valueType = getType(value);
+      if (ent.getOptionalEntry()) {
+        Type unwrapped = optionalValueType(valueType);
+        if (unwrapped != null) {
+          valueType = unwrapped;
+        }
+      }
+      if (!isAssignable(fieldType, valueType)) {
         errors.fieldTypeMismatch(locationByID(ent.getId()), field, fieldType, getType(value));
       }
     }
+  }
+
+  private static Type optionalValueType(Type type) {
+    if (!isOptionalType(type) || type.getAbstractType().getParameterTypesCount() == 0) {
+      return null;
+    }
+    return type.getAbstractType().getParameterTypes(0);
   }
 
   void checkComprehension(Expr.Builder e) {
