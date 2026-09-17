@@ -1360,6 +1360,16 @@ class ParserTest {
                 "expression code point size exceeds limit: size: 3, limit 2"));
   }
 
+  @Test
+  void optionalSelectUsesDistinctExpressionIds() {
+    ParseResult parsed = Parser.parseAllMacros(Source.newTextSource("target.?field"));
+    assertThat(parsed.getErrors().getErrors()).isEmpty();
+
+    Expr optionalSelect = parsed.getExpr();
+    assertThat(optionalSelect.getId())
+        .isNotEqualTo(optionalSelect.getCallExpr().getArgs(1).getId());
+  }
+
   static class KindAndIdAdorner implements Debug.Adorner {
 
     @Override

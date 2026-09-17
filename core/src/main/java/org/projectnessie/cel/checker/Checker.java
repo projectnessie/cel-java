@@ -56,6 +56,7 @@ import org.projectnessie.cel.checker.Types.Kind;
 import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.Source;
 import org.projectnessie.cel.common.containers.Container;
+import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.Err.ErrException;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.parser.Parser.ParseResult;
@@ -264,10 +265,23 @@ public final class Checker {
       }
     }
 
-    // Interpret as field selection, first traversing down the operand.
-    check(sel.getOperandBuilder());
+    Type resultType = checkSelectField(e, sel.getOperandBuilder(), sel.getField(), false);
+    if (sel.getTestOnly()) {
+      resultType = Decls.Bool;
+    }
+    setType(e, resultType);
+  }
 
-    Type targetType = getType(sel.getOperandBuilder());
+  private Type checkSelectField(
+      Expr.Builder e, Expr.Builder operand, String field, boolean optionalSelect) {
+    // Interpret as field selection, first traversing down the operand.
+    check(operand);
+
+    Type targetType = getType(operand);
+    boolean optionalOperand = isOptionalType(targetType);
+    if (optionalOperand) {
+      targetType = optionalValueType(targetType);
+    }
     // Assume error type by default as most types do not support field selection.
     Type resultType = Decls.Error;
     switch (kindOf(targetType)) {
@@ -279,11 +293,13 @@ public final class Checker {
       case kindObject:
         // Objects yield their field type declaration as the selection result type, but only if
         // the field is defined.
-        FieldType fieldType =
-            lookupFieldType(location(e), targetType.getMessageType(), sel.getField());
+        FieldType fieldType = lookupFieldType(location(e), targetType.getMessageType(), field);
         if (fieldType != null) {
           resultType = fieldType.type;
         }
+        break;
+      case kindAbstract:
+        errors.typeDoesNotSupportFieldSelection(location(e), targetType);
         break;
       case kindTypeParam:
         // Set the operand type to DYN to prevent assignment to a potentionally incorrect type
@@ -303,10 +319,16 @@ public final class Checker {
         }
         break;
     }
-    if (sel.getTestOnly()) {
-      resultType = Decls.Bool;
+    if (optionalOperand || optionalSelect) {
+      return Decls.newAbstractType("optional_type", Collections.singletonList(resultType));
     }
-    setType(e, resultType);
+    return resultType;
+  }
+
+  private static boolean isOptionalType(Type type) {
+    return type != null
+        && type.hasAbstractType()
+        && "optional_type".equals(type.getAbstractType().getName());
   }
 
   private boolean isQualifiedLocalVariableSelection(Expr.Builder e) {
@@ -326,6 +348,20 @@ public final class Checker {
     Call.Builder call = e.getCallExprBuilder();
     List<Expr.Builder> args = call.getArgsBuilderList();
     String fnName = call.getFunction();
+
+    if (fnName.equals(Operator.OptionalSelect.id)) {
+      Decl fn = env.lookupFunction(fnName);
+      if (fn == null) {
+        for (Expr.Builder arg : args) {
+          check(arg);
+        }
+        errors.undeclaredReference(location(e), env.container.name(), fnName);
+        setType(e, Decls.Error);
+        return;
+      }
+      checkOptionalSelect(e, call, args);
+      return;
+    }
 
     // Traverse arguments.
     for (Expr.Builder arg : args) {
@@ -379,6 +415,27 @@ public final class Checker {
     }
     // Function name not declared, record error.
     errors.undeclaredReference(location(e), env.container.name(), fnName);
+  }
+
+  private void checkOptionalSelect(Expr.Builder e, Call.Builder call, List<Expr.Builder> args) {
+    if (call.getTarget() != Expr.getDefaultInstance() || args.size() != 2) {
+      errors.noMatchingOverload(location(e), call.getFunction(), List.of(), false);
+      setType(e, Decls.Error);
+      return;
+    }
+
+    Expr.Builder field = args.get(1);
+    check(field);
+    if (field.getExprKindCase() != Expr.ExprKindCase.CONST_EXPR
+        || field.getConstExpr().getConstantKindCase() != Constant.ConstantKindCase.STRING_VALUE) {
+      errors.typeMismatch(location(field), Decls.String, getType(field));
+      setType(e, Decls.Error);
+      return;
+    }
+
+    Type resultType = checkSelectField(e, args.get(0), field.getConstExpr().getStringValue(), true);
+    setType(e, resultType);
+    setReference(e, newFunctionReference(Collections.singletonList("optional_select")));
   }
 
   void resolveOverloadOrError(
@@ -469,10 +526,18 @@ public final class Checker {
   void checkCreateList(Expr.Builder e) {
     CreateList.Builder create = e.getListExprBuilder();
     Type elemType = null;
+    boolean[] optionalIndices = new boolean[create.getElementsCount()];
+    for (int index : create.getOptionalIndicesList()) {
+      optionalIndices[index] = true;
+    }
     for (int i = 0; i < create.getElementsBuilderList().size(); i++) {
       Expr.Builder el = create.getElementsBuilderList().get(i);
       check(el);
-      elemType = joinTypes(location(el), elemType, getType(el));
+      Type type = getType(el);
+      if (optionalIndices[i]) {
+        type = unwrapOptionalEntry(location(el), type);
+      }
+      elemType = joinTypes(location(el), elemType, type);
     }
     if (elemType == null) {
       // If the list is empty, assign free type var to elem type.
@@ -501,7 +566,11 @@ public final class Checker {
 
       Expr.Builder val = ent.getValueBuilder();
       check(val);
-      valueType = joinTypes(location(val), valueType, getType(val));
+      Type type = getType(val);
+      if (ent.getOptionalEntry()) {
+        type = unwrapOptionalEntry(location(val), type);
+      }
+      valueType = joinTypes(location(val), valueType, type);
     }
     if (keyType == null) {
       // If the map is empty, assign free type variables to typeKey and value type.
@@ -553,10 +622,31 @@ public final class Checker {
       if (t != null) {
         fieldType = t.type;
       }
-      if (!isAssignable(fieldType, getType(value))) {
+      Type valueType = getType(value);
+      if (ent.getOptionalEntry()) {
+        valueType = unwrapOptionalEntry(location(value), valueType);
+      }
+      if (!isAssignable(fieldType, valueType)) {
         errors.fieldTypeMismatch(locationByID(ent.getId()), field, fieldType, getType(value));
       }
     }
+  }
+
+  private static Type optionalValueType(Type type) {
+    if (!isOptionalType(type) || type.getAbstractType().getParameterTypesCount() == 0) {
+      return null;
+    }
+    return type.getAbstractType().getParameterTypes(0);
+  }
+
+  private Type unwrapOptionalEntry(Location location, Type type) {
+    Type unwrapped = optionalValueType(type);
+    if (unwrapped != null || isDyn(type)) {
+      return unwrapped != null ? unwrapped : type;
+    }
+    errors.typeMismatch(
+        location, Decls.newAbstractType("optional_type", Collections.singletonList(type)), type);
+    return type;
   }
 
   void checkComprehension(Expr.Builder e) {

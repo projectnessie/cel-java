@@ -50,8 +50,8 @@ Unary :
 Member :
   Primary
   (
-    <DOT> Field [<LPAREN> (<RPAREN> | ExprList <RPAREN>)]
-  | <LBRACKET> Expr <RBRACKET>
+    <DOT> [<QUESTIONMARK>] Field [<LPAREN> (<RPAREN> | ExprList <RPAREN>)]
+  | <LBRACKET> [<QUESTIONMARK>] Expr <RBRACKET>
   | <LBRACE> [FieldInitializerList] [<COMMA>] <RBRACE>
   )*!
   ;
@@ -59,7 +59,7 @@ Member :
 Primary :
     [<DOT>] <IDENTIFIER> [<LPAREN> (<RPAREN> | ExprList <RPAREN>)]
   | <LPAREN> Expr <RPAREN>
-  | <LBRACKET> (<RBRACKET> | ExprList [<COMMA>] <RBRACKET>)
+  | <LBRACKET> (<RBRACKET> | ListInitializerList [<COMMA>] <RBRACKET>)
   | <LBRACE> (<RBRACE> | MapInitializerList [<COMMA>] <RBRACE>)
   | ConstantLiteral
   ;
@@ -68,8 +68,12 @@ ExprList :
   Expr (<COMMA> Expr =>||)*!
   ;
 
+ListInitializerList :
+  [<QUESTIONMARK>] Expr (<COMMA> [<QUESTIONMARK>] Expr =>||)*!
+  ;
+
 FieldInitializerList :
-  Field <COLON> Expr (<COMMA> Field <COLON> Expr =>||)*!
+  [<QUESTIONMARK>] Field <COLON> Expr (<COMMA> [<QUESTIONMARK>] Field <COLON> Expr =>||)*!
   ;
 
 Field :
@@ -78,7 +82,7 @@ Field :
   ;
 
 MapInitializerList :
-  Expr <COLON> Expr (<COMMA> Expr <COLON> Expr =>||)*!
+  [<QUESTIONMARK>] Expr <COLON> Expr (<COMMA> [<QUESTIONMARK>] Expr <COLON> Expr =>||)*!
   ;
 
 ConstantLiteral :

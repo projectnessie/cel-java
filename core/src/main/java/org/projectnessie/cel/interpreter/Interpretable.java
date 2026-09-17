@@ -44,6 +44,7 @@ import org.projectnessie.cel.common.types.IterableT;
 import org.projectnessie.cel.common.types.IteratorT;
 import org.projectnessie.cel.common.types.ListT;
 import org.projectnessie.cel.common.types.MapT;
+import org.projectnessie.cel.common.types.OptionalT;
 import org.projectnessie.cel.common.types.Overloads;
 import org.projectnessie.cel.common.types.StringT;
 import org.projectnessie.cel.common.types.ref.FieldType;
@@ -429,6 +430,85 @@ public interface Interpretable {
     @Override
     public String toString() {
       return "EvalAnd{" + "id=" + id + ", lhs=" + lhs + ", rhs=" + rhs + '}';
+    }
+  }
+
+  final class EvalOptionalOr extends AbstractEvalLhsRhs implements InterpretableCall {
+    private final String function;
+    private final String overload;
+    private final boolean returnValue;
+
+    EvalOptionalOr(
+        long id,
+        String function,
+        String overload,
+        Interpretable lhs,
+        Interpretable rhs,
+        boolean returnValue) {
+      super(id, lhs, rhs);
+      this.function = Objects.requireNonNull(function);
+      this.overload = Objects.requireNonNull(overload);
+      this.returnValue = returnValue;
+    }
+
+    @Override
+    public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
+      Val left = lhs.eval(ctx);
+      if (isUnknownOrError(left)) {
+        return left;
+      }
+      if (left instanceof OptionalT optional && optional.hasValue()) {
+        return returnValue ? optional.getValue() : optional;
+      }
+
+      Val right = rhs.eval(ctx);
+      if (isUnknownOrError(right)) {
+        return right;
+      }
+      if (left.type().hasTrait(Trait.ReceiverType)) {
+        return ((Receiver) left).receive(function, overload, right);
+      }
+      return noSuchOverload(left, function, overload, new Val[] {right});
+    }
+
+    @Override
+    public Cost cost() {
+      return calShortCircuitBinaryOpsCost(lhs, rhs);
+    }
+
+    @Override
+    public String function() {
+      return function;
+    }
+
+    @Override
+    public String overloadID() {
+      return overload;
+    }
+
+    @Override
+    public Interpretable[] args() {
+      return new Interpretable[] {lhs, rhs};
+    }
+
+    @Override
+    public String toString() {
+      return "EvalOptionalOr{"
+          + "id="
+          + id
+          + ", lhs="
+          + lhs
+          + ", rhs="
+          + rhs
+          + ", function='"
+          + function
+          + '\''
+          + ", overload='"
+          + overload
+          + '\''
+          + ", returnValue="
+          + returnValue
+          + '}';
     }
   }
 
@@ -877,18 +957,24 @@ public interface Interpretable {
 
   final class EvalList extends AbstractEval implements Coster {
     final Interpretable[] elems;
+    final boolean[] optionalIndices;
     private final TypeAdapter adapter;
 
     EvalList(long id, Interpretable[] elems, TypeAdapter adapter) {
+      this(id, elems, new boolean[elems.length], adapter);
+    }
+
+    EvalList(long id, Interpretable[] elems, boolean[] optionalIndices, TypeAdapter adapter) {
       super(id);
       this.elems = elems;
+      this.optionalIndices = optionalIndices;
       this.adapter = adapter;
     }
 
     /** Eval implements the Interpretable interface method. */
     @Override
     public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
-      Val[] elemVals = new Val[elems.length];
+      List<Val> elemVals = new ArrayList<>(elems.length);
       // If any argument is unknown or error early terminate.
       for (int i = 0; i < elems.length; i++) {
         Interpretable elem = elems[i];
@@ -896,9 +982,19 @@ public interface Interpretable {
         if (isUnknownOrError(elemVal)) {
           return elemVal;
         }
-        elemVals[i] = elemVal;
+        if (optionalIndices[i]) {
+          if (!(elemVal instanceof OptionalT)) {
+            return newErr("optional list element is not optional");
+          }
+          OptionalT optional = (OptionalT) elemVal;
+          if (!optional.hasValue()) {
+            continue;
+          }
+          elemVal = optional.getValue();
+        }
+        elemVals.add(elemVal);
       }
-      return adapter.nativeToValue(elemVals);
+      return adapter.nativeToValue(elemVals.toArray(Val[]::new));
     }
 
     /** Cost implements the Coster interface method. */
@@ -916,12 +1012,23 @@ public interface Interpretable {
   final class EvalMap extends AbstractEval implements Coster {
     final Interpretable[] keys;
     final Interpretable[] vals;
+    final boolean[] optionalEntries;
     private final TypeAdapter adapter;
 
     EvalMap(long id, Interpretable[] keys, Interpretable[] vals, TypeAdapter adapter) {
+      this(id, keys, vals, new boolean[keys.length], adapter);
+    }
+
+    EvalMap(
+        long id,
+        Interpretable[] keys,
+        Interpretable[] vals,
+        boolean[] optionalEntries,
+        TypeAdapter adapter) {
       super(id);
       this.keys = keys;
       this.vals = vals;
+      this.optionalEntries = optionalEntries;
       this.adapter = adapter;
     }
 
@@ -942,6 +1049,16 @@ public interface Interpretable {
         Val valVal = vals[i].eval(ctx);
         if (isUnknownOrError(valVal)) {
           return valVal;
+        }
+        if (optionalEntries[i]) {
+          if (!(valVal instanceof OptionalT)) {
+            return newErr("optional map entry is not optional");
+          }
+          OptionalT optional = (OptionalT) valVal;
+          if (!optional.hasValue()) {
+            continue;
+          }
+          valVal = optional.getValue();
         }
         if (entries.putIfAbsent(keyVal, valVal) != null) {
           // Prevent duplicate keys, error out.
@@ -976,14 +1093,26 @@ public interface Interpretable {
     private final String typeName;
     private final String[] fields;
     private final Interpretable[] vals;
+    private final boolean[] optionalEntries;
     private final TypeProvider provider;
 
     EvalObj(
         long id, String typeName, String[] fields, Interpretable[] vals, TypeProvider provider) {
+      this(id, typeName, fields, vals, new boolean[fields.length], provider);
+    }
+
+    EvalObj(
+        long id,
+        String typeName,
+        String[] fields,
+        Interpretable[] vals,
+        boolean[] optionalEntries,
+        TypeProvider provider) {
       super(id);
       this.typeName = Objects.requireNonNull(typeName);
       this.fields = Objects.requireNonNull(fields);
       this.vals = Objects.requireNonNull(vals);
+      this.optionalEntries = optionalEntries;
       this.provider = Objects.requireNonNull(provider);
     }
 
@@ -997,6 +1126,16 @@ public interface Interpretable {
         Val val = vals[i].eval(ctx);
         if (isUnknownOrError(val)) {
           return val;
+        }
+        if (optionalEntries[i]) {
+          if (!(val instanceof OptionalT)) {
+            return newErr("optional message field is not optional");
+          }
+          OptionalT optional = (OptionalT) val;
+          if (!optional.hasValue()) {
+            continue;
+          }
+          val = optional.getValue();
         }
         fieldVals.put(field, val);
       }

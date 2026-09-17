@@ -42,6 +42,8 @@ public enum Operator {
   Modulo("_%_", 3, "%"),
   Negate("-_", 2, "-"),
   Index("_[_]", 1, null),
+  OptionalSelect("@optional_select"),
+  OptionalIndex("@optional_index"),
   // Macros, must have a valid identifier.
   Has("has"),
   All("all"),

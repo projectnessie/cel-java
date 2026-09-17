@@ -62,6 +62,7 @@ import org.projectnessie.cel.interpreter.Interpretable.EvalMap;
 import org.projectnessie.cel.interpreter.Interpretable.EvalMapFold;
 import org.projectnessie.cel.interpreter.Interpretable.EvalNe;
 import org.projectnessie.cel.interpreter.Interpretable.EvalObj;
+import org.projectnessie.cel.interpreter.Interpretable.EvalOptionalOr;
 import org.projectnessie.cel.interpreter.Interpretable.EvalOr;
 import org.projectnessie.cel.interpreter.Interpretable.EvalReceiverVarArgs;
 import org.projectnessie.cel.interpreter.Interpretable.EvalTestOnly;
@@ -394,6 +395,18 @@ public interface InterpretablePlanner {
       if (resolvedFunc.fnName.equals(Operator.Equals.id)) return planCallEqual(expr, args);
       if (resolvedFunc.fnName.equals(Operator.NotEquals.id)) return planCallNotEqual(expr, args);
       if (resolvedFunc.fnName.equals(Operator.Index.id)) return planCallIndex(expr, args);
+      if ("optional_or".equals(resolvedFunc.overloadId)
+          || (resolvedFunc.overloadId.isEmpty()
+              && "or".equals(resolvedFunc.fnName)
+              && disp.findOverload("optional_or") != null))
+        return new EvalOptionalOr(
+            expr.getId(), resolvedFunc.fnName, resolvedFunc.overloadId, args[0], args[1], false);
+      if ("optional_or_value".equals(resolvedFunc.overloadId)
+          || (resolvedFunc.overloadId.isEmpty()
+              && "orValue".equals(resolvedFunc.fnName)
+              && disp.findOverload("optional_or_value") != null))
+        return new EvalOptionalOr(
+            expr.getId(), resolvedFunc.fnName, resolvedFunc.overloadId, args[0], args[1], true);
 
       // Otherwise, generate Interpretable calls specialized by argument count.
       // Try to find the specific function by overload id.
@@ -560,6 +573,10 @@ public interface InterpretablePlanner {
     Interpretable planCreateList(Expr expr) {
       CreateList list = expr.getListExpr();
       Interpretable[] elems = new Interpretable[list.getElementsCount()];
+      boolean[] optionalIndices = new boolean[list.getElementsCount()];
+      for (int index : list.getOptionalIndicesList()) {
+        optionalIndices[index] = true;
+      }
       for (int i = 0; i < list.getElementsCount(); i++) {
         Expr elem = list.getElements(i);
         Interpretable elemVal = plan(elem);
@@ -568,7 +585,7 @@ public interface InterpretablePlanner {
         }
         elems[i] = elemVal;
       }
-      return new EvalList(expr.getId(), elems, adapter);
+      return new EvalList(expr.getId(), elems, optionalIndices, adapter);
     }
 
     /** planCreateStruct generates a map or object construction Interpretable. */
@@ -580,8 +597,10 @@ public interface InterpretablePlanner {
       List<Entry> entries = str.getEntriesList();
       Interpretable[] keys = new Interpretable[entries.size()];
       Interpretable[] vals = new Interpretable[entries.size()];
+      boolean[] optionalEntries = new boolean[entries.size()];
       for (int i = 0; i < entries.size(); i++) {
         Entry entry = entries.get(i);
+        optionalEntries[i] = entry.getOptionalEntry();
         Interpretable keyVal = plan(entry.getMapKey());
         if (keyVal == null) {
           return null;
@@ -594,7 +613,7 @@ public interface InterpretablePlanner {
         }
         vals[i] = valVal;
       }
-      return new EvalMap(expr.getId(), keys, vals, adapter);
+      return new EvalMap(expr.getId(), keys, vals, optionalEntries, adapter);
     }
 
     /** planCreateObj generates an object construction Interpretable. */
@@ -607,16 +626,18 @@ public interface InterpretablePlanner {
       List<Entry> entries = obj.getEntriesList();
       String[] fields = new String[entries.size()];
       Interpretable[] vals = new Interpretable[entries.size()];
+      boolean[] optionalEntries = new boolean[entries.size()];
       for (int i = 0; i < entries.size(); i++) {
         Entry entry = entries.get(i);
         fields[i] = entry.getFieldKey();
+        optionalEntries[i] = entry.getOptionalEntry();
         Interpretable val = plan(entry.getValue());
         if (val == null) {
           return null;
         }
         vals[i] = val;
       }
-      return new EvalObj(expr.getId(), typeName, fields, vals, provider);
+      return new EvalObj(expr.getId(), typeName, fields, vals, optionalEntries, provider);
     }
 
     /** planComprehension generates an Interpretable fold operation. */
