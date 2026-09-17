@@ -19,10 +19,23 @@ import java.util.Objects;
 import org.projectnessie.cel.Issues;
 import org.projectnessie.cel.common.CELError;
 
+/**
+ * Reports parse or type-check failure while compiling a {@link Script}.
+ *
+ * <p>The structured diagnostics are available through {@link #getIssues()}. Exceptions attached to
+ * individual diagnostics are also attached to this exception as suppressed exceptions.
+ */
 public final class ScriptCreateException extends ScriptException {
 
   private final Issues issues;
 
+  /**
+   * Creates an exception for a failed script compilation stage.
+   *
+   * @param message description of the failed stage
+   * @param issues structured parse or type-check diagnostics
+   * @throws NullPointerException if {@code issues} is {@code null}
+   */
   public ScriptCreateException(String message, Issues issues) {
     super(String.format("%s: %s", message, issues));
     this.issues = issues;
@@ -32,6 +45,11 @@ public final class ScriptCreateException extends ScriptException {
         .forEach(this::addSuppressed);
   }
 
+  /**
+   * Returns the structured diagnostics that caused compilation to fail.
+   *
+   * @return compilation diagnostics
+   */
   public Issues getIssues() {
     return issues;
   }

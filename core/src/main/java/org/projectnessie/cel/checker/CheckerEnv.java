@@ -42,10 +42,16 @@ import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.parser.Macro;
 
 /**
- * Env is the environment for type checking.
+ * Low-level environment used by {@link Checker}.
  *
- * <p>The Env is comprised of a container, type provider, declarations, and other related objects
- * which can be used to assist with type-checking.
+ * <p>A checker environment contains a name container, type provider, variables, functions, and
+ * aggregate-literal policy. Most applications should configure the higher-level {@link
+ * org.projectnessie.cel.Env} instead.
+ *
+ * <p>Complete calls to {@link #add(List)} and {@link #enableDynamicAggregateLiterals(boolean)}
+ * before sharing an instance for concurrent checks. Concurrent checks isolate their expression
+ * state and nested lexical scopes; the shared cache of provider-resolved identifiers supports
+ * concurrent access. Any supplied type provider must also support concurrent reads.
  */
 public final class CheckerEnv {
 
@@ -65,7 +71,7 @@ public final class CheckerEnv {
     this.aggLitElemType = aggLitElemType;
   }
 
-  /** NewEnv returns a new *Env with the given parameters. */
+  /** Creates an empty checker environment with dynamic aggregate literal element types. */
   public static CheckerEnv newCheckerEnv(Container container, TypeProvider provider) {
     Scopes declarations = newScopes();
     // declarations.push(); // TODO why this ??
@@ -73,7 +79,7 @@ public final class CheckerEnv {
     return new CheckerEnv(container, provider, declarations, dynElementType);
   }
 
-  /** NewStandardEnv returns a new *Env with the given params plus standard declarations. */
+  /** Creates a checker environment initialized with standard CEL declarations. */
   public static CheckerEnv newStandardCheckerEnv(Container container, TypeProvider provider) {
     CheckerEnv e = newCheckerEnv(container, provider);
     e.add(Checker.StandardDeclarations);
@@ -82,21 +88,30 @@ public final class CheckerEnv {
   }
 
   /**
-   * EnableDynamicAggregateLiterals detmerines whether list and map literals may support mixed
-   * element types at check-time. This does not preclude the presence of a dynamic list or map
-   * somewhere in the CEL evaluation process.
+   * Configures whether list and map literals may contain mixed element types at check time.
+   *
+   * <p>This setting does not prohibit dynamically typed collections from entering evaluation by
+   * other means. Configure it before sharing this environment for checks.
    */
   public CheckerEnv enableDynamicAggregateLiterals(boolean enabled) {
     aggLitElemType = enabled ? dynElementType : homogenousElementType;
     return this;
   }
 
-  /** Add adds new Decl protos to the Env. Returns an error for identifier redeclarations. */
+  /**
+   * Adds declarations to this environment.
+   *
+   * @throws IllegalArgumentException if an identifier is redeclared or function overloads overlap
+   */
   public void add(Decl... decls) {
     add(Arrays.asList(decls));
   }
 
-  /** Add adds new Decl protos to the Env. Returns an error for identifier redeclarations. */
+  /**
+   * Adds declarations to this environment.
+   *
+   * @throws IllegalArgumentException if an identifier is redeclared or function overloads overlap
+   */
   public void add(List<Decl> decls) {
     List<String> errMsgs = new ArrayList<>();
     for (Decl decl : decls) {
@@ -115,8 +130,11 @@ public final class CheckerEnv {
   }
 
   /**
-   * LookupIdent returns a Decl proto for typeName as an identifier in the Env. Returns nil if no
-   * such identifier is found in the Env.
+   * Resolves an identifier using local declarations, the name container, and the type provider.
+   *
+   * <p>Provider-resolved identifiers are cached in the root scope.
+   *
+   * @return the resolved declaration, or {@code null} when no candidate resolves
    */
   public Decl lookupIdent(String name) {
     if (!name.startsWith(".") && hasLocalIdent(name)) {
@@ -173,8 +191,9 @@ public final class CheckerEnv {
   }
 
   /**
-   * LookupFunction returns a Decl proto for typeName as a function in env. Returns nil if no such
-   * function is found in env.
+   * Resolves a function using the configured name container.
+   *
+   * @return the resolved function declaration, or {@code null} when absent
    */
   public Decl lookupFunction(String name) {
     for (String candidate : container.resolveCandidateNames(name)) {

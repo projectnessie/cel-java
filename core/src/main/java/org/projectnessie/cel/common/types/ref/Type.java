@@ -17,24 +17,37 @@ package org.projectnessie.cel.common.types.ref;
 
 import org.projectnessie.cel.common.types.traits.Trait;
 
-/** Type interface indicate the name of a given type. */
+/**
+ * Runtime CEL type value.
+ *
+ * <p>A type identifies values by their CEL name and advertises the behavioral {@link Trait traits}
+ * implemented by those values. Custom {@link Val} implementations must return a stable type whose
+ * advertised traits agree with the Java trait interfaces implemented by the value.
+ */
 public interface Type extends Val {
 
   /**
-   * HasTrait returns whether the type has a given trait associated with it.
+   * Tests whether values of this type support {@code trait}.
    *
-   * <p>See common/types/traits/traits.go for a list of supported traits.
+   * @param trait behavioral capability to test
+   * @return whether values of this type implement the corresponding trait contract
    */
   boolean hasTrait(Trait trait);
 
   /**
-   * TypeName returns the qualified type name of the type.
+   * Returns the stable, qualified CEL type name.
    *
    * <p>The type name is also used as the type's identifier name at type-check and interpretation
    * time.
+   *
+   * @return the CEL type name
    */
   String typeName();
 
-  /** Get the type enum. */
+  /**
+   * Returns the built-in runtime category used for dispatch.
+   *
+   * @return the runtime type category
+   */
   TypeEnum typeEnum();
 }

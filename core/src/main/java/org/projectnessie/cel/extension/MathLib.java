@@ -36,9 +36,13 @@ import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.UintT;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Lister;
+import org.projectnessie.cel.interpreter.functions.FunctionOp;
 import org.projectnessie.cel.interpreter.functions.Overload;
+import org.projectnessie.cel.interpreter.functions.QuaternaryOp;
+import org.projectnessie.cel.interpreter.functions.QuinaryOp;
+import org.projectnessie.cel.interpreter.functions.TernaryOp;
 
-/** MathLib provides CEL helper functions from the standard math extension library. */
+/** CEL standard math extension library. */
 public final class MathLib implements Library {
   private static final String GREATEST = "math.greatest";
   private static final String LEAST = "math.least";
@@ -60,6 +64,7 @@ public final class MathLib implements Library {
 
   private MathLib() {}
 
+  /** Returns an environment option installing the math declarations and implementations. */
   public static EnvOption math() {
     return Library.Lib(new MathLib());
   }
@@ -91,10 +96,34 @@ public final class MathLib implements Library {
   public List<ProgramOption> getProgramOptions() {
     List<Overload> overloads = new ArrayList<>();
     overloads.add(
-        Overload.overload(GREATEST, null, MathLib::greatest, MathLib::greatest, MathLib::greatest));
-    overloads.add(Overload.overload(LEAST, null, MathLib::least, MathLib::least, MathLib::least));
-    addArityOverloads(overloads, GREATEST, MathLib::greatest);
-    addArityOverloads(overloads, LEAST, MathLib::least);
+        Overload.overload(
+            GREATEST,
+            null,
+            MathLib::greatest,
+            MathLib::greatest,
+            MathLib::greatest,
+            MathLib::greatest,
+            MathLib::greatest,
+            MathLib::greatest));
+    overloads.add(
+        Overload.overload(
+            LEAST,
+            null,
+            MathLib::least,
+            MathLib::least,
+            MathLib::least,
+            MathLib::least,
+            MathLib::least,
+            MathLib::least));
+    addArityOverloads(
+        overloads,
+        GREATEST,
+        MathLib::greatest,
+        MathLib::greatest,
+        MathLib::greatest,
+        MathLib::greatest);
+    addArityOverloads(
+        overloads, LEAST, MathLib::least, MathLib::least, MathLib::least, MathLib::least);
     overloads.add(Overload.unary(CEIL, MathLib::ceil));
     overloads.add(Overload.unary(overloadId(CEIL, 1), MathLib::ceil));
     overloads.add(Overload.unary(FLOOR, MathLib::floor));
@@ -164,15 +193,18 @@ public final class MathLib implements Library {
   private static void addArityOverloads(
       List<Overload> overloads,
       String function,
-      org.projectnessie.cel.interpreter.functions.FunctionOp op) {
+      FunctionOp op,
+      TernaryOp ternaryOp,
+      QuaternaryOp quaternaryOp,
+      QuinaryOp quinaryOp) {
     overloads.add(Overload.unary(overloadId(function, "int"), op::invoke));
     overloads.add(Overload.unary(overloadId(function, "uint"), op::invoke));
     overloads.add(Overload.unary(overloadId(function, "double"), op::invoke));
     overloads.add(
         Overload.binary(overloadId(function, 2), (left, right) -> op.invoke(left, right)));
-    for (int arity = 3; arity <= 5; arity++) {
-      overloads.add(Overload.function(overloadId(function, arity), op));
-    }
+    overloads.add(Overload.ternary(overloadId(function, 3), ternaryOp));
+    overloads.add(Overload.quaternary(overloadId(function, 4), quaternaryOp));
+    overloads.add(Overload.quinary(overloadId(function, 5), quinaryOp));
     overloads.add(Overload.unary(overloadId(function, "list"), op::invoke));
   }
 
@@ -188,8 +220,85 @@ public final class MathLib implements Library {
     return minMax(values, true);
   }
 
+  private static Val greatest(Val first, Val second, Val third) {
+    return minMax(first, second, third, true);
+  }
+
+  private static Val greatest(Val first, Val second, Val third, Val fourth) {
+    return minMax(first, second, third, fourth, true);
+  }
+
+  private static Val greatest(Val first, Val second, Val third, Val fourth, Val fifth) {
+    return minMax(first, second, third, fourth, fifth, true);
+  }
+
   private static Val least(Val... values) {
     return minMax(values, false);
+  }
+
+  private static Val least(Val first, Val second, Val third) {
+    return minMax(first, second, third, false);
+  }
+
+  private static Val least(Val first, Val second, Val third, Val fourth) {
+    return minMax(first, second, third, fourth, false);
+  }
+
+  private static Val least(Val first, Val second, Val third, Val fourth, Val fifth) {
+    return minMax(first, second, third, fourth, fifth, false);
+  }
+
+  private static Val minMax(
+      Val first, Val second, Val third, Val fourth, Val fifth, boolean greatest) {
+    Val result = minMax(first, second, third, fourth, greatest);
+    if (!isNumber(result)) {
+      return result;
+    }
+    if (!isNumber(fifth)) {
+      return noSuchOverload();
+    }
+    int cmp = compareNumbers(fifth, result);
+    if ((greatest && cmp > 0) || (!greatest && cmp < 0)) {
+      result = fifth;
+    }
+    return result;
+  }
+
+  private static Val minMax(Val first, Val second, Val third, Val fourth, boolean greatest) {
+    Val result = minMax(first, second, third, greatest);
+    if (!isNumber(result)) {
+      return result;
+    }
+    if (!isNumber(fourth)) {
+      return noSuchOverload();
+    }
+    int cmp = compareNumbers(fourth, result);
+    if ((greatest && cmp > 0) || (!greatest && cmp < 0)) {
+      result = fourth;
+    }
+    return result;
+  }
+
+  private static Val minMax(Val first, Val second, Val third, boolean greatest) {
+    if (!isNumber(first)) {
+      return noSuchOverload();
+    }
+    Val result = first;
+    if (!isNumber(second)) {
+      return noSuchOverload();
+    }
+    int cmp = compareNumbers(second, result);
+    if ((greatest && cmp > 0) || (!greatest && cmp < 0)) {
+      result = second;
+    }
+    if (!isNumber(third)) {
+      return noSuchOverload();
+    }
+    cmp = compareNumbers(third, result);
+    if ((greatest && cmp > 0) || (!greatest && cmp < 0)) {
+      result = third;
+    }
+    return result;
   }
 
   private static Val minMax(Val[] values, boolean greatest) {
@@ -217,10 +326,10 @@ public final class MathLib implements Library {
 
   private static List<Val> candidates(Val[] values) {
     if (values.length == 1 && values[0] instanceof Lister list) {
-      int size = (int) list.size().intValue();
+      int size = list.nativeSize();
       List<Val> elements = new ArrayList<>(size);
       for (int i = 0; i < size; i++) {
-        elements.add(list.get(intOf(i)));
+        elements.add(list.nativeGetAt(i));
       }
       return elements;
     }

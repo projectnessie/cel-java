@@ -40,6 +40,7 @@ import static org.projectnessie.cel.EnvOption.declarations;
 import static org.projectnessie.cel.EnvOption.homogeneousAggregateLiterals;
 import static org.projectnessie.cel.EnvOption.macros;
 import static org.projectnessie.cel.EnvOption.types;
+import static org.projectnessie.cel.EvalOption.OptDisableNativeEval;
 import static org.projectnessie.cel.EvalOption.OptExhaustiveEval;
 import static org.projectnessie.cel.EvalOption.OptPartialEval;
 import static org.projectnessie.cel.EvalOption.OptTrackState;
@@ -68,6 +69,9 @@ import com.google.api.expr.v1alpha1.Expr.Call;
 import com.google.api.expr.v1alpha1.Expr.Ident;
 import com.google.api.expr.v1alpha1.ParsedExpr;
 import com.google.api.expr.v1alpha1.Type;
+import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.Message;
+import dev.cel.expr.conformance.proto3.TestAllTypes;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -245,6 +249,15 @@ public class CELTest {
   }
 
   @Test
+  void compileReturnsParseIssuesWithoutChecking() {
+    AstIssuesTuple result = newEnv().compile("a +");
+
+    assertThat(result.hasIssues()).isTrue();
+    assertThat(result.getAst()).isNull();
+    assertThat(result.getIssues().getErrors()).isNotEmpty();
+  }
+
+  @Test
   void exampleWithBuiltins() {
     // Variables used within this expression environment.
     EnvOption decls =
@@ -295,6 +308,7 @@ public class CELTest {
   }
 
   @Test
+  @SuppressWarnings("removal")
   void Abbrevs_Disambiguation() {
     Env env =
         newEnv(
@@ -341,6 +355,7 @@ public class CELTest {
   }
 
   @Test
+  @SuppressWarnings("removal")
   void CustomEnvCanSubsetStandardLibrary() {
     Env withoutStdLib = newCustomEnv(declarations(Decls.newVar("resource.name", Decls.String)));
     AstIssuesTuple missingStartsWith =
@@ -653,15 +668,13 @@ public class CELTest {
                   if (args.length != 3) {
                     return newErr("invalid arguments to 'get'");
                   }
-                  if (!(args[0] instanceof Mapper)) {
+                  if (!(args[0] instanceof Mapper attrs)) {
                     return newErr(
                         "invalid operand of type '%s' to obj.get(key, def)", args[0].type());
                   }
-                  Mapper attrs = (Mapper) args[0];
-                  if (!(args[1] instanceof StringT)) {
+                  if (!(args[1] instanceof StringT key)) {
                     return newErr("invalid key of type '%s' to obj.get(key, def)", args[1].type());
                   }
-                  StringT key = (StringT) args[1];
                   Val defVal = args[2];
                   if (attrs.contains(key) == True) {
                     return attrs.get(key);
@@ -798,6 +811,100 @@ public class CELTest {
   }
 
   @Test
+  void logicalUnknownProvenanceIsCompleteAndResidualStateRemainsPerExpression() {
+    Env env =
+        newEnv(
+            declarations(
+                Decls.newVar("a", Decls.Bool),
+                Decls.newVar("b", Decls.Bool),
+                Decls.newVar("c", Decls.Bool)));
+    AstIssuesTuple compiled = env.compile("a && b && c");
+    assertThat(compiled.hasIssues()).isFalse();
+    Expr root = compiled.getAst().getExpr();
+    Expr left = root.getCallExpr().getArgs(0);
+    long aId = left.getCallExpr().getArgs(0).getId();
+    long bId = left.getCallExpr().getArgs(1).getId();
+    long cId = root.getCallExpr().getArgs(1).getId();
+    PartialActivation unknowns =
+        partialVars(
+            emptyMap(), attributePattern("a"), attributePattern("b"), attributePattern("c"));
+
+    for (Program program :
+        asList(
+            env.program(compiled.getAst(), evalOptions(OptTrackState, OptPartialEval)),
+            env.program(
+                compiled.getAst(),
+                evalOptions(OptTrackState, OptPartialEval, OptDisableNativeEval)))) {
+      EvalResult result = program.eval(unknowns);
+
+      assertThat(result.getVal())
+          .isInstanceOfSatisfying(
+              UnknownT.class,
+              unknown -> assertThat(unknown.expressionIds()).containsExactly(aId, bId, cId));
+      assertThat(result.getEvalDetails().getState().value(root.getId())).isEqualTo(result.getVal());
+      assertThat(result.getEvalDetails().getState().value(aId)).isEqualTo(UnknownT.unknownOf(aId));
+      assertThat(result.getEvalDetails().getState().value(bId)).isEqualTo(UnknownT.unknownOf(bId));
+      assertThat(result.getEvalDetails().getState().value(cId)).isEqualTo(UnknownT.unknownOf(cId));
+      assertThat(astToString(env.residualAst(compiled.getAst(), result.getEvalDetails())))
+          .isEqualTo("a && b && c");
+    }
+  }
+
+  @Test
+  void twoUnknownLogicalResidualsRetainBothOperands() {
+    Env env = newEnv(declarations(Decls.newVar("a", Decls.Bool), Decls.newVar("b", Decls.Bool)));
+    PartialActivation unknowns =
+        partialVars(emptyMap(), attributePattern("a"), attributePattern("b"));
+
+    for (String expression : asList("a && b", "a || b")) {
+      AstIssuesTuple compiled = env.compile(expression);
+      assertThat(compiled.hasIssues()).isFalse();
+      Expr root = compiled.getAst().getExpr();
+      long aId = root.getCallExpr().getArgs(0).getId();
+      long bId = root.getCallExpr().getArgs(1).getId();
+
+      for (Program program :
+          asList(
+              env.program(compiled.getAst(), evalOptions(OptTrackState, OptPartialEval)),
+              env.program(
+                  compiled.getAst(),
+                  evalOptions(OptTrackState, OptPartialEval, OptDisableNativeEval)))) {
+        EvalResult result = program.eval(unknowns);
+
+        assertThat(result.getVal())
+            .isInstanceOfSatisfying(
+                UnknownT.class,
+                unknown -> assertThat(unknown.expressionIds()).containsExactly(aId, bId));
+        assertThat(result.getEvalDetails().getState().value(root.getId()))
+            .isEqualTo(result.getVal());
+        assertThat(astToString(env.residualAst(compiled.getAst(), result.getEvalDetails())))
+            .isEqualTo(expression);
+      }
+    }
+  }
+
+  @Test
+  void logicalAbsorbingBooleanDiscardsUnknownProvenance() {
+    Env env = newEnv(declarations(Decls.newVar("a", Decls.Bool), Decls.newVar("b", Decls.Bool)));
+    AstIssuesTuple compiled = env.compile("a && false && b");
+    assertThat(compiled.hasIssues()).isFalse();
+    PartialActivation unknowns =
+        partialVars(emptyMap(), attributePattern("a"), attributePattern("b"));
+
+    for (Program program :
+        asList(
+            env.program(compiled.getAst(), evalOptions(OptTrackState, OptPartialEval)),
+            env.program(
+                compiled.getAst(),
+                evalOptions(OptTrackState, OptPartialEval, OptDisableNativeEval)))) {
+      EvalResult result = program.eval(unknowns);
+      assertThat(result.getVal()).isSameAs(False);
+      assertThat(astToString(env.residualAst(compiled.getAst(), result.getEvalDetails())))
+          .isEqualTo("false");
+    }
+  }
+
+  @Test
   void ResidualAst_Complex() {
     Env e =
         newEnv(
@@ -845,6 +952,95 @@ public class CELTest {
     Env e3 = e2.extend();
     assertThat(e2.getTypeAdapter()).isEqualTo(e3.getTypeAdapter());
     assertThat(e2.getTypeProvider()).isEqualTo(e3.getTypeProvider());
+  }
+
+  @Test
+  void EnvExtensionPreservesProtobufRepresentationBindings() {
+    DynamicMessage dynamic = DynamicMessage.getDefaultInstance(TestAllTypes.getDescriptor());
+
+    Env generated =
+        newEnv(container("cel.expr.conformance"), types(TestAllTypes.getDefaultInstance()));
+    Env generatedExtendedWithDynamic = generated.extend(types(dynamic));
+    assertMessageLiteralRepresentation(generated, TestAllTypes.class);
+    assertMessageLiteralRepresentation(generatedExtendedWithDynamic, DynamicMessage.class);
+
+    Env dynamicEnv = newEnv(container("cel.expr.conformance"), types(dynamic));
+    Env dynamicExtendedWithGenerated = dynamicEnv.extend(types(TestAllTypes.getDefaultInstance()));
+    assertMessageLiteralRepresentation(dynamicEnv, DynamicMessage.class);
+    assertMessageLiteralRepresentation(dynamicExtendedWithGenerated, TestAllTypes.class);
+  }
+
+  private static void assertMessageLiteralRepresentation(
+      Env env, Class<? extends Message> representation) {
+    AstIssuesTuple compiled = env.compile("proto3.TestAllTypes{single_int32: 42}");
+    assertThat(compiled.hasIssues()).isFalse();
+
+    Program nativeProgram = env.program(compiled.getAst());
+    Program establishedProgram = env.program(compiled.getAst(), evalOptions(OptDisableNativeEval));
+    assertThat(nativeProgram.eval(emptyMap()).getVal().value()).isInstanceOf(representation);
+    assertThat(establishedProgram.eval(emptyMap()).getVal().value()).isInstanceOf(representation);
+  }
+
+  @Test
+  void firstCheckFreezesEnvironmentConfiguration() {
+    Env env = newCustomEnv();
+    AstIssuesTuple parsed = env.parse("[1, 'two']");
+    assertThat(parsed.hasIssues()).isFalse();
+
+    AstIssuesTuple dynamicCheck = env.check(parsed.getAst());
+    assertThat(dynamicCheck.hasIssues()).isFalse();
+    assertThat(env.hasFeature(EnvOption.EnvFeature.FeatureDisableDynamicAggregateLiterals))
+        .isFalse();
+
+    assertThatThrownBy(
+            () -> env.setFeature(EnvOption.EnvFeature.FeatureDisableDynamicAggregateLiterals))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage(
+            "environment configuration is frozen after the first check; use extend() to configure"
+                + " a new environment");
+    assertThatThrownBy(() -> declarations(Decls.newVar("late", Decls.Int)).apply(env))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("environment configuration is frozen");
+    assertThatThrownBy(() -> container("late.container").apply(env))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("environment configuration is frozen");
+    assertThat(env.hasFeature(EnvOption.EnvFeature.FeatureDisableDynamicAggregateLiterals))
+        .isFalse();
+
+    Env extended = env.extend(homogeneousAggregateLiterals());
+    assertThat(extended.hasFeature(EnvOption.EnvFeature.FeatureDisableDynamicAggregateLiterals))
+        .isTrue();
+    assertThat(extended.check(parsed.getAst()).hasIssues()).isTrue();
+    assertThat(env.check(parsed.getAst()).hasIssues()).isFalse();
+  }
+
+  @Test
+  void checkerInitializationFailureStillFreezesEnvironmentConfiguration() {
+    Env env =
+        newCustomEnv(
+            declarations(Decls.newVar("duplicate", Decls.Int)),
+            declarations(Decls.newVar("duplicate", Decls.String)));
+    AstIssuesTuple parsed = env.parse("duplicate");
+    assertThat(parsed.hasIssues()).isFalse();
+
+    assertThat(env.check(parsed.getAst()).hasIssues()).isTrue();
+    assertThatThrownBy(
+            () -> env.setFeature(EnvOption.EnvFeature.FeatureDisableDynamicAggregateLiterals))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("environment configuration is frozen");
+  }
+
+  @Test
+  void EnvExtensionPreservesDistinctEqualRegistries() {
+    TypeRegistry adapter = newEmptyRegistry();
+    TypeRegistry provider = newEmptyRegistry();
+    assertThat(adapter).isEqualTo(provider).isNotSameAs(provider);
+
+    Env extended = newEnv(customTypeAdapter(adapter), customTypeProvider(provider)).extend();
+
+    assertThat(extended.getTypeAdapter()).isNotSameAs(adapter);
+    assertThat(extended.getTypeProvider()).isNotSameAs(provider);
+    assertThat(extended.getTypeAdapter()).isNotSameAs(extended.getTypeProvider());
   }
 
   @Test
@@ -922,10 +1118,9 @@ public class CELTest {
         i -> {
           lastInstruction.set(i);
           // Only optimize the instruction if it is a call.
-          if (!(i instanceof InterpretableCall)) {
+          if (!(i instanceof InterpretableCall call)) {
             return i;
           }
-          InterpretableCall call = (InterpretableCall) i;
           // Only optimize the math functions when they have constant arguments.
           switch (call.function()) {
             case "_+_":

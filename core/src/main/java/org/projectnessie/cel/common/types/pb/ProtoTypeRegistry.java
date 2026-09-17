@@ -16,6 +16,7 @@
 package org.projectnessie.cel.common.types.pb;
 
 import static org.projectnessie.cel.common.types.BoolT.BoolType;
+import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.BytesT.BytesType;
 import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
 import static org.projectnessie.cel.common.types.DurationT.DurationType;
@@ -38,6 +39,7 @@ import static org.projectnessie.cel.common.types.UintT.UintType;
 import static org.projectnessie.cel.common.types.pb.Db.collectFileDescriptorSet;
 import static org.projectnessie.cel.common.types.pb.Db.newDb;
 import static org.projectnessie.cel.common.types.pb.DefaultTypeAdapter.maybeUnwrapValue;
+import static org.projectnessie.cel.common.types.pb.FileDescription.newFileDescription;
 import static org.projectnessie.cel.common.types.pb.PbObjectT.newObject;
 import static org.projectnessie.cel.common.types.pb.PbTypeDescription.typeNameFromMessage;
 import static org.projectnessie.cel.common.types.ref.TypeAdapterSupport.maybeNativeToValue;
@@ -45,6 +47,7 @@ import static org.projectnessie.cel.common.types.ref.TypeAdapterSupport.maybeNat
 import com.google.api.expr.v1alpha1.Type;
 import com.google.protobuf.Any;
 import com.google.protobuf.BoolValue;
+import com.google.protobuf.ByteString;
 import com.google.protobuf.BytesValue;
 import com.google.protobuf.Descriptors.Descriptor;
 import com.google.protobuf.Descriptors.EnumDescriptor;
@@ -73,7 +76,9 @@ import com.google.protobuf.WireFormat;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -81,34 +86,98 @@ import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import org.projectnessie.cel.common.ULong;
+import org.projectnessie.cel.common.types.IteratorT;
+import org.projectnessie.cel.common.types.MapT;
 import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.TypeT;
+import org.projectnessie.cel.common.types.Types;
+import org.projectnessie.cel.common.types.ref.FieldGetter;
+import org.projectnessie.cel.common.types.ref.FieldTester;
 import org.projectnessie.cel.common.types.ref.FieldType;
+import org.projectnessie.cel.common.types.ref.StandardScalarFieldProvider;
+import org.projectnessie.cel.common.types.ref.StandardScalarTypeAdapter;
+import org.projectnessie.cel.common.types.ref.TypeAdapterSupport;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Lister;
+import org.projectnessie.cel.common.types.traits.Trait;
 
-public final class ProtoTypeRegistry implements TypeRegistry {
+/**
+ * CEL type registry and value adapter for generated and dynamic Protocol Buffer messages.
+ *
+ * <p>A registry supplies protobuf message and enum declarations to the checker, creates protobuf
+ * values for CEL object literals, and adapts protobuf messages for evaluation. {@link
+ * #newRegistry(Message...)} includes CEL standard runtime types and protobuf well-known types. Pass
+ * representative default message instances to register application schemas and their transitive
+ * descriptor dependencies.
+ *
+ * <p>Ordinary application message descriptors initially use {@link
+ * com.google.protobuf.DynamicMessage}; recognized protobuf well-known types use their canonical
+ * generated representations. Registering an application generated message binds that Java
+ * representation for new values and enables generated field access where available. {@link #copy()}
+ * preserves the current binding in independent mutable registry state, so later registration in one
+ * copy does not affect another.
+ *
+ * <p>Complete registration before sharing a registry with concurrent compilation or evaluation
+ * callers. Concurrent evaluation may populate internal field-access caches, but registration and
+ * copying are configuration operations and must not race with other registry access.
+ *
+ * <p>{@link #newExactAggregateRegistry(Message...)} is an explicit optimization contract for
+ * supported protobuf aggregate fields. The ordinary registry remains the general-purpose choice;
+ * callers must not assume that a particular expression or field uses an optimized evaluator.
+ */
+public class ProtoTypeRegistry
+    implements TypeRegistry, StandardScalarTypeAdapter, StandardScalarFieldProvider {
   private static final ProtoTypeRegistry DEFAULT_REGISTRY = newDefaultRegistry();
 
   private final Map<String, org.projectnessie.cel.common.types.ref.Type> revTypeMap;
-  private final Map<String, FieldType> fieldTypeCache;
+  private final Map<String, Map<String, FieldType>> fieldTypeCache;
   private final Db pbdb;
 
-  private ProtoTypeRegistry(
-      Map<String, org.projectnessie.cel.common.types.ref.Type> revTypeMap, Db pbdb) {
+  ProtoTypeRegistry(Map<String, org.projectnessie.cel.common.types.ref.Type> revTypeMap, Db pbdb) {
     this.revTypeMap = revTypeMap;
     this.fieldTypeCache = new ConcurrentHashMap<>();
     this.pbdb = pbdb;
   }
 
   /**
-   * NewRegistry accepts a list of proto message instances and returns a type provider which can
-   * create new instances of the provided message or any message that proto depends upon in its
-   * FileDescriptor.
+   * Creates a general-purpose registry and registers the supplied message schemas.
+   *
+   * <p>Each message registers its file descriptor and all transitive file dependencies. The
+   * instances also select the generated or dynamic Java representation used for their message
+   * types.
+   *
+   * @param types representative protobuf messages; an empty array creates a registry containing the
+   *     standard and well-known types
+   * @return an independent mutable registry
+   * @throws NullPointerException if {@code types} or an element is null
    */
   public static ProtoTypeRegistry newRegistry(Message... types) {
     ProtoTypeRegistry p = DEFAULT_REGISTRY.copy();
+    for (Message msgType : types) {
+      p.registerMessage(msgType);
+    }
+    return p;
+  }
+
+  /**
+   * Returns an opt-in protobuf registry whose supported aggregate fields expose certified exact
+   * Java representations.
+   *
+   * <p>The returned registry remains a {@link ProtoTypeRegistry}. Unsupported aggregate fields and
+   * all scalar fields retain the default protobuf behavior. Registration and representation binding
+   * otherwise follow {@link #newRegistry(Message...)}.
+   *
+   * @param types representative protobuf messages to register
+   * @return an independent registry with exact aggregate adaptation enabled
+   * @throws NullPointerException if {@code types} or an element is null
+   */
+  public static TypeRegistry newExactAggregateRegistry(Message... types) {
+    ProtoTypeRegistry p =
+        new ExactProtoTypeRegistry(
+            new HashMap<>(DEFAULT_REGISTRY.revTypeMap), DEFAULT_REGISTRY.pbdb.copy());
     for (Message msgType : types) {
       p.registerMessage(msgType);
     }
@@ -165,27 +234,47 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     return p;
   }
 
-  /** NewEmptyRegistry returns a registry which is completely unconfigured. */
+  /**
+   * Creates a registry without CEL runtime type registrations.
+   *
+   * <p>This advanced factory still has an isolated descriptor database initialized with protobuf
+   * well-known descriptors. Prefer {@link #newRegistry(Message...)} unless building the complete
+   * runtime type catalog explicitly.
+   *
+   * @return an independent mutable registry
+   */
   public static ProtoTypeRegistry newEmptyRegistry() {
     return new ProtoTypeRegistry(new HashMap<>(), newDb());
   }
 
   /**
-   * Copy implements the ref.TypeRegistry interface method which copies the current state of the
-   * registry into its own memory space.
+   * Copies the current registry into independent mutable state.
+   *
+   * <p>The copy retains registered runtime types, descriptors, and current generated/dynamic
+   * representation bindings. Later registrations and field caches are isolated.
+   *
+   * @return an independent registry copy
    */
   @Override
   public ProtoTypeRegistry copy() {
-    return new ProtoTypeRegistry(new HashMap<>(this.revTypeMap), pbdb.copy());
+    return newCopy(new HashMap<>(this.revTypeMap), pbdb.copy());
   }
 
+  ProtoTypeRegistry newCopy(
+      Map<String, org.projectnessie.cel.common.types.ref.Type> copiedTypes, Db copiedDb) {
+    return new ProtoTypeRegistry(copiedTypes, copiedDb);
+  }
+
+  /**
+   * Registers a protobuf message or CEL runtime type.
+   *
+   * @param t a {@link Message} or {@link org.projectnessie.cel.common.types.ref.Type}
+   * @throws RuntimeException if the value has another type
+   * @throws NullPointerException if {@code t} is null
+   */
   @Override
   public void register(Object t) {
     if (t instanceof Message) {
-      Set<FileDescriptor> fds = collectFileDescriptorSet((Message) t);
-      for (FileDescriptor fd : fds) {
-        registerDescriptor(fd);
-      }
       registerMessage((Message) t);
     } else if (t instanceof org.projectnessie.cel.common.types.ref.Type) {
       registerType((org.projectnessie.cel.common.types.ref.Type) t);
@@ -194,6 +283,12 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     }
   }
 
+  /**
+   * Resolves a registered protobuf enum constant.
+   *
+   * @param enumName fully qualified protobuf enum-constant name
+   * @return its numeric value as a CEL integer, or a CEL error if unknown
+   */
   @Override
   public Val enumValue(String enumName) {
     EnumValueDescription enumVal = pbdb.describeEnum(enumName);
@@ -203,10 +298,34 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     return intOf(enumVal.value());
   }
 
+  /**
+   * Resolves checked type and runtime access metadata for a protobuf field.
+   *
+   * <p>The returned metadata supports both generated and descriptor-based access according to the
+   * representation currently bound to this registry.
+   *
+   * @param messageType fully qualified registered protobuf message name
+   * @param fieldName protobuf source field name or qualified extension name
+   * @return field metadata, or {@code null} if the message type or field is unknown
+   */
   @Override
   public FieldType findFieldType(String messageType, String fieldName) {
-    String cacheKey = messageType + '\n' + fieldName;
-    return fieldTypeCache.computeIfAbsent(cacheKey, key -> loadFieldType(messageType, fieldName));
+    Map<String, FieldType> messageFields = fieldTypeCache.get(messageType);
+    if (messageFields == null) {
+      Map<String, FieldType> newFields = new ConcurrentHashMap<>();
+      Map<String, FieldType> existing = fieldTypeCache.putIfAbsent(messageType, newFields);
+      messageFields = existing != null ? existing : newFields;
+    }
+    FieldType fieldType = messageFields.get(fieldName);
+    if (fieldType != null) {
+      return fieldType;
+    }
+    FieldType loaded = loadFieldType(messageType, fieldName);
+    if (loaded == null) {
+      return null;
+    }
+    FieldType existing = messageFields.putIfAbsent(fieldName, loaded);
+    return existing != null ? existing : loaded;
   }
 
   private FieldType loadFieldType(String messageType, String fieldName) {
@@ -214,11 +333,102 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     if (field == null) {
       return null;
     }
-    FieldDescription resolvedField = field;
-    return new FieldType(
-        resolvedField.checkedType(),
-        resolvedField::hasField,
-        target -> resolvedField.getField(target, this));
+    FieldTester descriptorTester = field::hasField;
+    FieldGetter descriptorGetter =
+        target -> normalizeFieldValue(field, target, field.rawField(target), false);
+    PbTypeDescription type = pbdb.describeType(messageType);
+    FieldGetter generatedGetter = type != null ? GeneratedFieldAccessor.create(type, field) : null;
+    FieldGetter objectGetter = generatedGetter;
+    if (objectGetter == null && type != null) {
+      objectGetter = GeneratedFieldAccessor.createForObject(type, field);
+    }
+    FieldTester generatedTester =
+        type != null ? GeneratedFieldAccessor.createTester(type, field) : null;
+    FieldTester tester = descriptorTester;
+    if (generatedTester != null) {
+      Class<?> generatedType = type.reflectType();
+      tester =
+          target ->
+              generatedType.isInstance(target)
+                  ? generatedTester.isSet(target)
+                  : field.hasField(target);
+    }
+    FieldGetter getter =
+        generatedGetter != null
+            ? bindGeneratedGetter(type, field, generatedGetter, tester)
+            : descriptorGetter;
+    FieldGetter optimizedObjectGetter =
+        objectGetter != null ? bindGeneratedGetter(type, field, objectGetter, tester) : null;
+    return new ProtoFieldType(
+        field.checkedType(), tester, getter, generatedTester, optimizedObjectGetter);
+  }
+
+  private FieldGetter bindGeneratedGetter(
+      PbTypeDescription type,
+      FieldDescription field,
+      FieldGetter generatedGetter,
+      FieldTester tester) {
+    Class<?> generatedType = type.reflectType();
+    if (field.isWrapper()) {
+      return target ->
+          generatedType.isInstance(target)
+              ? !tester.isSet(target)
+                  ? com.google.protobuf.NullValue.NULL_VALUE
+                  : generatedGetter.getFrom(target)
+              : field.getField(target, this);
+    }
+    if (generatedGetter instanceof FieldGetter.Primitive primitiveGetter) {
+      return new FieldGetter.Primitive() {
+        @Override
+        public Class<?> optimizedTargetType() {
+          return primitiveGetter.optimizedTargetType();
+        }
+
+        @Override
+        public Object getFrom(Object target) {
+          return generatedType.isInstance(target)
+              ? normalizeFieldValue(field, target, primitiveGetter.getFrom(target), true)
+              : normalizeFieldValue(field, target, field.rawField(target), false);
+        }
+
+        @Override
+        public boolean getBooleanFrom(Object target) {
+          return primitiveGetter.getBooleanFrom(target);
+        }
+
+        @Override
+        public long getLongFrom(Object target) {
+          return primitiveGetter.getLongFrom(target);
+        }
+
+        @Override
+        public double getDoubleFrom(Object target) {
+          return primitiveGetter.getDoubleFrom(target);
+        }
+      };
+    }
+    return target ->
+        generatedType.isInstance(target)
+            ? normalizeFieldValue(field, target, generatedGetter.getFrom(target), true)
+            : normalizeFieldValue(field, target, field.rawField(target), false);
+  }
+
+  Object normalizeFieldValue(
+      FieldDescription field, Object target, Object value, boolean generated) {
+    return generated
+        ? field.adaptGeneratedValue(value, this)
+        : field.adaptDescriptorValue(target, value, this);
+  }
+
+  FieldType findFieldTypeForObjectAccess(
+      String messageType, String fieldName, boolean presenceTest) {
+    FieldType fieldType = findFieldType(messageType, fieldName);
+    if (!(fieldType instanceof ProtoFieldType protoFieldType)) {
+      return null;
+    }
+    return presenceTest
+        ? protoFieldType.objectPresenceFieldType
+        : protoFieldType.objectGetterFieldType;
   }
 
   FieldDescription findFieldDescription(String messageType, String fieldName) {
@@ -230,12 +440,15 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     if (field == null) {
       field = pbdb.describeExtension(messageType, fieldName);
     }
-    if (field == null) {
-      return null;
-    }
     return field;
   }
 
+  /**
+   * Resolves a registered CEL type, protobuf enum constant, or extension identifier.
+   *
+   * @param identName identifier to resolve
+   * @return the runtime type/value, or {@code null} if the identifier is unknown
+   */
   @Override
   public Val findIdent(String identName) {
     org.projectnessie.cel.common.types.ref.Type t = revTypeMap.get(identName);
@@ -252,6 +465,12 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     return null;
   }
 
+  /**
+   * Resolves a registered protobuf message as a checked CEL type value.
+   *
+   * @param typeName fully qualified protobuf message name
+   * @return the checked type value, or {@code null} if the message type is unknown
+   */
   @Override
   public Type findType(String typeName) {
     if (pbdb.describeType(typeName) == null) {
@@ -263,6 +482,18 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     return Type.newBuilder().setType(Type.newBuilder().setMessageType(typeName)).build();
   }
 
+  /**
+   * Constructs a registered protobuf message from CEL field values.
+   *
+   * <p>Field values are converted according to their protobuf descriptors. CEL null clears
+   * supported singular message fields and is pruned from supported repeated/map well-known message
+   * values according to protobuf conversion rules.
+   *
+   * @param typeName fully qualified registered protobuf message name
+   * @param fields protobuf source field names and CEL values
+   * @return the constructed protobuf-backed CEL object, or a CEL error for an unknown type, field,
+   *     or invalid field conversion
+   */
   @Override
   public Val newValue(String typeName, Map<String, Val> fields) {
     PbTypeDescription td = pbdb.describeType(typeName);
@@ -287,9 +518,6 @@ public final class ProtoTypeRegistry implements TypeRegistry {
         return noSuchField(name);
       }
 
-      // TODO resolve inefficiency for maps: first converted from a MapT to a native Java map and
-      //  then to a protobuf struct. The intermediate step (the Java map) could be omitted.
-
       FieldDescriptor pbDesc = field.descriptor();
       if (nv.getValue() == org.projectnessie.cel.common.types.NullT.NullValue
           && isNullClearedField(pbDesc)) {
@@ -297,17 +525,22 @@ public final class ProtoTypeRegistry implements TypeRegistry {
       }
 
       try {
-        Object value = toNativeFieldValue(nv.getValue(), field);
-        if (value.getClass().isArray()) {
-          value = Arrays.asList((Object[]) value);
-        }
+        Object value;
+        if (pbDesc.isMapField() && nv.getValue() instanceof MapT map) {
+          value = toProtoMapStructure(field, map);
+        } else {
+          value = toNativeFieldValue(nv.getValue(), field);
+          if (value.getClass().isArray()) {
+            value = Arrays.asList((Object[]) value);
+          }
 
-        if (pbDesc.getJavaType() == JavaType.ENUM) {
-          value = intToProtoEnumValues(field, value);
-        }
+          if (pbDesc.getJavaType() == JavaType.ENUM) {
+            value = intToProtoEnumValues(field, value);
+          }
 
-        if (pbDesc.isMapField()) {
-          value = toProtoMapStructure(pbDesc, value);
+          if (pbDesc.isMapField()) {
+            value = toProtoMapStructure(pbDesc, value);
+          }
         }
 
         builder.setField(pbDesc, value);
@@ -326,19 +559,19 @@ public final class ProtoTypeRegistry implements TypeRegistry {
         && value instanceof Lister) {
       return toNativeRepeatedFieldValue((Lister) value, fieldDesc);
     }
-    return value.convertToNative(field.reflectType());
+    return valueToNative(value, field.reflectType());
   }
 
   private Object toNativeRepeatedFieldValue(Lister value, FieldDescriptor fieldDesc) {
     Class<?> elementType = messageNativeType(fieldDesc);
-    int size = (int) value.size().intValue();
+    int size = value.nativeSize();
     List<Object> converted = new ArrayList<>(size);
     for (int i = 0; i < size; i++) {
-      Val element = value.get(intOf(i));
+      Val element = value.nativeGetAt(i);
       if (element == NullT.NullValue && isNullPrunedMessageField(fieldDesc)) {
         continue;
       }
-      converted.add(element.convertToNative(elementType));
+      converted.add(valueToNative(element, elementType));
     }
     return converted;
   }
@@ -366,38 +599,75 @@ public final class ProtoTypeRegistry implements TypeRegistry {
   }
 
   private static Class<?> messageNativeType(FieldDescriptor field) {
-    switch (field.getMessageType().getFullName()) {
-      case "google.protobuf.Any":
-        return Any.class;
-      case "google.protobuf.BoolValue":
-        return BoolValue.class;
-      case "google.protobuf.BytesValue":
-        return BytesValue.class;
-      case "google.protobuf.DoubleValue":
-        return DoubleValue.class;
-      case "google.protobuf.Duration":
-        return Duration.class;
-      case "google.protobuf.FieldMask":
-        return FieldMask.class;
-      case "google.protobuf.FloatValue":
-        return FloatValue.class;
-      case "google.protobuf.Int32Value":
-        return Int32Value.class;
-      case "google.protobuf.Int64Value":
-        return Int64Value.class;
-      case "google.protobuf.StringValue":
-        return StringValue.class;
-      case "google.protobuf.Timestamp":
-        return Timestamp.class;
-      case "google.protobuf.UInt32Value":
-        return UInt32Value.class;
-      case "google.protobuf.UInt64Value":
-        return UInt64Value.class;
-      case "google.protobuf.Value":
-        return Value.class;
-      default:
-        return Message.class;
+    return switch (field.getMessageType().getFullName()) {
+      case "google.protobuf.Any" -> Any.class;
+      case "google.protobuf.BoolValue" -> BoolValue.class;
+      case "google.protobuf.BytesValue" -> BytesValue.class;
+      case "google.protobuf.DoubleValue" -> DoubleValue.class;
+      case "google.protobuf.Duration" -> Duration.class;
+      case "google.protobuf.FieldMask" -> FieldMask.class;
+      case "google.protobuf.FloatValue" -> FloatValue.class;
+      case "google.protobuf.Int32Value" -> Int32Value.class;
+      case "google.protobuf.Int64Value" -> Int64Value.class;
+      case "google.protobuf.StringValue" -> StringValue.class;
+      case "google.protobuf.Timestamp" -> Timestamp.class;
+      case "google.protobuf.UInt32Value" -> UInt32Value.class;
+      case "google.protobuf.UInt64Value" -> UInt64Value.class;
+      case "google.protobuf.Value" -> Value.class;
+      default -> Message.class;
+    };
+  }
+
+  /** Converts a CEL map directly to protobuf map entries without an intermediate Java map. */
+  private Object toProtoMapStructure(FieldDescription field, MapT value) {
+    FieldDescriptor fieldDesc = field.descriptor();
+    Descriptor entryType = fieldDesc.getMessageType();
+    FieldDescriptor keyType = field.keyType.descriptor();
+    FieldDescriptor valueType = field.valueType.descriptor();
+    WireFormat.FieldType keyFieldType = WireFormat.FieldType.valueOf(keyType.getType().name());
+    WireFormat.FieldType valueFieldType = WireFormat.FieldType.valueOf(valueType.getType().name());
+    List<MapEntry<?, ?>> entries = new ArrayList<>(value.nativeSize());
+
+    IteratorT iterator = value.iterator();
+    while (iterator.hasNext() == True) {
+      Val key = iterator.next();
+      Val mapValue = value.find(key);
+      if (mapValue == NullT.NullValue && isNullPrunedMessageField(valueType)) {
+        continue;
+      }
+
+      Object nativeKey = toNativeMapEntryValue(key, keyType);
+      Object nativeValue = toNativeMapEntryValue(mapValue, valueType);
+      entries.add(
+          MapEntry.newDefaultInstance(
+              entryType, keyFieldType, nativeKey, valueFieldType, nativeValue));
     }
+    return entries;
+  }
+
+  private Object toNativeMapEntryValue(Val value, FieldDescriptor field) {
+    return switch (field.getType()) {
+      case DOUBLE -> valueToDouble(value);
+      case FLOAT -> valueToNative(value, Float.class);
+      case INT64, SINT64, SFIXED64 -> valueToLong(value);
+      case UINT64, FIXED64 -> valueToNative(value, ULong.class).longValue();
+      case INT32, SINT32, SFIXED32 -> valueToInt(value);
+      case UINT32, FIXED32 -> valueToNative(value, ULong.class).intValue();
+      case BOOL -> valueToBoolean(value);
+      case STRING -> valueToNative(value, String.class);
+      case BYTES -> valueToNative(value, ByteString.class);
+      case ENUM -> {
+        if (value == NullT.NullValue) {
+          if (field.getEnumType().getFullName().equals("google.protobuf.NullValue")) {
+            yield 0;
+          }
+          throw new IllegalArgumentException("null is only valid for google.protobuf.NullValue");
+        }
+        yield valueToInt(value);
+      }
+      case MESSAGE -> valueToNative(value, messageNativeType(field));
+      case GROUP -> throw new IllegalArgumentException("protobuf maps cannot contain group values");
+    };
   }
 
   /**
@@ -426,7 +696,7 @@ public final class ProtoTypeRegistry implements TypeRegistry {
             continue;
           }
           if (!(v instanceof Message)) {
-            v = nativeToValue(v).convertToNative(messageNativeType(valueType));
+            v = valueToNative(nativeToValue(v), messageNativeType(valueType));
           }
         }
 
@@ -454,8 +724,7 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     if (value instanceof Number) {
       int enumValue = ((Number) value).intValue();
       value = enumType.findValueByNumberCreatingIfUnknown(enumValue);
-    } else if (value instanceof List) {
-      List list = (List) value;
+    } else if (value instanceof List list) {
       List newList = new ArrayList(list.size());
       for (Object o : list) {
         int enumValue = ((Number) o).intValue();
@@ -474,36 +743,122 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     return value;
   }
 
-  /** RegisterDescriptor registers the contents of a protocol buffer `FileDescriptor`. */
+  /**
+   * Registers the contents of a protocol buffer {@link FileDescriptor}.
+   *
+   * <p>This method registers declarations in that file only. Use {@link #registerMessage(Message)}
+   * to traverse descriptor dependencies and bind a generated or dynamic message representation.
+   * Repeated equivalent registration is idempotent.
+   *
+   * @param fileDesc descriptor whose declarations to register
+   * @throws IllegalArgumentException if the descriptor declares a runtime type name with a
+   *     conflicting kind or trait set
+   * @throws NullPointerException if {@code fileDesc} is null
+   */
   public void registerDescriptor(FileDescriptor fileDesc) {
+    Objects.requireNonNull(fileDesc, "fileDesc");
+    validateTypeRegistrations(runtimeTypes(newFileDescription(fileDesc)));
     FileDescription fd = pbdb.registerDescriptor(fileDesc);
     registerAllTypes(fd);
   }
 
-  /** RegisterMessage registers a protocol buffer message and its dependencies. */
+  /**
+   * Registers a protocol buffer message and all of its descriptor dependencies.
+   *
+   * <p>The message's default instance selects its generated or dynamic representation. Registering
+   * the same schema and representation repeatedly is idempotent. Binding a different representation
+   * updates this registry and invalidates the affected field-access cache.
+   *
+   * @param message representative generated or dynamic message
+   * @throws IllegalArgumentException if the descriptor set declares a runtime type name with a
+   *     conflicting kind or trait set
+   * @throws NullPointerException if {@code message} is null
+   */
   public void registerMessage(Message message) {
+    Objects.requireNonNull(message, "message");
+    String messageType = typeNameFromMessage(message);
+    PbTypeDescription existingDescription = pbdb.describeType(messageType);
+    Class<?> existingRepresentation =
+        existingDescription != null ? existingDescription.reflectType() : null;
+    Class<?> registeredRepresentation = message.getDefaultInstanceForType().getClass();
+    Set<FileDescriptor> descriptors = collectFileDescriptorSet(message);
+    List<org.projectnessie.cel.common.types.ref.Type> runtimeTypes = new ArrayList<>();
+    for (FileDescriptor descriptor : descriptors) {
+      runtimeTypes.addAll(runtimeTypes(newFileDescription(descriptor)));
+    }
+    validateTypeRegistrations(runtimeTypes);
+    for (FileDescriptor descriptor : descriptors) {
+      registerDescriptor(descriptor);
+    }
     FileDescription fd = pbdb.registerMessage(message);
+    if (existingRepresentation != registeredRepresentation) {
+      fieldTypeCache.remove(messageType);
+    }
     registerAllTypes(fd);
   }
 
+  /**
+   * Registers runtime type definitions by name.
+   *
+   * <p>Equivalent definitions have the same runtime kind and complete trait set and are idempotent.
+   * Conflicting definitions fail before any definition from this call is installed.
+   *
+   * @param types runtime types to register
+   * @throws IllegalArgumentException if a type name has a conflicting runtime kind or trait set
+   * @throws NullPointerException if {@code types} or any element is null
+   */
   @Override
   public void registerType(org.projectnessie.cel.common.types.ref.Type... types) {
-    for (org.projectnessie.cel.common.types.ref.Type t : types) {
-      revTypeMap.put(t.typeName(), t);
+    Map<String, org.projectnessie.cel.common.types.ref.Type> additions =
+        validateTypeRegistrations(Arrays.asList(Objects.requireNonNull(types, "types")));
+    revTypeMap.putAll(additions);
+  }
+
+  private Map<String, org.projectnessie.cel.common.types.ref.Type> validateTypeRegistrations(
+      Iterable<org.projectnessie.cel.common.types.ref.Type> types) {
+    Map<String, org.projectnessie.cel.common.types.ref.Type> additions = new LinkedHashMap<>();
+    for (org.projectnessie.cel.common.types.ref.Type input : types) {
+      Objects.requireNonNull(input, "types element");
+      String typeName = Objects.requireNonNull(input.typeName(), "typeName");
+      org.projectnessie.cel.common.types.ref.Type existing = additions.get(typeName);
+      if (existing == null) {
+        existing = revTypeMap.get(typeName);
+      }
+      if (existing == null) {
+        additions.put(typeName, input);
+        continue;
+      }
+      TypeRegistration existingRegistration = TypeRegistration.of(existing);
+      TypeRegistration inputRegistration = TypeRegistration.of(input);
+      if (existingRegistration.typeEnum != inputRegistration.typeEnum) {
+        throw new IllegalArgumentException(
+            String.format(
+                "type registration conflict for '%s': existing kind '%s', input kind '%s'",
+                typeName, existingRegistration.typeEnum, inputRegistration.typeEnum));
+      }
+      if (!existingRegistration.traits.equals(inputRegistration.traits)) {
+        throw new IllegalArgumentException(
+            String.format(
+                "type registration conflict for '%s': existing traits %s, input traits %s",
+                typeName, existingRegistration.traits, inputRegistration.traits));
+      }
     }
-    // TODO: generate an error when the type name is registered more than once.
+    return additions;
   }
 
   /**
-   * NativeToValue converts various "native" types to ref.Val with this specific implementation
-   * providing support for custom proto-based types.
+   * Converts a Java or Protocol Buffer value to a CEL value.
    *
-   * <p>This method should be the inverse of ref.Val.ConvertToNative.
+   * <p>Registered messages become protobuf-backed CEL objects. Protobuf wrapper, JSON, timestamp,
+   * duration, and {@code Any} messages are unwrapped to their CEL representations where possible.
+   * Unknown protobuf types and unsupported Java inputs produce CEL error values.
+   *
+   * @param value value to adapt
+   * @return the converted CEL value or a CEL error
    */
   @Override
   public Val nativeToValue(Object value) {
-    if (value instanceof Message) {
-      Message v = (Message) value;
+    if (value instanceof Message v) {
       String typeName = typeNameFromMessage(v);
       if (typeName.isEmpty()) {
         return anyWithEmptyType();
@@ -543,15 +898,91 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     return unsupportedRefValConversionErr(value);
   }
 
+  @Override
+  public Val nativeToValue(boolean value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(byte value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(short value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(int value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(long value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(float value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(double value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
   void registerAllTypes(FileDescription fd) {
+    List<org.projectnessie.cel.common.types.ref.Type> runtimeTypes = runtimeTypes(fd);
+    registerType(runtimeTypes.toArray(org.projectnessie.cel.common.types.ref.Type[]::new));
+  }
+
+  private static List<org.projectnessie.cel.common.types.ref.Type> runtimeTypes(
+      FileDescription fd) {
+    List<org.projectnessie.cel.common.types.ref.Type> types = new ArrayList<>();
     for (String typeName : fd.getTypeNames()) {
-      registerType(newObjectTypeValue(typeName));
+      org.projectnessie.cel.common.types.ref.Type canonical =
+          Checked.CheckedWellKnowns.containsKey(typeName) ? Types.getTypeByName(typeName) : null;
+      types.add(canonical != null ? canonical : newObjectTypeValue(typeName));
     }
+    return types;
   }
 
   @Override
   public String toString() {
     return "ProtoTypeRegistry{" + "revTypeMap.size=" + revTypeMap.size() + ", pbdb=" + pbdb + '}';
+  }
+
+  private static final class ProtoFieldType extends FieldType {
+    private final FieldType objectPresenceFieldType;
+    private final FieldType objectGetterFieldType;
+
+    private ProtoFieldType(
+        Type type,
+        FieldTester isSet,
+        FieldGetter getFrom,
+        FieldTester generatedTester,
+        FieldGetter objectGetter) {
+      super(type, isSet, getFrom);
+      this.objectPresenceFieldType =
+          generatedTester != null ? new FieldType(type, isSet, getFrom) : null;
+      this.objectGetterFieldType =
+          objectGetter != null ? new FieldType(type, isSet, objectGetter) : null;
+    }
+  }
+
+  private record TypeRegistration(TypeEnum typeEnum, EnumSet<Trait> traits) {
+    static TypeRegistration of(org.projectnessie.cel.common.types.ref.Type type) {
+      TypeEnum typeEnum = Objects.requireNonNull(type.typeEnum(), "typeEnum");
+      EnumSet<Trait> traits = EnumSet.noneOf(Trait.class);
+      for (Trait trait : Trait.values()) {
+        if (type.hasTrait(trait)) {
+          traits.add(trait);
+        }
+      }
+      return new TypeRegistration(typeEnum, traits);
+    }
   }
 
   @Override

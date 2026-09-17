@@ -41,7 +41,13 @@ import org.projectnessie.cel.common.types.traits.Receiver;
 import org.projectnessie.cel.common.types.traits.Sizer;
 import org.projectnessie.cel.common.types.traits.Trait;
 
-/** Runtime value for CEL optional_type values. */
+/**
+ * Runtime value for CEL {@code optional_type} values.
+ *
+ * <p>An optional distinguishes absence from a present CEL value, including a present CEL null.
+ * Optional access helpers return either a present optional, {@link #none()}, or a CEL error value
+ * when the operand does not support the requested operation.
+ */
 public final class OptionalT extends BaseVal implements FieldTester, Indexer, Receiver {
   public static final String OptionalTypeName = "optional_type";
   public static final Type OptionalType =
@@ -58,35 +64,43 @@ public final class OptionalT extends BaseVal implements FieldTester, Indexer, Re
     this.present = present;
   }
 
+  /** Returns the singleton absent optional. */
   public static OptionalT none() {
     return None;
   }
 
+  /** Returns a present optional containing the non-null CEL value. */
   public static OptionalT of(Val value) {
     return new OptionalT(Objects.requireNonNull(value, "value"), true);
   }
 
+  /** Returns an absent optional for a CEL zero value, otherwise a present optional. */
   public static OptionalT ofNonZeroValue(Val value) {
     return isZeroValue(value) ? none() : of(value);
   }
 
+  /** Applies optional field selection to a CEL operand. */
   public static Val optionalSelect(Val operand, Val field) {
     return optionalAccess(operand, field);
   }
 
+  /** Applies optional indexing to a CEL operand. */
   public static Val optionalIndex(Val operand, Val index) {
     return optionalAccess(operand, index);
   }
 
+  /** Returns whether this optional contains a value. */
   public boolean hasValue() {
     return present;
   }
 
+  /** Returns the contained CEL value, or {@code null} when absent. */
   public Val getValue() {
     return value;
   }
 
   @Override
+  @SuppressWarnings("removal")
   public <T> T convertToNative(Class<T> typeDesc) {
     if (typeDesc == Val.class || typeDesc == OptionalT.class) {
       return typeDesc.cast(this);
@@ -112,10 +126,9 @@ public final class OptionalT extends BaseVal implements FieldTester, Indexer, Re
 
   @Override
   public Val equal(Val other) {
-    if (!(other instanceof OptionalT)) {
+    if (!(other instanceof OptionalT optional)) {
       return False;
     }
-    OptionalT optional = (OptionalT) other;
     if (!present || !optional.present) {
       return present == optional.present ? True : False;
     }
@@ -137,15 +150,15 @@ public final class OptionalT extends BaseVal implements FieldTester, Indexer, Re
     if (!present) {
       return False;
     }
-    if (value instanceof OptionalT) {
-      return ((OptionalT) value).isSet(field);
+    if (value instanceof OptionalT optionalT) {
+      return optionalT.isSet(field);
     }
-    if (value instanceof FieldTester) {
-      Val present = ((FieldTester) value).isSet(field);
+    if (value instanceof FieldTester fieldTester) {
+      Val present = fieldTester.isSet(field);
       return isMissingAccess(present) ? False : present;
     }
-    if (value instanceof Container) {
-      return ((Container) value).contains(field);
+    if (value instanceof Container container) {
+      return container.contains(field);
     }
     return noSuchOverload(value, "has", field);
   }
@@ -157,20 +170,16 @@ public final class OptionalT extends BaseVal implements FieldTester, Indexer, Re
 
   @Override
   public Val receive(String function, String overload, Val... args) {
-    switch (function) {
-      case "hasValue":
-        return args.length == 0
-            ? (present ? True : False)
-            : noSuchOverload(this, function, overload, args);
-      case "value":
-        return value(args, function, overload);
-      case "or":
-        return or(args, function, overload);
-      case "orValue":
-        return orValue(args, function, overload);
-      default:
-        return noSuchOverload(this, function, overload, args);
-    }
+    return switch (function) {
+      case "hasValue" ->
+          args.length == 0
+              ? (present ? True : False)
+              : noSuchOverload(this, function, overload, args);
+      case "value" -> value(args, function, overload);
+      case "or" -> or(args, function, overload);
+      case "orValue" -> orValue(args, function, overload);
+      default -> noSuchOverload(this, function, overload, args);
+    };
   }
 
   private Val value(Val[] args, String function, String overload) {
@@ -195,41 +204,28 @@ public final class OptionalT extends BaseVal implements FieldTester, Indexer, Re
   }
 
   private static boolean isZeroValue(Val value) {
-    switch (value.type().typeEnum()) {
-      case Null:
-        return true;
-      case Bool:
-        return value == False || !value.booleanValue();
-      case Int:
-      case Uint:
-        return value.intValue() == 0L;
-      case Double:
-        return value.doubleValue() == 0.0d;
-      case Duration:
-        return Duration.ZERO.equals(value.value());
-      case Timestamp:
-        return value.value() instanceof ZonedDateTime timestamp
-            && timestamp.toInstant().equals(Instant.EPOCH);
-      case String:
-      case Bytes:
-      case List:
-      case Map:
-        return value.type().hasTrait(Trait.SizerType)
-            && ((Sizer) value).size().equal(IntZero) == True;
-      case Object:
-        return value.value() instanceof Message
-            && ((Message) value.value()).getAllFields().isEmpty();
-      default:
-        return false;
-    }
+    return switch (value.type().typeEnum()) {
+      case Null -> true;
+      case Bool -> value == False || !value.booleanValue();
+      case Int, Uint -> value.intValue() == 0L;
+      case Double -> value.doubleValue() == 0.0d;
+      case Duration -> Duration.ZERO.equals(value.value());
+      case Timestamp ->
+          value.value() instanceof ZonedDateTime timestamp
+              && timestamp.toInstant().equals(Instant.EPOCH);
+      case String, Bytes, List, Map ->
+          value instanceof Sizer sizer && sizer.size().equal(IntZero) == True;
+      case Object -> value.value() instanceof Message message && message.getAllFields().isEmpty();
+      default -> false;
+    };
   }
 
   private static Val optionalAccess(Val operand, Val index) {
-    if (operand instanceof OptionalT) {
-      return ((OptionalT) operand).get(index);
+    if (operand instanceof OptionalT optionalT) {
+      return optionalT.get(index);
     }
-    if (operand instanceof FieldTester && index.type().typeEnum() == TypeEnum.String) {
-      Val present = ((FieldTester) operand).isSet(index);
+    if (operand instanceof FieldTester fieldTester && index.type().typeEnum() == TypeEnum.String) {
+      Val present = fieldTester.isSet(index);
       if (present == False) {
         return none();
       }
@@ -237,12 +233,12 @@ public final class OptionalT extends BaseVal implements FieldTester, Indexer, Re
         return isMissingAccess(present) ? none() : present;
       }
     }
-    if (operand instanceof Mapper) {
-      Val value = ((Mapper) operand).find(index);
+    if (operand instanceof Mapper mapper) {
+      Val value = mapper.find(index);
       return value == null ? none() : of(value);
     }
-    if (operand instanceof Indexer) {
-      Val value = ((Indexer) operand).get(index);
+    if (operand instanceof Indexer indexer) {
+      Val value = indexer.get(index);
       if (isMissingAccess(value)) {
         return none();
       }

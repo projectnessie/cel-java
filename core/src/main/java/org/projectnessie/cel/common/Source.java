@@ -19,16 +19,33 @@ import com.google.api.expr.v1alpha1.SourceInfo;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.agrona.collections.IntArrayList;
 
-/** Source interface for filter source contents. */
+/**
+ * Source text and location metadata used when parsing expressions and reporting diagnostics.
+ *
+ * <p>Locations use one-based line numbers and zero-based columns. Source offsets are nonnegative
+ * integer positions in the coordinate system used by the source.
+ */
 public interface Source {
-  /** NewTextSource creates a new Source from the input text string. */
+  /**
+   * Creates a source for the given text with the default {@code <input>} description.
+   *
+   * @param text source text
+   * @return a text-backed source
+   */
   static Source newTextSource(String text) {
     return newStringSource(text, "<input>");
   }
 
-  /** NewStringSource creates a new Source from the given contents and description. */
+  /**
+   * Creates a source for the given text and description.
+   *
+   * @param contents source text
+   * @param description brief source description, such as a file name
+   * @return a text-backed source
+   */
   static Source newStringSource(String contents, String description) {
     // Compute line offsets up front as they are referred to frequently.
     IntArrayList offsets = new IntArrayList();
@@ -49,71 +66,129 @@ public interface Source {
     return new SourceImpl(contents, description, offsets);
   }
 
-  /** NewInfoSource creates a new Source from a SourceInfo. */
+  /**
+   * Creates a metadata-only source from the given source information.
+   *
+   * <p>The returned source has no source text and therefore cannot validate coordinates against an
+   * exact EOF. It retains the supplied line-offset representation for compatibility.
+   *
+   * @param info source metadata
+   * @return a metadata-only source
+   * @throws NullPointerException if {@code info} is {@code null}
+   */
   static Source newInfoSource(SourceInfo info) {
-    return new SourceImpl(
-        "", info.getLocation(), info.getLineOffsetsList(), info.getPositionsMap());
+    return SourceImpl.fromSourceInfo(info);
   }
 
   /**
-   * Content returns the source content represented as a string. Examples contents are the single
-   * file contents, textbox field, or url parameter.
+   * Returns the source content, or an empty string when the source was created from metadata
+   * without its original text.
+   *
+   * @return source text, possibly empty
    */
   String content();
 
   /**
-   * Description gives a brief description of the source. Example descriptions are a file name or ui
-   * element.
+   * Returns a brief description of the source, such as a file name or UI element.
+   *
+   * @return source description
    */
   String description();
 
   /**
-   * LineOffsets gives the character offsets at which lines occur. The zero-th entry should refer to
-   * the break between the first and second line, or EOF if there is only one line of source.
+   * Returns immutable line-offset metadata in this source's coordinate system.
+   *
+   * <p>For a text-backed source, entries identify the start of each line after the first and the
+   * final entry is a synthetic {@code content().length() + 1} terminal sentinel. For a
+   * metadata-only source, the supplied entries are retained and interpreted as starts of lines
+   * after the first; no exact EOF sentinel can be inferred.
+   *
+   * @return immutable line-offset metadata
    */
   List<Integer> lineOffsets();
 
   /**
-   * LocationOffset translates a Location to an offset. Given the line and column of the Location
-   * returns the Location's character offset in the Source, and a bool indicating whether the
-   * Location was found.
+   * Translates a location to a source offset.
+   *
+   * <p>End-of-line positions and, for text-backed sources, the EOF position are valid. Text-backed
+   * sources validate the complete location against their content. Metadata-only sources validate
+   * every available line boundary, but the final line remains unbounded because its EOF is unknown.
+   *
+   * @param location one-based line and zero-based column
+   * @return the nonnegative source offset, or {@code -1} if the location is invalid or outside a
+   *     known bound
+   * @throws NullPointerException if {@code location} is {@code null}
    */
   int locationOffset(Location location);
 
   /**
-   * OffsetLocation translates a character offset to a Location, or false if the conversion was not
-   * feasible.
+   * Translates a source offset to a location.
+   *
+   * <p>For a text-backed source, offsets from zero through EOF are valid. A metadata-only source
+   * accepts every nonnegative offset because its exact EOF is unknown.
+   *
+   * @param offset nonnegative source offset
+   * @return the corresponding location, or {@link Location#NoLocation} if the offset is invalid or
+   *     outside a known bound
    */
   Location offsetLocation(int offset);
 
   /**
-   * NewLocation takes an input line and column and produces a Location. The default behavior is to
-   * treat the line and column as absolute, but concrete derivations may use this method to convert
-   * a relative line and column position into an absolute location.
+   * Creates a location from the given line and column.
+   *
+   * <p>This method does not validate the location against the source. Use {@link
+   * #locationOffset(Location)} to validate and translate it.
+   *
+   * @param line one-based line number
+   * @param col zero-based column number
+   * @return the created location
    */
   Location newLocation(int line, int col);
 
-  /** Snippet returns a line of content and whether the line was found. */
+  /**
+   * Returns the content of the requested one-based line.
+   *
+   * @param line one-based line number
+   * @return line content without the terminating newline, or {@code null} if the line is
+   *     unavailable
+   */
   String snippet(int line);
 }
 
 final class SourceImpl implements Source {
 
+  private static final int UNKNOWN_CONTENT_LENGTH = -1;
+
   private final String content;
   private final String description;
   private final List<Integer> lineOffsets;
   private final Map<Long, Integer> idOffsets;
+  private final int contentLength;
 
   SourceImpl(String content, String description, List<Integer> lineOffsets) {
-    this(content, description, lineOffsets, new HashMap<>());
+    this(content, description, lineOffsets, new HashMap<>(), content.length());
   }
 
-  SourceImpl(
-      String content, String description, List<Integer> lineOffsets, Map<Long, Integer> idOffsets) {
+  static SourceImpl fromSourceInfo(SourceInfo info) {
+    return new SourceImpl(
+        "",
+        info.getLocation(),
+        info.getLineOffsetsList(),
+        info.getPositionsMap(),
+        UNKNOWN_CONTENT_LENGTH);
+  }
+
+  private SourceImpl(
+      String content,
+      String description,
+      List<Integer> lineOffsets,
+      Map<Long, Integer> idOffsets,
+      int contentLength) {
     this.content = content;
     this.description = description;
-    this.lineOffsets = lineOffsets;
+    this.lineOffsets = List.copyOf(lineOffsets);
     this.idOffsets = idOffsets;
+    this.contentLength = contentLength;
   }
 
   @Override
@@ -133,7 +208,35 @@ final class SourceImpl implements Source {
 
   @Override
   public int locationOffset(Location location) {
-    return findLineOffset(location.line()) + location.column();
+    Objects.requireNonNull(location, "location");
+
+    int column = location.column();
+    if (column < 0) {
+      return -1;
+    }
+
+    int lineStart = findLocationLineStart(location.line());
+    if (lineStart < 0) {
+      return -1;
+    }
+
+    int nextLineBoundary = findNextLineBoundary(location.line());
+    long maximumColumn;
+    if (nextLineBoundary >= 0) {
+      maximumColumn = (long) nextLineBoundary - lineStart - 1;
+    } else if (contentLength != UNKNOWN_CONTENT_LENGTH) {
+      // Text-backed sources normally have a terminal sentinel. Retain an exact fallback for
+      // directly constructed SourceImpl instances whose offsets omit it.
+      maximumColumn = (long) contentLength - lineStart;
+    } else {
+      maximumColumn = Integer.MAX_VALUE;
+    }
+
+    long offset = (long) lineStart + column;
+    if (column > maximumColumn || offset > Integer.MAX_VALUE) {
+      return -1;
+    }
+    return (int) offset;
   }
 
   @Override
@@ -143,10 +246,13 @@ final class SourceImpl implements Source {
 
   @Override
   public Location offsetLocation(int offset) {
+    if (offset < 0 || (contentLength != UNKNOWN_CONTENT_LENGTH && offset > contentLength)) {
+      return Location.NoLocation;
+    }
+
     // findLine finds the line that contains the given character offset and
     // returns the line number and offset of the beginning of that line.
-    // Note that the last line is treated as if it contains all offsets
-    // beyond the end of the actual source.
+    // The final line is unbounded only when the original source text is unavailable.
     int line = 1;
     int lineOffset;
     for (int lo : lineOffsets) {
@@ -167,22 +273,43 @@ final class SourceImpl implements Source {
 
   @Override
   public String snippet(int line) {
-    int charStart = findLineOffset(line);
+    int charStart = findSnippetLineOffset(line);
     if (charStart < 0) {
       return null;
     }
-    int charEnd = findLineOffset(line + 1);
+    int charEnd = findSnippetLineOffset(line + 1);
     if (charEnd >= 0) {
       return content.substring(charStart, charEnd - 1);
     }
     return content.substring(charStart);
   }
 
-  /**
-   * findLineOffset returns the offset where the (1-indexed) line begins, or false if line doesn't
-   * exist.
-   */
-  private int findLineOffset(int line) {
+  private int findLocationLineStart(int line) {
+    if (line == 1) {
+      return 0;
+    }
+    if (line < 1) {
+      return -1;
+    }
+
+    int lineStartCount =
+        contentLength == UNKNOWN_CONTENT_LENGTH ? lineOffsets.size() : lineOffsets.size() - 1;
+    int lineStartIndex = line - 2;
+    if (lineStartIndex < lineStartCount) {
+      return lineOffsets.get(lineStartIndex);
+    }
+    return -1;
+  }
+
+  private int findNextLineBoundary(int line) {
+    int boundaryIndex = line - 1;
+    if (boundaryIndex >= 0 && boundaryIndex < lineOffsets.size()) {
+      return lineOffsets.get(boundaryIndex);
+    }
+    return -1;
+  }
+
+  private int findSnippetLineOffset(int line) {
     if (line == 1) {
       return 0;
     }

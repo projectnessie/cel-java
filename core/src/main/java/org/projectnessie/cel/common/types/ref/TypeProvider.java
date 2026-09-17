@@ -19,37 +19,61 @@ import com.google.api.expr.v1alpha1.Type;
 import java.util.Map;
 
 /**
- * TypeProvider specifies functions for creating new object instances and for resolving enum values
- * by name.
+ * Resolves host types, fields, identifiers, enum constants, and object construction for CEL.
+ *
+ * <p>A provider participates in both checking and evaluation and may be retained by reusable
+ * environments and programs. Complete mutable configuration before sharing it and ensure lookup
+ * operations are safe for the intended concurrent use. Lookup methods use Java {@code null} only
+ * for “not found” where documented; failures produced while constructing or evaluating a CEL value
+ * are returned as CEL error values.
  */
 public interface TypeProvider {
-  /** EnumValue returns the numeric value of the given enum value name. */
+  /**
+   * Resolves a fully qualified enum value name.
+   *
+   * @param enumName fully qualified enum value name
+   * @return the numeric CEL value, or a CEL error value if the name is unknown
+   */
   Val enumValue(String enumName);
 
-  /** FindIdent takes a qualified identifier name and returns a Value if one exists. */
+  /**
+   * Resolves a qualified identifier such as a type or enum value.
+   *
+   * @param identName qualified identifier
+   * @return the resolved CEL value, or {@code null} if no identifier is registered
+   */
   Val findIdent(String identName);
 
   /**
-   * FindType looks up the Type given a qualified typeName. Returns false if not found.
+   * Looks up a checked CEL type by qualified name.
    *
    * <p>Used during type-checking only.
+   *
+   * @param typeName qualified CEL type name
+   * @return the checked type, or {@code null} if no type is registered
    */
   Type findType(String typeName);
 
   /**
-   * FieldFieldType returns the field type for a checked type value. Returns false if the field
-   * could not be found.
+   * Looks up a field descriptor on a checked message type.
    *
    * <p>Used during type-checking only.
+   *
+   * @param messageType qualified message type name
+   * @param fieldName field name
+   * @return the field descriptor, or {@code null} if the type or field is unknown
    */
   FieldType findFieldType(String messageType, String fieldName);
 
   /**
-   * NewValue creates a new type value from a qualified name and map of field name to value.
+   * Creates an object value from a qualified type name and CEL-valued fields.
    *
-   * <p>Note, for each value, the Val.ConvertToNative function will be invoked to convert the Val to
-   * the field's native type. If an error occurs during conversion, the NewValue will be a
-   * types.Err.
+   * <p>Each field value is converted to the host representation required by that field. An unknown
+   * type, field, or failed conversion is represented by a CEL error value.
+   *
+   * @param typeName qualified type name
+   * @param fields field names and CEL values used to construct the object
+   * @return the object as a CEL value, or a CEL error value
    */
   Val newValue(String typeName, Map<String, Val> fields);
 }

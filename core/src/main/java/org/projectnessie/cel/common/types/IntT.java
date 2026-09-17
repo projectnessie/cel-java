@@ -16,7 +16,6 @@
 package org.projectnessie.cel.common.types;
 
 import static org.projectnessie.cel.common.types.BoolT.False;
-import static org.projectnessie.cel.common.types.DoubleT.DoubleType;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.Err.divideByZero;
 import static org.projectnessie.cel.common.types.Err.errIntOverflow;
@@ -38,6 +37,7 @@ import com.google.protobuf.Int32Value;
 import com.google.protobuf.Int64Value;
 import com.google.protobuf.Value;
 import java.time.Instant;
+import java.util.stream.IntStream;
 import org.projectnessie.cel.common.types.Overflow.OverflowException;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
@@ -68,11 +68,14 @@ public final class IntT extends BaseVal
           Trait.NegatorType,
           Trait.SubtractorType);
 
-  /** Int constants used for comparison results. IntZero is the zero-value for Int */
-  public static final IntT IntZero = new IntT(0);
+  private static final IntT[] CONST =
+      IntStream.rangeClosed(-10, 10).mapToObj(IntT::new).toArray(IntT[]::new);
 
-  public static final IntT IntOne = new IntT(1);
-  public static final IntT IntNegOne = new IntT(-1);
+  /** Int constants used for comparison results. IntZero is the zero-value for Int */
+  public static final IntT IntZero = CONST[10];
+
+  public static final IntT IntOne = CONST[11];
+  public static final IntT IntNegOne = CONST[9];
 
   /** maxIntJSON is defined as the Number.MAX_SAFE_INTEGER value per EcmaScript 6. */
   public static final long maxIntJSON = (1L << 53) - 1;
@@ -97,14 +100,8 @@ public final class IntT extends BaseVal
   }
 
   public static IntT intOf(long i) {
-    if (i == 0L) {
-      return IntZero;
-    }
-    if (i == 1L) {
-      return IntOne;
-    }
-    if (i == -1L) {
-      return IntNegOne;
+    if (i >= -10 && i <= 10) {
+      return CONST[(int) i + 10];
     }
     return new IntT(i);
   }
@@ -120,7 +117,7 @@ public final class IntT extends BaseVal
   }
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"removal", "unchecked"})
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
     if (typeDesc == Long.class || typeDesc == long.class || typeDesc == Object.class) {
@@ -178,88 +175,50 @@ public final class IntT extends BaseVal
   /** ConvertToType implements ref.Val.ConvertToType. */
   @Override
   public Val convertToType(Type typeValue) {
-    switch (typeValue.typeEnum()) {
-      case Int:
-        return this;
-      case Uint:
+    return switch (typeValue.typeEnum()) {
+      case Int -> this;
+      case Uint -> {
         if (i < 0) {
-          return rangeError(i, "uint");
+          yield rangeError(i, "uint");
         }
-        return uintOf(i);
-      case Double:
-        return doubleOf(i);
-      case String:
-        return stringOf(Long.toString(i));
-      case Timestamp:
+        yield uintOf(i);
+      }
+      case Double -> doubleOf(i);
+      case String -> stringOf(Long.toString(i));
+      case Timestamp -> {
         // The maximum positive value that can be passed to time.Unix is math.MaxInt64 minus the
         // number of seconds between year 1 and year 1970. See comments on unixToInternal.
         if (i < minUnixTime || i > maxUnixTime) {
-          return errTimestampOverflow;
+          yield errTimestampOverflow;
         }
-        return timestampOf(Instant.ofEpochSecond(i).atZone(ZoneIdZ));
-      case Type:
-        return IntType;
-    }
-    return newTypeConversionError(IntType, typeValue);
+        yield timestampOf(Instant.ofEpochSecond(i).atZone(ZoneIdZ));
+      }
+      case Type -> IntType;
+      default -> newTypeConversionError(IntType, typeValue);
+    };
   }
 
   /** Compare implements traits.Comparer.Compare. */
   @Override
   public Val compare(Val other) {
-    switch (other.type().typeEnum()) {
-      case Double:
-        DoubleT cmp = (DoubleT) convertToType(DoubleType);
-        return cmp.compare(other);
-      case Uint:
-        if (i < 0L) {
-          // this int is negative, so it MUST be smaller than any uint
-          return IntNegOne;
-        }
-        if (other.intValue() < 0L) {
-          // the OTHER uint is > Integer.MAX_VALUE, so THIS int MUST be smaller
-          return IntNegOne;
-        }
-        return intOfCompare(Long.compareUnsigned(i, other.intValue()));
-      case Int:
-        Val converted = other.convertToType(type());
-        if (converted.type().typeEnum() == TypeEnum.Err) {
-          return converted;
-        }
-        return intOfCompare(Long.compare(i, converted.intValue()));
-      default:
-        return noSuchOverload(this, "compare", other);
-    }
+    return switch (other.type().typeEnum()) {
+      case Double -> intOfCompare(NumericComparison.compareIntDouble(i, other.doubleValue()));
+      case Uint -> intOfCompare(NumericComparison.compareIntUint(i, other.intValue()));
+      case Int -> intOfCompare(NumericComparison.compareInt(i, other.intValue()));
+      default -> noSuchOverload(this, "compare", other);
+    };
   }
 
   /** Equal implements ref.Val.Equal. */
   @Override
   public Val equal(Val other) {
-    switch (other.type().typeEnum()) {
-      case Double:
-        DoubleT cmp = (DoubleT) convertToType(DoubleType);
-        return cmp.equal(other);
-      case Uint:
-        if (other.intValue() < 0L) {
-          return False;
-        }
-      case Int:
-        Val converted = other.convertToType(type());
-        if (converted.type().typeEnum() == TypeEnum.Err) {
-          return converted;
-        }
-        return boolOf(i == converted.intValue());
-      case Null:
-      case Bool:
-      case Bytes:
-      case List:
-      case Map:
-      case Object:
-      case String:
-      case Type:
-        return False;
-      default:
-        return noSuchOverload(this, "equal", other);
-    }
+    return switch (other.type().typeEnum()) {
+      case Double -> boolOf(NumericComparison.equalIntDouble(i, other.doubleValue()));
+      case Uint -> boolOf(NumericComparison.equalIntUint(i, other.intValue()));
+      case Int -> boolOf(NumericComparison.equalInt(i, other.intValue()));
+      case Null, Bool, Bytes, List, Map, Object, String, Type -> False;
+      default -> noSuchOverload(this, "equal", other);
+    };
   }
 
   /** Divide implements traits.Divider.Divide. */
@@ -371,7 +330,6 @@ public final class IntT extends BaseVal
 
   @Override
   public int hashCode() {
-    // Used to allow heterogeneous numeric map keys
-    return (int) i;
+    return Types.numericHashCode(i);
   }
 }
