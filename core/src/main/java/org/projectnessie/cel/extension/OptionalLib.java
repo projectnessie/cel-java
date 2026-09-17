@@ -55,13 +55,21 @@ public final class OptionalLib implements Library {
   private static final String OPTIONAL_OF_OVERLOAD = "optional_of";
   private static final String OPTIONAL_OF_NON_ZERO_VALUE_OVERLOAD = "optional_of_non_zero_value";
   private static final String OPTIONAL_SELECT_OVERLOAD = "optional_select";
-  private static final String OPTIONAL_INDEX_OVERLOAD = "optional_index";
-  private static final String OPTIONAL_INDEX_OPTIONAL_OVERLOAD = "optional_index_optional";
+  private static final String OPTIONAL_LIST_INDEX_OVERLOAD = "optional_list_index";
+  private static final String OPTIONAL_OPTIONAL_LIST_INDEX_OVERLOAD =
+      "optional_optional_list_index";
+  private static final String OPTIONAL_MAP_INDEX_OVERLOAD = "optional_map_index";
+  private static final String OPTIONAL_OPTIONAL_MAP_INDEX_OVERLOAD = "optional_optional_map_index";
+  private static final String OPTIONAL_LIST_INDEX_OPTIONAL_OVERLOAD =
+      "optional_list_index_optional";
+  private static final String OPTIONAL_MAP_INDEX_OPTIONAL_OVERLOAD = "optional_map_index_optional";
   private static final String OPTIONAL_HAS_VALUE_OVERLOAD = "optional_has_value";
   private static final String OPTIONAL_VALUE_OVERLOAD = "optional_value";
   private static final String OPTIONAL_OR_OVERLOAD = "optional_or";
   private static final String OPTIONAL_OR_VALUE_OVERLOAD = "optional_or_value";
   private static final String TYPE_PARAM_A = "A";
+  private static final String TYPE_PARAM_K = "K";
+  private static final String TYPE_PARAM_V = "V";
   private static final String OPTIONAL_MACRO_TARGET = "@optional_target";
   private static final String OPTIONAL_MACRO_RESULT = "@optional_result";
 
@@ -76,6 +84,13 @@ public final class OptionalLib implements Library {
     var typeParamA = Decls.newTypeParamType(TYPE_PARAM_A);
     var optionalA = Decls.newAbstractType(OPTIONAL_TYPE, singletonList(typeParamA));
     var typeParams = singletonList(TYPE_PARAM_A);
+    var typeParamK = Decls.newTypeParamType(TYPE_PARAM_K);
+    var typeParamV = Decls.newTypeParamType(TYPE_PARAM_V);
+    var listA = Decls.newListType(typeParamA);
+    var optionalListA = Decls.newAbstractType(OPTIONAL_TYPE, singletonList(listA));
+    var mapKV = Decls.newMapType(typeParamK, typeParamV);
+    var optionalMapKV = Decls.newAbstractType(OPTIONAL_TYPE, singletonList(mapKV));
+    var optionalValueV = Decls.newAbstractType(OPTIONAL_TYPE, singletonList(typeParamV));
 
     return List.of(
         EnvOption.types(singletonList(OptionalType)),
@@ -107,17 +122,35 @@ public final class OptionalLib implements Library {
                     Decls.newAbstractType(OPTIONAL_TYPE, singletonList(Decls.Dyn)))),
             Decls.newFunction(
                 Operator.OptionalIndex.id,
-                Decls.newOverload(
-                    OPTIONAL_INDEX_OVERLOAD,
-                    List.of(Decls.Dyn, Decls.Dyn),
-                    Decls.newAbstractType(OPTIONAL_TYPE, singletonList(Decls.Dyn)))),
+                Decls.newParameterizedOverload(
+                    OPTIONAL_LIST_INDEX_OVERLOAD, List.of(listA, Decls.Int), optionalA, typeParams),
+                Decls.newParameterizedOverload(
+                    OPTIONAL_OPTIONAL_LIST_INDEX_OVERLOAD,
+                    List.of(optionalListA, Decls.Int),
+                    optionalA,
+                    typeParams),
+                Decls.newParameterizedOverload(
+                    OPTIONAL_MAP_INDEX_OVERLOAD,
+                    List.of(mapKV, typeParamK),
+                    optionalValueV,
+                    List.of(TYPE_PARAM_K, TYPE_PARAM_V)),
+                Decls.newParameterizedOverload(
+                    OPTIONAL_OPTIONAL_MAP_INDEX_OVERLOAD,
+                    List.of(optionalMapKV, typeParamK),
+                    optionalValueV,
+                    List.of(TYPE_PARAM_K, TYPE_PARAM_V))),
             Decls.newFunction(
                 Operator.Index.id,
                 Decls.newParameterizedOverload(
-                    OPTIONAL_INDEX_OPTIONAL_OVERLOAD,
-                    List.of(optionalA, Decls.Dyn),
-                    Decls.newAbstractType(OPTIONAL_TYPE, singletonList(Decls.Dyn)),
-                    typeParams)),
+                    OPTIONAL_LIST_INDEX_OPTIONAL_OVERLOAD,
+                    List.of(optionalListA, Decls.Int),
+                    optionalA,
+                    typeParams),
+                Decls.newParameterizedOverload(
+                    OPTIONAL_MAP_INDEX_OPTIONAL_OVERLOAD,
+                    List.of(optionalMapKV, typeParamK),
+                    optionalValueV,
+                    List.of(TYPE_PARAM_K, TYPE_PARAM_V))),
             Decls.newFunction(
                 OPTIONAL_HAS_VALUE,
                 Decls.newParameterizedInstanceOverload(
@@ -152,7 +185,10 @@ public final class OptionalLib implements Library {
             Overload.binary(Operator.OptionalSelect.id, OptionalT::optionalSelect),
             Overload.binary(OPTIONAL_SELECT_OVERLOAD, OptionalT::optionalSelect),
             Overload.binary(Operator.OptionalIndex.id, OptionalT::optionalIndex),
-            Overload.binary(OPTIONAL_INDEX_OVERLOAD, OptionalT::optionalIndex)));
+            Overload.binary(OPTIONAL_LIST_INDEX_OVERLOAD, OptionalT::optionalIndex),
+            Overload.binary(OPTIONAL_OPTIONAL_LIST_INDEX_OVERLOAD, OptionalT::optionalIndex),
+            Overload.binary(OPTIONAL_MAP_INDEX_OVERLOAD, OptionalT::optionalIndex),
+            Overload.binary(OPTIONAL_OPTIONAL_MAP_INDEX_OVERLOAD, OptionalT::optionalIndex)));
   }
 
   private static Expr makeOptMap(ExprHelper eh, Expr target, List<Expr> args) {

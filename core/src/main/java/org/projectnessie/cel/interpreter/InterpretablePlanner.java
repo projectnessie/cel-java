@@ -62,6 +62,7 @@ import org.projectnessie.cel.interpreter.Interpretable.EvalMap;
 import org.projectnessie.cel.interpreter.Interpretable.EvalMapFold;
 import org.projectnessie.cel.interpreter.Interpretable.EvalNe;
 import org.projectnessie.cel.interpreter.Interpretable.EvalObj;
+import org.projectnessie.cel.interpreter.Interpretable.EvalOptionalOr;
 import org.projectnessie.cel.interpreter.Interpretable.EvalOr;
 import org.projectnessie.cel.interpreter.Interpretable.EvalReceiverVarArgs;
 import org.projectnessie.cel.interpreter.Interpretable.EvalTestOnly;
@@ -394,6 +395,12 @@ public interface InterpretablePlanner {
       if (resolvedFunc.fnName.equals(Operator.Equals.id)) return planCallEqual(expr, args);
       if (resolvedFunc.fnName.equals(Operator.NotEquals.id)) return planCallNotEqual(expr, args);
       if (resolvedFunc.fnName.equals(Operator.Index.id)) return planCallIndex(expr, args);
+      if ("optional_or".equals(resolvedFunc.overloadId))
+        return new EvalOptionalOr(
+            expr.getId(), resolvedFunc.fnName, resolvedFunc.overloadId, args[0], args[1], false);
+      if ("optional_or_value".equals(resolvedFunc.overloadId))
+        return new EvalOptionalOr(
+            expr.getId(), resolvedFunc.fnName, resolvedFunc.overloadId, args[0], args[1], true);
 
       // Otherwise, generate Interpretable calls specialized by argument count.
       // Try to find the specific function by overload id.

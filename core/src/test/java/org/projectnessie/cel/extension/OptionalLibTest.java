@@ -72,6 +72,8 @@ class OptionalLibTest {
     assertEvaluates("optional.ofNonZeroValue('').hasValue()", False);
     assertEvaluates("optional.ofNonZeroValue([]).hasValue()", False);
     assertEvaluates("optional.ofNonZeroValue({}).hasValue()", False);
+    assertEvaluates("optional.ofNonZeroValue(duration('0s')).hasValue()", False);
+    assertEvaluates("optional.ofNonZeroValue(timestamp(0)).hasValue()", False);
   }
 
   @Test
@@ -86,6 +88,8 @@ class OptionalLibTest {
     assertEvaluates("optional.none().or(optional.none()).orValue(42)", intOf(42));
     assertEvaluates("optional.none().or(optional.of(21)).orValue(42)", intOf(21));
     assertEvaluates("optional.of(7).or(optional.of(21)).orValue(42)", intOf(7));
+    assertEvaluates("optional.of(7).or(optional.of(1 / 0)).value()", intOf(7));
+    assertEvaluates("optional.of(7).orValue(1 / 0)", intOf(7));
   }
 
   @Test
@@ -124,6 +128,10 @@ class OptionalLibTest {
     assertEvaluates("{'c': 'x'}.?c.value()", stringOf("x"));
     assertEvaluates("[][?0].hasValue()", False);
     assertEvaluates("['foo'][?0].value()", stringOf("foo"));
+    assertCheckedType("['foo'][?0]", optional(Decls.String));
+    assertCheckedType("{'foo': 1}[?'foo']", optional(Decls.Int));
+    assertCheckedType("optional.of(['foo'])[0]", optional(Decls.String));
+    assertCheckedType("optional.of({'foo': 1})['foo']", optional(Decls.Int));
   }
 
   @Test
@@ -141,6 +149,22 @@ class OptionalLibTest {
   void evaluatesOptionalAggregateEntries() {
     assertEvaluates("[?{}.?c, ?optional.of(42), ?optional.none()].size()", intOf(1));
     assertEvaluates("{?'foo': optional.none()}.size()", intOf(0));
+    assertCheckFails("[?1]");
+    assertCheckFails("{?'foo': 1}");
+  }
+
+  @Test
+  void checksOptionalSelectionsAgainstContainedTypes() {
+    assertCheckedType("optional.of({'field': 1}).field", optional(Decls.Int));
+    assertCheckedType("{'field': 1}.?field", optional(Decls.Int));
+    assertCheckFails("optional.of(1).missing");
+    assertCheckFails("1.?missing");
+  }
+
+  @Test
+  void rejectsInvalidOptionalIndexes() {
+    assertCheckFails("optional.of(1)[0]");
+    assertCheckFails("['foo'][?'foo']");
   }
 
   @Test
@@ -160,6 +184,15 @@ class OptionalLibTest {
 
   private static void assertEvaluates(String expression, Object expectedValue) {
     assertThat(evaluate(expression).getVal()).describedAs(expression).isEqualTo(expectedValue);
+  }
+
+  private static void assertCheckFails(String expression) {
+    Env env = newEnv(optionals());
+    Env.AstIssuesTuple parsed = env.parse(expression);
+    assertThat(parsed.hasIssues()).describedAs(expression).isFalse();
+
+    Env.AstIssuesTuple checked = env.check(parsed.getAst());
+    assertThat(checked.hasIssues()).describedAs(expression).isTrue();
   }
 
   private static Program.EvalResult evaluate(String expression) {

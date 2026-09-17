@@ -25,6 +25,9 @@ import static org.projectnessie.cel.common.types.TypeT.TypeType;
 import static org.projectnessie.cel.common.types.TypeT.newObjectTypeValue;
 
 import com.google.protobuf.Message;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZonedDateTime;
 import java.util.Objects;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
@@ -202,6 +205,11 @@ public final class OptionalT extends BaseVal implements FieldTester, Indexer, Re
         return value.intValue() == 0L;
       case Double:
         return value.doubleValue() == 0.0d;
+      case Duration:
+        return Duration.ZERO.equals(value.value());
+      case Timestamp:
+        return value.value() instanceof ZonedDateTime timestamp
+            && timestamp.toInstant().equals(Instant.EPOCH);
       case String:
       case Bytes:
       case List:

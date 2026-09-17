@@ -433,6 +433,85 @@ public interface Interpretable {
     }
   }
 
+  final class EvalOptionalOr extends AbstractEvalLhsRhs implements InterpretableCall {
+    private final String function;
+    private final String overload;
+    private final boolean returnValue;
+
+    EvalOptionalOr(
+        long id,
+        String function,
+        String overload,
+        Interpretable lhs,
+        Interpretable rhs,
+        boolean returnValue) {
+      super(id, lhs, rhs);
+      this.function = Objects.requireNonNull(function);
+      this.overload = Objects.requireNonNull(overload);
+      this.returnValue = returnValue;
+    }
+
+    @Override
+    public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
+      Val left = lhs.eval(ctx);
+      if (isUnknownOrError(left)) {
+        return left;
+      }
+      if (left instanceof OptionalT optional && optional.hasValue()) {
+        return returnValue ? optional.getValue() : optional;
+      }
+
+      Val right = rhs.eval(ctx);
+      if (isUnknownOrError(right)) {
+        return right;
+      }
+      if (left.type().hasTrait(Trait.ReceiverType)) {
+        return ((Receiver) left).receive(function, overload, right);
+      }
+      return noSuchOverload(left, function, overload, new Val[] {right});
+    }
+
+    @Override
+    public Cost cost() {
+      return calShortCircuitBinaryOpsCost(lhs, rhs);
+    }
+
+    @Override
+    public String function() {
+      return function;
+    }
+
+    @Override
+    public String overloadID() {
+      return overload;
+    }
+
+    @Override
+    public Interpretable[] args() {
+      return new Interpretable[] {lhs, rhs};
+    }
+
+    @Override
+    public String toString() {
+      return "EvalOptionalOr{"
+          + "id="
+          + id
+          + ", lhs="
+          + lhs
+          + ", rhs="
+          + rhs
+          + ", function='"
+          + function
+          + '\''
+          + ", overload='"
+          + overload
+          + '\''
+          + ", returnValue="
+          + returnValue
+          + '}';
+    }
+  }
+
   static Cost calShortCircuitBinaryOpsCost(Interpretable lhs, Interpretable rhs) {
     Cost l = estimateCost(lhs);
     Cost r = estimateCost(rhs);
