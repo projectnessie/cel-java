@@ -17,6 +17,7 @@ package org.projectnessie.cel.extension;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
+import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.OptionalT.OptionalType;
 
 import com.google.api.expr.v1alpha1.Expr;
@@ -30,6 +31,7 @@ import org.projectnessie.cel.common.ErrorWithLocation;
 import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.OptionalT;
+import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.interpreter.functions.Overload;
 import org.projectnessie.cel.parser.ExprHelper;
 import org.projectnessie.cel.parser.Macro;
@@ -188,7 +190,23 @@ public final class OptionalLib implements Library {
             Overload.binary(OPTIONAL_LIST_INDEX_OVERLOAD, OptionalT::optionalIndex),
             Overload.binary(OPTIONAL_OPTIONAL_LIST_INDEX_OVERLOAD, OptionalT::optionalIndex),
             Overload.binary(OPTIONAL_MAP_INDEX_OVERLOAD, OptionalT::optionalIndex),
-            Overload.binary(OPTIONAL_OPTIONAL_MAP_INDEX_OVERLOAD, OptionalT::optionalIndex)));
+            Overload.binary(OPTIONAL_OPTIONAL_MAP_INDEX_OVERLOAD, OptionalT::optionalIndex),
+            Overload.binary(OPTIONAL_OR_OVERLOAD, OptionalLib::optionalOr),
+            Overload.binary(OPTIONAL_OR_VALUE_OVERLOAD, OptionalLib::optionalOrValue)));
+  }
+
+  private static Val optionalOr(Val optional, Val alternative) {
+    if (optional instanceof OptionalT optionalValue) {
+      return optionalValue.receive(OPTIONAL_OR, OPTIONAL_OR_OVERLOAD, alternative);
+    }
+    return noSuchOverload(optional, OPTIONAL_OR, alternative);
+  }
+
+  private static Val optionalOrValue(Val optional, Val alternative) {
+    if (optional instanceof OptionalT optionalValue) {
+      return optionalValue.receive(OPTIONAL_OR_VALUE, OPTIONAL_OR_VALUE_OVERLOAD, alternative);
+    }
+    return noSuchOverload(optional, OPTIONAL_OR_VALUE, alternative);
   }
 
   private static Expr makeOptMap(ExprHelper eh, Expr target, List<Expr> args) {

@@ -243,7 +243,10 @@ public final class OptionalT extends BaseVal implements FieldTester, Indexer, Re
     }
     if (operand instanceof Indexer) {
       Val value = ((Indexer) operand).get(index);
-      return isMissingAccess(value) ? none() : of(value);
+      if (isMissingAccess(value)) {
+        return none();
+      }
+      return value instanceof Err ? value : of(value);
     }
     return noSuchOverload(operand, "optional access", index);
   }
@@ -255,7 +258,8 @@ public final class OptionalT extends BaseVal implements FieldTester, Indexer, Re
     String error = value.toString();
     return error.startsWith("no such key")
         || error.startsWith("no such field")
-        || error.startsWith("invalid_argument")
+        || (error.startsWith("invalid_argument: index ")
+            && error.contains(" out of range in list "))
         || error.startsWith("index out of bounds");
   }
 

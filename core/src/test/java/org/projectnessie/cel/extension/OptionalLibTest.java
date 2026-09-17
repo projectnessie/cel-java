@@ -93,6 +93,12 @@ class OptionalLibTest {
   }
 
   @Test
+  void evaluatesParseOnlyOrAndOrValue() {
+    assertEvaluatesParsed("optional.of(7).or(optional.of(1 / 0)).value()", intOf(7));
+    assertEvaluatesParsed("optional.of(7).orValue(1 / 0)", intOf(7));
+  }
+
+  @Test
   void evaluatesOptionalEquality() {
     assertEvaluates("optional.none() == optional.none()", True);
     assertEvaluates("optional.none() == optional.of(1)", False);
@@ -165,6 +171,7 @@ class OptionalLibTest {
   void rejectsInvalidOptionalIndexes() {
     assertCheckFails("optional.of(1)[0]");
     assertCheckFails("['foo'][?'foo']");
+    assertThat(evaluate("['foo'][?dyn(1.5)]").getVal()).isInstanceOf(Err.class);
   }
 
   @Test
@@ -186,6 +193,12 @@ class OptionalLibTest {
     assertThat(evaluate(expression).getVal()).describedAs(expression).isEqualTo(expectedValue);
   }
 
+  private static void assertEvaluatesParsed(String expression, Object expectedValue) {
+    assertThat(evaluateParsed(expression).getVal())
+        .describedAs(expression)
+        .isEqualTo(expectedValue);
+  }
+
   private static void assertCheckFails(String expression) {
     Env env = newEnv(optionals());
     Env.AstIssuesTuple parsed = env.parse(expression);
@@ -205,6 +218,14 @@ class OptionalLibTest {
 
     Program program = env.program(checked.getAst());
     return program.eval(Map.of());
+  }
+
+  private static Program.EvalResult evaluateParsed(String expression) {
+    Env env = newEnv(optionals());
+    Env.AstIssuesTuple parsed = env.parse(expression);
+    assertThat(parsed.hasIssues()).describedAs(expression).isFalse();
+
+    return env.program(parsed.getAst()).eval(Map.of());
   }
 
   private static Type optional(Type type) {

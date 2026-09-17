@@ -395,10 +395,16 @@ public interface InterpretablePlanner {
       if (resolvedFunc.fnName.equals(Operator.Equals.id)) return planCallEqual(expr, args);
       if (resolvedFunc.fnName.equals(Operator.NotEquals.id)) return planCallNotEqual(expr, args);
       if (resolvedFunc.fnName.equals(Operator.Index.id)) return planCallIndex(expr, args);
-      if ("optional_or".equals(resolvedFunc.overloadId))
+      if ("optional_or".equals(resolvedFunc.overloadId)
+          || (resolvedFunc.overloadId.isEmpty()
+              && "or".equals(resolvedFunc.fnName)
+              && disp.findOverload("optional_or") != null))
         return new EvalOptionalOr(
             expr.getId(), resolvedFunc.fnName, resolvedFunc.overloadId, args[0], args[1], false);
-      if ("optional_or_value".equals(resolvedFunc.overloadId))
+      if ("optional_or_value".equals(resolvedFunc.overloadId)
+          || (resolvedFunc.overloadId.isEmpty()
+              && "orValue".equals(resolvedFunc.fnName)
+              && disp.findOverload("optional_or_value") != null))
         return new EvalOptionalOr(
             expr.getId(), resolvedFunc.fnName, resolvedFunc.overloadId, args[0], args[1], true);
 
