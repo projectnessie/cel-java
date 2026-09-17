@@ -350,6 +350,15 @@ public final class Checker {
     String fnName = call.getFunction();
 
     if (fnName.equals(Operator.OptionalSelect.id)) {
+      Decl fn = env.lookupFunction(fnName);
+      if (fn == null) {
+        for (Expr.Builder arg : args) {
+          check(arg);
+        }
+        errors.undeclaredReference(location(e), env.container.name(), fnName);
+        setType(e, Decls.Error);
+        return;
+      }
       checkOptionalSelect(e, call, args);
       return;
     }

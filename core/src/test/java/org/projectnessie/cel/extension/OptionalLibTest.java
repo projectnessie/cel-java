@@ -168,6 +168,11 @@ class OptionalLibTest {
   }
 
   @Test
+  void rejectsOptionalSelectionsWithoutTheOptionalLibrary() {
+    assertCheckFailsWithoutOptionals("{}.?field");
+  }
+
+  @Test
   void rejectsInvalidOptionalIndexes() {
     assertCheckFails("optional.of(1)[0]");
     assertCheckFails("['foo'][?'foo']");
@@ -201,6 +206,15 @@ class OptionalLibTest {
 
   private static void assertCheckFails(String expression) {
     Env env = newEnv(optionals());
+    Env.AstIssuesTuple parsed = env.parse(expression);
+    assertThat(parsed.hasIssues()).describedAs(expression).isFalse();
+
+    Env.AstIssuesTuple checked = env.check(parsed.getAst());
+    assertThat(checked.hasIssues()).describedAs(expression).isTrue();
+  }
+
+  private static void assertCheckFailsWithoutOptionals(String expression) {
+    Env env = newEnv();
     Env.AstIssuesTuple parsed = env.parse(expression);
     assertThat(parsed.hasIssues()).describedAs(expression).isFalse();
 

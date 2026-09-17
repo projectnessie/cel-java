@@ -388,7 +388,8 @@ public final class Parser {
             optional = true;
             optionalNode = children.get(i++);
           }
-          String id = fieldName(children.get(i++));
+          Node field = children.get(i++);
+          String id = fieldName(field);
           if (i < children.size() && isToken(children.get(i), LPAREN)) {
             if (optional) {
               return reportError(optionalNode, "optional select does not support function calls");
@@ -409,7 +410,7 @@ public final class Parser {
                     helper.id(optionalNode),
                     Operator.OptionalSelect.id,
                     operand,
-                    helper.newLiteralString(optionalNode, id));
+                    helper.newLiteralString(field, id));
           } else {
             operand = helper.newSelect(op, operand, id);
           }
