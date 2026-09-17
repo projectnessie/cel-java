@@ -33,7 +33,7 @@ managed-jmh = ["jmh-core", "jmh-generator-annprocess"]
 junit-testing = ["assertj-core", "junit-jupiter-api", "junit-jupiter-params"]
 
 [libraries]
-agrona = { module = "org.agrona:agrona", version = "2.6.0" }
+agrona = { module = "org.agrona:agrona", version = "2.6.1" }
 assertj-core = { module = "org.assertj:assertj-core", version = "3.27.7" }
 congocc = { module = "org.congocc:org.congocc.parser.generator", version = "2.1.0" }
 errorprone-plugin = { module = "net.ltgt.gradle:gradle-errorprone-plugin", version.ref = "errorpronePlugin" }
