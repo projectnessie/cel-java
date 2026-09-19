@@ -35,11 +35,10 @@ public final class Printer {
 
     @Override
     public String getMetadata(Object elem) {
-      if (!(elem instanceof Expr)) {
+      if (!(elem instanceof Expr e)) {
         return "";
       }
       StringBuilder result = new StringBuilder();
-      Expr e = (Expr) elem;
       Type t = checks.getTypeMapMap().get(e.getId());
       if (t != null) {
         result.append("~");

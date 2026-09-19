@@ -87,30 +87,19 @@ public class AdapterAllocationBench {
   }
 
   private static Object value(String kind, int size) {
-    switch (kind) {
-      case "arrayList":
-        return list(size);
-      case "linkedHashSet":
-        return set(size);
-      case "objectArray":
-        return list(size).toArray();
-      case "stringArray":
-        return stringArray(size);
-      case "intArray":
-        return intArray(size);
-      case "longArray":
-        return longArray(size);
-      case "doubleArray":
-        return doubleArray(size);
-      case "mapStringInt":
-        return mapStringInt(size);
-      case "mapValVal":
-        return mapValVal(size);
-      case "listValue":
-        return listValue(size);
-      default:
-        throw new IllegalArgumentException("Unknown native value kind: " + kind);
-    }
+    return switch (kind) {
+      case "arrayList" -> list(size);
+      case "linkedHashSet" -> set(size);
+      case "objectArray" -> list(size).toArray();
+      case "stringArray" -> stringArray(size);
+      case "intArray" -> intArray(size);
+      case "longArray" -> longArray(size);
+      case "doubleArray" -> doubleArray(size);
+      case "mapStringInt" -> mapStringInt(size);
+      case "mapValVal" -> mapValVal(size);
+      case "listValue" -> listValue(size);
+      default -> throw new IllegalArgumentException("Unknown native value kind: " + kind);
+    };
   }
 
   private static List<Long> list(int size) {

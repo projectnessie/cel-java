@@ -281,9 +281,8 @@ public final class Env {
     // be immutable. Since it is possible to set the TypeProvider separately
     // from the TypeAdapter, the possible configurations which could use a
     // TypeRegistry as the base implementation are captured below.
-    if (this.adapter instanceof TypeRegistry && this.provider instanceof TypeRegistry) {
-      TypeRegistry adapterReg = (TypeRegistry) this.adapter;
-      TypeRegistry providerReg = (TypeRegistry) this.provider;
+    if (this.adapter instanceof TypeRegistry adapterReg
+        && this.provider instanceof TypeRegistry providerReg) {
       TypeRegistry reg = providerReg.copy();
       provider = reg;
       // If the adapter and provider are the same object, set the adapter
