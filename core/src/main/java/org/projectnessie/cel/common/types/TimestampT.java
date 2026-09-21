@@ -207,7 +207,7 @@ public final class TimestampT extends BaseVal implements Adder, Comparer, Receiv
   }
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"removal", "unchecked"})
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
     if (typeDesc == ZonedDateTime.class) {

@@ -18,7 +18,13 @@ package org.projectnessie.cel.common.types.pb;
 import com.google.protobuf.Descriptors.EnumValueDescriptor;
 import java.util.Objects;
 
-/** EnumValueDescription maps a fully-qualified enum value name to its numeric value. */
+/**
+ * Immutable association between a fully qualified protobuf enum-constant name and its numeric
+ * value.
+ *
+ * <p>This is descriptor metadata used by {@link ProtoTypeRegistry}. CEL represents protobuf enum
+ * constants as integers.
+ */
 public final class EnumValueDescription {
 
   private final String enumValueName;
@@ -30,20 +36,23 @@ public final class EnumValueDescription {
   }
 
   /**
-   * NewEnumValueDescription produces an enum value description with the fully qualified enum value
-   * name and the enum value descriptor.
+   * Creates an enum-value description.
+   *
+   * @param name fully qualified protobuf enum-constant name
+   * @param desc protobuf descriptor that supplies the numeric value
+   * @return an immutable description
    */
   public static EnumValueDescription newEnumValueDescription(
       String name, EnumValueDescriptor desc) {
     return new EnumValueDescription(name, desc);
   }
 
-  /** Name returns the fully-qualified identifier name for the enum value. */
+  /** Returns the fully qualified identifier name for the enum constant. */
   public String name() {
     return enumValueName;
   }
 
-  /** Value returns the (numeric) value of the enum. */
+  /** Returns the numeric protobuf value exposed to CEL as an integer. */
   public int value() {
     return desc.getNumber();
   }

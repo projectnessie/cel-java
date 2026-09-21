@@ -49,8 +49,6 @@ class CelCodeCoveragePlugin : Plugin<Project> {
           excludeClassLoaders =
             listOf("*QuarkusClassLoader") + (if (excluded != null) excluded else emptyList())
         }
-        systemProperty("quarkus.jacoco.report", "false")
-        systemProperty("quarkus.jacoco.reuse-data-file", "true")
       }
     }
   }

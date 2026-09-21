@@ -70,6 +70,10 @@ public final class StringT extends BaseVal implements Adder, Comparer, Matcher, 
           Overloads.StartsWith,
           StringT::stringStartsWith);
 
+  static final StringT TRUE = stringOf("true");
+  static final StringT FALSE = stringOf("false");
+  static final StringT NULL = stringOf("null");
+
   public static StringT stringOf(String s) {
     return new StringT(s);
   }
@@ -83,14 +87,14 @@ public final class StringT extends BaseVal implements Adder, Comparer, Matcher, 
   /** Add implements traits.Adder.Add. */
   @Override
   public Val add(Val other) {
-    if (!(other instanceof StringT)) {
+    if (!(other instanceof StringT o)) {
       return noSuchOverload(this, "add", other);
     }
-    return new StringT(s + ((StringT) other).s);
+    return new StringT(s + o.s);
   }
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"removal", "unchecked"})
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
     if (typeDesc == String.class || typeDesc == Object.class) {
@@ -181,14 +185,20 @@ public final class StringT extends BaseVal implements Adder, Comparer, Matcher, 
     };
   }
 
-  /** Match implements traits.Matcher.Match. */
+  /**
+   * Match implements traits.Matcher.Match using {@link java.util.regex.Pattern}.
+   *
+   * <p>This direct value-level operation retains CEL-Java's legacy Java-regex behavior. Programs
+   * created through the public CEL APIs may select a different engine for the standard {@code
+   * matches} function with {@link org.projectnessie.cel.ProgramOption#regexEngine}.
+   */
   @Override
   public Val match(Val pattern) {
-    if (!(pattern instanceof StringT)) {
+    if (!(pattern instanceof StringT o)) {
       return noSuchOverload(this, "match", pattern);
     }
     try {
-      Pattern p = Pattern.compile(((StringT) pattern).s);
+      Pattern p = Pattern.compile(o.s);
       java.util.regex.Matcher m = p.matcher(s);
       return boolOf(m.find());
     } catch (Exception e) {
@@ -212,6 +222,11 @@ public final class StringT extends BaseVal implements Adder, Comparer, Matcher, 
   @Override
   public Val size() {
     return intOf(s.codePointCount(0, s.length()));
+  }
+
+  @Override
+  public int nativeSize() {
+    return s.codePointCount(0, s.length());
   }
 
   /** Type implements ref.Val.Type. */
@@ -244,23 +259,23 @@ public final class StringT extends BaseVal implements Adder, Comparer, Matcher, 
   }
 
   static Val stringContains(String s, Val sub) {
-    if (!(sub instanceof StringT)) {
+    if (!(sub instanceof StringT str)) {
       return noSuchOverload(StringType, "contains", sub);
     }
-    return boolOf(s.contains(((StringT) sub).s));
+    return boolOf(s.contains(str.s));
   }
 
   static Val stringEndsWith(String s, Val suf) {
-    if (!(suf instanceof StringT)) {
+    if (!(suf instanceof StringT str)) {
       return noSuchOverload(StringType, "endsWith", suf);
     }
-    return boolOf(s.endsWith(((StringT) suf).s));
+    return boolOf(s.endsWith(str.s));
   }
 
   static Val stringStartsWith(String s, Val pre) {
-    if (!(pre instanceof StringT)) {
+    if (!(pre instanceof StringT str)) {
       return noSuchOverload(StringType, "startsWith", pre);
     }
-    return boolOf(s.startsWith(((StringT) pre).s));
+    return boolOf(s.startsWith(str.s));
   }
 }

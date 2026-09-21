@@ -18,14 +18,25 @@ package org.projectnessie.cel.common.types.traits;
 import org.projectnessie.cel.common.types.IterableT;
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** Mapper interface which aggregates the traits of a maps. */
+/**
+ * Complete runtime contract for a CEL map value.
+ *
+ * <p>Implementations support key membership, indexing, key iteration, and sizing in addition to the
+ * base {@link Val} contract. Keys yielded by iteration must be accepted by {@link #find(Val)} and
+ * {@link #get(Val)}.
+ */
 public interface Mapper extends Val, Container, Indexer, IterableT, Sizer {
 
   /**
-   * Find returns a value, if one exists, for the input key.
+   * Finds the value associated with {@code key} without converting absence into a CEL error.
    *
-   * <p>If the key is not found the function returns (nil, false). If the input key is not valid for
-   * the map, or is Err or Unknown the function returns (Unknown|Err, false).
+   * <p>This method is the deliberate exception to the usual non-null trait return contract: Java
+   * {@code null} means that the key is absent. A present CEL null value is returned as a non-null
+   * CEL null {@link Val}. The evaluator propagates CEL error and unknown arguments before ordinary
+   * map lookup; direct callers should likewise pass an evaluated, valid CEL key.
+   *
+   * @param key map key
+   * @return the associated CEL value, or Java {@code null} if absent
    */
   Val find(Val key);
 }

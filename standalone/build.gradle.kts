@@ -15,7 +15,37 @@
  */
 
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import javax.inject.Inject
+import org.gradle.api.file.ArchiveOperations
+import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.FileSystemOperations
 import org.gradle.api.plugins.jvm.JvmTestSuite
+import org.gradle.api.tasks.CacheableTask
+import org.gradle.api.tasks.Classpath
+import org.gradle.api.tasks.OutputDirectory
+import org.gradle.api.tasks.TaskAction
+
+@CacheableTask
+abstract class PrepareStandaloneSources : DefaultTask() {
+  @get:Classpath abstract val sourceArchives: ConfigurableFileCollection
+
+  @get:OutputDirectory abstract val outputDirectory: DirectoryProperty
+
+  @get:Inject abstract val archiveOperations: ArchiveOperations
+
+  @get:Inject abstract val fileSystemOperations: FileSystemOperations
+
+  @TaskAction
+  fun prepareSources() {
+    val sourceTrees = sourceArchives.files.map { archiveOperations.zipTree(it) }
+    fileSystemOperations.sync {
+      from(sourceTrees)
+      into(outputDirectory)
+      include("org/projectnessie/cel/**")
+    }
+  }
+}
 
 plugins {
   `java-library`
@@ -31,6 +61,24 @@ val standaloneShadow =
     isCanBeConsumed = false
     isCanBeResolved = true
     isTransitive = false
+  }
+
+val standaloneCelSources =
+  configurations.create("standaloneCelSources") {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+    isTransitive = false
+    attributes {
+      attribute(
+        Category.CATEGORY_ATTRIBUTE,
+        objects.named(Category::class.java, Category.DOCUMENTATION),
+      )
+      attribute(
+        DocsType.DOCS_TYPE_ATTRIBUTE,
+        objects.named(DocsType::class.java, DocsType.SOURCES),
+      )
+      attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage::class.java, Usage.JAVA_RUNTIME))
+    }
   }
 
 dependencies {
@@ -49,6 +97,12 @@ dependencies {
   standaloneShadow(project(":cel-generated-pb"))
   standaloneShadow(libs.protobuf.java)
   standaloneShadow(libs.agrona)
+  standaloneShadow(libs.re2j)
+
+  standaloneCelSources(project(":cel-core"))
+  standaloneCelSources(project(":cel-tools"))
+  standaloneCelSources(project(":cel-jackson"))
+  standaloneCelSources(project(":cel-jackson3"))
 }
 
 val shadowJar = tasks.named<ShadowJar>("shadowJar")
@@ -81,6 +135,20 @@ shadowJar.configure {
 tasks.named<Jar>("jar").configure {
   dependsOn(shadowJar)
   archiveClassifier.set("raw")
+}
+
+val standaloneCelSourceArchives = standaloneCelSources.incoming.artifactView {}.files
+val prepareStandaloneSources =
+  tasks.register<PrepareStandaloneSources>("prepareStandaloneSources") {
+    sourceArchives.from(standaloneCelSourceArchives)
+    outputDirectory.set(layout.buildDirectory.dir("standalone-sources"))
+  }
+
+tasks.named<Jar>("sourcesJar") {
+  // The standalone project has no sources of its own. Publish the maintained CEL-Java sources
+  // whose classes are bundled in the shaded binary. Generated protobuf and third-party sources
+  // are deliberately excluded.
+  from(prepareStandaloneSources.flatMap { it.outputDirectory })
 }
 
 tasks.withType<ShadowJar>().configureEach { exclude("META-INF/jandex.idx") }

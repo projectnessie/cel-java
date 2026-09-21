@@ -17,8 +17,13 @@ package org.projectnessie.cel.common.types.traits;
 
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** Container interface which permits containment tests such as 'a in b'. */
+/** Capability for values that support CEL containment tests such as {@code a in b}. */
 public interface Container {
-  /** Contains returns true if the value exists within the object. */
+  /**
+   * Tests whether {@code value} is contained in this value.
+   *
+   * @param value element or key to test
+   * @return a CEL boolean, error, or unknown value
+   */
   Val contains(Val value);
 }

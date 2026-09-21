@@ -30,7 +30,7 @@ import org.projectnessie.cel.common.types.traits.Indexer;
 import org.projectnessie.cel.interpreter.functions.Overload;
 
 /**
- * ProtoLib provides CEL protobuf extension helper functions.
+ * CEL extension providing Protobuf extension-field helper functions.
  *
  * <p>The extension-name argument is a fully-qualified protobuf extension field name. Expressions
  * that use extension identifiers instead of string literals need those identifiers registered with
@@ -45,6 +45,7 @@ public final class ProtoLib implements Library {
 
   private ProtoLib() {}
 
+  /** Returns an environment option installing the Protobuf extension-field operations. */
   public static EnvOption proto() {
     return Library.Lib(new ProtoLib());
   }
