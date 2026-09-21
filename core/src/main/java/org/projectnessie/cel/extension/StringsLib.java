@@ -297,84 +297,79 @@ public class StringsLib implements Library {
             Decls.newFunction(
                 CHAR_AT,
                 Decls.newInstanceOverload(
-                    "string_char_at_int", Arrays.asList(Decls.String, Decls.Int), Decls.String)),
+                    "string_char_at_int", List.of(Decls.String, Decls.Int), Decls.String)),
             Decls.newFunction(
                 INDEX_OF,
                 Decls.newInstanceOverload(
-                    "string_index_of_string", Arrays.asList(Decls.String, Decls.String), Decls.Int),
+                    "string_index_of_string", List.of(Decls.String, Decls.String), Decls.Int),
                 Decls.newInstanceOverload(
                     "string_index_of_string_int",
-                    Arrays.asList(Decls.String, Decls.String, Decls.Int),
+                    List.of(Decls.String, Decls.String, Decls.Int),
                     Decls.Int)),
             Decls.newFunction(
                 JOIN,
                 Decls.newInstanceOverload(
-                    "list_join", Arrays.asList(Decls.newListType(Decls.String)), Decls.String),
+                    "list_join", List.of(Decls.newListType(Decls.String)), Decls.String),
                 Decls.newInstanceOverload(
                     "list_join_string",
-                    Arrays.asList(Decls.newListType(Decls.String), Decls.String),
+                    List.of(Decls.newListType(Decls.String), Decls.String),
                     Decls.String)),
             Decls.newFunction(
                 LAST_INDEX_OF,
                 Decls.newInstanceOverload(
-                    "string_last_index_of_string",
-                    Arrays.asList(Decls.String, Decls.String),
-                    Decls.Int),
+                    "string_last_index_of_string", List.of(Decls.String, Decls.String), Decls.Int),
                 Decls.newInstanceOverload(
                     "string_last_index_of_string_int",
-                    Arrays.asList(Decls.String, Decls.String, Decls.Int),
+                    List.of(Decls.String, Decls.String, Decls.Int),
                     Decls.Int)),
             Decls.newFunction(
                 LOWER_ASCII,
                 Decls.newInstanceOverload(
-                    "string_lower_ascii", Arrays.asList(Decls.String), Decls.String)),
+                    "string_lower_ascii", List.of(Decls.String), Decls.String)),
             Decls.newFunction(
                 REPLACE,
                 Decls.newInstanceOverload(
                     "string_replace_string_string",
-                    Arrays.asList(Decls.String, Decls.String, Decls.String),
+                    List.of(Decls.String, Decls.String, Decls.String),
                     Decls.String),
                 Decls.newInstanceOverload(
                     "string_replace_string_string_int",
-                    Arrays.asList(Decls.String, Decls.String, Decls.String, Decls.Int),
+                    List.of(Decls.String, Decls.String, Decls.String, Decls.Int),
                     Decls.String)),
             Decls.newFunction(
                 REVERSE,
-                Decls.newInstanceOverload(
-                    "string_reverse", Arrays.asList(Decls.String), Decls.String)),
+                Decls.newInstanceOverload("string_reverse", List.of(Decls.String), Decls.String)),
             Decls.newFunction(
                 SPLIT,
                 Decls.newInstanceOverload(
-                    "string_split_string", Arrays.asList(Decls.String, Decls.String), Decls.Dyn),
+                    "string_split_string", List.of(Decls.String, Decls.String), Decls.Dyn),
                 Decls.newInstanceOverload(
                     "string_split_string_int",
-                    Arrays.asList(Decls.String, Decls.String, Decls.Int),
+                    List.of(Decls.String, Decls.String, Decls.Int),
                     Decls.Dyn)),
             Decls.newFunction(
                 SUBSTR,
                 Decls.newInstanceOverload(
-                    "string_substring_int", Arrays.asList(Decls.String, Decls.Int), Decls.String),
+                    "string_substring_int", List.of(Decls.String, Decls.Int), Decls.String),
                 Decls.newInstanceOverload(
                     "string_substring_int_int",
-                    Arrays.asList(Decls.String, Decls.Int, Decls.Int),
+                    List.of(Decls.String, Decls.Int, Decls.Int),
                     Decls.String)),
             Decls.newFunction(
                 TRIM_SPACE,
-                Decls.newInstanceOverload(
-                    "string_trim", Arrays.asList(Decls.String), Decls.String)),
+                Decls.newInstanceOverload("string_trim", List.of(Decls.String), Decls.String)),
             Decls.newFunction(
                 UPPER_ASCII,
                 Decls.newInstanceOverload(
-                    "string_upper_ascii", Arrays.asList(Decls.String), Decls.String)),
+                    "string_upper_ascii", List.of(Decls.String), Decls.String)),
             Decls.newFunction(
                 FORMAT,
                 Decls.newInstanceOverload(
                     "string_format",
-                    Arrays.asList(Decls.String, Decls.newListType(Decls.Dyn)),
+                    List.of(Decls.String, Decls.newListType(Decls.Dyn)),
                     Decls.String)),
             Decls.newFunction(
-                QUOTE,
-                Decls.newOverload("strings_quote", Arrays.asList(Decls.String), Decls.String)));
+                QUOTE, Decls.newOverload("strings_quote", List.of(Decls.String), Decls.String)));
     return List.of(option);
   }
 
@@ -572,7 +567,7 @@ public class StringsLib implements Library {
     int count = 0;
 
     for (; count < n && index < str.length(); count++) {
-      if (old.length() == 0) {
+      if (old.isEmpty()) {
         stringBuilder.append(replacement).append(str, index, index + 1);
         index++;
       } else {
@@ -623,7 +618,7 @@ public class StringsLib implements Library {
     if (n == 1) {
       return new String[] {s};
     }
-    if (sep.length() == 0) {
+    if (sep.isEmpty()) {
       return explode(s, n);
     }
 
@@ -789,57 +784,37 @@ public class StringsLib implements Library {
   }
 
   private static String formatValue(char clause, int precision, Val arg) {
-    switch (clause) {
-      case 's':
-        return renderStringClause(arg);
-      case 'd':
-        return renderDecimalClause(arg);
-      case 'b':
-        return renderBinaryClause(arg);
-      case 'o':
-        return renderOctalClause(arg);
-      case 'x':
-      case 'X':
-        return renderHexClause(arg, clause == 'X');
-      case 'f':
-        return renderFixedPointClause(arg, precision >= 0 ? precision : 6);
-      case 'e':
-        return renderScientificClause(arg, precision >= 0 ? precision : 6);
-      default:
-        throw new FormatException(
-            "could not parse formatting clause: unrecognized formatting clause \"%s\"", clause);
-    }
+    return switch (clause) {
+      case 's' -> renderStringClause(arg);
+      case 'd' -> renderDecimalClause(arg);
+      case 'b' -> renderBinaryClause(arg);
+      case 'o' -> renderOctalClause(arg);
+      case 'x', 'X' -> renderHexClause(arg, clause == 'X');
+      case 'f' -> renderFixedPointClause(arg, precision >= 0 ? precision : 6);
+      case 'e' -> renderScientificClause(arg, precision >= 0 ? precision : 6);
+      default ->
+          throw new FormatException(
+              "could not parse formatting clause: unrecognized formatting clause \"%s\"", clause);
+    };
   }
 
   private static String renderStringClause(Val value) {
-    switch (value.type().typeEnum()) {
-      case String:
-        return value.value().toString();
-      case Bool:
-        return Boolean.toString(value.booleanValue());
-      case Bytes:
-        return new String(value.convertToNative(byte[].class), UTF_8);
-      case Int:
-        return Long.toString(value.intValue());
-      case Uint:
-        return Long.toUnsignedString(value.intValue());
-      case Double:
-        return renderDouble(value.doubleValue());
-      case Null:
-        return "null";
-      case Type:
-      case Duration:
-      case Timestamp:
-        return value.convertToType(StringT.StringType).value().toString();
-      case List:
-        return renderList(value);
-      case Map:
-        return renderMap(value);
-      default:
-        throw new FormatException(
-            "error during formatting: string clause can only be used on strings, bools, bytes, ints, doubles, maps, lists, types, durations, and timestamps, was given %s",
-            value.type().typeName());
-    }
+    return switch (value.type().typeEnum()) {
+      case String -> value.value().toString();
+      case Bool -> Boolean.toString(value.booleanValue());
+      case Bytes -> new String(value.convertToNative(byte[].class), UTF_8);
+      case Int -> Long.toString(value.intValue());
+      case Uint -> Long.toUnsignedString(value.intValue());
+      case Double -> renderDouble(value.doubleValue());
+      case Null -> "null";
+      case Type, Duration, Timestamp -> value.convertToType(StringT.StringType).value().toString();
+      case List -> renderList(value);
+      case Map -> renderMap(value);
+      default ->
+          throw new FormatException(
+              "error during formatting: string clause can only be used on strings, bools, bytes, ints, doubles, maps, lists, types, durations, and timestamps, was given %s",
+              value.type().typeName());
+    };
   }
 
   private static String renderDecimalClause(Val value) {
@@ -862,53 +837,40 @@ public class StringsLib implements Library {
   }
 
   private static String renderBinaryClause(Val value) {
-    switch (value.type().typeEnum()) {
-      case Int:
-        return Long.toBinaryString(value.intValue());
-      case Uint:
-        return Long.toUnsignedString(value.intValue(), 2);
-      case Bool:
-        return value.booleanValue() ? "1" : "0";
-      default:
-        throw new FormatException(
-            "error during formatting: only integers and bools can be formatted as binary, was given %s",
-            value.type().typeName());
-    }
+    return switch (value.type().typeEnum()) {
+      case Int -> Long.toBinaryString(value.intValue());
+      case Uint -> Long.toUnsignedString(value.intValue(), 2);
+      case Bool -> value.booleanValue() ? "1" : "0";
+      default ->
+          throw new FormatException(
+              "error during formatting: only integers and bools can be formatted as binary, was given %s",
+              value.type().typeName());
+    };
   }
 
   private static String renderOctalClause(Val value) {
-    switch (value.type().typeEnum()) {
-      case Int:
-        return Long.toOctalString(value.intValue());
-      case Uint:
-        return Long.toUnsignedString(value.intValue(), 8);
-      default:
-        throw new FormatException(
-            "error during formatting: octal clause can only be used on integers, was given %s",
-            value.type().typeName());
-    }
+    return switch (value.type().typeEnum()) {
+      case Int -> Long.toOctalString(value.intValue());
+      case Uint -> Long.toUnsignedString(value.intValue(), 8);
+      default ->
+          throw new FormatException(
+              "error during formatting: octal clause can only be used on integers, was given %s",
+              value.type().typeName());
+    };
   }
 
   private static String renderHexClause(Val value, boolean upperCase) {
-    String hex;
-    switch (value.type().typeEnum()) {
-      case Int:
-        hex = Long.toHexString(value.intValue());
-        break;
-      case Uint:
-        hex = Long.toUnsignedString(value.intValue(), 16);
-        break;
-      case String:
-        hex = bytesToHex(value.value().toString().getBytes(UTF_8));
-        break;
-      case Bytes:
-        hex = bytesToHex(value.convertToNative(byte[].class));
-        break;
-      default:
-        throw new FormatException(
-            "error during formatting: only integers, byte buffers, and strings can be formatted as hex, was given %s",
-            value.type().typeName());
-    }
+    String hex =
+        switch (value.type().typeEnum()) {
+          case Int -> Long.toHexString(value.intValue());
+          case Uint -> Long.toUnsignedString(value.intValue(), 16);
+          case String -> bytesToHex(value.value().toString().getBytes(UTF_8));
+          case Bytes -> bytesToHex(value.convertToNative(byte[].class));
+          default ->
+              throw new FormatException(
+                  "error during formatting: only integers, byte buffers, and strings can be formatted as hex, was given %s",
+                  value.type().typeName());
+        };
     return upperCase ? hex.toUpperCase(Locale.ROOT) : hex;
   }
 

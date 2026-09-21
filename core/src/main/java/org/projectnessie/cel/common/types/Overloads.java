@@ -236,20 +236,19 @@ public final class Overloads {
   // IsTypeConversionFunction returns whether the input function is a standard library type
   // conversion function.
   public static boolean isTypeConversionFunction(String function) {
-    switch (function) {
-      case TypeConvertBool:
-      case TypeConvertBytes:
-      case TypeConvertDouble:
-      case TypeConvertDuration:
-      case TypeConvertDyn:
-      case TypeConvertInt:
-      case TypeConvertString:
-      case TypeConvertTimestamp:
-      case TypeConvertType:
-      case TypeConvertUint:
-        return true;
-      default:
-        return false;
-    }
+    return switch (function) {
+      case TypeConvertBool,
+          TypeConvertBytes,
+          TypeConvertDouble,
+          TypeConvertDuration,
+          TypeConvertDyn,
+          TypeConvertInt,
+          TypeConvertString,
+          TypeConvertTimestamp,
+          TypeConvertType,
+          TypeConvertUint ->
+          true;
+      default -> false;
+    };
   }
 }

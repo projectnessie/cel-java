@@ -51,17 +51,17 @@ public class CompileBuildBench {
     public String expression;
 
     String source() {
-      switch (expression) {
-        case "simplePredicate":
-          return "resource == 'projects/p1' && user == 'alice'";
-        case "deepSelectors":
-          return "request.auth.claims.email.endsWith('@example.com')"
-              + " && request.resource.labels['env'] == 'prod'";
-        case "macroPipeline":
-          return "items.filter(i, i.score > 10).map(i, i.name).exists(n, n.startsWith('a'))";
-        default:
-          throw new IllegalArgumentException("Unknown compile benchmark expression: " + expression);
-      }
+      return switch (expression) {
+        case "simplePredicate" -> "resource == 'projects/p1' && user == 'alice'";
+        case "deepSelectors" ->
+            "request.auth.claims.email.endsWith('@example.com')"
+                + " && request.resource.labels['env'] == 'prod'";
+        case "macroPipeline" ->
+            "items.filter(i, i.score > 10).map(i, i.name).exists(n, n.startsWith('a'))";
+        default ->
+            throw new IllegalArgumentException(
+                "Unknown compile benchmark expression: " + expression);
+      };
     }
   }
 

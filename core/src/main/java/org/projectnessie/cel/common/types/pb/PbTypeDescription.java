@@ -119,15 +119,13 @@ public final class PbTypeDescription extends Description implements TypeDescript
       if (this.reflectType == Any.class) {
         String realTypeUrl;
         ByteString realValue;
-        if (msg instanceof DynamicMessage) {
-          DynamicMessage dyn = (DynamicMessage) msg;
+        if (msg instanceof DynamicMessage dyn) {
           Descriptor dynDesc = dyn.getDescriptorForType();
           FieldDescriptor fTypeUrl = dynDesc.findFieldByName("type_url");
           FieldDescriptor fValue = dynDesc.findFieldByName("value");
           realTypeUrl = (String) dyn.getField(fTypeUrl);
           realValue = (ByteString) dyn.getField(fValue);
-        } else if (msg instanceof Any) {
-          Any any = (Any) msg;
+        } else if (msg instanceof Any any) {
           realTypeUrl = any.getTypeUrl();
           realValue = any.getValue();
         } else {
@@ -145,11 +143,9 @@ public final class PbTypeDescription extends Description implements TypeDescript
       }
 
       if (!(zeroMsg instanceof DynamicMessage)) {
-        if (msg instanceof Any) {
-          Any any = (Any) msg;
+        if (msg instanceof Any any) {
           msg = DynamicMessage.parseFrom(getDescriptor(), any.getValue(), db.extensionRegistry());
-        } else if (msg instanceof DynamicMessage && !hasExtensions(msg)) {
-          DynamicMessage dyn = (DynamicMessage) msg;
+        } else if (msg instanceof DynamicMessage dyn && !hasExtensions(msg)) {
           msg = zeroMsg.getParserForType().parseFrom(dyn.toByteString(), db.extensionRegistry());
         }
       }
@@ -246,32 +242,23 @@ public final class PbTypeDescription extends Description implements TypeDescript
       return conv.apply(msg);
     }
 
-    if (msg instanceof Any) {
-      Any v = (Any) msg;
+    if (msg instanceof Any v) {
       DynamicMessage dyn = DynamicMessage.newBuilder(v).build();
       return unwrapDynamic(db, desc, dyn);
     }
     if (msg instanceof DynamicMessage) {
       return unwrapDynamic(db, desc, msg);
     }
-    if (msg instanceof Value) {
-      Value v = (Value) msg;
-      switch (v.getKindCase()) {
-        case BOOL_VALUE:
-          return v.getBoolValue();
-        case LIST_VALUE:
-          return v.getListValue();
-        case NULL_VALUE:
-          return v.getNullValue();
-        case NUMBER_VALUE:
-          return v.getNumberValue();
-        case STRING_VALUE:
-          return v.getStringValue();
-        case STRUCT_VALUE:
-          return v.getStructValue();
-        default:
-          return NullValue.NULL_VALUE;
-      }
+    if (msg instanceof Value v) {
+      return switch (v.getKindCase()) {
+        case BOOL_VALUE -> v.getBoolValue();
+        case LIST_VALUE -> v.getListValue();
+        case NULL_VALUE -> v.getNullValue();
+        case NUMBER_VALUE -> v.getNumberValue();
+        case STRING_VALUE -> v.getStringValue();
+        case STRUCT_VALUE -> v.getStructValue();
+        default -> NullValue.NULL_VALUE;
+      };
     }
 
     return msg;
@@ -382,16 +369,14 @@ public final class PbTypeDescription extends Description implements TypeDescript
   }
 
   public static String typeNameFromMessage(Message message) {
-    if (message instanceof DynamicMessage) {
-      DynamicMessage dyn = (DynamicMessage) message;
+    if (message instanceof DynamicMessage dyn) {
       Descriptor dynDesc = dyn.getDescriptorForType();
       if (dynDesc.getFullName().equals("google.protobuf.Any")) {
         FieldDescriptor f = dynDesc.findFieldByName("type_url");
         String typeUrl = (String) dyn.getField(f);
         return typeNameFromUrl(typeUrl);
       }
-    } else if (message instanceof Any) {
-      Any any = (Any) message;
+    } else if (message instanceof Any any) {
       String typeUrl = any.getTypeUrl();
       return typeNameFromUrl(typeUrl);
     }
