@@ -25,6 +25,8 @@ import org.projectnessie.cel.common.types.ListT;
 import org.projectnessie.cel.common.types.StringT;
 import org.projectnessie.cel.interpreter.functions.BinaryOp;
 import org.projectnessie.cel.interpreter.functions.FunctionOp;
+import org.projectnessie.cel.interpreter.functions.QuaternaryOp;
+import org.projectnessie.cel.interpreter.functions.TernaryOp;
 import org.projectnessie.cel.interpreter.functions.UnaryOp;
 
 /** function invocation guards for common call signatures within extension functions. */
@@ -57,6 +59,19 @@ public final class Guards {
     };
   }
 
+  public static TernaryOp callInStrIntIntOutStrTernary(
+      TriFunction<String, Integer, Integer, String> func) {
+    return (first, second, third) -> {
+      try {
+        return StringT.stringOf(
+            func.apply(
+                (String) first.value(), getIntValue((IntT) second), getIntValue((IntT) third)));
+      } catch (RuntimeException e) {
+        return Err.newErr(e, "%s", e.getMessage());
+      }
+    };
+  }
+
   public static BinaryOp callInStrStrOutInt(BiFunction<String, String, Integer> func) {
     return (lhs, rhs) -> {
       try {
@@ -76,6 +91,18 @@ public final class Guards {
                 ((String) values[0].value()),
                 ((String) values[1].value()),
                 (getIntValue((IntT) values[2]))));
+      } catch (RuntimeException e) {
+        return Err.newErr(e, "%s", e.getMessage());
+      }
+    };
+  }
+
+  public static TernaryOp callInStrStrIntOutIntTernary(
+      TriFunction<String, String, Integer, Integer> func) {
+    return (first, second, third) -> {
+      try {
+        return IntT.intOf(
+            func.apply((String) first.value(), (String) second.value(), getIntValue((IntT) third)));
       } catch (RuntimeException e) {
         return Err.newErr(e, "%s", e.getMessage());
       }
@@ -107,6 +134,18 @@ public final class Guards {
     };
   }
 
+  public static TernaryOp callInStrStrIntOutStrArrTernary(
+      TriFunction<String, String, Integer, String[]> func) {
+    return (first, second, third) -> {
+      try {
+        return ListT.newStringArrayList(
+            func.apply((String) first.value(), (String) second.value(), getIntValue((IntT) third)));
+      } catch (RuntimeException e) {
+        return Err.newErr(e, "%s", e.getMessage());
+      }
+    };
+  }
+
   public static FunctionOp callInStrStrStrOutStr(TriFunction<String, String, String, String> func) {
     return values -> {
       try {
@@ -115,6 +154,18 @@ public final class Guards {
                 ((String) values[0].value()),
                 ((String) values[1].value()),
                 ((String) values[2].value())));
+      } catch (RuntimeException e) {
+        return Err.newErr(e, "%s", e.getMessage());
+      }
+    };
+  }
+
+  public static TernaryOp callInStrStrStrOutStrTernary(
+      TriFunction<String, String, String, String> func) {
+    return (first, second, third) -> {
+      try {
+        return StringT.stringOf(
+            func.apply((String) first.value(), (String) second.value(), (String) third.value()));
       } catch (RuntimeException e) {
         return Err.newErr(e, "%s", e.getMessage());
       }
@@ -131,6 +182,22 @@ public final class Guards {
                 ((String) values[1].value()),
                 ((String) values[2].value()),
                 getIntValue((IntT) values[3])));
+      } catch (RuntimeException e) {
+        return Err.newErr(e, "%s", e.getMessage());
+      }
+    };
+  }
+
+  public static QuaternaryOp callInStrStrStrIntOutStrQuaternary(
+      QuadFunction<String, String, String, Integer, String> func) {
+    return (first, second, third, fourth) -> {
+      try {
+        return StringT.stringOf(
+            func.apply(
+                (String) first.value(),
+                (String) second.value(),
+                (String) third.value(),
+                getIntValue((IntT) fourth)));
       } catch (RuntimeException e) {
         return Err.newErr(e, "%s", e.getMessage());
       }
