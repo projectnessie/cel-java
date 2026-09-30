@@ -78,20 +78,17 @@ import org.projectnessie.cel.common.types.traits.Mapper;
  * prepare the overloads accordingly.
  */
 public final class AstPruner {
-  private final Expr expr;
   private final EvalState state;
   private long nextExprID;
 
-  private AstPruner(Expr expr, EvalState state, long nextExprID) {
-    this.expr = expr;
+  private AstPruner(EvalState state, long nextExprID) {
     this.state = state;
     this.nextExprID = nextExprID;
   }
 
   public static Expr pruneAst(Expr expr, EvalState state) {
-    AstPruner pruner = new AstPruner(expr, state, 1);
-    Expr newExpr = pruner.prune(expr);
-    return newExpr;
+    AstPruner pruner = new AstPruner(state, 1);
+    return pruner.prune(expr);
   }
 
   static Expr createLiteral(long id, Constant val) {
@@ -319,33 +316,32 @@ public final class AstPruner {
         boolean prunedStruct = false;
         CreateStruct struct = node.getStructExpr();
         List<Entry> entries = struct.getEntriesList();
-        String messageType = struct.getMessageName();
         List<Entry> newEntries = new ArrayList<>(entries.size());
         for (int i = 0; i < entries.size(); i++) {
           Entry entry = entries.get(i);
           newEntries.add(entry);
           Expr mapKey = entry.getMapKey();
-          Expr newKey = mapKey != Entry.getDefaultInstance().getMapKey() ? prune(mapKey) : null;
+          Expr newKey = entry.hasMapKey() ? prune(mapKey) : null;
           Expr newValue = prune(entry.getValue());
           if ((newKey == null || newKey == mapKey)
               && (newValue == null || newValue == entry.getValue())) {
             continue;
           }
           prunedStruct = true;
-          Entry newEntry;
-          if (!messageType.isEmpty()) {
-            newEntry =
-                Entry.newBuilder().setFieldKey(entry.getFieldKey()).setValue(newValue).build();
-          } else {
-            newEntry = Entry.newBuilder().setMapKey(newKey).setValue(newValue).build();
+          Entry.Builder newEntry = Entry.newBuilder(entry);
+          if (newKey != null && newKey != mapKey) {
+            newEntry.setMapKey(newKey);
           }
-          newEntries.set(i, newEntry);
+          if (newValue != null && newValue != entry.getValue()) {
+            newEntry.setValue(newValue);
+          }
+          newEntries.set(i, newEntry.build());
         }
         if (prunedStruct) {
           return Expr.newBuilder()
               .setId(node.getId())
               .setStructExpr(
-                  CreateStruct.newBuilder().setMessageName(messageType).addAllEntries(entries))
+                  CreateStruct.newBuilder(struct).clearEntries().addAllEntries(newEntries))
               .build();
         }
         break;
