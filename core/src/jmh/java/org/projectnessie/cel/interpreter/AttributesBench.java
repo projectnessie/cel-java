@@ -42,6 +42,7 @@ import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.Threads;
 import org.openjdk.jmh.annotations.Warmup;
 import org.projectnessie.cel.common.containers.Container;
+import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.interpreter.AttributeFactory.Attribute;
 import org.projectnessie.cel.interpreter.AttributeFactory.NamespacedAttribute;
@@ -55,6 +56,24 @@ import org.projectnessie.cel.interpreter.AttributesTest.CustAttrFactory;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 public class AttributesBench {
+
+  @State(Scope.Benchmark)
+  public static class GeneratedScalarFieldGetterState {
+
+    final NestedMessage message;
+    final FieldType fieldType;
+
+    public GeneratedScalarFieldGetterState() {
+      message = NestedMessage.newBuilder().setBb(123).build();
+      TypeRegistry reg = newRegistry(message);
+      fieldType = reg.findFieldType("cel.expr.conformance.proto3.TestAllTypes.NestedMessage", "bb");
+    }
+  }
+
+  @Benchmark
+  public Object generatedScalarFieldGetter(GeneratedScalarFieldGetterState state) {
+    return state.fieldType.getFrom.getFrom(state.message);
+  }
 
   @Benchmark
   public void attributesConditionalAttr_TrueBranch() {
