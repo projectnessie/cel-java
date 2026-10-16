@@ -80,7 +80,7 @@ public final class PbObjectT extends ObjectT {
     if (fd == null) {
       return noSuchField(protoFieldStr);
     }
-    return nativeToValue(fd.getField(value, adapter));
+    return adapter.nativeToValue(fd.getField(value, adapter));
   }
 
   @Override
@@ -98,7 +98,18 @@ public final class PbObjectT extends ObjectT {
     return boolOf(message().equals(otherObject.message()));
   }
 
-  @SuppressWarnings("unchecked")
+  /**
+   * Converts this value to a compatible protobuf or CEL representation.
+   *
+   * <p>Supported targets include the wrapped generated message class, {@link DynamicMessage},
+   * {@link Any}, selected protobuf JSON {@link Value} representations, {@link Message}, {@link
+   * Val}, and {@link PbObjectT}. Conversion to another generated protobuf class rebuilds the
+   * message from its protobuf data.
+   *
+   * @throws IllegalArgumentException if the requested target is not supported
+   * @throws RuntimeException if rebuilding a generated message fails
+   */
+  @SuppressWarnings({"removal", "unchecked"})
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
     if (typeDesc.isAssignableFrom(value.getClass())) {
@@ -127,7 +138,7 @@ public final class PbObjectT extends ObjectT {
         return (T) Value.newBuilder().setStringValue(fieldMaskJsonValue((FieldMask) value)).build();
       }
       if (value instanceof Timestamp) {
-        return adapter.nativeToValue(value).convertToNative(typeDesc);
+        return adapter.valueToNative(adapter.nativeToValue(value), typeDesc);
       }
     }
     if (typeDesc.isAssignableFrom(this.typeDesc.reflectType()) || typeDesc == Object.class) {

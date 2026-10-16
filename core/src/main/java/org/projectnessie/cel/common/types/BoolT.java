@@ -65,7 +65,7 @@ public final class BoolT extends BaseVal implements Comparer, Negater {
   }
 
   /** ConvertToNative implements the ref.Val interface method. */
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"removal", "unchecked"})
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
     if (typeDesc == Boolean.class || typeDesc == boolean.class || typeDesc == Object.class) {

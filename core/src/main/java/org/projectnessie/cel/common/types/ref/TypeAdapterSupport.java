@@ -18,6 +18,7 @@ package org.projectnessie.cel.common.types.ref;
 import static org.projectnessie.cel.common.types.BytesT.bytesOf;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.DurationT.durationOf;
+import static org.projectnessie.cel.common.types.Err.rangeError;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.ListT.newDoubleArrayList;
 import static org.projectnessie.cel.common.types.ListT.newGenericArrayList;
@@ -56,10 +57,21 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
 import org.projectnessie.cel.common.ULong;
+import org.projectnessie.cel.common.types.BoolT;
+import org.projectnessie.cel.common.types.DoubleT;
+import org.projectnessie.cel.common.types.Err;
+import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.NullT;
+import org.projectnessie.cel.common.types.UintT;
+import org.projectnessie.cel.common.types.UnknownT;
 
 /**
- * Helper class for {@link TypeAdapter} implementations to convert from a Java type to a CEL type.
+ * Standard conversion helpers for {@link TypeAdapter} implementations.
+ *
+ * <p>{@link #maybeNativeToValue(TypeAdapter, Object)} recognizes the built-in Java, Protobuf, and
+ * aggregate representations handled by CEL-Java. Custom adapters commonly call it first and handle
+ * a {@code null} return as “not recognized.” The primitive methods and CEL-to-Java methods provide
+ * the default semantics used by {@link TypeAdapter}.
  */
 public final class TypeAdapterSupport {
   private TypeAdapterSupport() {}
@@ -150,5 +162,170 @@ public final class TypeAdapterSupport {
     }
 
     return null;
+  }
+
+  /**
+   * Returns the standard CEL boolean value.
+   *
+   * @param value primitive value
+   * @return CEL boolean
+   */
+  public static Val nativeToValue(boolean value) {
+    return boolOf(value);
+  }
+
+  /**
+   * Returns a CEL int value.
+   *
+   * @param value primitive value
+   * @return CEL int
+   */
+  public static Val nativeToValue(byte value) {
+    return intOf(value);
+  }
+
+  /**
+   * Returns a CEL int value.
+   *
+   * @param value primitive value
+   * @return CEL int
+   */
+  public static Val nativeToValue(short value) {
+    return intOf(value);
+  }
+
+  /**
+   * Returns a CEL int value.
+   *
+   * @param value primitive value
+   * @return CEL int
+   */
+  public static Val nativeToValue(int value) {
+    return intOf(value);
+  }
+
+  /**
+   * Returns a CEL int value.
+   *
+   * @param value primitive value
+   * @return CEL int
+   */
+  public static Val nativeToValue(long value) {
+    return intOf(value);
+  }
+
+  /**
+   * Returns a CEL double value.
+   *
+   * @param value primitive value
+   * @return CEL double
+   */
+  public static Val nativeToValue(float value) {
+    return doubleOf(value);
+  }
+
+  /**
+   * Returns a CEL double value.
+   *
+   * @param value primitive value
+   * @return CEL double
+   */
+  public static Val nativeToValue(double value) {
+    return doubleOf(value);
+  }
+
+  /**
+   * Converts a CEL value to the requested Java representation using primitive specializations where
+   * available.
+   *
+   * @param adapter adapter whose primitive conversion methods define the conversion semantics
+   * @param value CEL value to convert
+   * @param targetType requested Java class or primitive class
+   * @return the converted Java value
+   * @throws RuntimeException if conversion is unsupported or out of range
+   */
+  @SuppressWarnings("unchecked")
+  public static <T> T valueToNative(TypeAdapter adapter, Val value, Class<T> targetType) {
+    if (targetType == boolean.class) {
+      return (T) Boolean.valueOf(adapter.valueToBoolean(value));
+    }
+    if (targetType == int.class) {
+      return (T) Integer.valueOf(adapter.valueToInt(value));
+    }
+    if (targetType == long.class) {
+      return (T) Long.valueOf(adapter.valueToLong(value));
+    }
+    if (targetType == double.class) {
+      return (T) Double.valueOf(adapter.valueToDouble(value));
+    }
+    return legacyValueToNative(value, targetType);
+  }
+
+  /**
+   * Converts a CEL boolean to a Java primitive.
+   *
+   * @param value CEL value to convert
+   * @return primitive boolean
+   * @throws RuntimeException if {@code value} is not convertible to boolean
+   */
+  public static boolean valueToBoolean(Val value) {
+    if (value instanceof BoolT boolValue) {
+      return boolValue.booleanValue();
+    }
+    return legacyValueToNative(value, boolean.class);
+  }
+
+  /**
+   * Converts a CEL int or uint to a range-checked Java {@code int}.
+   *
+   * @param value CEL value to convert
+   * @return primitive value
+   * @throws RuntimeException if {@code value} is not an integer or is outside the Java {@code int}
+   *     range
+   */
+  public static int valueToInt(Val value) {
+    if (value instanceof IntT || value instanceof UintT) {
+      long longValue = value.intValue();
+      if (longValue < Integer.MIN_VALUE || longValue > Integer.MAX_VALUE) {
+        Err.throwErrorAsIllegalStateException(rangeError(longValue, "Java int"));
+      }
+      return (int) longValue;
+    }
+    return legacyValueToNative(value, int.class);
+  }
+
+  /**
+   * Converts a CEL int or uint to Java {@code long} bits.
+   *
+   * <p>For CEL uint, the returned primitive preserves the unsigned value's raw bits.
+   *
+   * @param value CEL value to convert
+   * @return primitive signed value or raw unsigned bits
+   * @throws RuntimeException if {@code value} is not convertible to {@code long}
+   */
+  public static long valueToLong(Val value) {
+    if (value instanceof IntT || value instanceof UintT || value instanceof UnknownT) {
+      return value.intValue();
+    }
+    return legacyValueToNative(value, long.class);
+  }
+
+  /**
+   * Converts a CEL double to a Java primitive.
+   *
+   * @param value CEL value to convert
+   * @return primitive double
+   * @throws RuntimeException if {@code value} is not convertible to {@code double}
+   */
+  public static double valueToDouble(Val value) {
+    if (value instanceof DoubleT doubleValue) {
+      return doubleValue.doubleValue();
+    }
+    return legacyValueToNative(value, double.class);
+  }
+
+  @SuppressWarnings("removal")
+  private static <T> T legacyValueToNative(Val value, Class<T> targetType) {
+    return value.convertToNative(targetType);
   }
 }

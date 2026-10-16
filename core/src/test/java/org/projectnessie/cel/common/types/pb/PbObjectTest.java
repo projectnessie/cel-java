@@ -67,6 +67,7 @@ public class PbObjectTest {
   }
 
   @Test
+  @SuppressWarnings("removal")
   void protoObjectConvertToNative() throws Exception {
     TypeRegistry reg = newRegistry(Expr.getDefaultInstance());
     ParsedExpr msg =
@@ -96,6 +97,7 @@ public class PbObjectTest {
   }
 
   @Test
+  @SuppressWarnings("removal")
   void wellKnownProtoObjectsConvertToJsonValue() {
     TypeRegistry reg = newRegistry(Empty.getDefaultInstance(), FieldMask.getDefaultInstance());
 
