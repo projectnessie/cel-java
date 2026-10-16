@@ -22,6 +22,8 @@ import static org.projectnessie.cel.common.types.IntT.intOf;
 import com.google.api.expr.v1alpha1.CheckedExpr;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.projectnessie.cel.Env;
+import org.projectnessie.cel.ProgramOption;
 import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
 import org.projectnessie.cel.interpreter.Activation;
@@ -35,6 +37,7 @@ import org.projectnessie.cel.interpreter.Coster;
 import org.projectnessie.cel.interpreter.Coster.Cost;
 import org.projectnessie.cel.interpreter.Dispatcher;
 import org.projectnessie.cel.interpreter.Interpretable;
+import org.projectnessie.cel.interpreter.Interpretable.InterpretableCall;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableConst;
 import org.projectnessie.cel.interpreter.InterpretableDecorator;
 import org.projectnessie.cel.interpreter.InterpretablePlanner;
@@ -47,6 +50,36 @@ import org.projectnessie.cel.interpreter.Interpreter;
  * name any concrete interpreter implementation.
  */
 class InterpreterPublicApiCompileTest {
+
+  @Test
+  void optimizerHelpersRemainCallableOutsideInterpreterPackage() {
+    Env env = Env.newEnv();
+    var conversion = env.compile("int('42')").getAst();
+    var membership = env.compile("1 in [1]").getAst();
+    InterpretableDecorator foldUnary =
+        node ->
+            node instanceof InterpretableCall call
+                ? InterpretableDecorator.maybeOptimizeConstUnary(node, call)
+                : node;
+    InterpretableDecorator foldMembership =
+        node -> {
+          Interpretable folded = Interpreter.optimize().decorate(node);
+          return node instanceof InterpretableCall call
+              ? InterpretableDecorator.maybeOptimizeSetMembership(folded, call)
+              : folded;
+        };
+    assertThat(
+            env.program(conversion, ProgramOption.customDecorator(foldUnary))
+                .eval(emptyMap())
+                .getVal())
+        .isEqualTo(intOf(42));
+    assertThat(
+            env.program(membership, ProgramOption.customDecorator(foldMembership))
+                .eval(emptyMap())
+                .getVal()
+                .booleanValue())
+        .isTrue();
+  }
 
   @Test
   void retainedContractsAndFactoriesRemainUsableOutsideInterpreterPackage() {
@@ -73,6 +106,8 @@ class InterpreterPublicApiCompileTest {
         Interpreter.newStandardInterpreter(container, registry, registry, attributes);
     Interpreter configured =
         Interpreter.newInterpreter(extended, container, registry, registry, attributes);
+    Interpreter configuredNative =
+        Interpreter.newInterpreter(extended, container, registry, registry, attributes, true);
     InterpretableDecorator optimizer = Interpreter.optimize();
     InterpretablePlanner checked =
         InterpretablePlanner.newPlanner(
@@ -89,6 +124,7 @@ class InterpreterPublicApiCompileTest {
     assertThat(constant.value()).isEqualTo(intOf(1L));
     assertThat(standard).isNotNull();
     assertThat(configured).isNotNull();
+    assertThat(configuredNative).isNotNull();
     assertThat(optimizer).isNotNull();
     assertThat(checked).isNotNull();
     assertThat(checkedMaps).isNotNull();
