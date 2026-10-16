@@ -16,9 +16,10 @@
 
 INCLUDE "cel-lexer.ccc"
 
-Start : Expr! <EOF>! ;
+Start : { resourceCheckpoint(); } Expr! <EOF>! ;
 
 Expr :
+  { resourceCheckpoint(); }
   ConditionalOr
   [<QUESTIONMARK> ConditionalOr <COLON> Expr]
   ;
@@ -44,12 +45,13 @@ Multiplicative :
   ;
 
 Unary :
-  (<EXCLAM> | <MINUS>)* Member
+  ({ resourceCheckpoint(); } (<EXCLAM> | <MINUS>))* Member
   ;
 
 Member :
   Primary
   (
+    { resourceCheckpoint(); }
     <DOT> [<QUESTIONMARK>] Field [<LPAREN> (<RPAREN> | ExprList <RPAREN>)]
   | <LBRACKET> [<QUESTIONMARK>] Expr <RBRACKET>
   | <LBRACE> [FieldInitializerList] [<COMMA>] <RBRACE>
@@ -65,15 +67,16 @@ Primary :
   ;
 
 ExprList :
-  Expr (<COMMA> Expr =>||)*!
+  Expr ({ resourceCheckpoint(); } <COMMA> Expr =>||)*!
   ;
 
 ListInitializerList :
-  [<QUESTIONMARK>] Expr (<COMMA> [<QUESTIONMARK>] Expr =>||)*!
+  [<QUESTIONMARK>] Expr ({ resourceCheckpoint(); } <COMMA> [<QUESTIONMARK>] Expr =>||)*!
   ;
 
 FieldInitializerList :
-  [<QUESTIONMARK>] Field <COLON> Expr (<COMMA> [<QUESTIONMARK>] Field <COLON> Expr =>||)*!
+  [<QUESTIONMARK>] Field <COLON> Expr
+  ({ resourceCheckpoint(); } <COMMA> [<QUESTIONMARK>] Field <COLON> Expr =>||)*!
   ;
 
 Field :
@@ -82,7 +85,8 @@ Field :
   ;
 
 MapInitializerList :
-  [<QUESTIONMARK>] Expr <COLON> Expr (<COMMA> [<QUESTIONMARK>] Expr <COLON> Expr =>||)*!
+  [<QUESTIONMARK>] Expr <COLON> Expr
+  ({ resourceCheckpoint(); } <COMMA> [<QUESTIONMARK>] Expr <COLON> Expr =>||)*!
   ;
 
 ConstantLiteral :

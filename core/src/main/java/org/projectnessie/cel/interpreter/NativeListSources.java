@@ -26,11 +26,13 @@ import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Lister;
 import org.projectnessie.cel.common.types.traits.Sizer;
+import org.projectnessie.cel.internal.OperationScope;
 
 /**
  * Shared representation dispatch for a resolved list source.
@@ -167,6 +169,9 @@ final class NativeListSources {
       }
       throw failure;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       throw NativeSupport.propagatedError(newErr(failure, failure.toString()));
     }
   }
@@ -305,6 +310,7 @@ final class NativeListSources {
           checkIndex(index, values.size());
           Iterator<?> iterator = values.iterator();
           for (int current = 0; iterator.hasNext(); current++) {
+            OperationScope.current().checkpoint(Phase.EVALUATE);
             selected = iterator.next();
             if (current == index) {
               return source.materializeResolvedElement(selected);
@@ -328,6 +334,9 @@ final class NativeListSources {
     } catch (ValueSignal failure) {
       throw failure;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       throw signal(newErr(failure, failure.toString()));
     }
   }
@@ -348,11 +357,13 @@ final class NativeListSources {
       NativeLoopBinding binding,
       NativeScalarLoopConsumer consumer,
       boolean prepareCapacity) {
+    var controller = ActivationControls.controller(binding);
     if (elementKind == NativeScalarKind.INT && raw instanceof int[] values) {
       if (prepareCapacity) {
         consumer.prepareCapacity(values.length);
       }
       for (int value : values) {
+        controller.checkpoint(Phase.EVALUATE);
         binding.setInt(value);
         if (consumer.test(binding)) {
           return true;
@@ -365,6 +376,7 @@ final class NativeListSources {
         consumer.prepareCapacity(values.length);
       }
       for (long value : values) {
+        controller.checkpoint(Phase.EVALUATE);
         binding.setInt(value);
         if (consumer.test(binding)) {
           return true;
@@ -379,6 +391,7 @@ final class NativeListSources {
         consumer.prepareCapacity(values.length);
       }
       for (long value : values) {
+        controller.checkpoint(Phase.EVALUATE);
         binding.setUint(value);
         if (consumer.test(binding)) {
           return true;
@@ -391,6 +404,7 @@ final class NativeListSources {
         consumer.prepareCapacity(values.length);
       }
       for (double value : values) {
+        controller.checkpoint(Phase.EVALUATE);
         binding.setDouble(value);
         if (consumer.test(binding)) {
           return true;
@@ -403,6 +417,7 @@ final class NativeListSources {
         consumer.prepareCapacity(values.length);
       }
       for (String value : values) {
+        controller.checkpoint(Phase.EVALUATE);
         if (value != null || !source.exactListSource()) {
           binding.setString(value);
         } else {
@@ -419,6 +434,7 @@ final class NativeListSources {
         consumer.prepareCapacity(values.length);
       }
       for (Object value : values) {
+        controller.checkpoint(Phase.EVALUATE);
         setBindingValue(binding, elementKind, value, source);
         if (consumer.test(binding)) {
           return true;
@@ -431,6 +447,7 @@ final class NativeListSources {
         consumer.prepareCapacity(values.size());
       }
       for (Object value : values) {
+        controller.checkpoint(Phase.EVALUATE);
         setBindingValue(binding, elementKind, value, source);
         if (consumer.test(binding)) {
           return true;
@@ -449,6 +466,9 @@ final class NativeListSources {
     } catch (ValueSignal valueSignal) {
       throw valueSignal;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       throw signal(newErr(failure, failure.toString()));
     }
   }
@@ -468,6 +488,7 @@ final class NativeListSources {
         checkIndex(index, values.size());
         Iterator<?> iterator = values.iterator();
         for (int current = 0; iterator.hasNext(); current++) {
+          OperationScope.current().checkpoint(Phase.EVALUATE);
           Object value = iterator.next();
           if (current == index) {
             return value;

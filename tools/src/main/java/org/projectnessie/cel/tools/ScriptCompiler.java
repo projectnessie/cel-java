@@ -37,8 +37,11 @@ import org.projectnessie.cel.Library;
 import org.projectnessie.cel.Program;
 import org.projectnessie.cel.ProgramOption;
 import org.projectnessie.cel.RegexEngine;
+import org.projectnessie.cel.ResourceLimits;
 import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
+import org.projectnessie.cel.internal.CheckedControlledOperation;
+import org.projectnessie.cel.internal.OperationController;
 
 /**
  * Immutable, reusable configuration for compiling CEL source text into {@link Script} instances.
@@ -94,6 +97,55 @@ public final class ScriptCompiler {
     return compile(env, sourceText, programOptions);
   }
 
+  /**
+   * Creates a cancellation-only one-shot compilation handle.
+   *
+   * @param sourceText CEL expression source text
+   * @return a lazy one-shot compilation handle
+   * @throws NullPointerException if {@code sourceText} is {@code null}
+   * @throws IllegalArgumentException if {@code sourceText} is blank
+   */
+  public CancelableScriptCompilation compileCancelable(String sourceText) {
+    return compileCancelable(sourceText, ResourceLimits.unlimited());
+  }
+
+  /**
+   * Creates a one-shot compilation handle with cooperative cancellation and resource limits.
+   *
+   * <p>Limits start when {@link CancelableScriptCompilation#compile()} starts and span parsing,
+   * checking, optimization, and planning. Handle creation and executor queueing are excluded.
+   *
+   * @param sourceText CEL expression source text
+   * @param limits immutable limits for this compilation
+   * @return one-shot controlled compilation
+   * @throws NullPointerException if an argument is {@code null}
+   * @throws IllegalArgumentException if {@code sourceText} is blank
+   */
+  public CancelableScriptCompilation compileCancelable(String sourceText, ResourceLimits limits) {
+    requireNonNull(sourceText, "sourceText");
+    requireNonNull(limits, "limits");
+    if (sourceText.trim().isEmpty()) {
+      throw new IllegalArgumentException("No source code.");
+    }
+    var options = List.copyOf(programOptions);
+    var operation =
+        new CheckedControlledOperation<Script, ScriptCreateException>(
+            new OperationController(limits),
+            org.projectnessie.cel.OperationAbortedException.Phase.PARSE,
+            () -> compileControlled(env, sourceText, options, limits));
+    return new CancelableScriptCompilation() {
+      @Override
+      public Script compile() throws ScriptCreateException {
+        return operation.execute();
+      }
+
+      @Override
+      public void cancel() {
+        operation.cancel();
+      }
+    };
+  }
+
   static Script compile(Env env, String sourceText, List<ProgramOption> programOptions)
       throws ScriptCreateException {
     requireNonNull(sourceText, "sourceText");
@@ -115,6 +167,26 @@ public final class ScriptCompiler {
     Program program =
         env.program(
             astIssues.getAst(), programOptions.toArray(new ProgramOption[programOptions.size()]));
+    return new Script(env, program);
+  }
+
+  private static Script compileControlled(
+      Env env, String sourceText, List<ProgramOption> programOptions, ResourceLimits limits)
+      throws ScriptCreateException {
+    AstIssuesTuple astIssues = env.parseCancelable(sourceText, limits).execute();
+    if (astIssues.hasIssues()) {
+      throw new ScriptCreateException("parse failed", astIssues.getIssues());
+    }
+    astIssues = env.checkCancelable(astIssues.getAst(), limits).execute();
+    if (astIssues.hasIssues()) {
+      throw new ScriptCreateException("check failed", astIssues.getIssues());
+    }
+    Program program =
+        env.programCancelable(
+                astIssues.getAst(),
+                limits,
+                programOptions.toArray(new ProgramOption[programOptions.size()]))
+            .execute();
     return new Script(env, program);
   }
 
