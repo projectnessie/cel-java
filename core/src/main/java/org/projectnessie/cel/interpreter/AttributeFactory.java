@@ -1315,8 +1315,16 @@ record NullQualifier(long id, Val celValue, TypeAdapter adapter)
  * When the field type is known this can be used to improve the speed and efficiency of field
  * resolution.
  */
-record FieldQualifier(long id, String name, FieldType fieldType, TypeAdapter adapter)
+record FieldQualifier(
+    long id,
+    String name,
+    FieldType fieldType,
+    TypeAdapter adapter,
+    CheckedAggregateMaterializer aggregateMaterializer)
     implements Coster, ConstantQualifierEquator, ValQualifier {
+  FieldQualifier(long id, String name, FieldType fieldType, TypeAdapter adapter) {
+    this(id, name, fieldType, adapter, null);
+  }
 
   /** ID is an implementation of the Qualifier interface method. */
   @Override
@@ -1336,7 +1344,9 @@ record FieldQualifier(long id, String name, FieldType fieldType, TypeAdapter ada
   @Override
   public Val qualifyToVal(Activation vars, Object obj) {
     Object value = qualify(vars, obj);
-    return adapter.nativeToValue(value);
+    return aggregateMaterializer != null
+        ? aggregateMaterializer.materialize(value)
+        : adapter.nativeToValue(value);
   }
 
   /** Value implements the ConstantQualifier interface */
@@ -1379,3 +1389,40 @@ record FieldQualifier(long id, String name, FieldType fieldType, TypeAdapter ada
  * Exact aggregate field qualifier that deliberately retains the raw host value for a checked
  * aggregate source node.
  */
+final class RawExactAggregateFieldQualifier implements Coster, ConstantQualifierEquator {
+  private final FieldQualifier delegate;
+
+  RawExactAggregateFieldQualifier(long id, String name, FieldType fieldType, TypeAdapter adapter) {
+    this.delegate = new FieldQualifier(id, name, fieldType, adapter);
+  }
+
+  @Override
+  public long id() {
+    return delegate.id();
+  }
+
+  @Override
+  public Object qualify(Activation vars, Object obj) {
+    return delegate.qualify(vars, obj);
+  }
+
+  @Override
+  public Val value() {
+    return delegate.value();
+  }
+
+  @Override
+  public Cost cost() {
+    return delegate.cost();
+  }
+
+  @Override
+  public boolean qualifierValueEquals(Object value) {
+    return delegate.qualifierValueEquals(value);
+  }
+
+  @Override
+  public String toString() {
+    return "RawExactAggregateFieldQualifier{" + "delegate=" + delegate + '}';
+  }
+}
