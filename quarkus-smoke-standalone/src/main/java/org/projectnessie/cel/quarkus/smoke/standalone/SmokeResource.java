@@ -24,9 +24,10 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import java.time.Instant;
 import java.util.List;
+import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.tools.Script;
-import org.projectnessie.cel.tools.ScriptHost;
+import org.projectnessie.cel.tools.ScriptCompiler;
 import org.projectnessie.cel.types.jackson.JacksonRegistry;
 
 @Path("/cel/native-smoke")
@@ -41,18 +42,18 @@ public class SmokeResource {
   @GET
   @Produces(MediaType.APPLICATION_JSON)
   public SmokeResponse smoke() throws Exception {
-    return new SmokeResponse("cel-standalone", evaluateBaseScript(), evaluateJacksonScript());
+    return new SmokeResponse(
+        "cel-standalone", evaluateBaseScript(), evaluateJacksonScript(), evaluateRe2Script());
   }
 
   private boolean evaluateBaseScript() throws Exception {
     Script script =
-        ScriptHost.newBuilder()
-            .build()
-            .buildScript(EXPRESSION)
+        ScriptCompiler.newBuilder()
             .withDeclarations(
                 Decls.newVar("resource.name", Decls.String),
                 Decls.newVar("request.time", Decls.Timestamp))
-            .build();
+            .build()
+            .compile(EXPRESSION);
 
     Boolean allowed =
         script.execute(
@@ -68,13 +69,12 @@ public class SmokeResource {
 
   private boolean evaluateJacksonScript() throws Exception {
     Script script =
-        ScriptHost.newBuilder()
+        ScriptCompiler.newBuilder()
             .registry(JacksonRegistry.newRegistry())
-            .build()
-            .buildScript(JACKSON_EXPRESSION)
             .withDeclarations(Decls.newVar("input", Decls.newObjectType(Input.class.getName())))
             .withTypes(Input.class)
-            .build();
+            .build()
+            .compile(JACKSON_EXPRESSION);
 
     Boolean allowed =
         script.execute(
@@ -83,7 +83,16 @@ public class SmokeResource {
     return allowed;
   }
 
-  public record SmokeResponse(String engine, boolean base, boolean jackson) {}
+  private boolean evaluateRe2Script() throws Exception {
+    Script script =
+        ScriptCompiler.newBuilder()
+            .regexEngine(RegexEngine.RE2)
+            .build()
+            .compile("'portable-regex'.matches('regex$')");
+    return script.execute(Boolean.class, of());
+  }
+
+  public record SmokeResponse(String engine, boolean base, boolean jackson, boolean re2) {}
 
   @RegisterForReflection
   public static final class Input {

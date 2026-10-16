@@ -102,7 +102,7 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
   }
 
   /** ConvertToNative implements the ref.Val interface method. */
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"removal", "unchecked"})
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
     if (typeDesc == ByteString.class || typeDesc == Object.class) {
@@ -174,6 +174,11 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
   @Override
   public Val size() {
     return IntT.intOf(b.length);
+  }
+
+  @Override
+  public int nativeSize() {
+    return b.length;
   }
 
   /** Type implements the ref.Val interface method. */

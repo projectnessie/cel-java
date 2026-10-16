@@ -17,18 +17,16 @@ package org.projectnessie.cel.common.types.traits;
 
 import org.projectnessie.cel.common.types.ref.Val;
 
-/**
- * Comparer interface for ordering comparisons between values in order to support '&lt;', '&lt;=',
- * '&gt;=', '&gt;' overloads.
- */
+/** Capability for values that support CEL ordering operators. */
 public interface Comparer {
   /**
-   * Compare this value to the input other value, returning an Int:
+   * Compares this value with {@code other}.
    *
-   * <p>{@code this &lt; other -&gt; Int(-1)<br> this == other -&gt; Int(0)<br> this &gt; other
-   * -&gt; Int(1) }
+   * <p>A concrete comparison returns CEL int {@code -1}, {@code 0}, or {@code 1} when this value is
+   * respectively less than, equal to, or greater than {@code other}.
    *
-   * <p>If the comparison cannot be made or is not supported, an error should be returned.
+   * @param other value to compare
+   * @return the CEL comparison integer, or a CEL error or unknown value
    */
   Val compare(Val other);
 }

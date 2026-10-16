@@ -15,63 +15,108 @@
  */
 package org.projectnessie.cel.interpreter;
 
-import java.util.Arrays;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
-import java.util.function.Supplier;
-import org.projectnessie.cel.common.types.ref.Val;
 
 /**
- * Activation used to resolve identifiers by name and references by id.
+ * Supplies variable bindings to a CEL evaluation.
  *
- * <p>An Activation is the primary mechanism by which a caller supplies input into a CEL program.
+ * <p>An activation distinguishes an absent binding ({@link ActivationFunction#ABSENT}) from a
+ * present CEL null binding (Java {@code null}). Values may be Java host representations or already
+ * adapted {@link org.projectnessie.cel.common.types.ref.Val} instances; the program's type adapter
+ * converts host values when they are consumed.
+ *
+ * <p>Activations and their backing objects may be retained for the lifetime of a program or
+ * evaluation. Callers must not mutate retained maps or bound values while evaluation is in
+ * progress. Custom implementations and resolver functions may be called concurrently when a program
+ * is shared and are responsible for their own thread safety.
  */
-public interface Activation {
-  /**
-   * ResolveName returns a value from the activation by qualified name, or false if the name could
-   * not be found.
-   */
-  ResolvedValue resolveName(String name);
-
-  /**
-   * Parent returns the parent of the current activation, may be nil. If non-nil, the parent will be
-   * searched during resolve calls.
-   */
-  Activation parent();
-
-  /** EmptyActivation returns a variable free activation. */
-  static Activation emptyActivation() {
-    // This call cannot fail.
-    return newActivation(new HashMap<String, Object>());
+public interface Activation extends ActivationFunction {
+  @SuppressWarnings("removal")
+  @Override
+  default Object resolve(String name) {
+    var resolved = resolveName(name);
+    if (resolved != null) {
+      return resolved.present() ? resolved.value() : ABSENT;
+    }
+    return ABSENT;
   }
 
   /**
-   * NewActivation returns an activation based on a map-based binding where the map keys are
-   * expected to be qualified names used with ResolveName calls.
+   * Resolves a name using the legacy wrapper representation.
    *
-   * <p>The input `bindings` may either be of type `Activation` or `map[string]interface{}`.
+   * <p>Replace with {@link #resolve(String)}.
    *
-   * <p>Lazy bindings may be supplied within the map-based input in either of the following forms: -
-   * func() interface{} - func() ref.Val
+   * @param name qualified variable name
+   * @return the legacy resolved-value wrapper
+   * @deprecated use {@link #resolve(String)}
+   */
+  @SuppressWarnings({"DeprecatedIsStillUsed", "removal"})
+  @Deprecated(forRemoval = true)
+  ResolvedValue resolveName(String name);
+
+  /**
+   * Returns this activation's parent, if its implementation exposes one.
    *
-   * <p>The output of the lazy binding will overwrite the variable reference in the internal map.
+   * @return the parent activation, or {@code null}
+   */
+  default Activation parent() {
+    return null;
+  }
+
+  /**
+   * Returns an activation with no variable bindings.
+   *
+   * @return a reusable empty activation
+   */
+  static Activation emptyActivation() {
+    // This call cannot fail.
+    return newActivation(Map.of());
+  }
+
+  /**
+   * Creates an activation from a supported binding source.
+   *
+   * <p>The input {@code bindings} may be an {@link Activation}, a {@link Map}, a {@link Function},
+   * or an {@link ActivationFunction}. An activation is returned unchanged. Map keys are qualified
+   * CEL variable names. An {@code ActivationFunction} uses {@link ActivationFunction#ABSENT} for
+   * absence and Java {@code null} for a present null. The legacy {@code Function} form treats both
+   * a Java {@code null} result and a legacy absent wrapper as absence.
+   *
+   * <p>The activation retains a map input without copying it, but does not modify it. The caller
+   * must not mutate the map while the activation may be resolved.
+   *
+   * <p>A map value may be a no-argument {@link java.util.function.Supplier} for lazy resolution.
+   * The activation invokes the supplier when the binding is first resolved and memoizes a
+   * successful result, including {@code null}, in activation-owned state. Concurrent resolutions
+   * share that result. If the supplier throws, the exception is propagated without memoizing a
+   * result, so a later resolution retries it. A supplier returned by a supplier is the resolved
+   * value and is not invoked by the activation.
    *
    * <p>Values which are not represented as ref.Val types on input may be adapted to a ref.Val using
    * the ref.TypeAdapter configured in the environment.
+   *
+   * @param bindings supported binding source
+   * @return an activation backed by {@code bindings}
+   * @throws NullPointerException if {@code bindings} is {@code null}
+   * @throws IllegalArgumentException if {@code bindings} has an unsupported type
    */
+  @SuppressWarnings({"rawtypes", "unchecked", "removal"})
   static Activation newActivation(Object bindings) {
     if (bindings == null) {
       throw new NullPointerException("bindings must be non-nil");
     }
-    if (bindings instanceof Activation) {
-      return (Activation) bindings;
+    if (bindings instanceof Activation activation) {
+      return activation;
     }
-    if (bindings instanceof Map) {
-      return new MapActivation((Map<String, Object>) bindings);
+    if (bindings instanceof Map map) {
+      return new MapActivation(map);
     }
-    if (bindings instanceof Function) {
-      return new FunctionActivation((Function<String, Object>) bindings);
+    if (bindings instanceof Function func) {
+      bindings = (ActivationFunction) name -> ResolvedValue.mapLegacy(func.apply(name));
+    }
+    if (bindings instanceof ActivationFunction activationFunction) {
+      return new FunctionActivation(activationFunction);
     }
     throw new IllegalArgumentException(
         String.format(
@@ -80,233 +125,48 @@ public interface Activation {
   }
 
   /**
-   * mapActivation which implements Activation and maps of named values.
+   * Creates an activation that resolves against {@code child} before {@code parent}.
    *
-   * <p>Named bindings may lazily supply values by providing a function which accepts no arguments
-   * and produces an interface value.
-   */
-  final class MapActivation implements Activation {
-    private final Map<String, Object> bindings;
-
-    MapActivation(Map<String, Object> bindings) {
-      this.bindings = bindings;
-    }
-
-    /** Parent implements the Activation interface method. */
-    @Override
-    public Activation parent() {
-      return null;
-    }
-
-    /** ResolveName implements the Activation interface method. */
-    @Override
-    public ResolvedValue resolveName(String name) {
-      if (name.startsWith(".")) {
-        name = name.substring(1);
-      }
-      Object obj = bindings.get(name);
-      if (obj == null) {
-        if (!bindings.containsKey(name)) {
-          return ResolvedValue.ABSENT;
-        }
-        return ResolvedValue.NULL_VALUE;
-      }
-
-      if (obj instanceof Supplier) {
-        obj = ((Supplier) obj).get();
-        bindings.put(name, obj);
-      }
-      return ResolvedValue.resolvedValue(obj);
-    }
-
-    @Override
-    public String toString() {
-      return "MapActivation{" + "bindings=" + bindings + '}';
-    }
-  }
-
-  /** functionActivation which implements Activation and a provider of named values. */
-  final class FunctionActivation implements Activation {
-    private final Function<String, Object> provider;
-
-    FunctionActivation(Function<String, Object> provider) {
-      this.provider = provider;
-    }
-
-    /** Parent implements the Activation interface method. */
-    @Override
-    public Activation parent() {
-      return null;
-    }
-
-    /** ResolveName implements the Activation interface method. */
-    @Override
-    public ResolvedValue resolveName(String name) {
-      if (name.startsWith(".")) {
-        name = name.substring(1);
-      }
-      Object result = provider.apply(name);
-      if (result instanceof ResolvedValue) {
-        return (ResolvedValue) result;
-      } else if (result == null) {
-        return ResolvedValue.ABSENT;
-      } else {
-        return ResolvedValue.resolvedValue(result);
-      }
-    }
-
-    @Override
-    public String toString() {
-      return "FunctionActivation{" + "provider=" + provider + '}';
-    }
-  }
-
-  /**
-   * hierarchicalActivation which implements Activation and contains a parent and child activation.
-   */
-  final class HierarchicalActivation implements Activation {
-    private final Activation parent;
-    private final Activation child;
-
-    HierarchicalActivation(Activation parent, Activation child) {
-      this.parent = parent;
-      this.child = child;
-    }
-
-    /** Parent implements the Activation interface method. */
-    @Override
-    public Activation parent() {
-      return parent;
-    }
-
-    /** ResolveName implements the Activation interface method. */
-    @Override
-    public ResolvedValue resolveName(String name) {
-      if (name.startsWith(".")) {
-        return parent.resolveName(name.substring(1));
-      }
-      ResolvedValue object = child.resolveName(name);
-      if (object.present()) {
-        return object;
-      }
-      return parent.resolveName(name);
-    }
-
-    @Override
-    public String toString() {
-      return "HierarchicalActivation{" + "parent=" + parent + ", child=" + child + '}';
-    }
-  }
-
-  /**
-   * NewHierarchicalActivation takes two activations and produces a new one which prioritizes
-   * resolution in the child first and parent(s) second.
+   * <p>The returned activation retains both inputs. A name beginning with {@code .} bypasses the
+   * child and is resolved directly against the parent after the leading dot is removed.
+   *
+   * @param parent non-null fallback activation
+   * @param child non-null preferred activation
+   * @return a hierarchical activation
    */
   static Activation newHierarchicalActivation(Activation parent, Activation child) {
     return new HierarchicalActivation(parent, child);
   }
 
   /**
-   * NewPartialActivation returns an Activation which contains a list of AttributePattern values
-   * representing field and index operations that should result in a 'types.Unknown' result.
+   * Creates an activation that marks matching attribute paths as unknown.
    *
-   * <p>The `bindings` value may be any value type supported by the interpreter.NewActivation call,
-   * but is typically either an existing Activation or map[string]interface{}.
+   * <p>{@code bindings} accepts every source supported by {@link #newActivation(Object)}. The
+   * pattern array is copied, but each mutable {@link AttributePattern} is retained. Complete
+   * pattern construction before creating or sharing the activation. Callers receive a cloned array
+   * from {@link PartialActivation#unknownAttributePatterns()}.
+   *
+   * @param bindings supported binding source
+   * @param unknowns non-null attribute patterns that should produce CEL unknown values
+   * @return a partial activation
+   * @throws NullPointerException if {@code bindings} or {@code unknowns} is {@code null}
    */
   static PartialActivation newPartialActivation(Object bindings, AttributePattern... unknowns) {
     Activation a = newActivation(bindings);
     return new PartActivation(a, unknowns);
   }
 
-  /** PartialActivation extends the Activation interface with a set of UnknownAttributePatterns. */
+  /** Activation that supplies attribute patterns for partial evaluation. */
   interface PartialActivation extends Activation {
 
     /**
-     * UnknownAttributePaths returns a set of AttributePattern values which match Attribute
-     * expressions for data accesses whose values are not yet known.
+     * Returns the attribute patterns whose matching accesses are unknown.
+     *
+     * <p>The returned array is a new shallow copy. Its mutable pattern elements remain shared with
+     * this activation.
+     *
+     * @return a copy of the unknown-pattern array
      */
     AttributePattern[] unknownAttributePatterns();
-  }
-
-  /** partActivation is the default implementations of the PartialActivation interface. */
-  final class PartActivation implements PartialActivation {
-    private final Activation delegate;
-    private final AttributePattern[] unknowns;
-
-    PartActivation(Activation delegate, AttributePattern[] unknowns) {
-      this.delegate = delegate;
-      this.unknowns = unknowns;
-    }
-
-    @Override
-    public Activation parent() {
-      return delegate.parent();
-    }
-
-    @Override
-    public ResolvedValue resolveName(String name) {
-      return delegate.resolveName(name);
-    }
-
-    /** UnknownAttributePatterns implements the PartialActivation interface method. */
-    @Override
-    public AttributePattern[] unknownAttributePatterns() {
-      return unknowns;
-    }
-
-    @Override
-    public String toString() {
-      return "PartActivation{"
-          + "delegate="
-          + delegate
-          + ", unknowns="
-          + Arrays.toString(unknowns)
-          + '}';
-    }
-  }
-
-  /**
-   * varActivation represents a single mutable variable binding.
-   *
-   * <p>This activation type should only be used within folds as the fold loop controls the object
-   * life-cycle.
-   */
-  final class VarActivation implements Activation {
-    Activation parent;
-    String name;
-    Val val;
-
-    VarActivation() {}
-
-    /** Parent implements the Activation interface method. */
-    @Override
-    public Activation parent() {
-      return parent;
-    }
-
-    /** ResolveName implements the Activation interface method. */
-    @Override
-    public ResolvedValue resolveName(String name) {
-      if (name.startsWith(".")) {
-        return parent.resolveName(name.substring(1));
-      }
-      if (name.equals(this.name)) {
-        return ResolvedValue.resolvedValue(val);
-      }
-      return parent.resolveName(name);
-    }
-
-    @Override
-    public String toString() {
-      return "VarActivation{"
-          + "parent="
-          + parent
-          + ", name='"
-          + name
-          + '\''
-          + ", val="
-          + val
-          + '}';
-    }
   }
 }

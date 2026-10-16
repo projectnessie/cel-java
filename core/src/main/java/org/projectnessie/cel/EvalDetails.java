@@ -17,17 +17,34 @@ package org.projectnessie.cel;
 
 import org.projectnessie.cel.interpreter.EvalState;
 
-/** EvalDetails holds additional information observed during the Eval() call. */
+/**
+ * Additional information associated with one program evaluation.
+ *
+ * <p>{@link Program#eval(Object)} always returns details containing a non-null, evaluation-owned
+ * state. The public constructor retains its supplied value, including {@code null}, for
+ * compatibility with directly constructed instances. Evaluation states are mutable and not
+ * thread-safe; inspect or modify a returned state only with appropriate external synchronization.
+ */
 public final class EvalDetails {
   private final EvalState state;
 
+  /**
+   * Creates evaluation details containing the supplied state.
+   *
+   * @param state evaluation state; may be {@code null} for compatibility with existing direct use
+   */
   public EvalDetails(EvalState state) {
     this.state = state;
   }
 
   /**
-   * State of the evaluation, non-nil if the OptTrackState or OptExhaustiveEval is specified within
-   * EvalOptions.
+   * Returns the evaluation state supplied at construction.
+   *
+   * <p>Results produced by {@link Program#eval(Object)} always return a non-null state. It is empty
+   * unless state tracking or exhaustive evaluation was requested.
+   *
+   * @return evaluation state, or {@code null} only when a directly constructed instance was given a
+   *     null state
    */
   public EvalState getState() {
     return state;

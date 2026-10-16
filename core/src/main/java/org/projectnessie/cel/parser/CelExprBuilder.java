@@ -18,20 +18,35 @@ package org.projectnessie.cel.parser;
 import com.google.api.expr.v1alpha1.Expr;
 import org.projectnessie.cel.common.operators.Operator;
 
+/**
+ * Converts nodes produced by the generated CEL grammar parser into protobuf {@link Expr} instances.
+ *
+ * <p>This is an internal generated-parser bridge that remains public for compatibility, not an
+ * externally implementable or general-purpose expression builder. Its node parameter types are
+ * package-private. Custom macros should use {@link ExprHelper} instead.
+ */
 public interface CelExprBuilder {
+  /** Converts an expression grammar node. */
   Expr visitExpr(Node node);
 
+  /** Converts a balanced binary expression using the supplied operator. */
   Expr visitBalanced(Node node, Operator operator);
 
+  /** Converts a binary-expression grammar node. */
   Expr visitBinary(Node node);
 
+  /** Converts a unary-expression grammar node. */
   Expr visitUnary(Node node);
 
+  /** Converts a member-access or receiver-call grammar node. */
   Expr visitMember(Node node);
 
+  /** Converts a primary-expression grammar node. */
   Expr visitPrimary(Node node);
 
+  /** Converts a literal grammar node. */
   Expr visitLiteral(Node node);
 
+  /** Converts an identifier token. */
   Expr visitIdentifier(Token token);
 }

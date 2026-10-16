@@ -15,8 +15,14 @@
  */
 package org.projectnessie.cel.common.types;
 
+/** Aggregate value capable of creating one-shot CEL iterators. */
 public interface IterableT {
 
-  /** Iterator returns a new iterator view of the struct. */
+  /**
+   * Returns a new one-shot cursor over this aggregate.
+   *
+   * <p>Traversal order, source-mutation behavior, and traversal failures are defined by the
+   * implementing aggregate. The returned cursor is not thread-safe; callers must serialize access.
+   */
   IteratorT iterator();
 }

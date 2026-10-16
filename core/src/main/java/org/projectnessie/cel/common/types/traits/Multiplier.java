@@ -17,8 +17,13 @@ package org.projectnessie.cel.common.types.traits;
 
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** Multiplier interface to support '*' operator overloads. */
+/** Capability for values that support the CEL binary {@code *} operator. */
 public interface Multiplier {
-  /** Multiply returns the result of multiplying the current and input value. */
+  /**
+   * Multiplies this value by {@code other}.
+   *
+   * @param other right-hand operand
+   * @return the product, or a CEL error or unknown value
+   */
   Val multiply(Val other);
 }

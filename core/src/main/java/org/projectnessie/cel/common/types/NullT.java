@@ -19,7 +19,6 @@ import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
-import static org.projectnessie.cel.common.types.StringT.stringOf;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.Value;
@@ -42,7 +41,7 @@ public final class NullT extends BaseVal {
   private static final Any PbAny = Any.pack(PbValue);
 
   /** ConvertToNative implements ref.Val.ConvertToNative. */
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"removal", "unchecked"})
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
     if (typeDesc == Integer.class || typeDesc == int.class) {
@@ -83,7 +82,7 @@ public final class NullT extends BaseVal {
   @Override
   public Val convertToType(Type typeValue) {
     return switch (typeValue.typeEnum()) {
-      case String -> stringOf("null");
+      case String -> StringT.NULL;
       case Null -> this;
       case Type -> NullType;
       default -> newTypeConversionError(NullType, typeValue);

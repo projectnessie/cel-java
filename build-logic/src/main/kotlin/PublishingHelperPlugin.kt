@@ -139,6 +139,7 @@ constructor(private val softwareComponentFactory: SoftwareComponentFactory) : Pl
         project.name
       }
     val pomDescription = project.description
+    val projectVersion = project.version.toString()
     val developersFile = layout.settingsDirectory.file("gradle/developers.csv")
     val contributorsFile = layout.settingsDirectory.file("gradle/contributors.csv")
 
@@ -186,10 +187,16 @@ constructor(private val softwareComponentFactory: SoftwareComponentFactory) : Pl
           }
         }
         scm {
+          val tagName =
+            if (projectVersion.endsWith("-SNAPSHOT")) {
+              "main"
+            } else {
+              "v$projectVersion"
+            }
           connection.set(scmUrl)
           developerConnection.set(scmUrl)
-          url.set(repoUrl.map { "$it/tree/main" })
-          tag.set("main")
+          url.set(repoUrl.map { "$it/tree/$tagName" })
+          tag.set(tagName)
         }
         issueManagement {
           system.set("Github")
