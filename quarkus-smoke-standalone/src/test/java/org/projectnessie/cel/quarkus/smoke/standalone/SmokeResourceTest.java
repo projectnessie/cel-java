@@ -32,6 +32,7 @@ class SmokeResourceTest {
         .statusCode(200)
         .body("engine", equalTo("cel-standalone"))
         .body("base", equalTo(true))
-        .body("jackson", equalTo(true));
+        .body("jackson", equalTo(true))
+        .body("re2", equalTo(true));
   }
 }

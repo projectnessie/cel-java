@@ -26,6 +26,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.Env;
 import org.projectnessie.cel.ProgramOption;
+import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
 import org.projectnessie.cel.common.types.ref.ExactAggregateFieldProvider;
@@ -117,8 +118,17 @@ class InterpreterPublicApiCompileTest {
         Interpreter.newStandardInterpreter(container, registry, registry, attributes);
     Interpreter configured =
         Interpreter.newInterpreter(extended, container, registry, registry, attributes);
+    Interpreter configuredEstablishedRe2 =
+        Interpreter.newInterpreter(
+            extended, container, registry, registry, attributes, RegexEngine.RE2);
     Interpreter configuredNative =
         Interpreter.newInterpreter(extended, container, registry, registry, attributes, true);
+    Interpreter configuredRe2 =
+        Interpreter.newInterpreter(
+            extended, container, registry, registry, attributes, true, RegexEngine.RE2);
+    Interpreter standardRe2 =
+        Interpreter.newStandardInterpreter(
+            container, registry, registry, attributes, RegexEngine.RE2);
     InterpretableDecorator optimizer = Interpreter.optimize();
     InterpretablePlanner checked =
         InterpretablePlanner.newPlanner(
@@ -129,6 +139,18 @@ class InterpreterPublicApiCompileTest {
     InterpretablePlanner unchecked =
         InterpretablePlanner.newUncheckedPlanner(
             extended, registry, registry, attributes, container);
+    InterpretablePlanner checkedRe2 =
+        InterpretablePlanner.newPlanner(
+            extended,
+            registry,
+            registry,
+            attributes,
+            container,
+            CheckedExpr.getDefaultInstance(),
+            RegexEngine.RE2);
+    InterpretablePlanner uncheckedRe2 =
+        InterpretablePlanner.newUncheckedPlanner(
+            extended, registry, registry, attributes, container, RegexEngine.RE2);
     ExactAggregateTypeAdapter exactAdapter = registry::nativeToValue;
     Val exactList = exactAdapter.nativeAggregateToValue(new long[] {1L, 2L}, newListType(Int));
     TypeRegistry exactProto = ProtoTypeRegistry.newExactAggregateRegistry();
@@ -139,11 +161,16 @@ class InterpreterPublicApiCompileTest {
     assertThat(constant.value()).isEqualTo(intOf(1L));
     assertThat(standard).isNotNull();
     assertThat(configured).isNotNull();
+    assertThat(configuredEstablishedRe2).isNotNull();
     assertThat(configuredNative).isNotNull();
+    assertThat(configuredRe2).isNotNull();
+    assertThat(standardRe2).isNotNull();
     assertThat(optimizer).isNotNull();
     assertThat(checked).isNotNull();
     assertThat(checkedMaps).isNotNull();
     assertThat(unchecked).isNotNull();
+    assertThat(checkedRe2).isNotNull();
+    assertThat(uncheckedRe2).isNotNull();
     assertThat(exactList.value()).isEqualTo(new long[] {1L, 2L});
     assertThat(exactProto).isInstanceOf(ProtoTypeRegistry.class);
     assertThat(Coster.costOf(1L, 2L).min).isEqualTo(1L);
