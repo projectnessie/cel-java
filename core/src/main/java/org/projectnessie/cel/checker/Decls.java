@@ -35,6 +35,13 @@ import com.google.protobuf.NullValue;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * Factory methods and canonical protobuf types for CEL declarations.
+ *
+ * <p>Declarations describe compile-time variables and function overloads. Supplying a declaration
+ * does not provide its runtime value or implementation: activation bindings provide variable
+ * values, and interpreter overloads provide function behavior.
+ */
 public final class Decls {
 
   /** Error type used to communicate issues during type-checking. */
@@ -43,19 +50,34 @@ public final class Decls {
   /** Dyn is a top-type used to represent any value. */
   public static final Type Dyn = Type.newBuilder().setDyn(Empty.getDefaultInstance()).build();
 
-  // Commonly used types.
+  /** CEL {@code bool} type. */
   public static final Type Bool = newPrimitiveType(PrimitiveType.BOOL);
+
+  /** CEL {@code bytes} type. */
   public static final Type Bytes = newPrimitiveType(PrimitiveType.BYTES);
+
+  /** CEL {@code double} type. */
   public static final Type Double = newPrimitiveType(PrimitiveType.DOUBLE);
+
+  /** CEL {@code int} type. */
   public static final Type Int = newPrimitiveType(PrimitiveType.INT64);
+
+  /** CEL {@code null_type}. */
   public static final Type Null = Type.newBuilder().setNull(NullValue.NULL_VALUE).build();
+
+  /** CEL {@code string} type. */
   public static final Type String = newPrimitiveType(PrimitiveType.STRING);
+
+  /** CEL {@code uint} type. */
   public static final Type Uint = newPrimitiveType(PrimitiveType.UINT64);
 
-  // Well-known types.
-  // TODO: Replace with an abstract type registry.
+  /** CEL type corresponding to Protobuf {@code google.protobuf.Any}. */
   public static final Type Any = newWellKnownType(WellKnownType.ANY);
+
+  /** CEL duration type. */
   public static final Type Duration = newWellKnownType(WellKnownType.DURATION);
+
+  /** CEL timestamp type. */
   public static final Type Timestamp = newWellKnownType(WellKnownType.TIMESTAMP);
 
   /**
@@ -96,7 +118,8 @@ public final class Decls {
    *
    * <p>Literal values are typically only associated with enum identifiers.
    *
-   * <p>Deprecated: Use NewVar or NewConst instead.
+   * <p>Prefer {@link #newVar(String, Type)} or {@link #newConst(String, Type, Constant)} for new
+   * code.
    */
   public static Decl newIdent(String name, Type t, Constant v) {
     Builder ident = IdentDecl.newBuilder().setType(t);

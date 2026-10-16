@@ -40,6 +40,12 @@ import org.projectnessie.cel.parser.Macro;
  */
 @FunctionalInterface
 public interface EnvOption {
+  /**
+   * Applies this configuration token.
+   *
+   * @param e environment being configured
+   * @return environment to receive subsequent options
+   */
   Env apply(Env e);
 
   // These constants beginning with "Feature" enable optional behavior in
@@ -48,10 +54,10 @@ public interface EnvOption {
 
   enum EnvFeature {
     /**
-     * Disallow heterogeneous aggregate (list, map) literals. Note, it is still possible to have
-     * heterogeneous aggregates when provided as variables to the expression, as well as via
-     * conversion of well-known dynamic types, or with unchecked expressions. Affects checking.
-     * Provides a subset of standard behavior.
+     * Reject heterogeneous list and map literals during type checking.
+     *
+     * <p>This does not prevent heterogeneous aggregates supplied as variables, produced from
+     * dynamic values, or used by unchecked expressions.
      */
     FeatureDisableDynamicAggregateLiterals
   }
@@ -95,11 +101,14 @@ public interface EnvOption {
   }
 
   /**
-   * Declarations option extends the declaration set configured in the environment.
+   * Appends variable and function declarations.
    *
-   * <p>Note: Declarations will by default be appended to the pre-existing declaration set
-   * configured for the environment. The NewEnv call builds on top of the standard CEL declarations.
-   * For a purely custom set of declarations use NewCustomEnv.
+   * <p>{@link Env#newEnv(EnvOption...)} installs standard declarations before applying caller
+   * options. Use {@link Env#newCustomEnv(EnvOption...)} for a declaration set that does not
+   * automatically include the standard library. The list is read when this option is applied.
+   *
+   * @param decls declarations to append
+   * @return option that appends {@code decls}
    */
   static EnvOption declarations(List<Decl> decls) {
     // TODO: provide an alternative means of specifying declarations that doesn't refer
@@ -107,11 +116,23 @@ public interface EnvOption {
     return e -> e.applyConfiguration(env -> env.declarations.addAll(decls));
   }
 
+  /**
+   * Appends variable and function declarations.
+   *
+   * @param decls declarations to append
+   * @return option that appends {@code decls}
+   * @see #declarations(List)
+   */
   static EnvOption declarations(Decl... decls) {
     return declarations(asList(decls));
   }
 
-  /** Features sets the given feature flags. See list of Feature constants above. */
+  /**
+   * Enables environment features.
+   *
+   * @param flags features to enable
+   * @return option that enables {@code flags}
+   */
   static EnvOption features(EnvFeature... flags) {
     return e -> {
       e.setFeatures(flags);
@@ -120,71 +141,84 @@ public interface EnvOption {
   }
 
   /**
-   * HomogeneousAggregateLiterals option ensures that list and map literal entry types must agree
-   * during type-checking.
+   * Requires homogeneous list and map literal entries during type checking.
    *
-   * <p>Note, it is still possible to have heterogeneous aggregates when provided as variables to
-   * the expression, as well as via conversion of well-known dynamic types, or with unchecked
+   * <p>Heterogeneous aggregates can still enter through variables, dynamic values, or unchecked
    * expressions.
+   *
+   * @return option enabling {@link EnvFeature#FeatureDisableDynamicAggregateLiterals}
    */
   static EnvOption homogeneousAggregateLiterals() {
     return features(FeatureDisableDynamicAggregateLiterals);
   }
 
+  /**
+   * Appends parser macros.
+   *
+   * @param macros macros to append
+   * @return option that appends {@code macros}
+   * @see #macros(List)
+   */
   static EnvOption macros(Macro... macros) {
     return macros(asList(macros));
   }
 
   /**
-   * Macros option extends the macro set configured in the environment.
+   * Appends parser macros.
    *
-   * <p>Note: This option must be specified after ClearMacros if used together.
+   * <p>Apply this option after {@link #clearMacros()} when replacing the configured macro set. The
+   * list is read when this option is applied.
+   *
+   * @param macros macros to append
+   * @return option that appends {@code macros}
    */
   static EnvOption macros(List<Macro> macros) {
     return e -> e.applyConfiguration(env -> env.macros.addAll(macros));
   }
 
   /**
-   * Container sets the container for resolving variable names. Defaults to an empty container.
+   * Sets the CEL container used to resolve names.
    *
-   * <p>If all references within an expression are relative to a protocol buffer package, then
-   * specifying a container of `google.type` would make it possible to write expressions such as
-   * `Expr{expression: 'a &lt; b'}` instead of having to write `google.type.Expr{...}`.
+   * <p>The default container is empty. For example, container {@code google.type} permits {@code
+   * Expr{expression: 'a < b'}} instead of {@code google.type.Expr{...}} when the type can be
+   * resolved there.
+   *
+   * @param name CEL container name
+   * @return option that extends the current container with {@code name}
    */
   static EnvOption container(String name) {
     return e -> e.applyConfiguration(env -> env.container = env.container.extend(name(name)));
   }
 
   /**
-   * Abbrevs configures a set of simple names as abbreviations for fully-qualified names.
+   * Configures simple-name abbreviations for fully qualified names.
    *
    * <p>An abbreviation (abbrev for short) is a simple name that expands to a fully-qualified name.
    * Abbreviations can be useful when working with variables, functions, and especially types from
    * multiple namespaces:
    *
-   * <pre><code>
-   *    // CEL object construction
-   *    qual.pkg.version.ObjTypeName{
-   *       field: alt.container.ver.FieldTypeName{value: ...}
-   *    }
-   * </code></pre>
+   * <p>For example, the CEL expression {@code qual.pkg.version.ObjTypeName{field:
+   * alt.container.ver.FieldTypeName{value: ...}}} contains two fully qualified type names.
    *
    * <p>Only one the qualified names above may be used as the CEL container, so at least one of
    * these references must be a long qualified name within an otherwise short CEL program. Using the
    * following abbreviations, the program becomes much simpler:
    *
-   * <pre><code>
-   *    // CEL Go option
-   *    Abbrevs("qual.pkg.version.ObjTypeName", "alt.container.ver.FieldTypeName")
-   *    // Simplified Object construction
-   *    ObjTypeName{field: FieldTypeName{value: ...}}
-   * </code></pre>
+   * <pre>{@code
+   * EnvOption option =
+   *     EnvOption.abbrevs(
+   *         "qual.pkg.version.ObjTypeName",
+   *         "alt.container.ver.FieldTypeName");
+   * }</pre>
+   *
+   * <p>With that option, the CEL expression can use {@code ObjTypeName{field: FieldTypeName{value:
+   * ...}}}.
    *
    * <p>There are a few rules for the qualified names and the simple abbreviations generated from
    * them:
    *
    * <ul>
-   *   <li>Qualified names must be dot-delimited, e.g. `package.subpkg.name`.
+   *   <li>Qualified names must be dot-delimited, for example {@code package.subpkg.name}.
    *   <li>The last element in the qualified name is the abbreviation.
    *   <li>Abbreviations must not collide with each other.
    *   <li>The abbreviation must not collide with unqualified names in use.
@@ -205,6 +239,9 @@ public interface EnvOption {
    * <p>If there is ever a case where an identifier could be in both the container and as an
    * abbreviation, the abbreviation wins as this will ensure that the meaning of a program is
    * preserved between compilations even as the container evolves.
+   *
+   * @param qualifiedNames fully qualified names whose final components become abbreviations
+   * @return option that adds the abbreviations
    */
   static EnvOption abbrevs(String... qualifiedNames) {
     return e ->

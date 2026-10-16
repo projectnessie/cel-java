@@ -28,6 +28,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
+/** Low-level formatting, substitution, assignability, and comparison utilities for CEL types. */
 public final class Types {
 
   enum Kind {
@@ -47,7 +48,7 @@ public final class Types {
     kindTypeParam
   }
 
-  /** FormatCheckedType converts a type message into a string representation. */
+  /** Returns the CEL syntax representation of a checked protobuf type. */
   public static String formatCheckedType(Type t) {
     // This is a very hot method.
 

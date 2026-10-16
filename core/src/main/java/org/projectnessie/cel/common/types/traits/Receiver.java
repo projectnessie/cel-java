@@ -17,8 +17,21 @@ package org.projectnessie.cel.common.types.traits;
 
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** Receiver interface for routing instance method calls within a value. */
+/**
+ * Capability for values that dynamically dispatch CEL receiver-style method calls.
+ *
+ * <p>The interpreter invokes this fallback only when no configured overload applicable to the
+ * receiver's advertised trait handles the call. Implementations should return a CEL
+ * no-such-overload error when the function or overload is unsupported.
+ */
 public interface Receiver {
-  /** Receive accepts a function name, overload id, and arguments and returns a value. */
+  /**
+   * Dispatches a receiver-style call on this value.
+   *
+   * @param function CEL function name
+   * @param overload checked overload identifier, which may be empty for an unchecked expression
+   * @param args arguments after the receiver
+   * @return the call result, or a CEL error or unknown value
+   */
   Val receive(String function, String overload, Val... args);
 }

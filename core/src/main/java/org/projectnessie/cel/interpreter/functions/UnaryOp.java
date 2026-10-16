@@ -17,8 +17,18 @@ package org.projectnessie.cel.interpreter.functions;
 
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** UnaryOp is a function that takes a single value and produces an output. */
+/**
+ * Runtime implementation of a one-argument CEL function overload.
+ *
+ * <p>Implementations registered on a reusable program must be thread-safe.
+ */
 @FunctionalInterface
 public interface UnaryOp {
+  /**
+   * Invokes the function.
+   *
+   * @param val evaluated argument
+   * @return the non-null CEL result, which may be a CEL error or unknown value
+   */
   Val invoke(Val val);
 }

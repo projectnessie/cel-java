@@ -65,6 +65,7 @@ public abstract class ListT extends BaseVal implements Lister {
           Trait.IterableType,
           Trait.SizerType);
 
+  /** Creates a CEL list backed by a string array. */
   public static Val newStringArrayList(String[] value) {
     return newGenericArrayList(v -> stringOf((String) v), value);
   }
@@ -84,6 +85,7 @@ public abstract class ListT extends BaseVal implements Lister {
     return value.convertToNative(targetType);
   }
 
+  /** Creates a CEL list backed by an object array and adapting elements on access. */
   public static Val newGenericArrayList(TypeAdapter adapter, Object[] value) {
     return new GenericListT(adapter, value);
   }
@@ -98,18 +100,22 @@ public abstract class ListT extends BaseVal implements Lister {
     return new ListBackedListT(adapter, value);
   }
 
+  /** Creates a CEL list backed by an {@code int[]} array. */
   public static Val newIntArrayList(TypeAdapter adapter, int[] value) {
     return new IntArrayListT(adapter, value);
   }
 
+  /** Creates a CEL list backed by a {@code long[]} array. */
   public static Val newLongArrayList(TypeAdapter adapter, long[] value) {
     return new LongArrayListT(adapter, value);
   }
 
+  /** Creates a CEL list backed by a {@code double[]} array. */
   public static Val newDoubleArrayList(TypeAdapter adapter, double[] value) {
     return new DoubleArrayListT(adapter, value);
   }
 
+  /** Creates a CEL list backed by an array of already adapted values. */
   public static Val newValArrayList(TypeAdapter adapter, Val[] value) {
     return new ValListT(adapter, value);
   }

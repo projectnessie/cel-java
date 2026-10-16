@@ -80,6 +80,11 @@ public enum EvalOption {
     this.mask = mask;
   }
 
+  /**
+   * Returns the internal bit mask associated with this option.
+   *
+   * @return option mask
+   */
   public int getMask() {
     return mask;
   }

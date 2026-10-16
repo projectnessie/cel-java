@@ -64,7 +64,11 @@ public final class Db {
 
   private volatile ExtensionRegistry extensionRegistry;
 
-  /** DefaultDb used at evaluation time or unless overridden at check time. */
+  /**
+   * Shared descriptor database containing Protocol Buffer well-known types.
+   *
+   * <p>This instance is registry infrastructure and must be treated as read-only.
+   */
   public static final Db defaultDb = new Db(new HashMap<>(), new ArrayList<>());
 
   static {
@@ -88,7 +92,11 @@ public final class Db {
     this.files = files;
   }
 
-  /** NewDb creates a new `pb.Db` with an empty type name to file description map. */
+  /**
+   * Creates an isolated descriptor database initialized with the built-in well-known types.
+   *
+   * @return a mutable database independent of {@link #defaultDb}
+   */
   public static Db newDb() {
     return defaultDb.copy();
   }
@@ -117,14 +125,26 @@ public final class Db {
     return new Db(revFileDescriptorMap, files);
   }
 
-  /** FileDescriptions returns the set of file descriptions associated with this db. */
+  /**
+   * Returns the registered file descriptions.
+   *
+   * <p>The returned list is live and registry-owned. Callers must treat it as read-only.
+   *
+   * @return the live list in registration order
+   */
   public List<FileDescription> fileDescriptions() {
     return files;
   }
 
   /**
-   * RegisterDescriptor produces a `FileDescription` from a `FileDescriptor` and registers the
-   * message and enum types into the `pb.Db`.
+   * Registers the messages, enum constants, and extensions declared by one protobuf file.
+   *
+   * <p>Registration of the same file is idempotent. Dependencies are not traversed by this
+   * low-level method; {@link ProtoTypeRegistry#registerMessage(Message)} registers a message's
+   * complete descriptor dependency set.
+   *
+   * @param fileDesc descriptor to register
+   * @return the existing or newly created description for that file
    */
   public FileDescription registerDescriptor(FileDescriptor fileDesc) {
     String path = path(fileDesc);
@@ -168,8 +188,13 @@ public final class Db {
   }
 
   /**
-   * RegisterMessage produces a `FileDescription` from a `message` and registers the message and all
-   * other definitions within the message file into the `pb.Db`.
+   * Registers the definitions in a message's file and binds its generated or dynamic Java
+   * representation.
+   *
+   * <p>Dependencies are not traversed by this low-level method.
+   *
+   * @param message representative message instance
+   * @return the description for the message's file
    */
   public FileDescription registerMessage(Message message) {
     Descriptor msgDesc = message.getDescriptorForType();
@@ -185,8 +210,10 @@ public final class Db {
   }
 
   /**
-   * DescribeEnum takes a qualified enum name and returns an `EnumDescription` if it exists in the
-   * `pb.Db`.
+   * Looks up a protobuf enum constant by qualified name.
+   *
+   * @param enumName qualified enum-constant name, optionally beginning with a dot
+   * @return the description, or {@code null} if the constant is not registered
    */
   public EnumValueDescription describeEnum(String enumName) {
     enumName = sanitizeProtoName(enumName);
@@ -194,13 +221,25 @@ public final class Db {
     return fd != null ? fd.getEnumDescription(enumName) : null;
   }
 
-  /** DescribeType returns a `TypeDescription` for the `typeName` if it exists in the `pb.Db`. */
+  /**
+   * Looks up a protobuf message type by qualified name.
+   *
+   * @param typeName qualified message name, optionally beginning with a dot
+   * @return the description, or {@code null} if the type is not registered
+   */
   public PbTypeDescription describeType(String typeName) {
     typeName = sanitizeProtoName(typeName);
     FileDescription fd = revFileDescriptorMap.get(typeName);
     return fd != null ? fd.getTypeDescription(typeName) : null;
   }
 
+  /**
+   * Looks up an extension and verifies that it extends the requested message type.
+   *
+   * @param messageType qualified extended-message name
+   * @param extensionName qualified extension name
+   * @return the extension description, or {@code null} if either name does not match
+   */
   public FieldDescription describeExtension(String messageType, String extensionName) {
     extensionName = sanitizeProtoName(extensionName);
     FieldDescription extension = describeExtension(extensionName);
@@ -212,6 +251,12 @@ public final class Db {
     return extension;
   }
 
+  /**
+   * Looks up a protobuf extension by qualified name.
+   *
+   * @param extensionName qualified extension name, optionally beginning with a dot
+   * @return the extension description, or {@code null} if it is not registered
+   */
   public FieldDescription describeExtension(String extensionName) {
     extensionName = sanitizeProtoName(extensionName);
     FileDescription fd = revFileDescriptorMap.get(extensionName);

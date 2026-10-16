@@ -42,7 +42,7 @@ import org.projectnessie.cel.interpreter.functions.QuaternaryOp;
 import org.projectnessie.cel.interpreter.functions.QuinaryOp;
 import org.projectnessie.cel.interpreter.functions.TernaryOp;
 
-/** MathLib provides CEL helper functions from the standard math extension library. */
+/** CEL standard math extension library. */
 public final class MathLib implements Library {
   private static final String GREATEST = "math.greatest";
   private static final String LEAST = "math.least";
@@ -64,6 +64,7 @@ public final class MathLib implements Library {
 
   private MathLib() {}
 
+  /** Returns an environment option installing the math declarations and implementations. */
   public static EnvOption math() {
     return Library.Lib(new MathLib());
   }

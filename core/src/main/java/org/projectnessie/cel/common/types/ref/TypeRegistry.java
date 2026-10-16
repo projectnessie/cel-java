@@ -44,6 +44,8 @@ public interface TypeRegistry extends TypeAdapter, TypeProvider {
    * existing type's behavior. Implementations define materialized-type equivalence because the
    * supported host representations are implementation-specific. Distinct representations of the
    * same logical type need not be equivalent.
+   *
+   * @param t implementation-supported materialized type, descriptor, or instance
    */
   void register(Object t);
 
