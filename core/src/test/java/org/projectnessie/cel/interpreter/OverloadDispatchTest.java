@@ -701,7 +701,6 @@ class OverloadDispatchTest {
 
   private static Overload operation(String name, int arity, long result) {
     return switch (arity) {
-      case 0 -> Overload.function(name, args -> intOf(result));
       case 1 -> Overload.unary(name, arg -> intOf(result));
       case 2 -> Overload.binary(name, (left, right) -> intOf(result));
       case 3 -> Overload.ternary(name, (first, second, third) -> intOf(result));

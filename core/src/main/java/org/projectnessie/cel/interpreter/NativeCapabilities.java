@@ -15,6 +15,8 @@
  */
 package org.projectnessie.cel.interpreter;
 
+import org.projectnessie.cel.common.types.ref.Val;
+
 interface NativeIntCapability extends Interpretable {
   long evalInt(Activation activation);
 }
@@ -37,4 +39,78 @@ interface NativeStringCapability extends Interpretable {
 
 interface NativeNullCapability extends Interpretable {
   void evalNull(Activation activation);
+}
+
+interface NativeRawCapability extends Interpretable {
+  Object evalRaw(Activation activation);
+}
+
+/**
+ * A list-valued expression that can resolve its host representation once and materialize that
+ * already-resolved representation without replaying the expression.
+ */
+interface NativeListSourceCapability extends NativeRawCapability {
+  Val materializeResolvedList(Object value);
+
+  Val materializeResolvedElement(Object value);
+
+  boolean exactListSource();
+}
+
+/**
+ * A map-valued expression that can resolve its host representation once and materialize that
+ * already-resolved representation without replaying the expression.
+ */
+interface NativeMapSourceCapability extends NativeRawCapability {
+  Val materializeResolvedMap(Object value);
+
+  boolean exactMapSource();
+}
+
+interface NativeScalarListLiteralCapability extends Interpretable {
+  int evalSize(Activation activation);
+}
+
+interface NativeBooleanListLiteralCapability extends NativeScalarListLiteralCapability {
+  boolean evalBooleanAt(Activation activation, int index);
+}
+
+interface NativeIntListLiteralCapability extends NativeScalarListLiteralCapability {
+  long evalIntAt(Activation activation, int index);
+}
+
+interface NativeUintListLiteralCapability extends NativeScalarListLiteralCapability {
+  long evalUintAt(Activation activation, int index);
+}
+
+interface NativeDoubleListLiteralCapability extends NativeScalarListLiteralCapability {
+  double evalDoubleAt(Activation activation, int index);
+}
+
+interface NativeStringListLiteralCapability extends NativeScalarListLiteralCapability {
+  String evalStringAt(Activation activation, int index);
+
+  boolean evalContains(Activation activation, NativeStringCapability needle);
+}
+
+interface NativeScalarListFoldCapability extends Interpretable {
+  NativeScalarKind elementKind();
+
+  long evalSize(Activation activation);
+
+  boolean evalBooleanAt(Activation activation, int index);
+
+  long evalIntAt(Activation activation, int index);
+
+  long evalUintAt(Activation activation, int index);
+
+  double evalDoubleAt(Activation activation, int index);
+
+  String evalStringAt(Activation activation, int index);
+
+  void evalNullAt(Activation activation, int index);
+
+  boolean evalStringContains(Activation activation, NativeStringCapability needle);
+
+  NativeIntAggregateValues evalIntValues(Activation activation);
 }

@@ -133,6 +133,24 @@ class EvalIdent extends AbstractEval implements Coster {
 }
 
 /** Checked aggregate identifier whose ordinary evaluation uses exact checked materialization. */
+class EvalExactAggregateIdent extends EvalIdent {
+  final CheckedAggregateMaterializer materializer;
+
+  EvalExactAggregateIdent(
+      long id, String name, TypeAdapter adapter, CheckedAggregateMaterializer materializer) {
+    super(id, name, adapter);
+    this.materializer = materializer;
+  }
+
+  @Override
+  public Val eval(Activation ctx) {
+    Object value = resolveRaw(ctx);
+    return value instanceof Val val && isUnknownOrError(val)
+        ? val
+        : materializer.materialize(value);
+  }
+}
+
 class EvalConst extends AbstractEval implements InterpretableConst, Coster {
   private final Val val;
 
