@@ -32,8 +32,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.EnvOption;
 import org.projectnessie.cel.Library;
+import org.projectnessie.cel.OperationAbortedException;
 import org.projectnessie.cel.ProgramOption;
 import org.projectnessie.cel.RegexEngine;
+import org.projectnessie.cel.ResourceLimits;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.Overloads;
@@ -43,6 +45,35 @@ import org.projectnessie.cel.interpreter.functions.Overload;
 import org.projectnessie.cel.toolstests.Dummy;
 
 class ScriptCompilerTest {
+
+  @Test
+  void controlledCompilationAndExecutionPreserveToolsContracts() throws Exception {
+    ScriptCompiler compiler =
+        ScriptCompiler.newBuilder().withDeclarations(Decls.newVar("x", Decls.Int)).build();
+
+    Script script = compiler.compileCancelable("x + 1", ResourceLimits.unlimited()).compile();
+    assertThat(
+            script
+                .executeCancelable(Integer.class, Map.of("x", 41), ResourceLimits.unlimited())
+                .execute())
+        .isEqualTo(42);
+
+    assertThatThrownBy(
+            () -> compiler.compileCancelable("missing", ResourceLimits.unlimited()).compile())
+        .isInstanceOf(ScriptCreateException.class);
+  }
+
+  @Test
+  void controlledToolsHandlesAreOneShotAndPassCancellationThrough() {
+    ScriptCompiler compiler = ScriptCompiler.newBuilder().build();
+    CancelableScriptCompilation compilation = compiler.compileCancelable("true");
+    compilation.cancel();
+
+    assertThatThrownBy(compilation::compile)
+        .isInstanceOf(OperationAbortedException.class)
+        .isNotInstanceOf(ScriptException.class);
+    assertThatThrownBy(compilation::compile).isInstanceOf(IllegalStateException.class);
+  }
 
   @Test
   void configuresOnceAndCompilesMultipleSources() throws Exception {

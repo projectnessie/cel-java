@@ -35,6 +35,7 @@ import com.google.protobuf.Value;
 import java.lang.reflect.Array;
 import java.util.Arrays;
 import java.util.List;
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.ref.BaseVal;
@@ -44,6 +45,7 @@ import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Lister;
 import org.projectnessie.cel.common.types.traits.Trait;
+import org.projectnessie.cel.internal.OperationCheckpoints;
 
 /**
  * Base class and factories for CEL list values.
@@ -158,7 +160,9 @@ public abstract class ListT extends BaseVal implements Lister {
     private ListValue toPbListValue() {
       ListValue.Builder list = ListValue.newBuilder();
       int s = nativeSize();
+      var controller = OperationCheckpoints.currentController();
       for (int i = 0; i < s; i++) {
+        controller.checkpoint();
         Val v = getUnchecked(i);
         Value e = adapter.valueToNative(v, Value.class);
         list.addValues(e);
@@ -180,7 +184,9 @@ public abstract class ListT extends BaseVal implements Lister {
       }
       Object array = Array.newInstance(compType, s);
 
+      var controller = OperationCheckpoints.currentController();
       for (int i = 0; i < s; i++) {
+        controller.checkpoint();
         Val v = getUnchecked(i);
         Object e = adapter.valueToNative(v, compType);
         Array.set(array, i, e);
@@ -237,7 +243,9 @@ public abstract class ListT extends BaseVal implements Lister {
       if (currentSize != o.nativeSize()) {
         return False;
       }
+      var controller = OperationCheckpoints.currentController();
       for (int i = 0; i < currentSize; i++) {
+        controller.checkpoint(Phase.EVALUATE);
         Val e1 = getUnchecked(i);
         if (isError(e1)) {
           return e1;
@@ -262,7 +270,9 @@ public abstract class ListT extends BaseVal implements Lister {
     @Override
     public Val contains(Val value) {
       int currentSize = nativeSize();
+      var controller = OperationCheckpoints.currentController();
       for (int i = 0; i < currentSize; i++) {
+        controller.checkpoint(Phase.EVALUATE);
         Val elem = getUnchecked(i);
         if (value.equal(elem) == True) {
           return True;
@@ -296,7 +306,9 @@ public abstract class ListT extends BaseVal implements Lister {
     public int hashCode() {
       int result = 1;
       int currentSize = nativeSize();
+      var controller = OperationCheckpoints.currentController();
       for (int i = 0; i < currentSize; i++) {
+        controller.checkpoint();
         result = 31 * result + getUnchecked(i).hashCode();
       }
       return result;
@@ -389,7 +401,9 @@ public abstract class ListT extends BaseVal implements Lister {
       int otherSize = otherList.nativeSize();
       Object[] newArray = Arrays.copyOf(array, array.length + otherSize);
       Class<?> componentType = array.getClass().getComponentType();
+      var controller = OperationCheckpoints.currentController();
       for (int i = 0; i < otherSize; i++) {
+        controller.checkpoint();
         Val otherValue = elementAt(otherList, i);
         newArray[array.length + i] =
             componentType != Object.class && componentType.isInstance(otherValue)
@@ -455,10 +469,13 @@ public abstract class ListT extends BaseVal implements Lister {
       int thisSize = nativeSize();
       int otherSize = otherList.nativeSize();
       Object[] newArray = new Object[thisSize + otherSize];
+      var controller = OperationCheckpoints.currentController();
       for (int i = 0; i < thisSize; i++) {
+        controller.checkpoint();
         newArray[i] = list.get(i);
       }
       for (int i = 0; i < otherSize; i++) {
+        controller.checkpoint();
         newArray[thisSize + i] = nativeListElement(elementAt(otherList, i), Object.class);
       }
       return new GenericListT(adapter, newArray);
@@ -498,7 +515,9 @@ public abstract class ListT extends BaseVal implements Lister {
     @Override
     public Object value() {
       Object[] nativeArray = new Object[array.length];
+      var controller = OperationCheckpoints.currentController();
       for (int i = 0; i < array.length; i++) {
+        controller.checkpoint();
         nativeArray[i] = array[i].value();
       }
       return nativeArray;
@@ -517,7 +536,9 @@ public abstract class ListT extends BaseVal implements Lister {
       } else {
         int otherSize = otherLister.nativeSize();
         Val[] newArray = Arrays.copyOf(array, array.length + otherSize);
+        var controller = OperationCheckpoints.currentController();
         for (int i = 0; i < otherSize; i++) {
+          controller.checkpoint();
           newArray[array.length + i] = elementAt(otherLister, i);
         }
         return new ValListT(adapter, newArray);
@@ -566,10 +587,13 @@ public abstract class ListT extends BaseVal implements Lister {
       int thisSize = nativeSize();
       int otherSize = otherLister.nativeSize();
       Val[] newArray = new Val[thisSize + otherSize];
+      var controller = OperationCheckpoints.currentController();
       for (int i = 0; i < thisSize; i++) {
+        controller.checkpoint();
         newArray[i] = getUnchecked(i);
       }
       for (int i = 0; i < otherSize; i++) {
+        controller.checkpoint();
         newArray[thisSize + i] = elementAt(otherLister, i);
       }
       return new ValListT(adapter, newArray);
@@ -616,7 +640,9 @@ public abstract class ListT extends BaseVal implements Lister {
         long needle = intValue.intValue();
         if (needle >= Integer.MIN_VALUE && needle <= Integer.MAX_VALUE) {
           int intNeedle = (int) needle;
+          var controller = OperationCheckpoints.currentController();
           for (int element : array) {
+            controller.checkpoint();
             if (element == intNeedle) {
               return True;
             }
@@ -631,13 +657,28 @@ public abstract class ListT extends BaseVal implements Lister {
     @Override
     public Val equal(Val other) {
       if (other instanceof IntArrayListT intList) {
-        return boolOf(Arrays.equals(array, intList.array));
+        if (array.length != intList.array.length) {
+          return False;
+        }
+        var controller = OperationCheckpoints.currentController();
+        if (!controller.isControlled()) {
+          return boolOf(Arrays.equals(array, intList.array));
+        }
+        for (int i = 0; i < array.length; i++) {
+          controller.checkpoint();
+          if (array[i] != intList.array[i]) {
+            return False;
+          }
+        }
+        return True;
       }
       if (other instanceof LongArrayListT longList) {
         if (array.length != longList.array.length) {
           return False;
         }
+        var controller = OperationCheckpoints.currentController();
         for (int i = 0; i < array.length; i++) {
+          controller.checkpoint();
           if (array[i] != longList.array[i]) {
             return False;
           }
@@ -686,7 +727,9 @@ public abstract class ListT extends BaseVal implements Lister {
     public Val contains(Val value) {
       if (value instanceof IntT intValue) {
         long needle = intValue.intValue();
+        var controller = OperationCheckpoints.currentController();
         for (long element : array) {
+          controller.checkpoint();
           if (element == needle) {
             return True;
           }
@@ -699,7 +742,20 @@ public abstract class ListT extends BaseVal implements Lister {
     @Override
     public Val equal(Val other) {
       if (other instanceof LongArrayListT longList) {
-        return boolOf(Arrays.equals(array, longList.array));
+        if (array.length != longList.array.length) {
+          return False;
+        }
+        var controller = OperationCheckpoints.currentController();
+        if (!controller.isControlled()) {
+          return boolOf(Arrays.equals(array, longList.array));
+        }
+        for (int i = 0; i < array.length; i++) {
+          controller.checkpoint();
+          if (array[i] != longList.array[i]) {
+            return False;
+          }
+        }
+        return True;
       }
       if (other instanceof IntArrayListT intList) {
         return intList.equal(this);
@@ -746,7 +802,9 @@ public abstract class ListT extends BaseVal implements Lister {
     public Val contains(Val value) {
       if (value instanceof DoubleT doubleValue) {
         double needle = doubleValue.doubleValue();
+        var controller = OperationCheckpoints.currentController();
         for (double element : array) {
+          controller.checkpoint();
           if (element == needle) {
             return True;
           }
@@ -762,7 +820,9 @@ public abstract class ListT extends BaseVal implements Lister {
         if (array.length != doubleList.array.length) {
           return False;
         }
+        var controller = OperationCheckpoints.currentController();
         for (int i = 0; i < array.length; i++) {
+          controller.checkpoint();
           if (array[i] != doubleList.array[i]) {
             return False;
           }
