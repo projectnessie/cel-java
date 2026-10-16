@@ -100,7 +100,7 @@ import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Lister;
 
-public final class ProtoTypeRegistry
+public class ProtoTypeRegistry
     implements TypeRegistry, StandardScalarTypeAdapter, StandardScalarFieldProvider {
   private static final ProtoTypeRegistry DEFAULT_REGISTRY = newDefaultRegistry();
 
@@ -108,8 +108,7 @@ public final class ProtoTypeRegistry
   private final Map<String, Map<String, FieldType>> fieldTypeCache;
   private final Db pbdb;
 
-  private ProtoTypeRegistry(
-      Map<String, org.projectnessie.cel.common.types.ref.Type> revTypeMap, Db pbdb) {
+  ProtoTypeRegistry(Map<String, org.projectnessie.cel.common.types.ref.Type> revTypeMap, Db pbdb) {
     this.revTypeMap = revTypeMap;
     this.fieldTypeCache = new ConcurrentHashMap<>();
     this.pbdb = pbdb;
@@ -122,6 +121,28 @@ public final class ProtoTypeRegistry
    */
   public static ProtoTypeRegistry newRegistry(Message... types) {
     ProtoTypeRegistry p = DEFAULT_REGISTRY.copy();
+    for (Message msgType : types) {
+      p.registerMessage(msgType);
+    }
+    return p;
+  }
+
+  /**
+   * Returns an opt-in protobuf registry whose supported aggregate fields expose certified exact
+   * Java representations.
+   *
+   * <p>The returned registry remains a {@link ProtoTypeRegistry}. Unsupported aggregate fields and
+   * all scalar fields retain the default protobuf behavior. Registration and representation binding
+   * otherwise follow {@link #newRegistry(Message...)}.
+   *
+   * @param types representative protobuf messages to register
+   * @return an independent registry with exact aggregate adaptation enabled
+   * @throws NullPointerException if {@code types} or an element is null
+   */
+  public static TypeRegistry newExactAggregateRegistry(Message... types) {
+    ProtoTypeRegistry p =
+        new ExactProtoTypeRegistry(
+            new HashMap<>(DEFAULT_REGISTRY.revTypeMap), DEFAULT_REGISTRY.pbdb.copy());
     for (Message msgType : types) {
       p.registerMessage(msgType);
     }
@@ -189,7 +210,12 @@ public final class ProtoTypeRegistry
    */
   @Override
   public ProtoTypeRegistry copy() {
-    return new ProtoTypeRegistry(new HashMap<>(this.revTypeMap), pbdb.copy());
+    return newCopy(new HashMap<>(this.revTypeMap), pbdb.copy());
+  }
+
+  ProtoTypeRegistry newCopy(
+      Map<String, org.projectnessie.cel.common.types.ref.Type> copiedTypes, Db copiedDb) {
+    return new ProtoTypeRegistry(copiedTypes, copiedDb);
   }
 
   @Override
@@ -252,7 +278,8 @@ public final class ProtoTypeRegistry
       return null;
     }
     FieldTester descriptorTester = field::hasField;
-    FieldGetter descriptorGetter = target -> field.getField(target, this);
+    FieldGetter descriptorGetter =
+        target -> normalizeFieldValue(field, target, field.rawField(target), false);
     PbTypeDescription type = pbdb.describeType(messageType);
     FieldGetter generatedGetter = type != null ? GeneratedFieldAccessor.create(type, field) : null;
     FieldGetter objectGetter = generatedGetter;
@@ -294,16 +321,47 @@ public final class ProtoTypeRegistry
                   : generatedGetter.getFrom(target)
               : field.getField(target, this);
     }
-    if (field.generatedValueNeedsAdaptation()) {
-      return target ->
-          generatedType.isInstance(target)
-              ? field.adaptGeneratedValue(generatedGetter.getFrom(target), this)
-              : field.getField(target, this);
+    if (generatedGetter instanceof FieldGetter.Primitive primitiveGetter) {
+      return new FieldGetter.Primitive() {
+        @Override
+        public Class<?> optimizedTargetType() {
+          return primitiveGetter.optimizedTargetType();
+        }
+
+        @Override
+        public Object getFrom(Object target) {
+          return generatedType.isInstance(target)
+              ? normalizeFieldValue(field, target, primitiveGetter.getFrom(target), true)
+              : normalizeFieldValue(field, target, field.rawField(target), false);
+        }
+
+        @Override
+        public boolean getBooleanFrom(Object target) {
+          return primitiveGetter.getBooleanFrom(target);
+        }
+
+        @Override
+        public long getLongFrom(Object target) {
+          return primitiveGetter.getLongFrom(target);
+        }
+
+        @Override
+        public double getDoubleFrom(Object target) {
+          return primitiveGetter.getDoubleFrom(target);
+        }
+      };
     }
     return target ->
         generatedType.isInstance(target)
-            ? generatedGetter.getFrom(target)
-            : field.getField(target, this);
+            ? normalizeFieldValue(field, target, generatedGetter.getFrom(target), true)
+            : normalizeFieldValue(field, target, field.rawField(target), false);
+  }
+
+  Object normalizeFieldValue(
+      FieldDescription field, Object target, Object value, boolean generated) {
+    return generated
+        ? field.adaptGeneratedValue(value, this)
+        : field.adaptDescriptorValue(target, value, this);
   }
 
   FieldType findFieldTypeForObjectAccess(

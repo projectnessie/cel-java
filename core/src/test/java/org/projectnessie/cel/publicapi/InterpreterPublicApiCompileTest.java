@@ -17,6 +17,8 @@ package org.projectnessie.cel.publicapi;
 
 import static java.util.Collections.emptyMap;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.projectnessie.cel.checker.Decls.Int;
+import static org.projectnessie.cel.checker.Decls.newListType;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 
 import com.google.api.expr.v1alpha1.CheckedExpr;
@@ -24,17 +26,27 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
+import org.projectnessie.cel.common.types.ref.ExactAggregateFieldProvider;
+import org.projectnessie.cel.common.types.ref.ExactAggregateTypeAdapter;
+import org.projectnessie.cel.common.types.ref.TypeProvider;
+import org.projectnessie.cel.common.types.ref.TypeRegistry;
+import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.interpreter.Activation;
 import org.projectnessie.cel.interpreter.Activation.PartialActivation;
 import org.projectnessie.cel.interpreter.AttributeFactory;
 import org.projectnessie.cel.interpreter.AttributeFactory.Attribute;
+import org.projectnessie.cel.interpreter.AttributeFactory.ConstantQualifier;
+import org.projectnessie.cel.interpreter.AttributeFactory.ConstantQualifierEquator;
 import org.projectnessie.cel.interpreter.AttributeFactory.NamespacedAttribute;
 import org.projectnessie.cel.interpreter.AttributeFactory.Qualifier;
+import org.projectnessie.cel.interpreter.AttributeFactory.ValQualifier;
 import org.projectnessie.cel.interpreter.AttributePattern;
 import org.projectnessie.cel.interpreter.Coster;
 import org.projectnessie.cel.interpreter.Coster.Cost;
 import org.projectnessie.cel.interpreter.Dispatcher;
 import org.projectnessie.cel.interpreter.Interpretable;
+import org.projectnessie.cel.interpreter.Interpretable.InterpretableAttribute;
+import org.projectnessie.cel.interpreter.Interpretable.InterpretableCall;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableConst;
 import org.projectnessie.cel.interpreter.InterpretableDecorator;
 import org.projectnessie.cel.interpreter.InterpretablePlanner;
@@ -85,6 +97,10 @@ class InterpreterPublicApiCompileTest {
     InterpretablePlanner unchecked =
         InterpretablePlanner.newUncheckedPlanner(
             extended, registry, registry, attributes, container);
+    ExactAggregateTypeAdapter exactAdapter = registry::nativeToValue;
+    Val exactList = exactAdapter.nativeAggregateToValue(new long[] {1L, 2L}, newListType(Int));
+    TypeRegistry exactProto = ProtoTypeRegistry.newExactAggregateRegistry();
+
     assertThat(partial.unknownAttributePatterns()).hasSize(1);
     assertThat(namespaced.candidateVariableNames()).containsExactly("x");
     assertThat(relative.addQualifier(qualifier)).isSameAs(relative);
@@ -96,8 +112,41 @@ class InterpreterPublicApiCompileTest {
     assertThat(checked).isNotNull();
     assertThat(checkedMaps).isNotNull();
     assertThat(unchecked).isNotNull();
+    assertThat(exactList.value()).isEqualTo(new long[] {1L, 2L});
+    assertThat(exactProto).isInstanceOf(ProtoTypeRegistry.class);
     assertThat(Coster.costOf(1L, 2L).min).isEqualTo(1L);
     assertThat(Coster.costOf(1L, 2L).max).isEqualTo(2L);
     assertThat(Cost.estimateCost(constant)).isEqualTo(Cost.None);
+  }
+
+  @SuppressWarnings("unused")
+  private static void retainExactAggregateProviderContract(
+      ExternalExactAggregateAdapterProvider adapterProvider) {
+    ExactAggregateTypeAdapter exactAdapter = adapterProvider;
+    TypeProvider publicProvider = adapterProvider;
+    boolean exactField =
+        adapterProvider.isExactAggregateField(
+            "example.Message", "values", com.google.api.expr.v1alpha1.Type.getDefaultInstance());
+  }
+
+  private abstract static class ExternalExactAggregateAdapterProvider
+      implements ExactAggregateTypeAdapter, ExactAggregateFieldProvider {}
+
+  @SuppressWarnings("unused")
+  private static void retainInspectionContracts(
+      Interpretable interpretable,
+      InterpretableConst constant,
+      InterpretableAttribute attribute,
+      InterpretableCall call,
+      Qualifier qualifier,
+      ConstantQualifier constantQualifier,
+      ConstantQualifierEquator equator,
+      ValQualifier valQualifier,
+      Attribute resolvedAttribute,
+      NamespacedAttribute namespacedAttribute,
+      Coster coster) {
+    Interpretable.calShortCircuitBinaryOpsCost(interpretable, constant);
+    Interpretable.calExhaustiveBinaryOpsCost(interpretable, constant);
+    Interpretable.sumOfCost(new Interpretable[] {interpretable, constant});
   }
 }
