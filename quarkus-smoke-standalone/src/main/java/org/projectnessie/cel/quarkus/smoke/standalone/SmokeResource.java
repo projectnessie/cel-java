@@ -24,6 +24,7 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 import java.time.Instant;
 import java.util.List;
+import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.tools.Script;
 import org.projectnessie.cel.tools.ScriptHost;
@@ -41,7 +42,8 @@ public class SmokeResource {
   @GET
   @Produces(MediaType.APPLICATION_JSON)
   public SmokeResponse smoke() throws Exception {
-    return new SmokeResponse("cel-standalone", evaluateBaseScript(), evaluateJacksonScript());
+    return new SmokeResponse(
+        "cel-standalone", evaluateBaseScript(), evaluateJacksonScript(), evaluateRe2Script());
   }
 
   private boolean evaluateBaseScript() throws Exception {
@@ -83,7 +85,17 @@ public class SmokeResource {
     return allowed;
   }
 
-  public record SmokeResponse(String engine, boolean base, boolean jackson) {}
+  private boolean evaluateRe2Script() throws Exception {
+    Script script =
+        ScriptHost.newBuilder()
+            .regexEngine(RegexEngine.RE2)
+            .build()
+            .buildScript("'portable-regex'.matches('regex$')")
+            .build();
+    return script.execute(Boolean.class, of());
+  }
+
+  public record SmokeResponse(String engine, boolean base, boolean jackson, boolean re2) {}
 
   @RegisterForReflection
   public static final class Input {
