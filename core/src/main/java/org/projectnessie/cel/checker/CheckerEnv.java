@@ -46,6 +46,11 @@ import org.projectnessie.cel.parser.Macro;
  *
  * <p>The Env is comprised of a container, type provider, declarations, and other related objects
  * which can be used to assist with type-checking.
+ *
+ * <p>Complete calls to {@link #add(List)} and {@link #enableDynamicAggregateLiterals(boolean)}
+ * before sharing an instance for concurrent checks. Concurrent checks isolate their expression
+ * state and nested lexical scopes; the shared cache of provider-resolved identifiers supports
+ * concurrent access. Any supplied type provider must also support concurrent reads.
  */
 public final class CheckerEnv {
 

@@ -24,23 +24,22 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.tools.Script;
+import org.projectnessie.cel.tools.ScriptCompiler;
 import org.projectnessie.cel.tools.ScriptException;
-import org.projectnessie.cel.tools.ScriptHost;
 
 public class ListContainsTest {
   @Test
   public void dynamicProtobufFieldLookupSuccess() throws ScriptException {
     UnknownSet rule = UnknownSet.newBuilder().addExprs(1).addExprs(2).build();
-    ScriptHost scriptHost = ScriptHost.newBuilder().build();
     Script script =
-        scriptHost
-            .buildScript("!(this in dyn(rules)['exprs']) ? 'value must be in list' : ''")
+        ScriptCompiler.newBuilder()
             .withTypes(rule)
             .withDeclarations(
                 Decls.newVar("this", Decls.Int),
                 Decls.newVar(
                     "rules", Decls.newObjectType(rule.getDescriptorForType().getFullName())))
-            .build();
+            .build()
+            .compile("!(this in dyn(rules)['exprs']) ? 'value must be in list' : ''");
     Map<String, Object> arguments = new HashMap<>();
     arguments.put("this", 1);
     arguments.put("rules", rule);
@@ -52,16 +51,15 @@ public class ListContainsTest {
   @Test
   public void dynamicProtobufFieldLookupFailure() throws ScriptException {
     UnknownSet rule = UnknownSet.newBuilder().addExprs(1).addExprs(2).build();
-    ScriptHost scriptHost = ScriptHost.newBuilder().build();
     Script script =
-        scriptHost
-            .buildScript("!(this in dyn(rules)['exprs']) ? 'value must be in list' : ''")
+        ScriptCompiler.newBuilder()
             .withTypes(rule)
             .withDeclarations(
                 Decls.newVar("this", Decls.Int),
                 Decls.newVar(
                     "rules", Decls.newObjectType(rule.getDescriptorForType().getFullName())))
-            .build();
+            .build()
+            .compile("!(this in dyn(rules)['exprs']) ? 'value must be in list' : ''");
     Map<String, Object> arguments = new HashMap<>();
     arguments.put("this", 15);
     arguments.put("rules", rule);
@@ -74,15 +72,14 @@ public class ListContainsTest {
   public void uintInList() throws ScriptException {
     TestAllTypes rule =
         TestAllTypes.newBuilder().addRepeatedFixed32(2).addRepeatedFixed32(3).build();
-    ScriptHost scriptHost = ScriptHost.newBuilder().build();
     Script script =
-        scriptHost
-            .buildScript("3u in rules.repeated_fixed32")
+        ScriptCompiler.newBuilder()
             .withTypes(rule.getDefaultInstanceForType())
             .withDeclarations(
                 Decls.newVar(
                     "rules", Decls.newObjectType(rule.getDescriptorForType().getFullName())))
-            .build();
+            .build()
+            .compile("3u in rules.repeated_fixed32");
     Map<String, Object> arguments = new HashMap<>();
     arguments.put("rules", rule);
 
@@ -94,15 +91,14 @@ public class ListContainsTest {
   public void uintNotInList() throws ScriptException {
     TestAllTypes rule =
         TestAllTypes.newBuilder().addRepeatedFixed32(2).addRepeatedFixed32(3).build();
-    ScriptHost scriptHost = ScriptHost.newBuilder().build();
     Script script =
-        scriptHost
-            .buildScript("10u in rules.repeated_fixed32")
+        ScriptCompiler.newBuilder()
             .withTypes(rule.getDefaultInstanceForType())
             .withDeclarations(
                 Decls.newVar(
                     "rules", Decls.newObjectType(rule.getDescriptorForType().getFullName())))
-            .build();
+            .build()
+            .compile("10u in rules.repeated_fixed32");
     Map<String, Object> arguments = new HashMap<>();
     arguments.put("rules", rule);
 

@@ -26,6 +26,7 @@ import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
 
 import java.util.AbstractList;
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -69,6 +70,27 @@ class NativeListSourceTest {
     assertEquivalent("values[2]", input);
     assertEquivalent("values[index]", input);
     assertEquivalent("uints[0]", input);
+  }
+
+  @Test
+  void structuralMutationsCompletedBetweenEvaluationsAreVisible() {
+    List<Long> values = new ArrayList<>(List.of(1L, 2L));
+    Map<String, Object> input = Map.of("values", values);
+    String expression = "size(values) * 100 + values[size(values) - 1]";
+    Program nativeProgram = program(expression, false);
+    Program establishedProgram = program(expression, true);
+
+    assertThat(nativeProgram.eval(input).getVal()).isEqualTo(intOf(202));
+    assertThat(establishedProgram.eval(input).getVal()).isEqualTo(intOf(202));
+
+    values.add(3L);
+    assertThat(nativeProgram.eval(input).getVal()).isEqualTo(intOf(303));
+    assertThat(establishedProgram.eval(input).getVal()).isEqualTo(intOf(303));
+
+    values.subList(0, 2).clear();
+    values.set(0, 9L);
+    assertThat(nativeProgram.eval(input).getVal()).isEqualTo(intOf(109));
+    assertThat(establishedProgram.eval(input).getVal()).isEqualTo(intOf(109));
   }
 
   @Test
