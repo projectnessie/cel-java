@@ -17,7 +17,6 @@ package org.projectnessie.cel.common.types.pb;
 
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
-import static org.projectnessie.cel.common.types.Err.noMoreElements;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.TypeT.TypeType;
 import static org.projectnessie.cel.common.types.Types.boolOf;
@@ -45,7 +44,6 @@ import java.util.Objects;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.IteratorT;
 import org.projectnessie.cel.common.types.MapT;
-import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 
@@ -561,7 +559,7 @@ public final class FieldDescription extends Description {
 
     @Override
     public IteratorT iterator() {
-      return new EntryKeyIterator();
+      return IteratorT.javaIterator(adapter, toJavaMap().keySet().iterator());
     }
 
     @Override
@@ -586,7 +584,7 @@ public final class FieldDescription extends Description {
 
     @Override
     public Val size() {
-      return intOf(entries.size());
+      return intOf(toJavaMap().size());
     }
 
     @Override
@@ -603,7 +601,8 @@ public final class FieldDescription extends Description {
     }
 
     private Val scan(Val key) {
-      for (Object entry : entries) {
+      for (int i = entries.size() - 1; i >= 0; i--) {
+        Object entry = entries.get(i);
         Val candidate = adapter.nativeToValue(mapEntryKey(entry));
         if (candidate.equal(key) == True) {
           return adapter.nativeToValue(mapEntryValue(entry));
@@ -624,7 +623,7 @@ public final class FieldDescription extends Description {
           for (Object entry : entries) {
             Val key = adapter.nativeToValue(mapEntryKey(entry));
             Val value = adapter.nativeToValue(mapEntryValue(entry));
-            index.putIfAbsent(key, value);
+            index.put(key, value);
           }
           indexedEntries = index;
         }
@@ -680,48 +679,6 @@ public final class FieldDescription extends Description {
       }
       throw new IllegalArgumentException(
           String.format("Unexpected %s (%s) in list of map fields", entry.getClass(), entry));
-    }
-
-    private final class EntryKeyIterator extends BaseVal implements IteratorT {
-      private int index;
-
-      @Override
-      public Val hasNext() {
-        return boolOf(index < entries.size());
-      }
-
-      @Override
-      public Val next() {
-        if (index < entries.size()) {
-          return adapter.nativeToValue(mapEntryKey(entries.get(index++)));
-        }
-        return noMoreElements();
-      }
-
-      @Override
-      public <T> T convertToNative(Class<T> typeDesc) {
-        throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public Val convertToType(org.projectnessie.cel.common.types.ref.Type typeValue) {
-        throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public Val equal(Val other) {
-        throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public org.projectnessie.cel.common.types.ref.Type type() {
-        throw new UnsupportedOperationException();
-      }
-
-      @Override
-      public Object value() {
-        throw new UnsupportedOperationException();
-      }
     }
   }
 
