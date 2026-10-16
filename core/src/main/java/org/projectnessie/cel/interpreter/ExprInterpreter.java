@@ -15,43 +15,44 @@
  */
 package org.projectnessie.cel.interpreter;
 
-import static org.projectnessie.cel.interpreter.InterpretablePlanner.newPlanner;
-import static org.projectnessie.cel.interpreter.InterpretablePlanner.newUncheckedPlanner;
-
 import com.google.api.expr.v1alpha1.CheckedExpr;
 import com.google.api.expr.v1alpha1.Expr;
 import com.google.api.expr.v1alpha1.Reference;
 import com.google.api.expr.v1alpha1.Type;
+import java.util.HashMap;
 import java.util.Map;
 import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
 
+/** Default {@link Interpreter} implementation. */
 final class ExprInterpreter implements Interpreter {
   private final Dispatcher dispatcher;
   private final Container container;
   private final TypeProvider provider;
   private final TypeAdapter adapter;
   private final AttributeFactory attrFactory;
+  private final PlanningPolicy planningPolicy;
 
   ExprInterpreter(
       Dispatcher dispatcher,
       Container container,
       TypeProvider provider,
       TypeAdapter adapter,
-      AttributeFactory attrFactory) {
+      AttributeFactory attrFactory,
+      PlanningPolicy planningPolicy) {
     this.dispatcher = dispatcher;
     this.container = container;
     this.provider = provider;
     this.adapter = adapter;
     this.attrFactory = attrFactory;
+    this.planningPolicy = planningPolicy;
   }
 
   @Override
   public Interpretable newInterpretable(CheckedExpr checked, InterpretableDecorator... decorators) {
-    InterpretablePlanner p =
-        newPlanner(dispatcher, provider, adapter, attrFactory, container, checked, decorators);
-    return p.plan(checked.getExpr());
+    return newInterpretable(
+        checked.getExpr(), checked.getReferenceMapMap(), checked.getTypeMapMap(), decorators);
   }
 
   @Override
@@ -60,16 +61,59 @@ final class ExprInterpreter implements Interpreter {
       Map<Long, Reference> refMap,
       Map<Long, Type> typeMap,
       InterpretableDecorator... decorators) {
-    InterpretablePlanner p =
-        newPlanner(
-            dispatcher, provider, adapter, attrFactory, container, refMap, typeMap, decorators);
-    return p.plan(expr);
+    return checkedPlanner(refMap, typeMap, decorators).plan(expr);
   }
 
   @Override
   public Interpretable newUncheckedInterpretable(Expr expr, InterpretableDecorator... decorators) {
-    InterpretablePlanner p =
-        newUncheckedPlanner(dispatcher, provider, adapter, attrFactory, container, decorators);
-    return p.plan(expr);
+    return uncheckedPlanner(decorators).plan(expr);
+  }
+
+  Planner checkedPlanner(CheckedExpr checked, InterpretableDecorator... decorators) {
+    return checkedPlanner(checked.getReferenceMapMap(), checked.getTypeMapMap(), decorators);
+  }
+
+  Planner checkedPlanner(
+      Map<Long, Reference> refMap, Map<Long, Type> typeMap, InterpretableDecorator... decorators) {
+    PlanningPolicy effectivePolicy = effectiveCheckedPolicy(decorators);
+    InterpretableDecorator[] effectiveDecorators =
+        effectivePolicy == PlanningPolicy.NATIVE_OPTIMIZED
+            ? new InterpretableDecorator[0]
+            : decorators;
+    return new Planner(
+        dispatcher,
+        provider,
+        adapter,
+        attrFactory,
+        container,
+        refMap,
+        typeMap,
+        effectivePolicy,
+        effectiveDecorators);
+  }
+
+  Planner uncheckedPlanner(InterpretableDecorator... decorators) {
+    return new Planner(
+        dispatcher,
+        provider,
+        adapter,
+        attrFactory,
+        container,
+        new HashMap<>(),
+        new HashMap<>(),
+        PlanningPolicy.ESTABLISHED_ONLY,
+        decorators);
+  }
+
+  private PlanningPolicy effectiveCheckedPolicy(InterpretableDecorator[] decorators) {
+    if (!planningPolicy.nativeSpecializationPermitted()) {
+      return PlanningPolicy.ESTABLISHED_ONLY;
+    }
+    if (decorators.length == 0) {
+      return planningPolicy;
+    }
+    return decorators.length == 1 && decorators[0] == BuiltInOptimizer.INSTANCE
+        ? PlanningPolicy.NATIVE_OPTIMIZED
+        : PlanningPolicy.ESTABLISHED_ONLY;
   }
 }

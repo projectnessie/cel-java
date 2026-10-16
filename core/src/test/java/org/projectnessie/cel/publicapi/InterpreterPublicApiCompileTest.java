@@ -73,6 +73,8 @@ class InterpreterPublicApiCompileTest {
         Interpreter.newStandardInterpreter(container, registry, registry, attributes);
     Interpreter configured =
         Interpreter.newInterpreter(extended, container, registry, registry, attributes);
+    Interpreter configuredNative =
+        Interpreter.newInterpreter(extended, container, registry, registry, attributes, true);
     InterpretableDecorator optimizer = Interpreter.optimize();
     InterpretablePlanner checked =
         InterpretablePlanner.newPlanner(
@@ -89,6 +91,7 @@ class InterpreterPublicApiCompileTest {
     assertThat(constant.value()).isEqualTo(intOf(1L));
     assertThat(standard).isNotNull();
     assertThat(configured).isNotNull();
+    assertThat(configuredNative).isNotNull();
     assertThat(optimizer).isNotNull();
     assertThat(checked).isNotNull();
     assertThat(checkedMaps).isNotNull();
