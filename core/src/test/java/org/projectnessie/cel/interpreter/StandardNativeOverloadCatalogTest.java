@@ -137,6 +137,7 @@ class StandardNativeOverloadCatalogTest {
         Map.of(CALL_ID, Reference.newBuilder().addOverloadId(AddInt64).build()),
         Map.of(),
         PlanningPolicy.nativeSpecialization(nativePlanningPermitted),
+        org.projectnessie.cel.RegexEngine.JAVA,
         new InterpretableDecorator[0]);
   }
 
