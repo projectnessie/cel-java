@@ -177,6 +177,140 @@ class NativePlanRootTest {
   }
 
   @TestFactory
+  Stream<DynamicTest> topLevelListConsumerRootsBelongOnlyToTheIntegratedPlanner() {
+    List<Object> nullValues = new ArrayList<>();
+    nullValues.add(null);
+    List<RootCase> cases =
+        List.of(
+            new RootCase("flags[1]", Map.of("flags", List.of(true, false))),
+            new RootCase("numbers[1]", Map.of("numbers", new long[] {7L, 41L})),
+            new RootCase("doubles[1]", Map.of("doubles", new double[] {1.0d, -0.0d})),
+            new RootCase("words[1]", Map.of("words", new String[] {"zero", "value"})),
+            new RootCase("nulls[0]", Map.of("nulls", nullValues)),
+            new RootCase(
+                "wordTarget in words",
+                Map.of("wordTarget", "value", "words", new String[] {"zero", "value"})));
+
+    return integratedRootTests(listEnv(), cases);
+  }
+
+  @TestFactory
+  Stream<DynamicTest> scalarListLiteralConsumerRootsBelongOnlyToTheIntegratedPlanner() {
+    Map<String, Object> values =
+        Map.of(
+            "b", true, "c", false, "x", 41L, "y", 42L, "d", 1.0d, "e", -0.0d, "s", "value", "t",
+            "other");
+    return integratedRootTests(
+        List.of(
+            new RootCase("[b, c][1]", values),
+            new RootCase("[x, y][0]", values),
+            new RootCase("[d, e][1]", values),
+            new RootCase("[s, t][0]", values),
+            new RootCase("size([x, y])", values),
+            new RootCase("[x, y].size()", values),
+            new RootCase("s in [t, s]", values)));
+  }
+
+  @TestFactory
+  Stream<DynamicTest> canonicalQuantifierRootsBelongOnlyToTheIntegratedPlanner() {
+    return integratedRootTests(
+        listEnv(),
+        List.of(
+            new RootCase(
+                "flags.exists(value, value)", Map.of("flags", new Boolean[] {false, true})),
+            new RootCase("flags.all(value, value)", Map.of("flags", new Boolean[] {true, true})),
+            new RootCase(
+                "flags.exists_one(value, value)", Map.of("flags", new Boolean[] {false, true})),
+            new RootCase(
+                "numbers.exists(value, value == 2)", Map.of("numbers", new long[] {1L, 2L})),
+            new RootCase("numbers.all(value, value > 0)", Map.of("numbers", new long[] {1L, 2L})),
+            new RootCase(
+                "numbers.exists_one(value, value == 2)", Map.of("numbers", new long[] {1L, 2L})),
+            new RootCase(
+                "doubles.exists(value, value == 1.5)",
+                Map.of("doubles", new double[] {1.0d, 1.5d})),
+            new RootCase(
+                "doubles.all(value, value > 0.0)", Map.of("doubles", new double[] {1.0d, 1.5d})),
+            new RootCase(
+                "doubles.exists_one(value, value == 1.5)",
+                Map.of("doubles", new double[] {1.0d, 1.5d})),
+            new RootCase(
+                "words.exists(value, value == 'value')",
+                Map.of("words", new String[] {"other", "value"})),
+            new RootCase(
+                "words.all(value, value != 'absent')",
+                Map.of("words", new String[] {"other", "value"})),
+            new RootCase(
+                "words.exists_one(value, value == 'value')",
+                Map.of("words", new String[] {"other", "value"}))));
+  }
+
+  @TestFactory
+  Stream<DynamicTest> canonicalListFoldConsumersBelongOnlyToTheIntegratedPlanner() {
+    return integratedRootTests(
+        listEnv(),
+        List.of(
+            new RootCase(
+                "size(numbers.filter(value, value > 0))",
+                Map.of("numbers", new long[] {-1L, 1L, 2L})),
+            new RootCase(
+                "numbers.map(value, value + 1).size()", Map.of("numbers", new long[] {1L, 2L})),
+            new RootCase(
+                "size(numbers.map(value, value > 0, value + 1))",
+                Map.of("numbers", new long[] {-1L, 1L, 2L})),
+            new RootCase(
+                "flags.filter(value, value)[0]", Map.of("flags", new Boolean[] {false, true})),
+            new RootCase(
+                "numbers.map(value, value + 1)[0]", Map.of("numbers", new long[] {1L, 2L})),
+            new RootCase(
+                "doubles.map(value, value + 0.5)[0]", Map.of("doubles", new double[] {1.0d, 2.0d})),
+            new RootCase(
+                "words.map(value, value + '!')[0]", Map.of("words", new String[] {"cel", "java"})),
+            new RootCase("numbers.map(value, null)[0]", Map.of("numbers", new long[] {1L, 2L})),
+            new RootCase(
+                "numbers.map(value, value > 0, value + 1)[0]",
+                Map.of("numbers", new long[] {-1L, 1L, 2L}))));
+  }
+
+  @TestFactory
+  Stream<DynamicTest> canonicalMappedStringMembershipBelongsOnlyToTheIntegratedPlanner() {
+    return integratedRootTests(
+        listEnv(),
+        List.of(
+            new RootCase(
+                "wordTarget in words.map(value, value)",
+                Map.of("wordTarget", "cel", "words", new String[] {"other", "cel"})),
+            new RootCase(
+                "wordTarget in words.map(value, value + '!')",
+                Map.of("wordTarget", "cel!", "words", new String[] {"other", "cel"})),
+            new RootCase(
+                "wordTarget in words.map(value, value != 'skip', value + '!')",
+                Map.of("wordTarget", "cel!", "words", new String[] {"other", "skip", "cel"})),
+            new RootCase(
+                "wordTarget in words.filter(value, value != 'skip')",
+                Map.of("wordTarget", "cel", "words", new String[] {"other", "skip", "cel"}))));
+  }
+
+  @TestFactory
+  Stream<DynamicTest> canonicalMappedIntegerQuantifiersBelongOnlyToTheIntegratedPlanner() {
+    Map<String, Object> input = Map.of("numbers", new long[] {1L, 2L, 3L});
+    return integratedRootTests(
+        listEnv(),
+        Stream.of(
+                "numbers.map(value, value + 1).exists(mapped, mapped == 3)",
+                "numbers.map(value, value + 1).all(mapped, mapped > 1)",
+                "numbers.map(value, value + 1).exists_one(mapped, mapped == 3)",
+                "numbers.map(value, value > 1, value + 1).exists(mapped, mapped == 3)",
+                "numbers.map(value, value > 1, value + 1).all(mapped, mapped > 2)",
+                "numbers.map(value, value > 1, value + 1).exists_one(mapped, mapped == 3)",
+                "numbers.filter(value, value > 1).exists(mapped, mapped == 2)",
+                "numbers.filter(value, value > 1).all(mapped, mapped > 1)",
+                "numbers.filter(value, value > 1).exists_one(mapped, mapped == 2)")
+            .map(expression -> new RootCase(expression, input))
+            .toList());
+  }
+
+  @TestFactory
   Stream<DynamicTest> mapSelectorsPreserveEstablishedCompatibilityResults() {
     Map<String, Object> nullValue = new HashMap<>();
     nullValue.put("answer", null);
