@@ -236,7 +236,15 @@ public class ProtoTypeRegistry
     return p;
   }
 
-  /** NewEmptyRegistry returns a registry which is completely unconfigured. */
+  /**
+   * Creates a registry without CEL runtime type registrations.
+   *
+   * <p>This advanced factory still has an isolated descriptor database initialized with protobuf
+   * well-known descriptors. Prefer {@link #newRegistry(Message...)} unless building the complete
+   * runtime type catalog explicitly.
+   *
+   * @return an independent mutable registry
+   */
   public static ProtoTypeRegistry newEmptyRegistry() {
     return new ProtoTypeRegistry(new HashMap<>(), newDb());
   }
@@ -277,6 +285,12 @@ public class ProtoTypeRegistry
     }
   }
 
+  /**
+   * Resolves a registered protobuf enum constant.
+   *
+   * @param enumName fully qualified protobuf enum-constant name
+   * @return its numeric value as a CEL integer, or a CEL error if unknown
+   */
   @Override
   public Val enumValue(String enumName) {
     EnumValueDescription enumVal = pbdb.describeEnum(enumName);
@@ -431,6 +445,12 @@ public class ProtoTypeRegistry
     return field;
   }
 
+  /**
+   * Resolves a registered CEL type, protobuf enum constant, or extension identifier.
+   *
+   * @param identName identifier to resolve
+   * @return the runtime type/value, or {@code null} if the identifier is unknown
+   */
   @Override
   public Val findIdent(String identName) {
     org.projectnessie.cel.common.types.ref.Type t = revTypeMap.get(identName);
@@ -447,6 +467,12 @@ public class ProtoTypeRegistry
     return null;
   }
 
+  /**
+   * Resolves a registered protobuf message as a checked CEL type value.
+   *
+   * @param typeName fully qualified protobuf message name
+   * @return the checked type value, or {@code null} if the message type is unknown
+   */
   @Override
   public Type findType(String typeName) {
     if (pbdb.describeType(typeName) == null) {
@@ -458,6 +484,18 @@ public class ProtoTypeRegistry
     return Type.newBuilder().setType(Type.newBuilder().setMessageType(typeName)).build();
   }
 
+  /**
+   * Constructs a registered protobuf message from CEL field values.
+   *
+   * <p>Field values are converted according to their protobuf descriptors. CEL null clears
+   * supported singular message fields and is pruned from supported repeated/map well-known message
+   * values according to protobuf conversion rules.
+   *
+   * @param typeName fully qualified registered protobuf message name
+   * @param fields protobuf source field names and CEL values
+   * @return the constructed protobuf-backed CEL object, or a CEL error for an unknown type, field,
+   *     or invalid field conversion
+   */
   @Override
   public Val newValue(String typeName, Map<String, Val> fields) {
     PbTypeDescription td = pbdb.describeType(typeName);
@@ -819,10 +857,14 @@ public class ProtoTypeRegistry
   }
 
   /**
-   * NativeToValue converts various "native" types to ref.Val with this specific implementation
-   * providing support for custom proto-based types.
+   * Converts a Java or Protocol Buffer value to a CEL value.
    *
-   * <p>This method should be the inverse of ref.Val.ConvertToNative.
+   * <p>Registered messages become protobuf-backed CEL objects. Protobuf wrapper, JSON, timestamp,
+   * duration, and {@code Any} messages are unwrapped to their CEL representations where possible.
+   * Unknown protobuf types and unsupported Java inputs produce CEL error values.
+   *
+   * @param value value to adapt
+   * @return the converted CEL value or a CEL error
    */
   @Override
   public Val nativeToValue(Object value) {

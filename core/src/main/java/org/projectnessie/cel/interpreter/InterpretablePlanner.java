@@ -26,9 +26,15 @@ import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
 
-/** interpretablePlanner creates an Interpretable evaluation plan from a proto Expr value. */
+/**
+ * Creates executable {@link Interpretable} plans from protobuf CEL expressions.
+ *
+ * <p>Checked planners use reference and type metadata to resolve calls, types, and names during
+ * planning. Unchecked planners defer more resolution to evaluation. Most applications should obtain
+ * programs through {@link org.projectnessie.cel.Env}.
+ */
 public interface InterpretablePlanner {
-  /** Plan generates an Interpretable value (or error) from the input proto Expr. */
+  /** Plans an expression or throws when the expression cannot be planned. */
   Interpretable plan(Expr expr);
 
   /**

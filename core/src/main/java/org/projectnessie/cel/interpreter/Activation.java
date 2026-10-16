@@ -64,7 +64,11 @@ public interface Activation extends ActivationFunction {
     return null;
   }
 
-  /** EmptyActivation returns a variable free activation. */
+  /**
+   * Returns an activation with no variable bindings.
+   *
+   * @return a reusable empty activation
+   */
   static Activation emptyActivation() {
     // This call cannot fail.
     return newActivation(Map.of());
@@ -121,8 +125,14 @@ public interface Activation extends ActivationFunction {
   }
 
   /**
-   * NewHierarchicalActivation takes two activations and produces a new one which prioritizes
-   * resolution in the child first and parent(s) second.
+   * Creates an activation that resolves against {@code child} before {@code parent}.
+   *
+   * <p>The returned activation retains both inputs. A name beginning with {@code .} bypasses the
+   * child and is resolved directly against the parent after the leading dot is removed.
+   *
+   * @param parent non-null fallback activation
+   * @param child non-null preferred activation
+   * @return a hierarchical activation
    */
   static Activation newHierarchicalActivation(Activation parent, Activation child) {
     return new HierarchicalActivation(parent, child);
@@ -146,7 +156,7 @@ public interface Activation extends ActivationFunction {
     return new PartActivation(a, unknowns);
   }
 
-  /** PartialActivation extends the Activation interface with a set of UnknownAttributePatterns. */
+  /** Activation that supplies attribute patterns for partial evaluation. */
   interface PartialActivation extends Activation {
 
     /**

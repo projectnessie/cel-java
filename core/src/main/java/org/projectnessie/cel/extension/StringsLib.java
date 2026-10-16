@@ -40,14 +40,14 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <p>Note: Currently the overloading isn't supported.
  *
- * <h3>CharAt</h3>
+ * <h2>CharAt</h2>
  *
  * <p>Returns the character at the given position. If the position is negative, or greater than the
  * length of the string, the function will produce an error:
  *
  * <pre>    {@code <string>.charAt(<int>) -> <string>}</pre>
  *
- * <h4>Examples:</h4>
+ * <h3>Examples:</h3>
  *
  * <pre>    {@code 'hello'.charAt(4)  // return 'o'}</pre>
  *
@@ -55,7 +55,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code 'hello'.charAt(-1) // error}</pre>
  *
- * <h3>IndexOf</h3>
+ * <h2>IndexOf</h2>
  *
  * <p>Returns the integer index of the first occurrence of the search string. If the search string
  * is not found the function returns -1.
@@ -68,7 +68,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code <string>.indexOf(<string>, <int>) -> <int>}</pre>
  *
- * <h4>Examples:</h4>
+ * <h3>Examples:</h3>
  *
  * <pre>    {@code 'hello mellow'.indexOf('')         // returns 0}</pre>
  *
@@ -82,7 +82,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code 'hello mellow'.indexOf('ello', 20) // error}</pre>
  *
- * <h3>Join</h3>
+ * <h2>Join</h2>
  *
  * <p>Returns a new string where the elements of string list are concatenated.
  *
@@ -93,7 +93,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code <list<string>>.join(<string>) -> <string>}</pre>
  *
- * <h4>Examples:</h4>
+ * <h3>Examples:</h3>
  *
  * <pre>    {@code ['hello', 'mellow'].join()    // returns 'hellomellow'}</pre>
  *
@@ -103,7 +103,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code [].join('/')                  // returns ''}</pre>
  *
- * <h3>LastIndexOf</h3>
+ * <h2>LastIndexOf</h2>
  *
  * <p>Returns the integer index at the start of the last occurrence of the search string. If the
  * search string is not found the function returns -1.
@@ -116,7 +116,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code <string>.lastIndexOf(<string>, <int>) -> <int>}</pre>
  *
- * <h4>Examples:</h4>
+ * <h3>Examples:</h3>
  *
  * <pre>    {@code 'hello mellow'.lastIndexOf('')         // returns 12}</pre>
  *
@@ -128,7 +128,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code 'hello mellow'.lastIndexOf('ello', -1) // error}</pre>
  *
- * <h3>LowerAscii</h4>
+ * <h2>LowerAscii</h2>
  *
  * <p>Returns a new string where all ASCII characters are lower-cased.
  *
@@ -136,13 +136,13 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code <string>.lowerAscii() -> <string>}</pre>
  *
- * <h4>Examples:</h4>
+ * <h3>Examples:</h3>
  *
  * <pre>    {@code 'TacoCat'.lowerAscii()     // returns 'tacocat'}</pre>
  *
  * <pre>    {@code 'TacoCÆt Xii'.lowerAscii() // returns 'tacocÆt xii'}</pre>
  *
- * <h3>Replace</h3>
+ * <h2>Replace</h2>
  *
  * <p>Returns a new string based on the target, which replaces the occurrences of a search string
  * with a replacement string if present. The function accepts an optional limit on the number of
@@ -155,7 +155,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code <string>.replace(<string>, <string>, <int>) -> <string>}</pre>
  *
- * <h4>Examples:</h4>
+ * <h3>Examples:</h3>
  *
  * <pre>    {@code 'hello hello'.replace('he', 'we')     // returns 'wello wello'}</pre>
  *
@@ -165,7 +165,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code 'hello hello'.replace('he', 'we', 0)  // returns 'hello hello'}</pre>
  *
- * <h3>Split</h3>
+ * <h2>Split</h2>
  *
  * <p>Returns a list of strings split from the input by the given separator. The function accepts an
  * optional argument specifying a limit on the number of substrings produced by the split.
@@ -178,7 +178,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code <string>.split(<string>, <int>) -> <list<string>>}</pre>
  *
- * <h4>Examples:</h4>
+ * <h3>Examples:</h3>
  *
  * <pre>    {@code 'hello hello hello'.split(' ')     // returns ['hello', 'hello', 'hello']}</pre>
  *
@@ -190,7 +190,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code 'hello hello hello'.split(' ', -1) // returns ['hello', 'hello', 'hello']}</pre>
  *
- * <h3>Substring</h3>
+ * <h2>Substring</h2>
  *
  * <p>Returns the substring given a numeric range corresponding to character positions. Optionally
  * may omit the trailing range for a substring from a given character position until the end of a
@@ -204,7 +204,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code <string>.substring(<int>,<int>)-><string>}</pre>
  *
- * <h4>Examples:</h4>
+ * <h3>Examples:</h3>
  *
  * <pre>    {@code 'tacocat'.substring(4)    // returns 'cat'}</pre>
  *
@@ -214,7 +214,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code 'tacocat'.substring(2, 1) // error}</pre>
  *
- * <h3>Trim</h3>
+ * <h2>Trim</h2>
  *
  * <p>Returns a new string which removes the leading and trailing whitespace in the target string.
  * The trim function uses the Unicode definition of whitespace which does not include the zero-width
@@ -222,11 +222,11 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code <string>.trim() -> <string>}</pre>
  *
- * <h4>Examples:</h4>
+ * <h3>Examples:</h3>
  *
  * <pre>    {@code ' \ttrim\n '.trim() // returns 'trim'}</pre>
  *
- * <h3>UpperAscii</h3>
+ * <h2>UpperAscii</h2>
  *
  * <p>Returns a new string where all ASCII characters are upper-cased.
  *
@@ -234,7 +234,7 @@ import org.projectnessie.cel.interpreter.functions.Overload;
  *
  * <pre>    {@code <string>.upperAscii() -> <string>}</pre>
  *
- * <h4>Examples:</h4>
+ * <h3>Examples:</h3>
  *
  * <pre>    {@code 'TacoCat'.upperAscii()     // returns 'TACOCAT'}</pre>
  *
@@ -286,6 +286,9 @@ public class StringsLib implements Library {
           (char) 0x205F,
           (char) 0x3000);
 
+  /**
+   * Returns an environment option installing the string extension declarations and implementations.
+   */
   public static EnvOption strings() {
     return Library.Lib(new StringsLib());
   }
@@ -550,16 +553,10 @@ public class StringsLib implements Library {
   }
 
   /**
-   * replace first n non-overlapping instance of {old} replaced by {replacement}. It works as <a
-   * ref="https://pkg.go.dev/strings#Replace">strings.Replace in Go</a> to have consistent behavior
-   * as cel in Go
+   * Replaces the first {@code n} non-overlapping occurrences of {@code old}.
    *
-   * <p>if {@code n == 0}, there is no change to the string
-   *
-   * <p>if {@code n < 0}, there is no limit on the number of replacement
-   *
-   * <p>if {old} is empty, it matches at the beginning of the string and after each UTF-8 sequence,
-   * yielding up to k+1 replacements for a k-rune string
+   * <p>A zero limit leaves the string unchanged; a negative limit replaces every occurrence. An
+   * empty search string matches at the start and between characters.
    */
   static String replaceN(String str, String old, String replacement, int n) {
     if (n == 0 || old.equals(replacement)) {
@@ -647,11 +644,8 @@ public class StringsLib implements Library {
   }
 
   /**
-   * explode splits s into an array of UTF-8 strings, one string per Unicode character up to a
-   * maximum of n (n < 0 means no limit).
-   *
-   * <p>ported from <a href="https://github.com/golang/go/blob/master/src/strings/strings.go">Go:
-   * strings.explode()</a>
+   * Splits a string into at most {@code n} character strings, with a negative limit meaning no
+   * limit.
    */
   private static String[] explode(String s, int n) {
     if (n < 0 || n > s.length()) {
