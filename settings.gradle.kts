@@ -151,6 +151,8 @@ celProject("jackson3")
 
 celProject("conformance")
 
+celProject("benchmarks")
+
 celProject("tools")
 
 celProject("standalone")
