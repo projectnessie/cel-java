@@ -25,22 +25,27 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Container holds a reference to an optional qualified container name and set of aliases.
+ * Immutable CEL namespace container with optional aliases.
  *
- * <p>The program container can be used to simplify variable, function, and type specification
- * within CEL programs and behaves more or less like a C++ namespace. See ResolveCandidateNames for
- * more details.
+ * <p>A container expands relative variable, function, and type names from the most-qualified
+ * candidate to the least-qualified candidate. Explicit aliases take precedence over namespace
+ * expansion. Candidate results are cached internally and returned as defensive array copies, so a
+ * configured container can be reused concurrently.
  */
 public final class Container {
 
-  /** DefaultContainer has an empty container name. */
+  /** Container with an empty namespace and no aliases. */
   public static final Container defaultContainer = new Container("", Collections.emptyMap());
 
   private final String name;
   private final Map<String, String> aliases;
   private final Map<String, String[]> candidateNameCache = new ConcurrentHashMap<>();
 
-  /** NewContainer creates a new Container with the fully-qualified name. */
+  /**
+   * Creates a container by applying options in order.
+   *
+   * @return configured container, or {@code null} if an option returns {@code null}
+   */
   public static Container newContainer(ContainerOption... opts) {
     Container c = defaultContainer;
     for (ContainerOption opt : opts) {
@@ -58,7 +63,7 @@ public final class Container {
   }
 
   /**
-   * Name returns the fully-qualified name of the container.
+   * Returns the fully-qualified name of the container.
    *
    * <p>The name may conceptually be a namespace, package, or type.
    */
@@ -72,8 +77,9 @@ public final class Container {
   }
 
   /**
-   * Extend creates a new Container with the existing settings and applies a series of
-   * ContainerOptions to further configure the new container.
+   * Returns a separately configured container derived from this container.
+   *
+   * @return configured copy, or {@code null} if an option returns {@code null}
    */
   public Container extend(ContainerOption... opts) {
     // Copy the name and aliases of the existing container.
@@ -91,8 +97,7 @@ public final class Container {
   }
 
   /**
-   * ResolveCandidateNames returns the candidates name of namespaced identifiers in C++ resolution
-   * order.
+   * Returns namespace candidates in CEL resolution order.
    *
    * <p>Names which shadow other names are returned first. If a name includes a leading dot ('.'),
    * the name is treated as an absolute identifier which cannot be shadowed.
@@ -168,8 +173,9 @@ public final class Container {
   }
 
   /**
-   * ToQualifiedName converts an expression AST into a qualified name if possible, with a boolean +
-   * 'found' value that indicates if the conversion is successful.
+   * Converts an identifier/select expression to a qualified name.
+   *
+   * @return qualified name, or {@code null} when the expression is not a qualified-name shape
    */
   public static String toQualifiedName(Expr e) {
     switch (e.getExprKindCase()) {
@@ -195,39 +201,26 @@ public final class Container {
   }
 
   /**
-   * ContainerOption specifies a functional configuration option for a Container.
+   * Functional container configuration option.
    *
-   * <p>Note, ContainerOption implementations must be able to handle nil container inputs.
+   * <p>Built-in options require a non-null input. Returning {@code null} stops option application
+   * and causes {@link #newContainer(ContainerOption...)} or {@link #extend(ContainerOption...)} to
+   * return {@code null}.
    */
   @FunctionalInterface
   public interface ContainerOption {
+    /** Applies this option and returns the resulting container. */
     Container apply(Container c);
   }
 
   /**
-   * Abbrevs configures a set of simple names as abbreviations for fully-qualified names. // // An
-   * abbreviation (abbrev for short) is a simple name that expands to a fully-qualified name. //
-   * Abbreviations can be useful when working with variables, functions, and especially types from
-   * // multiple namespaces: // // // CEL object construction // qual.pkg.version.ObjTypeName{ //
-   * field: alt.container.ver.FieldTypeName{value: ...} // } // // Only one the qualified names
-   * above may be used as the CEL container, so at least one of these // references must be a long
-   * qualified name within an otherwise short CEL program. Using the // following abbreviations, the
-   * program becomes much simpler: // // // CEL Go option // Abbrevs("qual.pkg.version.ObjTypeName",
-   * "alt.container.ver.FieldTypeName") // // Simplified Object construction // ObjTypeName{field:
-   * FieldTypeName{value: ...}} // // There are a few rules for the qualified names and the simple
-   * abbreviations generated from them: // - Qualified names must be dot-delimited, e.g.
-   * `package.subpkg.name`. // - The last element in the qualified name is the abbreviation. // -
-   * Abbreviations must not collide with each other. // - The abbreviation must not collide with
-   * unqualified names in use. // // Abbreviations are distinct from container-based references in
-   * the following important ways: // - Abbreviations must expand to a fully-qualified name. // -
-   * Expanded abbreviations do not participate in namespace resolution. // - Abbreviation expansion
-   * is done instead of the container search for a matching identifier. // - Containers follow C++
-   * namespace resolution rules with searches from the most qualified name // to the least qualified
-   * name. // - Container references within the CEL program may be relative, and are resolved to
-   * fully // qualified names at either type-check time or program plan time, whichever comes first.
-   * // // If there is ever a case where an identifier could be in both the container and as an //
-   * abbreviation, the abbreviation wins as this will ensure that the meaning of a program is //
-   * preserved between compilations even as the container evolves.
+   * Configures abbreviations derived from the final component of fully-qualified names.
+   *
+   * <p>For example, {@code abbrevs("qual.pkg.Message")} makes {@code Message} resolve directly to
+   * {@code qual.pkg.Message}. Abbreviations are expanded before namespace search and must be
+   * unique.
+   *
+   * @throws IllegalArgumentException if a name is not qualified or an abbreviation collides
    */
   public static ContainerOption abbrevs(String... qualifiedNames) {
     return c -> {
@@ -249,12 +242,12 @@ public final class Container {
   }
 
   /**
-   * Alias associates a fully-qualified name with a user-defined alias. // // In general, Abbrevs is
-   * preferred to Alias since the names generated from the Abbrevs option // are more easily traced
-   * back to source code. The Alias option is useful for propagating alias // configuration from one
-   * Container instance to another, and may also be useful for remapping // poorly chosen protobuf
-   * message / package names. // // Note: all of the rules that apply to Abbrevs also apply to
-   * Alias.
+   * Associates a fully-qualified name with an explicit simple alias.
+   *
+   * <p>Prefer {@link #abbrevs(String...)} when the final name component is suitable. Alias
+   * expansion precedes namespace search.
+   *
+   * @throws IllegalArgumentException if either name is invalid or the alias collides
    */
   public static ContainerOption alias(String qualifiedName, String alias) {
     return aliasAs("alias", qualifiedName, alias);
@@ -297,7 +290,11 @@ public final class Container {
     };
   }
 
-  /** Name sets the fully-qualified name of the Container. */
+  /**
+   * Sets the fully-qualified namespace name.
+   *
+   * @throws IllegalArgumentException if the name starts with a dot
+   */
   public static ContainerOption name(String name) {
     return c -> {
       if (!name.isEmpty() && name.charAt(0) == '.') {

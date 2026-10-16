@@ -19,9 +19,15 @@ import static org.projectnessie.cel.common.types.IntT.intOf;
 
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** Indexer permits random access of elements by index 'a[b()]'. */
+/** Capability for values that support CEL index access such as {@code a[b]}. */
 public interface Indexer {
-  /** Get the value at the specified index or error. */
+  /**
+   * Returns the value at {@code index}.
+   *
+   * @param index list index or map key
+   * @return the selected value, a CEL error or unknown value, or Java {@code null} when an
+   *     implementation such as {@link Mapper} uses null to report an absent key
+   */
   Val get(Val index);
 
   /**

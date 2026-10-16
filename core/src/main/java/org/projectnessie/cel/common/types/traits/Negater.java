@@ -17,8 +17,12 @@ package org.projectnessie.cel.common.types.traits;
 
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** Negater interface to support unary '-' and '!' operator overloads. */
+/** Capability for values that support CEL unary {@code -} or logical {@code !}. */
 public interface Negater {
-  /** Negate returns the complement of the current value. */
+  /**
+   * Negates this value according to its CEL type.
+   *
+   * @return the arithmetic or logical negation, or a CEL error or unknown value
+   */
   Val negate();
 }

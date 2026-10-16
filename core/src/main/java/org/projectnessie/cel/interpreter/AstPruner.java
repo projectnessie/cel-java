@@ -43,38 +43,18 @@ import org.projectnessie.cel.common.types.traits.Lister;
 import org.projectnessie.cel.common.types.traits.Mapper;
 
 /**
- * PruneAst prunes the given AST based on the given EvalState and generates a new AST. Given AST is
- * copied on write and a new AST is returned.
+ * Rewrites an expression using values captured in an {@link EvalState}.
  *
- * <p>Couple of typical use cases this interface would be:
+ * <p>Known subexpressions become literals where the CEL value has a literal representation;
+ * aggregate and control-flow nodes are simplified when their recorded values make that safe.
+ * Unknown and error values are retained as expression structure. The input expression is not
+ * mutated.
  *
- * <ol>
- *   <li>
- *       <ol>
- *         <li>Evaluate expr with some unknowns,
- *         <li>If result is unknown:
- *             <ol>
- *               <li>PruneAst
- *               <li>Goto 1
- *             </ol>
- *             Functional call results which are known would be effectively cached across
- *             iterations.
- *       </ol>
- *   <li>
- *       <ol>
- *         <li>Compile the expression (maybe via a service and maybe after checking a compiled
- *             expression does not exists in local cache)
- *         <li>Prepare the environment and the interpreter. Activation might be empty.
- *         <li>Eval the expression. This might return unknown or error or a concrete value.
- *         <li>PruneAst
- *         <li>Maybe cache the expression
- *       </ol>
- * </ol>
- *
- * <p>This is effectively constant folding the expression. How the environment is prepared in step 2
- * is flexible. For example, If the caller caches the compiled and constant folded expressions, but
- * is not willing to constant fold(and thus cache results of) some external calls, then they can
- * prepare the overloads accordingly.
+ * <p>This is low-level residual-expression infrastructure. Prefer {@link
+ * org.projectnessie.cel.Env#residualAst(org.projectnessie.cel.Ast,
+ * org.projectnessie.cel.EvalDetails)} for checked ASTs and the normal partial-evaluation workflow.
+ * Rewritten expression IDs are internal to the returned tree and must not be treated as stable
+ * identities across pruning.
  */
 public final class AstPruner {
   private final EvalState state;
@@ -85,6 +65,13 @@ public final class AstPruner {
     this.nextExprID = nextExprID;
   }
 
+  /**
+   * Returns a copy-on-write expression simplified with recorded evaluation values.
+   *
+   * @param expr expression to simplify
+   * @param state evaluation state from evaluating the expression
+   * @return the simplified expression
+   */
   public static Expr pruneAst(Expr expr, EvalState state) {
     AstPruner pruner = new AstPruner(state, 1);
     return pruner.prune(expr);

@@ -17,12 +17,13 @@ package org.projectnessie.cel.common.types.traits;
 
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** Divider interface to support '/' operator overloads. */
+/** Capability for values that support the CEL binary {@code /} operator. */
 public interface Divider {
   /**
-   * Divide returns the result of dividing the current value by the input denominator.
+   * Divides this value by {@code denominator}.
    *
-   * <p>A denominator value of zero results in an error.
+   * @param denominator right-hand operand
+   * @return the quotient, or a CEL error or unknown value; division by zero returns a CEL error
    */
   Val divide(Val denominator);
 }
