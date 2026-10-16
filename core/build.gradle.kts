@@ -32,6 +32,7 @@ dependencies {
   compileOnly(project(":cel-generated-pb"))
 
   implementation(libs.agrona)
+  implementation(libs.re2j)
 
   congocc(libs.congocc)
 

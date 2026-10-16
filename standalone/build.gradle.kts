@@ -97,6 +97,7 @@ dependencies {
   standaloneShadow(project(":cel-generated-pb"))
   standaloneShadow(libs.protobuf.java)
   standaloneShadow(libs.agrona)
+  standaloneShadow(libs.re2j)
 
   standaloneCelSources(project(":cel-core"))
   standaloneCelSources(project(":cel-tools"))
