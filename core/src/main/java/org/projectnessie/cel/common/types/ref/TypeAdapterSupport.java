@@ -123,6 +123,18 @@ public final class TypeAdapterSupport {
         });
   }
 
+  /**
+   * Converts a supported standard Java value to CEL, if this helper recognizes its runtime type.
+   *
+   * <p>Java {@code null} is recognized as CEL null. Collections and maps may retain their backing
+   * Java objects through the returned CEL aggregate; callers must not mutate such inputs while an
+   * evaluation is using them.
+   *
+   * @param a adapter used recursively for aggregate elements
+   * @param value Java value to inspect
+   * @return the converted CEL value, a CEL error for an unsupported Java array type, or Java {@code
+   *     null} when this helper does not recognize the runtime type
+   */
   public static Val maybeNativeToValue(TypeAdapter a, Object value) {
     if (value == null) {
       return NullT.NullValue;
@@ -135,6 +147,9 @@ public final class TypeAdapterSupport {
 
     if (value instanceof Object[]) {
       return newGenericArrayList(a, (Object[]) value);
+    }
+    if (value.getClass().isArray()) {
+      return newErr("unsupported Java array type '%s'", value.getClass().getTypeName());
     }
     if (value instanceof List) {
       return newGenericList(a, (List<?>) value);
