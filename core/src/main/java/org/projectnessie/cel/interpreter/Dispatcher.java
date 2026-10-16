@@ -15,11 +15,7 @@
  */
 package org.projectnessie.cel.interpreter;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import org.projectnessie.cel.interpreter.functions.Overload;
 
 /** Dispatcher resolves function calls to their appropriate overload. */
@@ -45,51 +41,5 @@ public interface Dispatcher {
    */
   static Dispatcher extendDispatcher(Dispatcher parent) {
     return new DefaultDispatcher(parent, new HashMap<>());
-  }
-
-  /** defaultDispatcher struct which contains an overload map. */
-  final class DefaultDispatcher implements Dispatcher {
-    private final Dispatcher parent;
-    private final Map<String, Overload> overloads;
-
-    DefaultDispatcher(Dispatcher parent, Map<String, Overload> overloads) {
-      this.parent = parent;
-      this.overloads = overloads;
-    }
-
-    /** Add implements the Dispatcher.Add interface method. */
-    @Override
-    public void add(Overload... overloads) {
-      for (Overload o : overloads) {
-
-        // add the overload unless an overload of the same name has already been provided.
-        if (this.overloads.containsKey(o.operator)) {
-          throw new IllegalArgumentException(
-              String.format("overload already exists '%s'", o.operator));
-        }
-        // index the overload by function name.
-        this.overloads.put(o.operator, o);
-      }
-    }
-
-    /** FindOverload implements the Dispatcher.FindOverload interface method. */
-    @Override
-    public Overload findOverload(String overload) {
-      Overload o = overloads.get(overload);
-      if (o != null) {
-        return o;
-      }
-      return parent != null ? parent.findOverload(overload) : null;
-    }
-
-    /** OverloadIds implements the Dispatcher interface method. */
-    @Override
-    public String[] overloadIds() {
-      List<String> r = new ArrayList<>(overloads.keySet());
-      if (parent != null) {
-        Collections.addAll(r, parent.overloadIds());
-      }
-      return r.toArray(new String[0]);
-    }
   }
 }
