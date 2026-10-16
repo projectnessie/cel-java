@@ -221,6 +221,69 @@ class NativePlumbingPrototypeTest {
   }
 
   @Test
+  void nonLogicalNativeSignalsPreserveAlreadyMergedUnknowns() {
+    Plans plans = plans("x + 1", new Decl[] {X});
+    Val unknown = unknownOf(17L, 19L);
+    Activation activation = newActivation(Map.of("x", unknown));
+
+    assertThat(plans.enabled()).isInstanceOf(NativeIsland.class);
+    assertThat(plans.enabled().eval(activation)).isSameAs(unknown);
+    assertThat(plans.established().eval(activation)).isSameAs(unknown);
+  }
+
+  @Test
+  void fusedNativeQuantifiersMergeUnknownsAndRetainAbsorbingShortCircuit() {
+    Decl flags = newVar("flags", newListType(Bool));
+    for (String expression : List.of("flags.all(value, value)", "flags.exists(value, value)")) {
+      Plans plans = plans(expression, new Decl[] {flags});
+      assertThat(plans.enabled()).isInstanceOf(NativeIsland.class);
+      assertThat(((NativeIsland) plans.enabled()).root())
+          .as(expression)
+          .isInstanceOf(NativeQuantifierFold.class);
+
+      Activation unknowns =
+          newActivation(Map.of("flags", new Object[] {unknownOf(1L), unknownOf(2L)}));
+      assertThat(plans.enabled().eval(unknowns)).isEqualTo(unknownOf(1L, 2L));
+      assertThat(plans.established().eval(unknowns)).isEqualTo(unknownOf(1L, 2L));
+    }
+
+    Plans all = plans("flags.all(value, value)", new Decl[] {flags});
+    AtomicInteger accesses = new AtomicInteger();
+    List<Object> values =
+        new AbstractList<>() {
+          private final List<Object> delegate =
+              List.of(unknownOf(3L), org.projectnessie.cel.common.types.BoolT.False, unknownOf(4L));
+
+          @Override
+          public Object get(int index) {
+            accesses.incrementAndGet();
+            return delegate.get(index);
+          }
+
+          @Override
+          public int size() {
+            return delegate.size();
+          }
+        };
+    assertThat(all.enabled().eval(newActivation(Map.of("flags", values))))
+        .isSameAs(org.projectnessie.cel.common.types.BoolT.False);
+    assertThat(accesses).hasValue(2);
+
+    Plans exists = plans("flags.exists(value, value)", new Decl[] {flags});
+    assertThat(
+            exists
+                .enabled()
+                .eval(
+                    newActivation(
+                        Map.of(
+                            "flags",
+                            new Object[] {
+                              unknownOf(5L), org.projectnessie.cel.common.types.BoolT.True
+                            }))))
+        .isSameAs(org.projectnessie.cel.common.types.BoolT.True);
+  }
+
+  @Test
   void mapSelectorAndConstantListIndexResolveTheirSourceOnce() {
     Plans selector =
         plans(

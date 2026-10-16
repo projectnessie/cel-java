@@ -66,7 +66,6 @@ import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.UintT;
-import org.projectnessie.cel.common.types.UnknownT;
 
 /**
  * Standard conversion helpers for {@link TypeAdapter} implementations.
@@ -479,7 +478,7 @@ public final class TypeAdapterSupport {
    * @throws RuntimeException if {@code value} is not convertible to {@code long}
    */
   public static long valueToLong(Val value) {
-    if (value instanceof IntT || value instanceof UintT || value instanceof UnknownT) {
+    if (value instanceof IntT || value instanceof UintT) {
       return value.intValue();
     }
     return legacyValueToNative(value, long.class);

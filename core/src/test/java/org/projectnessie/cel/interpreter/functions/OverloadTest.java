@@ -16,9 +16,19 @@
 package org.projectnessie.cel.interpreter.functions;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.projectnessie.cel.common.types.BoolT.False;
+import static org.projectnessie.cel.common.types.BoolT.True;
+import static org.projectnessie.cel.common.types.IntT.intOf;
+import static org.projectnessie.cel.common.types.ListT.newGenericArrayList;
 
 import java.util.Arrays;
 import org.junit.jupiter.api.Test;
+import org.projectnessie.cel.common.types.Err;
+import org.projectnessie.cel.common.types.IteratorT;
+import org.projectnessie.cel.common.types.Overloads;
+import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
+import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.common.types.traits.Trait;
 
 class OverloadTest {
   @Test
@@ -37,5 +47,36 @@ class OverloadTest {
     for (int i = 0; i < third.length; i++) {
       assertThat(third[i]).isSameAs(second[i]);
     }
+  }
+
+  @Test
+  void standardIteratorOverloadsDispatchThroughVal() {
+    Overload iteratorOverload = standardOverload(Overloads.Iterator);
+    Overload hasNextOverload = standardOverload(Overloads.HasNext);
+    Overload nextOverload = standardOverload(Overloads.Next);
+
+    assertThat(iteratorOverload.operandTrait).isEqualTo(Trait.IterableType);
+    assertThat(hasNextOverload.operandTrait).isEqualTo(Trait.IteratorType);
+    assertThat(nextOverload.operandTrait).isEqualTo(Trait.IteratorType);
+
+    Val cursor =
+        iteratorOverload.unary.invoke(
+            newGenericArrayList(DefaultTypeAdapter.Instance, new Object[] {1L}));
+    assertThat(cursor).isInstanceOf(IteratorT.class);
+    assertThat(cursor.type()).isSameAs(IteratorT.IteratorType);
+    assertThat(cursor.type().hasTrait(Trait.IteratorType)).isTrue();
+    assertThat(hasNextOverload.unary.invoke(cursor)).isSameAs(True);
+    assertThat(nextOverload.unary.invoke(cursor)).isEqualTo(intOf(1));
+    assertThat(hasNextOverload.unary.invoke(cursor)).isSameAs(False);
+    assertThat(nextOverload.unary.invoke(cursor))
+        .matches(Err::isError)
+        .hasToString("no more elements");
+  }
+
+  private static Overload standardOverload(String operator) {
+    return Arrays.stream(Overload.standardOverloads())
+        .filter(overload -> overload.operator.equals(operator))
+        .findFirst()
+        .orElseThrow();
   }
 }
