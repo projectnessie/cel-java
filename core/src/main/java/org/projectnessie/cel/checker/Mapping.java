@@ -21,6 +21,12 @@ import com.google.api.expr.v1alpha1.Type;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Checker-internal type-parameter substitution mapping.
+ *
+ * <p>The type is public for historical compatibility, but exposes no public construction or
+ * mutation API and is not an external checker extension point.
+ */
 public final class Mapping {
 
   private final Map<String, Type> mapping;

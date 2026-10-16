@@ -69,19 +69,21 @@ public interface Interpreter {
   Interpretable newUncheckedInterpretable(Expr expr, InterpretableDecorator... decorators);
 
   /**
-   * TrackState decorates each expression node with an observer which records the value associated
-   * with the given expression id. EvalState must be provided to the decorator. This decorator is
-   * not thread-safe, and the EvalState must be reset between Eval() calls.
+   * Returns a decorator that records expression values in {@code state}.
+   *
+   * <p>The decorator and state are evaluation-specific and not thread-safe. Do not share them
+   * between concurrent evaluations.
    */
   static InterpretableDecorator trackState(EvalState state) {
     return decObserveEval(state::setValue);
   }
 
   /**
-   * ExhaustiveEval replaces operations that short-circuit with versions that evaluate expressions
-   * and couples this behavior with the TrackState() decorator to provide insight into the
-   * evaluation state of the entire expression. EvalState must be provided to the decorator. This
-   * decorator is not thread-safe, and the EvalState must be reset between Eval() calls.
+   * Returns a decorator that disables short-circuiting and records expression values in {@code
+   * state}.
+   *
+   * <p>The decorator and state are evaluation-specific and not thread-safe. Evaluating normally
+   * skipped branches may expose their function side effects or errors.
    */
   static InterpretableDecorator exhaustiveEval(EvalState state) {
     InterpretableDecorator ex = decDisableShortcircuits();

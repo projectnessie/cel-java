@@ -17,8 +17,13 @@ package org.projectnessie.cel.common.types.traits;
 
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** Subtractor interface to support binary '-' operator overloads. */
+/** Capability for values that support the CEL binary {@code -} operator. */
 public interface Subtractor {
-  /** Subtract returns the result of subtracting the input from the current value. */
+  /**
+   * Subtracts {@code subtrahend} from this value.
+   *
+   * @param subtrahend right-hand operand
+   * @return the difference, or a CEL error or unknown value
+   */
   Val subtract(Val subtrahend);
 }

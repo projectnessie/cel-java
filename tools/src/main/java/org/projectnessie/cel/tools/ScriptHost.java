@@ -130,15 +130,35 @@ public final class ScriptHost {
       this.sourceText = sourceText;
     }
 
+    /**
+     * Selects the CEL container used to resolve qualified names.
+     *
+     * @param container CEL container name
+     * @return this builder
+     */
     public ScriptBuilder withContainer(String container) {
       this.container = container;
       return this;
     }
 
+    /**
+     * Adds declarations used while checking this script.
+     *
+     * @param declarations variable and function declarations
+     * @return this builder
+     */
     public ScriptBuilder withDeclarations(Decl... declarations) {
       return withDeclarations(asList(declarations));
     }
 
+    /**
+     * Adds declarations used while checking this script.
+     *
+     * <p>The declaration references are copied into this builder.
+     *
+     * @param declarations variable and function declarations
+     * @return this builder
+     */
     public ScriptBuilder withDeclarations(List<Decl> declarations) {
       this.declarations.addAll(declarations);
       return this;
@@ -169,10 +189,24 @@ public final class ScriptHost {
       return this;
     }
 
+    /**
+     * Adds libraries used to check and evaluate this script.
+     *
+     * @param libraries libraries providing compile-time and program options
+     * @return this builder
+     */
     public ScriptBuilder withLibraries(Library... libraries) {
       return withLibraries(asList(libraries));
     }
 
+    /**
+     * Adds libraries used to check and evaluate this script.
+     *
+     * <p>The library references are copied into this builder.
+     *
+     * @param libraries libraries providing compile-time and program options
+     * @return this builder
+     */
     public ScriptBuilder withLibraries(List<Library> libraries) {
       this.libraries.addAll(libraries);
       return this;

@@ -23,9 +23,10 @@ import org.projectnessie.cel.common.Errors;
 import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.Source;
 
-/** TypeErrors is a specialization of Errors. */
+/** Type-checking diagnostics associated with one CEL source. */
 public final class TypeErrors extends Errors {
 
+  /** Creates an empty type-diagnostic collection for the supplied source. */
   public TypeErrors(Source source) {
     super(source);
   }

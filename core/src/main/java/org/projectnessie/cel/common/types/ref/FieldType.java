@@ -15,17 +15,30 @@
  */
 package org.projectnessie.cel.common.types.ref;
 
-/** FieldType represents a field's type value and whether that field supports presence detection. */
+/**
+ * Describes the checked type and host access callbacks for one object field.
+ *
+ * <p>Providers return a {@code FieldType} from {@link TypeProvider#findFieldType(String, String)}.
+ * The descriptor retains the supplied callbacks; callers configuring a provider should therefore
+ * treat them as immutable and safe for the provider's supported concurrent use.
+ */
 public class FieldType {
-  /** Type of the field. */
+  /** Checked CEL type of the field. */
   public final com.google.api.expr.v1alpha1.Type type;
 
-  /** IsSet indicates whether the field is set on an input object. */
+  /** Callback that determines whether the field is present on an input object. */
   public final FieldTester isSet;
 
-  /** GetFrom retrieves the field value on the input object, if set. */
+  /** Callback that retrieves the field value from an input object. */
   public final FieldGetter getFrom;
 
+  /**
+   * Creates a field descriptor.
+   *
+   * @param type checked CEL type of the field
+   * @param isSet presence callback
+   * @param getFrom value callback
+   */
   public FieldType(com.google.api.expr.v1alpha1.Type type, FieldTester isSet, FieldGetter getFrom) {
     this.type = type;
     this.isSet = isSet;

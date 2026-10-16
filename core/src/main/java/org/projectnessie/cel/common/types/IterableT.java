@@ -15,6 +15,7 @@
  */
 package org.projectnessie.cel.common.types;
 
+/** Aggregate value capable of creating one-shot CEL iterators. */
 public interface IterableT {
 
   /**
