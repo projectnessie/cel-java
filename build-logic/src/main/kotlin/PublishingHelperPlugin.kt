@@ -58,7 +58,7 @@ constructor(private val softwareComponentFactory: SoftwareComponentFactory) : Pl
     plugins.withId("maven-publish") {
       val publication =
         extensions.getByType<PublishingExtension>().publications.register<MavenPublication>(
-          "maven"
+          "maven",
         ) {
           val parentGroupId = project.group.toString()
           val parentVersion = project.version.toString()
@@ -320,7 +320,7 @@ internal fun configureShadowPublishing(
   }
   // component.addVariantsFromConfiguration(configurations.getByName("runtimeElements")) {
   component.addVariantsFromConfiguration(
-    project.configurations.getByName("shadowRuntimeElements")
+    project.configurations.getByName("shadowRuntimeElements"),
   ) {
     if (isPublishable(configurationVariant)) {
       mapToMavenScope("runtime")

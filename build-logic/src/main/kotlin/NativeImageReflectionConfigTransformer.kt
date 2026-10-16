@@ -86,7 +86,7 @@ constructor(override val objectFactory: ObjectFactory) : ResourceTransformer {
     if (emitNativeImageProperties.get()) {
       os.putNextEntry(zipEntry(nativeImagePropertiesPath.get(), preserveFileTimestamps))
       os.write(
-        "Args = -H:ReflectionConfigurationResources=\${.}/reflection-config.json\n".toByteArray()
+        "Args = -H:ReflectionConfigurationResources=\${.}/reflection-config.json\n".toByteArray(),
       )
       os.closeEntry()
     }
@@ -143,7 +143,7 @@ constructor(override val objectFactory: ObjectFactory) : ResourceTransformer {
           merged.set(fieldName, mergeArrays(existingValue as ArrayNode, incomingValue as ArrayNode))
         else ->
           throw IllegalArgumentException(
-            "Conflicting native-image reflection metadata for ${reflectionEntryId(merged)} field '$fieldName'"
+            "Conflicting native-image reflection metadata for ${reflectionEntryId(merged)} field '$fieldName'",
           )
       }
     }

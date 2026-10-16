@@ -42,17 +42,17 @@ class NativeImageReflectionConfigTransformerTest {
     assertThat(
         transformer.canTransformResource(
           fileTreeElement(
-            "META-INF/native-image/org.projectnessie.cel/cel-core/main/reflection-config.json"
-          )
-        )
+            "META-INF/native-image/org.projectnessie.cel/cel-core/main/reflection-config.json",
+          ),
+        ),
       )
       .isTrue()
     assertThat(
         transformer.canTransformResource(
           fileTreeElement(
-            "META-INF/native-image/org.projectnessie.cel/cel-core/main/native-image.properties"
-          )
-        )
+            "META-INF/native-image/org.projectnessie.cel/cel-core/main/native-image.properties",
+          ),
+        ),
       )
       .isFalse()
     assertThat(transformer.canTransformResource(fileTreeElement("reflection-config.json")))
@@ -82,8 +82,8 @@ class NativeImageReflectionConfigTransformerTest {
           }
         ]
         """
-          .trimIndent()
-      )
+          .trimIndent(),
+      ),
     )
     transformer.transform(
       context(
@@ -105,15 +105,15 @@ class NativeImageReflectionConfigTransformerTest {
           }
         ]
         """
-          .trimIndent()
-      )
+          .trimIndent(),
+      ),
     )
 
     val output = transformOutput(transformer)
     val reflectionConfig =
       mapper.readTree(
         output[NativeImageReflectionConfigTransformer.DEFAULT_REFLECTION_CONFIG_PATH]
-          ?: error("missing reflection config")
+          ?: error("missing reflection config"),
       )
 
     val reflectionEntries = reflectionConfig.toList()
@@ -123,7 +123,7 @@ class NativeImageReflectionConfigTransformerTest {
           "org.projectnessie.cel.relocated.com.google.protobuf.DescriptorProtos",
           "org.projectnessie.cel.relocated.com.google.protobuf.DynamicMessage[]",
           "org.projectnessie.cel.relocated.com.google.protobuf.Empty",
-        )
+        ),
       )
 
     val empty = reflectionEntries.single {
@@ -148,7 +148,7 @@ class NativeImageReflectionConfigTransformerTest {
     val reflectionConfig =
       mapper.readTree(
         transformOutput(transformer)[
-          NativeImageReflectionConfigTransformer.DEFAULT_REFLECTION_CONFIG_PATH]
+          NativeImageReflectionConfigTransformer.DEFAULT_REFLECTION_CONFIG_PATH],
       )
 
     assertThat(reflectionConfig.toList().single().get("name").asString())
@@ -193,7 +193,7 @@ class NativeImageReflectionConfigTransformerTest {
     )
 
   private fun transformOutput(
-    transformer: NativeImageReflectionConfigTransformer
+    transformer: NativeImageReflectionConfigTransformer,
   ): Map<String, String> {
     val zipFile = File(tempDir, "transformed.zip")
     ZipOutputStream(zipFile.outputStream()).use { transformer.modifyOutputStream(it, false) }

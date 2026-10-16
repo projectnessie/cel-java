@@ -36,7 +36,7 @@ fun Project.nessieConfigureSpotless() {
           target("src/**/*.xml", "src/**/*.xsd")
           eclipseWtp(com.diffplug.spotless.extra.wtp.EclipseWtpFormatterStep.XML)
             .configFile(
-              layout.settingsDirectory.file("codestyle/org.eclipse.wst.xml.core.prefs").asFile
+              layout.settingsDirectory.file("codestyle/org.eclipse.wst.xml.core.prefs").asFile,
             )
         }
         kotlinGradle {
