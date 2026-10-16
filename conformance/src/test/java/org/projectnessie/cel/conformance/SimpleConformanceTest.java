@@ -92,6 +92,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.DynamicNode;
@@ -119,8 +121,10 @@ import org.projectnessie.cel.parser.Macro;
 class SimpleConformanceTest {
 
   private static final Path TESTDATA_DIR = testdataDir();
-  private static final TextFormat.Printer TEXT_PRINTER =
-      TextFormat.printer().emittingSingleLine(true);
+  private static final Pattern PROTO3_NUMERIC_ENUM_ANY =
+      Pattern.compile(
+          "\\[type\\.googleapis\\.com/cel\\.expr\\.conformance\\.proto3\\.TestAllTypes\\]"
+              + "\\s*\\{\\s*standalone_enum:\\s*(-?\\d+)\\s*\\}");
 
   private static final List<String> TEST_FILES =
       List.of(
@@ -296,8 +300,35 @@ class SimpleConformanceTest {
     TextFormat.Parser.newBuilder()
         .setTypeRegistry(typeRegistry)
         .build()
-        .merge(Files.readString(testFile, StandardCharsets.UTF_8), extensionRegistry, builder);
+        .merge(
+            encodeProto3NumericEnumAnyValues(Files.readString(testFile, StandardCharsets.UTF_8)),
+            extensionRegistry,
+            builder);
     return builder.build();
+  }
+
+  private static String encodeProto3NumericEnumAnyValues(String testData) {
+    // Protobuf 3's text-format parser rejects unknown numeric proto3 enum values, although its
+    // generated builders and binary format preserve them. Rewrite these narrowly shaped expanded
+    // Any literals to the equivalent raw Any representation so the conformance cases remain intact.
+    Matcher matcher = PROTO3_NUMERIC_ENUM_ANY.matcher(testData);
+    StringBuilder encoded = new StringBuilder(testData.length());
+    while (matcher.find()) {
+      int enumValue = Integer.parseInt(matcher.group(1));
+      Any any =
+          Any.pack(
+              dev.cel.expr.conformance.proto3.TestAllTypes.newBuilder()
+                  .setStandaloneEnumValue(enumValue)
+                  .build());
+      String replacement =
+          "type_url: \""
+              + any.getTypeUrl()
+              + "\" value: \""
+              + TextFormat.escapeBytes(any.getValue())
+              + "\"";
+      matcher.appendReplacement(encoded, Matcher.quoteReplacement(replacement));
+    }
+    return matcher.appendTail(encoded).toString();
   }
 
   private static Path testdataDir() {
@@ -932,7 +963,7 @@ class SimpleConformanceTest {
   }
 
   private static String print(Message message) {
-    return TEXT_PRINTER.printToString(message);
+    return TextFormat.shortDebugString(message);
   }
 
   private static final class SkipList {
