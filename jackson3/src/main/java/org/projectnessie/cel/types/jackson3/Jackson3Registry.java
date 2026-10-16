@@ -17,7 +17,10 @@ package org.projectnessie.cel.types.jackson3;
 
 import static org.projectnessie.cel.common.types.Err.newErr;
 
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.StandardScalarFieldProvider;
@@ -30,17 +33,45 @@ import tools.jackson.databind.JavaType;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.ValueSerializer;
 import tools.jackson.databind.cfg.GeneratorSettings;
+import tools.jackson.databind.cfg.MapperBuilder;
 import tools.jackson.databind.cfg.SerializationContexts;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.ser.SerializationContextExt;
 import tools.jackson.databind.type.TypeFactory;
 
 /**
- * CEL-Java {@link TypeRegistry} to use Jackson 3 objects as input values for CEL scripts.
+ * A {@link TypeRegistry} that exposes Jackson 3 bean properties to CEL.
  *
- * <p>The implementation does not support the construction of Jackson objects in CEL expressions and
- * therefore returning Jackson objects from CEL expressions is not possible/implemented and results
- * in {@link UnsupportedOperationException}s.
+ * <p>Use this registry when application inputs are ordinary Java objects described by a Jackson 3
+ * {@link ObjectMapper}. Register a class or instance before checking an expression that selects its
+ * fields. Runtime adaptation of an object also discovers its type, but that is too late to make the
+ * type available to an already running checker.
+ *
+ * <p>The registry is for reading host objects. It does not construct Jackson-described objects for
+ * CEL object literals: {@link #newValue(String, Map)} and {@link #registerType(Type...)} throw
+ * {@link UnsupportedOperationException}.
+ *
+ * <p>Jackson array fields use the same representations as runtime adaptation: {@code byte[]} is CEL
+ * bytes; {@code int[]}, {@code long[]}, and {@code double[]} are typed CEL lists; and reference
+ * arrays are typed recursively, with {@code Object[]} and arrays of CEL {@link Val} values using
+ * dynamic elements. {@code boolean[]}, {@code short[]}, {@code char[]}, and {@code float[]} are not
+ * supported and are rejected during registration. Inferred {@code long[]} fields are signed {@code
+ * list<int>} values.
+ *
+ * <p>Java {@link java.util.Collection} fields become CEL lists. Java {@link Map} fields become CEL
+ * maps when their keys map to CEL {@code bool}, {@code int}, {@code uint}, or {@code string}.
+ * Unsupported map-key types and container shapes for which Jackson supplies no element, key, or
+ * value type are rejected during registration. {@link java.util.Optional} fields use the contained
+ * checked type. A null property is absent for CEL presence testing and is read as CEL null.
+ *
+ * <p>The configured factories snapshot supported Jackson bean-property configuration. The registry
+ * supports direct and mutually recursive object schemas, and publishes a newly discovered schema
+ * graph only after every type in that graph has been initialized successfully. Failed discovery
+ * does not publish a partial graph and can be retried. Discovery is serialized, so a registry can
+ * be reused by concurrent compilation and evaluation callers.
+ *
+ * <p>{@link #copy()} creates independent registration state and another mapper snapshot. Types
+ * registered later in one copy are not visible in the other.
  */
 public final class Jackson3Registry
     implements TypeRegistry, StandardScalarTypeAdapter, StandardScalarFieldProvider {
@@ -48,28 +79,58 @@ public final class Jackson3Registry
   private final SerializationContextExt serializationContextExt;
   private final TypeFactory typeFactory;
   private final Map<Class<?>, JacksonTypeDescription> knownTypes = new ConcurrentHashMap<>();
-  private final Map<String, JacksonTypeDescription> knownTypesByName = new ConcurrentHashMap<>();
+  private volatile Map<String, JacksonTypeDescription> knownTypesByName = Map.of();
 
   private final Map<Class<?>, JacksonEnumDescription> enumMap = new ConcurrentHashMap<>();
   private final Map<String, JacksonEnumValue> enumValues = new ConcurrentHashMap<>();
 
+  private DiscoveryTransaction activeDiscovery;
+
   private Jackson3Registry() {
-    JsonMapper.Builder b = JsonMapper.builder();
-    SerializationContexts serializationContexts = b.serializationContexts();
-    this.objectMapper = b.build();
+    this(JsonMapper.builder());
+  }
+
+  private Jackson3Registry(MapperBuilder<?, ?> builder) {
+    Objects.requireNonNull(builder, "builder");
+    this.objectMapper = builder.build();
+    SerializationContexts serializationContexts = builder.serializationContexts();
     SerializationContexts forMapper =
         serializationContexts.forMapper(
             objectMapper,
             objectMapper.serializationConfig(),
             objectMapper.tokenStreamFactory(),
-            b.serializerFactory());
+            builder.serializerFactory());
     this.serializationContextExt =
         forMapper.createContext(objectMapper.serializationConfig(), GeneratorSettings.empty());
     this.typeFactory = objectMapper.getTypeFactory();
   }
 
+  /**
+   * Creates a registry with default Jackson 3 bean-property configuration.
+   *
+   * @return a distinct registry instance
+   */
   public static TypeRegistry newRegistry() {
     return new Jackson3Registry();
+  }
+
+  /**
+   * Creates a registry from a snapshot of the supplied Jackson 3 mapper configuration.
+   *
+   * <p>The registry uses supported Jackson bean-property discovery, including naming strategies,
+   * mix-ins, visibility rules, and modules that modify ordinary bean properties. It does not
+   * promise to model arbitrary custom serializer output as CEL fields.
+   *
+   * <p>This method rebuilds the immutable mapper into a registry-owned mapper. Custom Jackson
+   * extension objects that Jackson itself shares across mapper builds must not be mutated after
+   * construction.
+   *
+   * @param objectMapper the configured caller-owned mapper to snapshot
+   * @return a distinct registry instance that owns the mapper snapshot
+   * @throws NullPointerException if {@code objectMapper} is null
+   */
+  public static TypeRegistry newRegistry(ObjectMapper objectMapper) {
+    return new Jackson3Registry(Objects.requireNonNull(objectMapper, "objectMapper").rebuild());
   }
 
   /**
@@ -91,18 +152,60 @@ public final class Jackson3Registry
     return new ExactJackson3Registry(new Jackson3Registry());
   }
 
+  /**
+   * Creates an exact aggregate registry from a snapshot of the supplied mapper configuration.
+   *
+   * <p>Mapper ownership and supported property-discovery behavior are the same as for {@link
+   * #newRegistry(ObjectMapper)}. Exact aggregate validation is orthogonal to mapper configuration
+   * and recursive schema discovery.
+   *
+   * @param objectMapper the configured caller-owned mapper to snapshot
+   * @return a distinct exact aggregate registry that owns the mapper snapshot
+   * @throws NullPointerException if {@code objectMapper} is null
+   */
+  public static TypeRegistry newExactAggregateRegistry(ObjectMapper objectMapper) {
+    return new ExactJackson3Registry(
+        new Jackson3Registry(Objects.requireNonNull(objectMapper, "objectMapper").rebuild()));
+  }
+
+  /**
+   * Copies mapper configuration and all successfully registered schemas into independent registry
+   * state.
+   *
+   * @return an independently configurable registry
+   */
   @Override
-  public TypeRegistry copy() {
-    Jackson3Registry copy = new Jackson3Registry();
-    knownTypes.keySet().forEach(copy::typeDescription);
+  public synchronized TypeRegistry copy() {
+    Jackson3Registry copy = new Jackson3Registry(objectMapper.rebuild());
+    knownTypesByName.values().stream()
+        .map(JacksonTypeDescription::reflectType)
+        .forEach(copy::typeDescription);
     enumMap.keySet().forEach(copy::enumDescription);
     return copy;
   }
 
+  /**
+   * Registers a Jackson object type or Java enum.
+   *
+   * <p>{@code t} may be a {@link Class} or an instance. Object registration recursively discovers
+   * bean-property types. Repeated registration is idempotent.
+   *
+   * <p>Enum classes and instances expose constants under their fully qualified Java names. Their
+   * CEL values are integers corresponding to {@link Enum#ordinal()}; Jackson serialization names do
+   * not change this CEL representation.
+   *
+   * @param t the class or representative instance to register
+   * @throws NullPointerException if {@code t} is null
+   * @throws RuntimeException if Jackson cannot describe the type
+   */
   @Override
   public void register(Object t) {
-    Class<?> cls = t instanceof Class ? (Class<?>) t : t.getClass();
-    typeDescription(cls);
+    Class<?> cls = t instanceof Enum<?> ? ((Enum<?>) t).getDeclaringClass() : registeredClass(t);
+    if (Enum.class.isAssignableFrom(cls)) {
+      enumDescription(cls);
+    } else {
+      typeDescription(cls);
+    }
   }
 
   @Override
@@ -221,6 +324,9 @@ public final class Jackson3Registry
     if (!Enum.class.isAssignableFrom(clazz)) {
       throw new IllegalArgumentException("only enum allowed here");
     }
+    while (!clazz.isEnum()) {
+      clazz = clazz.getSuperclass();
+    }
 
     JacksonEnumDescription ed = enumMap.get(clazz);
     if (ed != null) {
@@ -242,19 +348,55 @@ public final class Jackson3Registry
     if (td != null) {
       return td;
     }
-    td = computeTypeDescription(clazz);
-    knownTypes.put(clazz, td);
-    return td;
+
+    boolean outermost = activeDiscovery == null;
+    if (outermost) {
+      activeDiscovery = new DiscoveryTransaction();
+    }
+
+    try {
+      td = discoverType(clazz);
+      if (outermost) {
+        commitDiscovery(activeDiscovery);
+      }
+      return td;
+    } catch (RuntimeException | Error e) {
+      if (outermost) {
+        rollbackDiscovery(activeDiscovery);
+      }
+      throw e;
+    } finally {
+      if (outermost) {
+        activeDiscovery = null;
+      }
+    }
   }
 
-  private JacksonTypeDescription computeTypeDescription(Class<?> clazz) {
-    ValueSerializer<Object> ser = serializationContextExt.findValueSerializer(clazz);
+  private JacksonTypeDescription discoverType(Class<?> clazz) {
     JavaType javaType = typeFactory.constructType(clazz);
+    JacksonTypeDescription typeDesc = new JacksonTypeDescription(javaType);
+    knownTypes.put(clazz, typeDesc);
+    activeDiscovery.record(clazz, typeDesc);
 
-    JacksonTypeDescription typeDesc = new JacksonTypeDescription(javaType, ser, this::typeQuery);
-    knownTypesByName.put(clazz.getName(), typeDesc);
-
+    ValueSerializer<Object> ser = serializationContextExt.findValueSerializer(clazz);
+    typeDesc.initialize(ser, this::typeQuery);
     return typeDesc;
+  }
+
+  private void commitDiscovery(DiscoveryTransaction transaction) {
+    Map<String, JacksonTypeDescription> committed = new HashMap<>(knownTypesByName);
+    for (JacksonTypeDescription typeDesc : transaction.discovered.values()) {
+      if (!typeDesc.initialized()) {
+        throw new IllegalStateException(
+            String.format("Jackson type '%s' was not initialized", typeDesc.name()));
+      }
+      committed.put(typeDesc.name(), typeDesc);
+    }
+    knownTypesByName = Map.copyOf(committed);
+  }
+
+  private void rollbackDiscovery(DiscoveryTransaction transaction) {
+    transaction.discovered.forEach(knownTypes::remove);
   }
 
   private com.google.api.expr.v1alpha1.Type typeQuery(JavaType javaType) {
@@ -262,5 +404,17 @@ public final class Jackson3Registry
       return enumDescription(javaType.getRawClass()).pbType();
     }
     return typeDescription(javaType.getRawClass()).pbType();
+  }
+
+  private static Class<?> registeredClass(Object value) {
+    return value instanceof Class<?> ? (Class<?>) value : value.getClass();
+  }
+
+  private static final class DiscoveryTransaction {
+    private final Map<Class<?>, JacksonTypeDescription> discovered = new LinkedHashMap<>();
+
+    private void record(Class<?> clazz, JacksonTypeDescription typeDesc) {
+      discovered.put(clazz, typeDesc);
+    }
   }
 }
