@@ -87,7 +87,7 @@ val generateCelGrammar =
             sourceFile.toString(),
           )
         if (logger.isInfoEnabled) base else base + "-q"
-      }
+      },
     )
   }
 
