@@ -25,6 +25,8 @@ import static org.projectnessie.cel.interpreter.Coster.Cost.OneOne;
 import static org.projectnessie.cel.interpreter.Coster.Cost.estimateCost;
 
 import java.util.Objects;
+import org.projectnessie.cel.OperationAbortedException;
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.Overloads;
@@ -34,6 +36,7 @@ import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Negater;
 import org.projectnessie.cel.common.types.traits.Receiver;
 import org.projectnessie.cel.common.types.traits.Trait;
+import org.projectnessie.cel.internal.OperationCheckpoints;
 import org.projectnessie.cel.interpreter.Activation.PartialActivation;
 import org.projectnessie.cel.interpreter.AttributeFactory.Attribute;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableAttribute;
@@ -464,9 +467,17 @@ final class EvalRegex extends EvalBinary {
     Val right = rhs.eval(ctx);
     if (left instanceof StringT input && right instanceof StringT expression) {
       try {
-        return boolOf(
-            RegexSupport.find(regexEngine, (String) expression.value(), (String) input.value()));
+        OperationCheckpoints.checkpointNow(Phase.EVALUATE);
+        var matched =
+            RegexSupport.find(regexEngine, (String) expression.value(), (String) input.value());
+        OperationCheckpoints.checkpointNow(Phase.EVALUATE);
+        return boolOf(matched);
+      } catch (OperationAbortedException failure) {
+        throw failure;
       } catch (Exception failure) {
+        if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         return newErr(failure, "%s", failure.getMessage());
       }
     }
@@ -512,6 +523,9 @@ class EvalAttr extends AbstractEval
     try {
       return adapter.nativeToValue(attr.resolve(ctx));
     } catch (Exception e) {
+      if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       return newErr(e, e.toString());
     }
   }

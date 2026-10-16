@@ -57,10 +57,12 @@ public interface EnvOption {
   }
 
   /**
-   * ClearMacros options clears all parser macros.
+   * Removes all macros configured before this option is applied.
    *
-   * <p>Clearing macros will ensure CEL expressions can only contain linear evaluation paths, as
-   * comprehensions such as `all` and `exists` are enabled only via macros.
+   * <p>This removes standard comprehension macro syntax such as {@code all} and {@code exists} when
+   * used after the standard library option. It does not impose an evaluation resource bound.
+   *
+   * @return option that clears configured macros
    */
   static EnvOption clearMacros() {
     return e -> e.applyConfiguration(env -> env.macros.clear());
