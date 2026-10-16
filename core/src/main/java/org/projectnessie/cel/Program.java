@@ -17,7 +17,19 @@ package org.projectnessie.cel;
 
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** An executable CEL program created from an {@link Ast}. */
+/**
+ * A reusable executable CEL program created from an {@link Ast}.
+ *
+ * <p>Programs created by {@link Env} are fully configured before they are returned and may be
+ * evaluated concurrently, subject to the thread-safety of configured custom adapters, providers,
+ * functions, decorators, global activations, and caller inputs. Reuse a program rather than parsing
+ * and planning the same expression for every input.
+ *
+ * <p>{@link #eval(Object)} is an unrestricted fast path. Use {@link #evalCancelable(Object,
+ * ResourceLimits)} for cooperative elapsed-time, executing-thread CPU/allocation, and cancellation
+ * controls. Neither path imposes a result-size or retained-heap limit, so hosts accepting untrusted
+ * expressions or inputs remain responsible for suitable admission policy and isolation.
+ */
 public interface Program {
 
   /**
@@ -36,7 +48,9 @@ public interface Program {
    * Evaluates this program against the supplied variables.
    *
    * <p>{@code vars} may be an {@link org.projectnessie.cel.interpreter.Activation} or a Java map
-   * from variable names to values accepted by the configured type adapter.
+   * from variable names to values accepted by the configured type adapter. The lower-level
+   * activation factory also accepts {@link java.util.function.Function} and {@link
+   * org.projectnessie.cel.interpreter.ActivationFunction}.
    *
    * <p>The caller retains ownership of {@code vars} and every value reachable from it. Some input
    * adapters retain live views of mutable Java values, so mutations completed before a later call
@@ -54,17 +68,53 @@ public interface Program {
    * <p>A CEL evaluation error is returned as an error {@link Val}. An unexpected internal Java
    * failure is thrown as a {@link RuntimeException}.
    *
-   * @param vars activation or Java map containing input variables
+   * @param vars input accepted by {@link
+   *     org.projectnessie.cel.interpreter.Activation#newActivation(Object)}
    * @return the CEL value and per-evaluation details
+   * @throws RuntimeException if the activation is invalid or an unexpected Java failure occurs
    */
   EvalResult eval(Object vars);
+
+  /**
+   * Creates a cancellation-only one-shot evaluation handle.
+   *
+   * <p>The returned handle performs evaluation synchronously on the thread calling {@link
+   * CancelableEval#eval()}. Handle creation and prior executor queueing do not count as execution.
+   *
+   * @param vars evaluation input
+   * @return one-shot controlled evaluation
+   * @throws UnsupportedOperationException if a third-party program implementation does not support
+   *     controlled evaluation
+   */
+  default CancelableEval evalCancelable(Object vars) {
+    return evalCancelable(vars, ResourceLimits.unlimited());
+  }
+
+  /**
+   * Creates a one-shot evaluation handle with cooperative cancellation and resource limits.
+   *
+   * <p>Cancellation and limit exhaustion throw {@link OperationAbortedException}; they are not CEL
+   * error values. Limits are measured from the start of {@link CancelableEval#eval()} and are
+   * checked cooperatively.
+   *
+   * @param vars evaluation input
+   * @param limits immutable limits for this invocation
+   * @return one-shot controlled evaluation
+   * @throws NullPointerException if {@code limits} is {@code null}
+   * @throws UnsupportedOperationException if a third-party program implementation does not support
+   *     controlled evaluation
+   */
+  default CancelableEval evalCancelable(Object vars, ResourceLimits limits) {
+    return ProgramControls.newEvaluation(this, vars, limits);
+  }
 
   /**
    * Value and details associated with an evaluation result.
    *
    * <p>{@link Program#eval(Object)} returns non-null details and state. The public {@link
    * Program#newEvalResult(Val, EvalDetails)} factory retains directly supplied values, including
-   * {@code null}, for compatibility.
+   * {@code null}, for compatibility. Instances are immutable, but the referenced {@link
+   * EvalDetails} and its state may be mutable.
    */
   final class EvalResult {
     private final Val val;

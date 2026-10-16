@@ -17,7 +17,12 @@ package org.projectnessie.cel.interpreter;
 
 import java.util.Objects;
 
-/** Coster calculates the heuristic cost incurred during evaluation. */
+/**
+ * Optional low-level contract for estimating an interpretable node's evaluation cost.
+ *
+ * <p>Costs are inclusive heuristic ranges, not execution budgets or measured time. They may be used
+ * to compare plans, but do not make evaluation resource-bounded.
+ */
 public interface Coster {
   Cost cost();
 
