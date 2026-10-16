@@ -26,9 +26,14 @@ public interface ProgramOption {
   Prog apply(Prog prog);
 
   /**
-   * CustomDecorator appends an InterpreterDecorator to the program.
+   * Appends a low-level interpreter-plan decorator.
    *
-   * <p>InterpretableDecorators can be used to inspect, alter, or replace the Program plan.
+   * <p>Decorators can inspect, alter, or replace the established interpreter plan. Custom
+   * decorators are applied in insertion order; built-in optimization and state decorators may have
+   * fixed later placement. Supplying a custom decorator disables native planning for the program.
+   *
+   * @param dec decorator to append
+   * @return program configuration token
    */
   static ProgramOption customDecorator(InterpretableDecorator dec) {
     return p -> {
