@@ -29,8 +29,11 @@ import com.google.protobuf.FieldMask;
 import com.google.protobuf.Message;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -38,11 +41,19 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Db maps from file / message / enum name to file description.
+ * Mutable descriptor database used by the Protocol Buffer checker and runtime adapters.
  *
- * <p>Each Db is isolated from each other, and while information about protobuf descriptors may be
- * fetched from the global protobuf registry, no descriptors are added to this registry, else the
- * isolation guarantees of the Db object would be violated.
+ * <p>The database indexes files, messages, enum constants, and extensions by their protobuf names.
+ * It is low-level registry infrastructure; applications normally configure a {@link
+ * ProtoTypeRegistry} instead.
+ *
+ * <p>A database owns its mutable description and index state. {@link #copy()} duplicates that state
+ * while sharing immutable protobuf descriptors. Generated-versus-dynamic message representation
+ * bindings are independent between copies.
+ *
+ * <p>Registration mutates the database and is not a concurrent operation. Complete registration
+ * before sharing a database with evaluation callers. Do not mutate {@link #defaultDb}; use {@link
+ * #newDb()} to obtain an isolated database initialized with the built-in well-known types.
  */
 public final class Db {
 
@@ -79,18 +90,30 @@ public final class Db {
 
   /** NewDb creates a new `pb.Db` with an empty type name to file description map. */
   public static Db newDb() {
-    // The FileDescription objects in the default db contain lazily initialized TypeDescription
-    // values which may point to the state contained in the DefaultDb irrespective of this shallow
-    // copy; however, the type graph for a field is idempotently computed, and is guaranteed to
-    // only be initialized once thanks to atomic values within the TypeDescription objects, so it
-    // is safe to share these values across instances.
     return defaultDb.copy();
   }
 
-  /** Copy creates a copy of the current database with its own internal descriptor mapping. */
+  /**
+   * Copies this database with independent mutable indexes and type descriptions.
+   *
+   * <p>Immutable protobuf descriptors and enum/field descriptions may be shared. Changes to message
+   * representation bindings or subsequent registrations in either database are isolated from the
+   * other.
+   *
+   * @return an independent mutable copy
+   */
   public Db copy() {
-    Map<String, FileDescription> revFileDescriptorMap = new HashMap<>(this.revFileDescriptorMap);
-    List<FileDescription> files = new ArrayList<>(this.files);
+    Map<FileDescription, FileDescription> copiedDescriptions = new IdentityHashMap<>();
+    Map<String, FileDescription> revFileDescriptorMap =
+        new HashMap<>(this.revFileDescriptorMap.size());
+    this.revFileDescriptorMap.forEach(
+        (name, description) ->
+            revFileDescriptorMap.put(
+                name, copiedDescriptions.computeIfAbsent(description, FileDescription::copy)));
+    List<FileDescription> files = new ArrayList<>(this.files.size());
+    this.files.forEach(
+        description ->
+            files.add(copiedDescriptions.computeIfAbsent(description, FileDescription::copy)));
     return new Db(revFileDescriptorMap, files);
   }
 
@@ -220,35 +243,22 @@ public final class Db {
   }
 
   /**
-   * CollectFileDescriptorSet builds a file descriptor set associated with the file where the input
-   * message is declared.
+   * Collects the descriptor for a message's file and all transitive file dependencies.
+   *
+   * @param message message whose descriptor graph to traverse
+   * @return a newly allocated set in dependency-discovery order
    */
   public static Set<FileDescriptor> collectFileDescriptorSet(Message message) {
-    Set<FileDescriptor> fdMap = new LinkedHashSet<>();
-    Descriptor messageDesc = message.getDescriptorForType();
-    FileDescriptor messageFile = messageDesc.getFile();
-    fdMap.add(messageFile);
-    fdMap.addAll(messageFile.getPublicDependencies());
-
-    //    parentFile = message.ProtoReflect().Descriptor().ParentFile()
-    //    fdMap[parentFile.Path()] = parentFile
-    //    // Initialize list of dependencies
-    //    deps := make([]protoreflect.FileImport, parentFile.Imports().Len())
-    //    for i := 0; i < parentFile.Imports().Len(); i++ {
-    //      deps[i] = parentFile.Imports().Get(i)
-    //    }
-    //    // Expand list for new dependencies
-    //    for i := 0; i < len(deps); i++ {
-    //      dep := deps[i]
-    //      if _, found := fdMap[dep.Path()]; found {
-    //        continue
-    //      }
-    //      fdMap[dep.Path()] = dep.FileDescriptor
-    //      for j := 0; j < dep.FileDescriptor.Imports().Len(); j++ {
-    //        deps = append(deps, dep.FileDescriptor.Imports().Get(j))
-    //      }
-    //    }
-    return fdMap;
+    Set<FileDescriptor> descriptors = new LinkedHashSet<>();
+    Deque<FileDescriptor> pending = new ArrayDeque<>();
+    pending.add(message.getDescriptorForType().getFile());
+    while (!pending.isEmpty()) {
+      FileDescriptor descriptor = pending.removeFirst();
+      if (descriptors.add(descriptor)) {
+        pending.addAll(descriptor.getDependencies());
+      }
+    }
+    return descriptors;
   }
 
   @Override
