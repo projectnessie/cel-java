@@ -219,6 +219,87 @@ final class NativeNullIdent extends EvalIdent implements NativeNullCapability {
   }
 }
 
+final class NativeRawIdent extends EvalIdent implements NativeListSourceCapability {
+  NativeRawIdent(long id, String name, TypeAdapter adapter) {
+    super(id, name, adapter);
+  }
+
+  @Override
+  public Object evalRaw(Activation activation) {
+    return resolveRaw(activation);
+  }
+
+  @Override
+  public Val materializeResolvedList(Object value) {
+    return adapter.nativeToValue(value);
+  }
+
+  @Override
+  public Val materializeResolvedElement(Object value) {
+    return adapter.nativeToValue(value);
+  }
+
+  @Override
+  public boolean exactListSource() {
+    return false;
+  }
+}
+
+final class NativeExactAggregateIdent extends EvalExactAggregateIdent
+    implements NativeListSourceCapability {
+  NativeExactAggregateIdent(
+      long id, String name, TypeAdapter adapter, CheckedAggregateMaterializer materializer) {
+    super(id, name, adapter, materializer);
+  }
+
+  @Override
+  public Object evalRaw(Activation activation) {
+    return resolveRaw(activation);
+  }
+
+  @Override
+  public Val materializeResolvedList(Object value) {
+    return value instanceof Val val && (isError(val) || isUnknown(val))
+        ? val
+        : materializer.materialize(value);
+  }
+
+  @Override
+  public Val materializeResolvedElement(Object value) {
+    return materializer.materializeListElement(value);
+  }
+
+  @Override
+  public boolean exactListSource() {
+    return true;
+  }
+}
+
+final class NativeExactMapIdent extends EvalExactAggregateIdent
+    implements NativeMapSourceCapability {
+  NativeExactMapIdent(
+      long id, String name, TypeAdapter adapter, CheckedAggregateMaterializer materializer) {
+    super(id, name, adapter, materializer);
+  }
+
+  @Override
+  public Object evalRaw(Activation activation) {
+    return resolveRaw(activation);
+  }
+
+  @Override
+  public Val materializeResolvedMap(Object value) {
+    return value instanceof Val val && (isError(val) || isUnknown(val))
+        ? val
+        : materializer.materialize(value);
+  }
+
+  @Override
+  public boolean exactMapSource() {
+    return true;
+  }
+}
+
 class NativeIntBinary extends EvalBinary implements NativeIntCapability {
   private final NativeArithmetic operation;
 

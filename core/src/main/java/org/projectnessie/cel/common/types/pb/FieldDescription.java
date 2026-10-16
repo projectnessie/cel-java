@@ -427,11 +427,27 @@ public final class FieldDescription extends Description {
   public Object getField(Object target, TypeAdapter adapter) {
     Message message = (Message) target;
     FieldDescriptor fd = fieldDescriptorFor(message);
-    Object value = message.getField(fd);
+    return adaptDescriptorValue(message, fd, message.getField(fd), adapter);
+  }
+
+  Object rawField(Object target) {
+    Message message = (Message) target;
+    FieldDescriptor fd = fieldDescriptorFor(message);
+    return message.getField(fd);
+  }
+
+  Object adaptDescriptorValue(Object target, Object value, TypeAdapter adapter) {
+    Message message = (Message) target;
+    FieldDescriptor fd = fieldDescriptorFor(message);
+    return adaptDescriptorValue(message, fd, value, adapter);
+  }
+
+  private static Object adaptDescriptorValue(
+      Message message, FieldDescriptor fd, Object value, TypeAdapter adapter) {
     if (fd.isMapField() && value instanceof List) {
       return new ProtoMapT(adapter, fd, (List<?>) value);
     }
-    return getValueFromField(fd, message);
+    return normalizeValueFromField(fd, message, value);
   }
 
   Object adaptGeneratedValue(Object value, TypeAdapter adapter) {
@@ -452,28 +468,33 @@ public final class FieldDescription extends Description {
     return normalizeUnsignedValue(desc, value);
   }
 
+  Object exactRepeatedValue(Object value) {
+    FieldDescriptor.Type type = desc.getType();
+    if (value instanceof List
+        && (type == FieldDescriptor.Type.UINT32
+            || type == FieldDescriptor.Type.UINT64
+            || type == FieldDescriptor.Type.FIXED32
+            || type == FieldDescriptor.Type.FIXED64)) {
+      return new UnsignedLongList(desc, (List<?>) value);
+    }
+    return value;
+  }
+
   boolean isWrapper() {
     return isWellKnownType(desc);
   }
 
-  boolean generatedValueNeedsAdaptation() {
-    if (desc.isMapField()) {
-      return true;
-    }
-    FieldDescriptor.Type type = desc.getType();
-    return type == FieldDescriptor.Type.UINT32
-        || type == FieldDescriptor.Type.UINT64
-        || type == FieldDescriptor.Type.FIXED32
-        || type == FieldDescriptor.Type.FIXED64;
+  public static Object getValueFromField(FieldDescriptor desc, Message message) {
+    return normalizeValueFromField(desc, message, message.getField(desc));
   }
 
-  public static Object getValueFromField(FieldDescriptor desc, Message message) {
-
+  private static Object normalizeValueFromField(
+      FieldDescriptor desc, Message message, Object fieldValue) {
     if (!desc.isRepeated() && isWellKnownType(desc) && !message.hasField(desc)) {
       return NullValue.NULL_VALUE;
     }
 
-    Object v = message.getField(desc);
+    Object v = fieldValue;
     if (!desc.isMapField() && !desc.isRepeated()) {
       v = normalizeUnsignedValue(desc, v);
     } else if (desc.isMapField()) {
@@ -601,8 +622,17 @@ public final class FieldDescription extends Description {
       return toNative(adapter, typeDesc);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <T> T toNative(TypeAdapter conversionAdapter, Class<T> typeDesc) {
+      if (typeDesc == Map.class) {
+        Map<Object, Object> converted = new LinkedHashMap<>();
+        toJavaMap().forEach(
+            (key, value) -> converted.put(
+                conversionAdapter.valueToNative(adapter.nativeToValue(key), Object.class),
+                conversionAdapter.valueToNative(adapter.nativeToValue(value), Object.class)));
+        return (T) converted;
+      }
       return conversionAdapter.valueToNative(
           MapT.newMaybeWrappedMap(adapter, toJavaMap()), typeDesc);
     }
@@ -716,7 +746,7 @@ public final class FieldDescription extends Description {
       if (index != null) {
         return index.get(key);
       }
-      if (!scanned || entryCount() <= 1) {
+      if (!scanned || physicalEntryCount() <= 1) {
         scanned = true;
         return scan(key);
       }
@@ -759,10 +789,20 @@ public final class FieldDescription extends Description {
     }
 
     private Val scan(Val key) {
-      for (Object entry : allEntries()) {
-        Val candidate = adapter.nativeToValue(nativeEntryKey(entry));
-        if (candidate.equal(key) == True) {
-          return adapter.nativeToValue(nativeEntryValue(entry));
+      if (entries != null) {
+        for (int i = entries.size() - 1; i >= 0; i--) {
+          Object entry = entries.get(i);
+          Val candidate = adapter.nativeToValue(nativeEntryKey(entry));
+          if (candidate.equal(key) == True) {
+            return adapter.nativeToValue(nativeEntryValue(entry));
+          }
+        }
+      } else {
+        for (Object entry : map.entrySet()) {
+          Val candidate = adapter.nativeToValue(nativeEntryKey(entry));
+          if (candidate.equal(key) == True) {
+            return adapter.nativeToValue(nativeEntryValue(entry));
+          }
         }
       }
       return null;
@@ -789,7 +829,10 @@ public final class FieldDescription extends Description {
     }
 
     private Map<Object, Object> toJavaMap() {
-      Map<Object, Object> javaMap = new HashMap<>(entryCount() * 4 / 3 + 1);
+      if (entries != null) {
+        return new LinkedHashMap<>(canonicalEntries());
+      }
+      Map<Object, Object> javaMap = new LinkedHashMap<>(map.size() * 4 / 3 + 1);
       for (Object entry : allEntries()) {
         javaMap.put(nativeEntryKey(entry), nativeEntryValue(entry));
       }
@@ -797,58 +840,19 @@ public final class FieldDescription extends Description {
     }
 
     private Object nativeEntryKey(Object entry) {
-      return normalizeUnsignedValue(entryKeyDescriptor(entry), rawMapEntryValue(entry, 1));
+      return ProtoMapSupport.key(entry, keyDesc);
     }
 
     private Object nativeEntryValue(Object entry) {
-      return normalizeUnsignedValue(entryValueDescriptor(entry), rawMapEntryValue(entry, 2));
-    }
-
-    private FieldDescriptor entryKeyDescriptor(Object entry) {
-      if (entry instanceof Map.Entry<?, ?>) {
-        return keyDesc;
-      }
-      if (entry instanceof DynamicMessage) {
-        List<FieldDescriptor> fields = ((DynamicMessage) entry).getDescriptorForType().getFields();
-        if (fields.size() == 2) {
-          return fields.get(0);
-        }
-      }
-      return keyDesc;
-    }
-
-    private FieldDescriptor entryValueDescriptor(Object entry) {
-      if (entry instanceof Map.Entry<?, ?>) {
-        return valueDesc;
-      }
-      if (entry instanceof DynamicMessage) {
-        List<FieldDescriptor> fields = ((DynamicMessage) entry).getDescriptorForType().getFields();
-        if (fields.size() == 2) {
-          return fields.get(1);
-        }
-      }
-      return valueDesc;
-    }
-
-    private Object rawMapEntryValue(Object entry, int fieldNumber) {
-      if (entry instanceof Map.Entry<?, ?> mapEntry) {
-        return fieldNumber == 1 ? mapEntry.getKey() : mapEntry.getValue();
-      }
-      if (entry instanceof MapEntry<?, ?> mapEntry) {
-        return fieldNumber == 1 ? mapEntry.getKey() : mapEntry.getValue();
-      }
-      if (entry instanceof DynamicMessage dynMsg) {
-        List<FieldDescriptor> fields = dynMsg.getDescriptorForType().getFields();
-        if (fields.size() == 2) {
-          return dynMsg.getField(fields.get(fieldNumber - 1));
-        }
-      }
-      throw new IllegalArgumentException(
-          String.format("Unexpected %s (%s) in list of map fields", entry.getClass(), entry));
+      return ProtoMapSupport.value(entry, valueDesc);
     }
 
     private int entryCount() {
       return entries != null ? canonicalEntries().size() : map.size();
+    }
+
+    private int physicalEntryCount() {
+      return entries != null ? entries.size() : map.size();
     }
 
     private Iterable<?> allEntries() {
@@ -856,20 +860,17 @@ public final class FieldDescription extends Description {
     }
 
     private Map<Object, Object> canonicalEntries() {
-      Map<Object, Object> canonical = canonicalEntries;
-      if (canonical != null) {
-        return canonical;
+      Map<Object, Object> result = canonicalEntries;
+      if (result != null) {
+        return result;
       }
       synchronized (this) {
-        canonical = canonicalEntries;
-        if (canonical == null) {
-          canonical = new LinkedHashMap<>(entries.size() * 4 / 3 + 1);
-          for (Object entry : entries) {
-            canonical.put(nativeEntryKey(entry), nativeEntryValue(entry));
-          }
-          canonicalEntries = canonical;
+        result = canonicalEntries;
+        if (result == null) {
+          result = ProtoMapSupport.canonicalMap(entries, keyDesc, valueDesc);
+          canonicalEntries = result;
         }
-        return canonical;
+        return result;
       }
     }
 
@@ -896,7 +897,7 @@ public final class FieldDescription extends Description {
     }
   }
 
-  private static Object normalizeUnsignedValue(FieldDescriptor desc, Object value) {
+  static Object normalizeUnsignedValue(FieldDescriptor desc, Object value) {
     if (value instanceof Number number) {
       return switch (desc.getType()) {
         case UINT32, FIXED32 -> ULong.valueOf(Integer.toUnsignedLong(number.intValue()));
