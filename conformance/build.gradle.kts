@@ -67,7 +67,7 @@ dependencies {
   implementation(project(":cel-generated-pb3"))
   implementation(testFixtures(project(":cel-generated-pb3")))
 
-  implementation(libs.protobuf.java) { version { strictly(libs.versions.protobuf3.get()) } }
+  implementation(libs.protobuf.java3)
 
   testImplementation(testFixtures(project(":cel-core")))
 
@@ -82,7 +82,8 @@ configure<ProtobufExtension> {
   // Configure the protoc executable
   protoc {
     // Download from repositories
-    artifact = "com.google.protobuf:protoc:${libs.versions.protobuf3.get()}"
+    artifact =
+      "com.google.protobuf:protoc:${libs.protobuf.java3.get().versionConstraint.preferredVersion}"
   }
 }
 
