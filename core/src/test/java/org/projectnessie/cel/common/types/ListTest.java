@@ -217,6 +217,7 @@ public abstract class ListTest<CONSTRUCT> {
     checkList(doubleTc, doubleListVal);
   }
 
+  @SuppressWarnings("removal")
   Lister checkList(TestData<CONSTRUCT> tc, Val listVal) {
     assertThat(listVal)
         .isInstanceOf(Lister.class)

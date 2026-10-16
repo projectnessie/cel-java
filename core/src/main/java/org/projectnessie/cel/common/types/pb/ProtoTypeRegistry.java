@@ -23,6 +23,8 @@ import static org.projectnessie.cel.common.types.DurationT.DurationType;
 import static org.projectnessie.cel.common.types.Err.anyWithEmptyType;
 import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.noSuchField;
+import static org.projectnessie.cel.common.types.Err.rangeError;
+import static org.projectnessie.cel.common.types.Err.throwErrorAsIllegalStateException;
 import static org.projectnessie.cel.common.types.Err.unknownType;
 import static org.projectnessie.cel.common.types.Err.unsupportedRefValConversionErr;
 import static org.projectnessie.cel.common.types.IntT.IntType;
@@ -90,6 +92,7 @@ import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.TypeT;
 import org.projectnessie.cel.common.types.ref.FieldGetter;
 import org.projectnessie.cel.common.types.ref.FieldType;
+import org.projectnessie.cel.common.types.ref.TypeAdapterSupport;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Lister;
@@ -338,7 +341,7 @@ public final class ProtoTypeRegistry implements TypeRegistry {
         && value instanceof Lister) {
       return toNativeRepeatedFieldValue((Lister) value, fieldDesc);
     }
-    return value.convertToNative(field.reflectType());
+    return valueToNative(value, field.reflectType());
   }
 
   private Object toNativeRepeatedFieldValue(Lister value, FieldDescriptor fieldDesc) {
@@ -350,7 +353,7 @@ public final class ProtoTypeRegistry implements TypeRegistry {
       if (element == NullT.NullValue && isNullPrunedMessageField(fieldDesc)) {
         continue;
       }
-      converted.add(element.convertToNative(elementType));
+      converted.add(valueToNative(element, elementType));
     }
     return converted;
   }
@@ -424,17 +427,17 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     return entries;
   }
 
-  private static Object toNativeMapEntryValue(Val value, FieldDescriptor field) {
+  private Object toNativeMapEntryValue(Val value, FieldDescriptor field) {
     return switch (field.getType()) {
-      case DOUBLE -> value.convertToNative(Double.class);
-      case FLOAT -> value.convertToNative(Float.class);
-      case INT64, SINT64, SFIXED64 -> value.convertToNative(Long.class);
-      case UINT64, FIXED64 -> value.convertToNative(ULong.class).longValue();
-      case INT32, SINT32, SFIXED32 -> value.convertToNative(Integer.class);
-      case UINT32, FIXED32 -> value.convertToNative(ULong.class).intValue();
-      case BOOL -> value.convertToNative(Boolean.class);
-      case STRING -> value.convertToNative(String.class);
-      case BYTES -> value.convertToNative(ByteString.class);
+      case DOUBLE -> valueToDouble(value);
+      case FLOAT -> valueToNative(value, Float.class);
+      case INT64, SINT64, SFIXED64 -> valueToLong(value);
+      case UINT64, FIXED64 -> valueToNative(value, ULong.class).longValue();
+      case INT32, SINT32, SFIXED32 -> valueToInt(value);
+      case UINT32, FIXED32 -> toUnsignedInt(value);
+      case BOOL -> valueToBoolean(value);
+      case STRING -> valueToNative(value, String.class);
+      case BYTES -> valueToNative(value, ByteString.class);
       case ENUM -> {
         if (value == NullT.NullValue) {
           if (field.getEnumType().getFullName().equals("google.protobuf.NullValue")) {
@@ -442,11 +445,19 @@ public final class ProtoTypeRegistry implements TypeRegistry {
           }
           throw new IllegalArgumentException("null is only valid for google.protobuf.NullValue");
         }
-        yield value.convertToNative(Integer.class);
+        yield valueToInt(value);
       }
-      case MESSAGE -> value.convertToNative(messageNativeType(field));
+      case MESSAGE -> valueToNative(value, messageNativeType(field));
       case GROUP -> throw new IllegalArgumentException("protobuf maps cannot contain group values");
     };
+  }
+
+  private int toUnsignedInt(Val value) {
+    long unsigned = valueToNative(value, ULong.class).longValue();
+    if (Long.compareUnsigned(unsigned, 0xffff_ffffL) > 0) {
+      throwErrorAsIllegalStateException(rangeError(Long.toUnsignedString(unsigned), "uint32"));
+    }
+    return (int) unsigned;
   }
 
   /**
@@ -475,7 +486,7 @@ public final class ProtoTypeRegistry implements TypeRegistry {
             continue;
           }
           if (!(v instanceof Message)) {
-            v = nativeToValue(v).convertToNative(messageNativeType(valueType));
+            v = valueToNative(nativeToValue(v), messageNativeType(valueType));
           }
         }
 
@@ -588,6 +599,41 @@ public final class ProtoTypeRegistry implements TypeRegistry {
     }
 
     return unsupportedRefValConversionErr(value);
+  }
+
+  @Override
+  public Val nativeToValue(boolean value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(byte value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(short value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(int value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(long value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(float value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(double value) {
+    return TypeAdapterSupport.nativeToValue(value);
   }
 
   void registerAllTypes(FileDescription fd) {

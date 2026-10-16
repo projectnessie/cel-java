@@ -160,6 +160,41 @@ public final class Jackson3Registry implements TypeRegistry {
     }
   }
 
+  @Override
+  public Val nativeToValue(boolean value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(byte value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(short value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(int value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(long value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(float value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(double value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
   synchronized JacksonEnumDescription enumDescription(Class<?> clazz) {
     if (!Enum.class.isAssignableFrom(clazz)) {
       throw new IllegalArgumentException("only enum allowed here");

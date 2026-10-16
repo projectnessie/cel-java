@@ -18,6 +18,7 @@ package org.projectnessie.cel.common.types.pb;
 import static org.projectnessie.cel.common.types.Err.anyWithEmptyType;
 import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.unknownType;
+import static org.projectnessie.cel.common.types.TypeT.newObjectTypeValue;
 import static org.projectnessie.cel.common.types.pb.PbTypeDescription.typeNameFromMessage;
 import static org.projectnessie.cel.common.types.ref.TypeAdapterSupport.maybeNativeToValue;
 
@@ -26,7 +27,9 @@ import com.google.protobuf.Message;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.Types;
+import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
+import org.projectnessie.cel.common.types.ref.TypeAdapterSupport;
 import org.projectnessie.cel.common.types.ref.Val;
 
 /** defaultTypeAdapter converts go native types to CEL values. */
@@ -48,6 +51,41 @@ public final class DefaultTypeAdapter implements TypeAdapter {
       return val;
     }
     return Err.unsupportedRefValConversionErr(value);
+  }
+
+  @Override
+  public Val nativeToValue(boolean value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(byte value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(short value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(int value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(long value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(float value) {
+    return TypeAdapterSupport.nativeToValue(value);
+  }
+
+  @Override
+  public Val nativeToValue(double value) {
+    return TypeAdapterSupport.nativeToValue(value);
   }
 
   /**
@@ -102,7 +140,9 @@ public final class DefaultTypeAdapter implements TypeAdapter {
         case STRING_VALUE:
           return v.getStringValue();
         case TYPE_VALUE:
-          return Types.getTypeByName(v.getTypeValue());
+          String typeName = v.getTypeValue();
+          Type type = Types.getTypeByName(typeName);
+          return type != null ? type : newObjectTypeValue(typeName);
         case UINT64_VALUE:
           return ULong.valueOf(v.getUint64Value());
         case OBJECT_VALUE:
