@@ -24,19 +24,43 @@ import com.google.api.expr.v1alpha1.Expr.CreateStruct;
 import com.google.api.expr.v1alpha1.Expr.CreateStruct.Entry;
 import com.google.api.expr.v1alpha1.Expr.Select;
 
+/**
+ * Low-level formatter for the structural representation of CEL expression protobufs.
+ *
+ * <p>The output is intended for diagnostics and debugging rather than as parseable CEL source. Use
+ * {@link org.projectnessie.cel.parser.Unparser} when a CEL-syntax representation is required.
+ */
 public final class Debug {
-  /** ToDebugString gives the unadorned string representation of the Expr. */
+  /**
+   * Formats an expression without additional metadata.
+   *
+   * @param e expression to format
+   * @return its structural debug representation
+   */
   public String toDebugString(Expr e) {
     return toAdornedDebugString(e, new EmptyDebugAdorner());
   }
 
-  /** ToAdornedDebugString gives the adorned string representation of the Expr. */
+  /**
+   * Formats an expression and appends caller-supplied metadata to each formatted node.
+   *
+   * @param e expression to format
+   * @param adorner metadata provider invoked for expression nodes and aggregate entries
+   * @return the adorned structural debug representation
+   */
   public static String toAdornedDebugString(Expr e, Adorner adorner) {
     DebugWriter w = new DebugWriter(adorner);
     w.buffer(e);
     return w.toString();
   }
 
+  /**
+   * Formats a CEL literal constant.
+   *
+   * @param c constant to format
+   * @return the CEL-like literal text, or {@code null} for the null literal
+   * @throws IllegalArgumentException if the constant kind is not set
+   */
   public static String formatLiteral(Constant c) {
     switch (c.getConstantKindCase()) {
       case BOOL_VALUE:
@@ -144,12 +168,14 @@ public final class Debug {
     }
   }
 
-  /**
-   * Adorner returns debug metadata that will be tacked on to the string representation of an
-   * expression.#
-   */
+  /** Supplies optional metadata appended to nodes in an adorned debug representation. */
   public interface Adorner {
-    /** GetMetadata for the input context. */
+    /**
+     * Returns metadata for a formatted expression node or aggregate entry.
+     *
+     * @param ctx the {@link Expr} or {@link Entry} currently being formatted
+     * @return text to append, commonly an empty string
+     */
     String getMetadata(Object ctx);
   }
 
@@ -160,13 +186,22 @@ public final class Debug {
     }
   }
 
-  /** debugWriter is used to print out pretty-printed debug strings. */
+  /**
+   * Stateful writer for one structural expression representation.
+   *
+   * <p>Instances accumulate output and are not thread-safe.
+   */
   public static final class DebugWriter {
     final Adorner adorner;
     final StringBuilder buffer;
     int indent;
     boolean lineStart;
 
+    /**
+     * Creates an empty writer using the supplied metadata provider.
+     *
+     * @param a metadata provider
+     */
     public DebugWriter(Adorner a) {
       this.adorner = a;
       this.buffer = new StringBuilder();
@@ -387,6 +422,8 @@ public final class Debug {
       }
     }
 
+    /** Returns all output accumulated by this writer. */
+    @Override
     public String toString() {
       return buffer.toString();
     }

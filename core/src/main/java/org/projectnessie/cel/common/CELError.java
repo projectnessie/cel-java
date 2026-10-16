@@ -18,8 +18,10 @@ package org.projectnessie.cel.common;
 import java.util.Objects;
 
 /**
- * Note: This class is called {@code Error} in Go, but that name is occupied by {@code
- * java.lang.Error}.
+ * One parse or type-check diagnostic with a source location.
+ *
+ * <p>The optional exception retains the originating Java failure for diagnostics; equality and
+ * ordering use the location and message only.
  */
 public final class CELError implements Comparable<CELError> {
   private static final char dot = '.';
@@ -30,20 +32,24 @@ public final class CELError implements Comparable<CELError> {
   private final String message;
   private final Exception exception;
 
+  /** Creates a diagnostic. */
   public CELError(Exception e, Location location, String message) {
     this.exception = e;
     this.location = location;
     this.message = message;
   }
 
+  /** Returns the originating exception, or {@code null} when no exception was recorded. */
   public Exception getException() {
     return exception;
   }
 
+  /** Returns the source location associated with the diagnostic. */
   public Location getLocation() {
     return location;
   }
 
+  /** Returns the human-readable diagnostic message without source decoration. */
   public String getMessage() {
     return message;
   }
@@ -79,7 +85,7 @@ public final class CELError implements Comparable<CELError> {
     return "Error{" + "location=" + location + ", message='" + message + '\'' + '}';
   }
 
-  /** ToDisplayString decorates the error message with the source location. */
+  /** Returns the message decorated with source description, location, and an available snippet. */
   public String toDisplayString(Source source) {
     StringBuilder result =
         new StringBuilder(

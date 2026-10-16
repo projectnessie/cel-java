@@ -31,6 +31,7 @@ import java.util.HashMap;
 import java.util.Map;
 import org.projectnessie.cel.common.types.ref.Type;
 
+/** Lookup utilities for canonical built-in CEL runtime type values. */
 public final class Types {
 
   private Types() {}

@@ -17,6 +17,13 @@ package org.projectnessie.cel.parser;
 
 import com.google.api.expr.v1alpha1.Expr;
 
+/**
+ * Grammar node capable of converting itself through a {@link CelExprBuilder}.
+ *
+ * <p>This internal bridge remains public for compatibility but is not an external parser extension
+ * point because the corresponding builder uses package-private node types.
+ */
 public interface CelExprNode {
+  /** Converts this grammar node into a protobuf CEL expression. */
   Expr toCelExpr(CelExprBuilder builder);
 }
