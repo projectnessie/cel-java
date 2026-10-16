@@ -79,7 +79,12 @@ final class Prog implements Program, Coster {
   public EvalResult eval(Object input) {
     Val v;
 
-    EvalDetails evalDetails = new EvalDetails(state);
+    EvalState resultState =
+        evalOpts.contains(EvalOption.OptTrackState)
+                || evalOpts.contains(EvalOption.OptExhaustiveEval)
+            ? state
+            : newEvalState();
+    EvalDetails evalDetails = new EvalDetails(resultState);
 
     try {
       // Build a hierarchical activation if there are default vars set.

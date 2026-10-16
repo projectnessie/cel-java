@@ -80,6 +80,16 @@ public final class FileDescription {
   }
 
   /**
+   * Returns a file description whose mutable containers and type representation bindings are
+   * independent of this description.
+   */
+  FileDescription copy() {
+    Map<String, PbTypeDescription> copiedTypes = new HashMap<>(types.size());
+    types.forEach((name, type) -> copiedTypes.put(name, type.copy()));
+    return new FileDescription(copiedTypes, new HashMap<>(enums), new HashMap<>(extensions));
+  }
+
+  /**
    * GetEnumDescription returns an EnumDescription for a qualified enum value name declared within
    * the .proto file.
    */

@@ -85,25 +85,26 @@ CEL protobuf classes for different protobuf runtime choices.
 
 ### Basic scripts
 
-The `cel-tools` artifact provides `ScriptHost` as a simple entry point for producing reusable
-`Script` instances.
+The `cel-tools` artifact provides `ScriptCompiler` as a configuration-first entry point for
+producing reusable `Script` instances. Configure a compiler once, compile one or more source
+expressions, then evaluate each script repeatedly with different inputs.
 
 ```java
 import java.util.HashMap;
 import java.util.Map;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.tools.Script;
-import org.projectnessie.cel.tools.ScriptHost;
+import org.projectnessie.cel.tools.ScriptCompiler;
+import org.projectnessie.cel.tools.ScriptException;
 
 public class MyClass {
-  public void myScriptUsage() {
-    ScriptHost scriptHost = ScriptHost.newBuilder().build();
-
-    Script script = scriptHost.buildScript("x + ' ' + y")
+  public void myScriptUsage() throws ScriptException {
+    ScriptCompiler compiler = ScriptCompiler.newBuilder()
         .withDeclarations(
             Decls.newVar("x", Decls.String),
             Decls.newVar("y", Decls.String))
         .build();
+    Script script = compiler.compile("x + ' ' + y");
 
     Map<String, Object> arguments = new HashMap<>();
     arguments.put("x", "hello");
@@ -115,6 +116,10 @@ public class MyClass {
   }
 }
 ```
+
+`ScriptHost` remains available for source compatibility but is deprecated. Its source-first
+builders also contribute types to a host-wide cumulative registry, so new integrations should use
+the immutable, configuration-first `ScriptCompiler`.
 
 ### Protobuf objects
 
@@ -131,12 +136,9 @@ message MyPojo {
 
 ```java
 public class MyClass {
-  public Boolean evalWithProtobuf() {
-    ScriptHost scriptHost = ScriptHost.newBuilder().build();
-
-    Script script =
-        scriptHost
-            .buildScript("inp.Property1 == checkName")
+  public Boolean evalWithProtobuf() throws ScriptException {
+    ScriptCompiler compiler =
+        ScriptCompiler.newBuilder()
             .withDeclarations(
                 // protobuf types need the type's full name
                 Decls.newVar("inp", Decls.newObjectType(MyPojo.getDescriptor().getFullName())),
@@ -144,6 +146,7 @@ public class MyClass {
             // protobuf types need the default instance
             .withTypes(MyPojo.getDefaultInstance())
             .build();
+    Script script = compiler.compile("inp.Property1 == checkName");
 
     MyPojo pojo = MyPojo.newBuilder().setProperty1("test").build();
 
@@ -168,12 +171,9 @@ annotations such as `@JsonProperty`.
 import org.projectnessie.cel.types.jackson3.Jackson3Registry;
 
 public class MyClass {
-  public Boolean evalWithJacksonObject(MyInput input, String checkName) {
-    ScriptHost scriptHost = ScriptHost.newBuilder()
+  public Boolean evalWithJacksonObject(MyInput input, String checkName) throws ScriptException {
+    ScriptCompiler compiler = ScriptCompiler.newBuilder()
         .registry(Jackson3Registry.newRegistry())
-        .build();
-
-    Script script = scriptHost.buildScript("inp.name == checkName")
         .withDeclarations(
             // types for Jackson need the fully qualified class name
             Decls.newVar("inp", Decls.newObjectType(MyInput.class.getName())),
@@ -181,6 +181,7 @@ public class MyClass {
         // Register the Jackson object input type as a java.lang.Class.
         .withTypes(MyInput.class)
         .build();
+    Script script = compiler.compile("inp.name == checkName");
 
     Map<String, Object> arguments = new HashMap<>();
     arguments.put("inp", input);
@@ -224,8 +225,8 @@ import java.util.HashMap;
 import java.util.Map;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.tools.Script;
+import org.projectnessie.cel.tools.ScriptCompiler;
 import org.projectnessie.cel.tools.ScriptException;
-import org.projectnessie.cel.tools.ScriptHost;
 
 public class AuthorizationExample {
   private static final String EXPRESSION =
@@ -238,15 +239,14 @@ public class AuthorizationExample {
 
   public AuthorizationExample() throws ScriptException {
     condition =
-        ScriptHost.newBuilder()
-            .build()
-            .buildScript(EXPRESSION)
+        ScriptCompiler.newBuilder()
             .withDeclarations(
                 Decls.newVar("resource.service", Decls.String),
                 Decls.newVar("resource.type", Decls.String),
                 Decls.newVar("resource.name", Decls.String),
                 Decls.newVar("request.time", Decls.Timestamp))
-            .build();
+            .build()
+            .compile(EXPRESSION);
   }
 
   public boolean grants(String service, String type, String name, Instant requestTime) {
@@ -282,7 +282,7 @@ Examples are:
 
 - [`StdLibrary`](./core/src/main/java/org/projectnessie/cel/Library.java)
 - [`StringsLib`](./core/src/main/java/org/projectnessie/cel/extension/StringsLib.java)
-- [`MyLib` in `ScriptHostTest`](./tools/src/test/java/org/projectnessie/cel/tools/ScriptHostTest.java)
+- [`CountingStringToIntLibrary` in `ScriptCompilerTest`](./tools/src/test/java/org/projectnessie/cel/tools/ScriptCompilerTest.java)
 - CEL-Go examples for [encoders](https://github.com/google/cel-go/blob/master/ext/encoders.go) and
   [strings](https://github.com/google/cel-go/blob/master/ext/strings.go)
 
@@ -291,9 +291,9 @@ passed to the runtime function as the first argument. This is the right place fo
 helpers such as resource-name parsing. Such helpers are host extensions, not portable CEL standard
 functions.
 
-`ScriptHost` currently builds scripts with CEL's standard library. Hosts that need stricter function
-or macro subsets can use the lower-level `Env.newCustomEnv(...)` API; `ScriptHost` does not
-currently expose a no-standard-library construction option.
+`ScriptCompiler` builds scripts with CEL's standard library. Applications that need stricter
+function or macro subsets can use the lower-level `Env.newCustomEnv(...)` API; `ScriptCompiler`
+does not currently expose a no-standard-library construction option.
 
 ## Artifacts
 
@@ -301,7 +301,7 @@ currently expose a no-standard-library construction option.
 
 | Need | Use |
 | --- | --- |
-| Normal embedding with `ScriptHost` | `cel-tools` plus exactly one of `cel-generated-pb` or `cel-generated-pb3` |
+| Normal embedding with `ScriptCompiler` | `cel-tools` plus exactly one of `cel-generated-pb` or `cel-generated-pb3` |
 | Dependency isolation / relocated protobuf dependencies | `cel-standalone` |
 | Jackson 3 object access | `cel-tools` or `cel-core` plus `cel-jackson3` and one generated protobuf artifact |
 | Jackson 2 object access | `cel-tools` or `cel-core` plus `cel-jackson` and one generated protobuf artifact |

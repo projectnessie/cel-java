@@ -27,7 +27,17 @@ import org.projectnessie.cel.common.types.ref.TypeProvider;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.parser.Macro;
 
-/** EnvOption is a functional interface for configuring the environment. */
+/**
+ * Configuration token applied while creating or extending an {@link Env}.
+ *
+ * <p>Built-in options must be applied while an {@link Env} is being created or extended and before
+ * its first check. Applying a built-in option to an environment after its first check throws {@link
+ * IllegalStateException}. Options are order-sensitive where documented.
+ *
+ * <p>The static factories are the supported way to configure built-in environment state. Custom
+ * implementations must return the environment to use for subsequent options and must not return
+ * {@code null}.
+ */
 @FunctionalInterface
 public interface EnvOption {
   Env apply(Env e);
@@ -53,36 +63,33 @@ public interface EnvOption {
    * comprehensions such as `all` and `exists` are enabled only via macros.
    */
   static EnvOption clearMacros() {
-    return e -> {
-      e.macros.clear();
-      return e;
-    };
+    return e -> e.applyConfiguration(env -> env.macros.clear());
   }
 
   /**
-   * CustomTypeAdapter swaps the default ref.TypeAdapter implementation with a custom one.
+   * Replaces the environment's type adapter.
    *
-   * <p>Note: This option must be specified before the Types and TypeDescs options when used
-   * together.
+   * <p>The adapter is retained, not copied; complete mutable configuration before concurrent
+   * environment use.
+   *
+   * @param adapter adapter for Java-to-CEL value conversion
+   * @return option that installs {@code adapter}
    */
   static EnvOption customTypeAdapter(TypeAdapter adapter) {
-    return e -> {
-      e.adapter = adapter;
-      return e;
-    };
+    return e -> e.applyConfiguration(env -> env.adapter = adapter);
   }
 
   /**
-   * CustomTypeProvider swaps the default ref.TypeProvider implementation with a custom one.
+   * Replaces the environment's type provider.
    *
-   * <p>Note: This option must be specified before the Types and TypeDescs options when used
-   * together.
+   * <p>Apply this option before {@link #types(List)} when both are used. The provider is retained,
+   * not copied; complete mutable configuration before concurrent environment use.
+   *
+   * @param provider provider for CEL type and field lookup
+   * @return option that installs {@code provider}
    */
   static EnvOption customTypeProvider(TypeProvider provider) {
-    return e -> {
-      e.provider = provider;
-      return e;
-    };
+    return e -> e.applyConfiguration(env -> env.provider = provider);
   }
 
   /**
@@ -95,10 +102,7 @@ public interface EnvOption {
   static EnvOption declarations(List<Decl> decls) {
     // TODO: provide an alternative means of specifying declarations that doesn't refer
     //  to the underlying proto implementations.
-    return e -> {
-      e.declarations.addAll(decls);
-      return e;
-    };
+    return e -> e.applyConfiguration(env -> env.declarations.addAll(decls));
   }
 
   static EnvOption declarations(Decl... decls) {
@@ -108,9 +112,7 @@ public interface EnvOption {
   /** Features sets the given feature flags. See list of Feature constants above. */
   static EnvOption features(EnvFeature... flags) {
     return e -> {
-      for (EnvFeature flag : flags) {
-        e.setFeature(flag);
-      }
+      e.setFeatures(flags);
       return e;
     };
   }
@@ -137,10 +139,7 @@ public interface EnvOption {
    * <p>Note: This option must be specified after ClearMacros if used together.
    */
   static EnvOption macros(List<Macro> macros) {
-    return e -> {
-      e.macros.addAll(macros);
-      return e;
-    };
+    return e -> e.applyConfiguration(env -> env.macros.addAll(macros));
   }
 
   /**
@@ -151,10 +150,7 @@ public interface EnvOption {
    * `Expr{expression: 'a &lt; b'}` instead of having to write `google.type.Expr{...}`.
    */
   static EnvOption container(String name) {
-    return e -> {
-      e.container = e.container.extend(name(name));
-      return e;
-    };
+    return e -> e.applyConfiguration(env -> env.container = env.container.extend(name(name)));
   }
 
   /**
@@ -209,38 +205,50 @@ public interface EnvOption {
    * preserved between compilations even as the container evolves.
    */
   static EnvOption abbrevs(String... qualifiedNames) {
-    return e -> {
-      e.container = e.container.extend(Container.abbrevs(qualifiedNames));
-      return e;
-    };
+    return e ->
+        e.applyConfiguration(
+            env -> env.container = env.container.extend(Container.abbrevs(qualifiedNames)));
   }
 
   /**
-   * Types adds one or more type declarations to the environment, allowing for construction of
-   * type-literals whose definitions are included in the common expression built-in set.
+   * Registers native type descriptions with the environment's type registry.
    *
-   * <p>The input types may either be instances of `proto.Message` or `ref.Type`. Any other type
-   * provided to this option will result in an error.
+   * <p>Supported descriptions depend on the configured {@link TypeRegistry}. The default Protobuf
+   * registry accepts Protobuf message instances and CEL {@link
+   * org.projectnessie.cel.common.types.ref.Type} values.
    *
-   * <p>Well-known protobuf types within the `google.protobuf.*` package are included in the
-   * standard environment by default.
+   * <p>Well-known Protobuf types in {@code google.protobuf} are included in the default registry.
+   * Apply {@link #customTypeProvider(TypeProvider)} before this option when using a custom
+   * registry. The list is read and the registry is mutated when this option is applied.
    *
-   * <p>Note: This option must be specified after the CustomTypeProvider option when used together.
+   * @param addTypes native type descriptions to register
+   * @return option that registers {@code addTypes}
+   * @throws RuntimeException when the configured provider is not a type registry or a type is not
+   *     supported
    */
   static EnvOption types(List<Object> addTypes) {
-    return e -> {
-      if (!(e.provider instanceof TypeRegistry reg)) {
-        throw new RuntimeException(
-            String.format(
-                "custom types not supported by provider: %s", e.provider.getClass().getName()));
-      }
-      for (Object t : addTypes) {
-        reg.register(t);
-      }
-      return e;
-    };
+    return e ->
+        e.applyConfiguration(
+            env -> {
+              if (!(env.provider instanceof TypeRegistry reg)) {
+                throw new RuntimeException(
+                    String.format(
+                        "custom types not supported by provider: %s",
+                        env.provider.getClass().getName()));
+              }
+              for (Object t : addTypes) {
+                reg.register(t);
+              }
+            });
   }
 
+  /**
+   * Registers native type descriptions with the environment's type registry.
+   *
+   * @param addTypes native type descriptions to register
+   * @return option that registers {@code addTypes}
+   * @see #types(List)
+   */
   static EnvOption types(Object... addTypes) {
     return types(asList(addTypes));
   }

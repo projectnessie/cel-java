@@ -18,6 +18,7 @@ package org.projectnessie.cel.checker;
 import com.google.api.expr.v1alpha1.Decl;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Scopes represents nested Decl sets where the Scopes value contains a Groups containing all
@@ -39,7 +40,7 @@ public final class Scopes {
    * is added with Push.
    */
   public static Scopes newScopes() {
-    return new Scopes(null, newGroup());
+    return new Scopes(null, newRootGroup());
   }
 
   /** Push creates a new Scopes value which references the current Scope as its parent. */
@@ -145,5 +146,11 @@ public final class Scopes {
 
   static Group newGroup() {
     return new Group(new HashMap<>(), new HashMap<>());
+  }
+
+  private static Group newRootGroup() {
+    // CheckerEnv lazily caches provider-resolved identifiers in the shared root scope during
+    // checking. Function declarations are fully configured before that scope is shared.
+    return new Group(new ConcurrentHashMap<>(), new HashMap<>());
   }
 }
