@@ -48,8 +48,10 @@ public class Jackson3ScriptHostTest {
     MetaTest cmMatch = MetaTest.builder().author("foo@bar.baz").build();
     MetaTest cmNoMatch = MetaTest.builder().author("foo@foo.foo").build();
 
-    assertThat(script.execute(Boolean.class, singletonMap("param", cmMatch))).isTrue();
-    assertThat(script.execute(Boolean.class, singletonMap("param", cmNoMatch))).isFalse();
+    assertThat(script.executeWithActivation(Boolean.class, singletonMap("param", cmMatch)))
+        .isTrue();
+    assertThat(script.executeWithActivation(Boolean.class, singletonMap("param", cmNoMatch)))
+        .isFalse();
 
     script =
         scriptHost
@@ -58,8 +60,9 @@ public class Jackson3ScriptHostTest {
             .withTypes(MetaTest.class)
             .build();
 
-    assertThat(script.execute(Object.class, singletonMap("param", cmMatch))).isEqualTo(cmMatch);
-    assertThat(script.execute(ObjectT.class, singletonMap("param", cmMatch)).value())
+    assertThat(script.executeWithActivation(Object.class, singletonMap("param", cmMatch)))
+        .isEqualTo(cmMatch);
+    assertThat(script.executeWithActivation(ObjectT.class, singletonMap("param", cmMatch)).value())
         .isEqualTo(cmMatch);
   }
 
@@ -86,7 +89,7 @@ public class Jackson3ScriptHostTest {
     arguments.put("inp", pojo);
     arguments.put("checkName", checkName);
 
-    assertThat(script.execute(Boolean.class, arguments)).isTrue();
+    assertThat(script.executeWithActivation(Boolean.class, arguments)).isTrue();
   }
 
   @Test
@@ -112,7 +115,7 @@ public class Jackson3ScriptHostTest {
                     .build())
             .build();
 
-    assertThat(script.execute(Boolean.class, singletonMap("param", val))).isTrue();
+    assertThat(script.executeWithActivation(Boolean.class, singletonMap("param", val))).isTrue();
 
     // same as above, but use the 'container'
 
@@ -125,7 +128,7 @@ public class Jackson3ScriptHostTest {
             .withTypes(ObjectListEnum.class)
             .build();
 
-    assertThat(script.execute(Boolean.class, singletonMap("param", val))).isTrue();
+    assertThat(script.executeWithActivation(Boolean.class, singletonMap("param", val))).isTrue();
 
     // return the enum
 
@@ -138,7 +141,7 @@ public class Jackson3ScriptHostTest {
             .withTypes(ObjectListEnum.class)
             .build();
 
-    assertThat(script.execute(Integer.class, singletonMap("param", val)))
+    assertThat(script.executeWithActivation(Integer.class, singletonMap("param", val)))
         .isEqualTo(ClassEnum.VAL_2.ordinal());
   }
 }
