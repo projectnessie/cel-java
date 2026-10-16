@@ -20,6 +20,7 @@ nessieConfigureJava()
 
 val nonPublishedProjects =
   setOf(
+    "cel-benchmarks",
     "cel-conformance",
     "cel-quarkus-smoke-standalone",
     "cel-quarkus-smoke-core-pb3-jackson3",
