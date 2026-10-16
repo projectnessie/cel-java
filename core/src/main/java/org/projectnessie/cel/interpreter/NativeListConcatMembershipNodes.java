@@ -81,6 +81,9 @@ final class NativeScalarListConcatMembership extends EvalBinary implements Nativ
     } catch (ValueSignal failure) {
       rhsFailure = failure;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       rhsFailure = signal(newErr(failure, failure.toString()));
     }
 
@@ -136,6 +139,9 @@ final class NativeScalarListConcatMembership extends EvalBinary implements Nativ
           slowNeedle = valueSignal.value;
         }
       } catch (Exception exception) {
+        if (exception instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         exceptionalNeedle = signal(newErr(exception, exception.toString()));
       }
     }

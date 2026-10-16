@@ -26,6 +26,7 @@ import static org.projectnessie.cel.interpreter.ValueSignal.signal;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.Overloads;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
@@ -300,7 +301,9 @@ final class NativeStringMembershipEvaluation extends NativeLoopBinding
       throw signal(slowNeedle);
     }
     if (slowNeedle != null) {
+      var controller = ActivationControls.controller(parent());
       for (Val value : constructedValues) {
+        controller.checkpoint(Phase.EVALUATE);
         if (slowNeedle.equal(value) == True) {
           return true;
         }
@@ -309,7 +312,9 @@ final class NativeStringMembershipEvaluation extends NativeLoopBinding
     }
     if (slowValues != null) {
       Val needleValue = stringOf(needle);
+      var controller = ActivationControls.controller(parent());
       for (NativePositionedValue slowValue : slowValues) {
+        controller.checkpoint(Phase.EVALUATE);
         if (firstMatch != -1L && slowValue.position() >= firstMatch) {
           break;
         }

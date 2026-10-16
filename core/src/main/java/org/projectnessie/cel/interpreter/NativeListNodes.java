@@ -27,6 +27,7 @@ import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.common.types.Util.isUnknownOrError;
 import static org.projectnessie.cel.interpreter.ValueSignal.signal;
 
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.BoolT;
 import org.projectnessie.cel.common.types.Overloads;
@@ -79,6 +80,9 @@ abstract class NativeListIndex extends NativeScalarAttr {
     } catch (ValueSignal valueSignal) {
       target = valueSignal.value;
     } catch (Exception e) {
+      if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       throw signal(newErr(e, e.toString()));
     }
     if (target instanceof Val value && isError(value)) {
@@ -107,6 +111,9 @@ abstract class NativeListIndex extends NativeScalarAttr {
     } catch (ValueSignal valueSignal) {
       throw valueSignal;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       throw signal(newErr(failure, failure.toString()));
     }
   }
@@ -425,6 +432,9 @@ final class NativeExactSetMembership extends EvalBinary implements NativeBoolean
       } catch (ValueSignal valueSignal) {
         throw valueSignal;
       } catch (Exception failure) {
+        if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         throw signal(newErr(failure, failure.toString()));
       }
     }
@@ -502,6 +512,9 @@ final class NativeExactListEquality extends EvalEq implements NativeBooleanCapab
       } catch (ValueSignal valueSignal) {
         throw valueSignal;
       } catch (Exception failure) {
+        if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         throw signal(newErr(failure, failure.toString()));
       }
     }
@@ -563,6 +576,9 @@ final class NativeExactListInequality extends EvalNe implements NativeBooleanCap
       } catch (ValueSignal valueSignal) {
         throw valueSignal;
       } catch (Exception failure) {
+        if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
         throw signal(newErr(failure, failure.toString()));
       }
     }
@@ -682,7 +698,9 @@ abstract class NativeScalarListLiteral extends EvalList
   @Override
   public final int evalSize(Activation activation) {
     if (!constantElements) {
+      var controller = ActivationControls.controller(activation);
       for (int i = 0; i < nativeElements.length; i++) {
+        controller.checkpoint(Phase.EVALUATE);
         evalDiscarded(activation, i);
       }
     }
@@ -727,7 +745,9 @@ final class NativeBooleanListLiteral extends NativeScalarListLiteral
   public boolean evalBooleanAt(Activation activation, int index) {
     boolean selected = false;
     Val selectedSlow = null;
+    var controller = ActivationControls.controller(activation);
     for (int i = 0; i < nativeElements.length; i++) {
+      controller.checkpoint(Phase.EVALUATE);
       try {
         boolean value = ((NativeBooleanCapability) nativeElements[i]).evalBoolean(activation);
         if (i == index) {
@@ -775,7 +795,9 @@ final class NativeIntListLiteral extends NativeScalarListLiteral
   public long evalIntAt(Activation activation, int index) {
     long selected = 0L;
     Val selectedSlow = null;
+    var controller = ActivationControls.controller(activation);
     for (int i = 0; i < nativeElements.length; i++) {
+      controller.checkpoint(Phase.EVALUATE);
       try {
         long value = ((NativeIntCapability) nativeElements[i]).evalInt(activation);
         if (i == index) {
@@ -823,7 +845,9 @@ final class NativeUintListLiteral extends NativeScalarListLiteral
   public long evalUintAt(Activation activation, int index) {
     long selected = 0L;
     Val selectedSlow = null;
+    var controller = ActivationControls.controller(activation);
     for (int i = 0; i < nativeElements.length; i++) {
+      controller.checkpoint(Phase.EVALUATE);
       try {
         long value = ((NativeUintCapability) nativeElements[i]).evalUint(activation);
         if (i == index) {
@@ -871,7 +895,9 @@ final class NativeDoubleListLiteral extends NativeScalarListLiteral
   public double evalDoubleAt(Activation activation, int index) {
     double selected = 0.0d;
     Val selectedSlow = null;
+    var controller = ActivationControls.controller(activation);
     for (int i = 0; i < nativeElements.length; i++) {
+      controller.checkpoint(Phase.EVALUATE);
       try {
         double value = ((NativeDoubleCapability) nativeElements[i]).evalDouble(activation);
         if (i == index) {
@@ -919,7 +945,9 @@ final class NativeStringListLiteral extends NativeScalarListLiteral
   public String evalStringAt(Activation activation, int index) {
     String selected = null;
     Val selectedSlow = null;
+    var controller = ActivationControls.controller(activation);
     for (int i = 0; i < nativeElements.length; i++) {
+      controller.checkpoint(Phase.EVALUATE);
       try {
         String value = ((NativeStringCapability) nativeElements[i]).evalString(activation);
         if (i == index) {
@@ -959,8 +987,10 @@ final class NativeStringListLiteral extends NativeScalarListLiteral
   }
 
   private boolean evalContainsSlowNeedle(Activation activation, Val needle) {
+    var controller = ActivationControls.controller(activation);
     if (isError(needle) || isUnknown(needle)) {
       for (Interpretable element : nativeElements) {
+        controller.checkpoint(Phase.EVALUATE);
         try {
           ((NativeStringCapability) element).evalString(activation);
         } catch (ValueSignal valueSignal) {
@@ -974,6 +1004,7 @@ final class NativeStringListLiteral extends NativeScalarListLiteral
 
     Val[] values = new Val[nativeElements.length];
     for (int i = 0; i < nativeElements.length; i++) {
+      controller.checkpoint(Phase.EVALUATE);
       try {
         values[i] = stringOf(((NativeStringCapability) nativeElements[i]).evalString(activation));
       } catch (ValueSignal valueSignal) {
@@ -984,6 +1015,7 @@ final class NativeStringListLiteral extends NativeScalarListLiteral
       }
     }
     for (Val value : values) {
+      controller.checkpoint(Phase.EVALUATE);
       if (needle.equal(value) == BoolT.True) {
         return true;
       }
@@ -994,7 +1026,9 @@ final class NativeStringListLiteral extends NativeScalarListLiteral
   private boolean evalContainsString(Activation activation, String needle) {
     int firstMatch = -1;
     Val[] slowValues = null;
+    var controller = ActivationControls.controller(activation);
     for (int i = 0; i < nativeElements.length; i++) {
+      controller.checkpoint(Phase.EVALUATE);
       try {
         String value = ((NativeStringCapability) nativeElements[i]).evalString(activation);
         if (firstMatch == -1 && needle.equals(value)) {
@@ -1015,6 +1049,7 @@ final class NativeStringListLiteral extends NativeScalarListLiteral
       StringT needleValue = stringOf(needle);
       int limit = firstMatch == -1 ? nativeElements.length : firstMatch;
       for (int i = 0; i < limit; i++) {
+        controller.checkpoint(Phase.EVALUATE);
         Val slowValue = slowValues[i];
         if (slowValue != null && needleValue.equal(slowValue) == BoolT.True) {
           return true;

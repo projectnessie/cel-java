@@ -51,6 +51,7 @@ import org.projectnessie.cel.common.types.MapT;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.internal.OperationCheckpoints;
 
 /** FieldDescription holds metadata related to fields declared within a type. */
 public final class FieldDescription extends Description {
@@ -627,10 +628,14 @@ public final class FieldDescription extends Description {
     public <T> T toNative(TypeAdapter conversionAdapter, Class<T> typeDesc) {
       if (typeDesc == Map.class) {
         Map<Object, Object> converted = new LinkedHashMap<>();
-        toJavaMap().forEach(
-            (key, value) -> converted.put(
-                conversionAdapter.valueToNative(adapter.nativeToValue(key), Object.class),
-                conversionAdapter.valueToNative(adapter.nativeToValue(value), Object.class)));
+        var controller = OperationCheckpoints.currentController();
+        for (Map.Entry<Object, Object> entry : toJavaMap().entrySet()) {
+          controller.checkpoint();
+          converted.put(
+              conversionAdapter.valueToNative(adapter.nativeToValue(entry.getKey()), Object.class),
+              conversionAdapter.valueToNative(
+                  adapter.nativeToValue(entry.getValue()), Object.class));
+        }
         return (T) converted;
       }
       return conversionAdapter.valueToNative(

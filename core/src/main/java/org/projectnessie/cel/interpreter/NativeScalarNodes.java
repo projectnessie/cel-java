@@ -36,6 +36,8 @@ import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.UnknownT.isUnknown;
 import static org.projectnessie.cel.interpreter.ValueSignal.signal;
 
+import org.projectnessie.cel.OperationAbortedException;
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.common.types.BoolT;
 import org.projectnessie.cel.common.types.DoubleT;
@@ -46,6 +48,7 @@ import org.projectnessie.cel.common.types.StringT;
 import org.projectnessie.cel.common.types.UintT;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.internal.OperationCheckpoints;
 import org.projectnessie.cel.interpreter.AttributeFactory.Attribute;
 import org.projectnessie.cel.interpreter.functions.Overload;
 
@@ -174,8 +177,15 @@ final class NativeConstantRegex extends EvalBinary implements NativeBooleanCapab
     RegexSupport.CompiledRegex compiled = null;
     Val error = null;
     try {
+      OperationCheckpoints.checkpointNow(Phase.PLAN);
       compiled = RegexSupport.compile(regexEngine, pattern);
+      OperationCheckpoints.checkpointNow(Phase.PLAN);
+    } catch (OperationAbortedException failure) {
+      throw failure;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       error = newErr(failure, "%s", failure.getMessage());
     }
     this.pattern = compiled;
@@ -194,7 +204,10 @@ final class NativeConstantRegex extends EvalBinary implements NativeBooleanCapab
     if (patternError != null) {
       throw signal(patternError);
     }
-    return pattern.find(input);
+    OperationCheckpoints.checkpointNow(Phase.EVALUATE);
+    var matched = pattern.find(input);
+    OperationCheckpoints.checkpointNow(Phase.EVALUATE);
+    return matched;
   }
 }
 

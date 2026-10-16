@@ -82,6 +82,22 @@ public class CompileBuildBench {
   }
 
   @Benchmark
+  public void envControlledCompileAndProgram(CompileState state, Blackhole blackhole) {
+    Env env =
+        newEnv(
+            declarations(
+                Decls.newVar("resource", Decls.String),
+                Decls.newVar("user", Decls.String),
+                Decls.newVar("request", Decls.Dyn),
+                Decls.newVar("items", Decls.newListType(Decls.Dyn))));
+    AstIssuesTuple ast = env.compileCancelable(state.source()).execute();
+    if (ast.hasIssues()) {
+      throw ast.getIssues().err();
+    }
+    blackhole.consume(env.programCancelable(ast.getAst()).execute());
+  }
+
+  @Benchmark
   public void scriptCompilerBuild(CompileState state, Blackhole blackhole) throws Exception {
     Script script =
         ScriptCompiler.newBuilder()

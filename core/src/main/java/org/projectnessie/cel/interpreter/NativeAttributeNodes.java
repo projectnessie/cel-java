@@ -47,6 +47,9 @@ abstract class NativeScalarAttr extends EvalAttr {
     } catch (ValueSignal valueSignal) {
       throw valueSignal;
     } catch (Exception e) {
+      if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       throw signal(newErr(e, e.toString()));
     }
   }
@@ -152,6 +155,9 @@ final class NativeStringMapObjectField extends NativeScalarAttr implements Nativ
     } catch (ValueSignal failure) {
       throw failure;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       throw signal(newErr(failure, failure.toString()));
     }
   }
@@ -193,6 +199,9 @@ class EvalExactAggregateFieldAttr extends AbstractEval implements Coster {
     } catch (ValueSignal failure) {
       throw failure;
     } catch (Exception failure) {
+      if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       throw signal(newErr(failure, failure.toString()));
     }
   }
