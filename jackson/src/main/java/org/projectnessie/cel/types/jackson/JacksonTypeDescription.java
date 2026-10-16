@@ -17,11 +17,18 @@ package org.projectnessie.cel.types.jackson;
 
 import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.JsonSerializer;
+import com.fasterxml.jackson.databind.introspect.AnnotatedMember;
 import com.fasterxml.jackson.databind.ser.BeanPropertyWriter;
 import com.fasterxml.jackson.databind.ser.PropertyWriter;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Duration;
 import com.google.protobuf.Timestamp;
+import java.lang.invoke.MethodHandle;
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.MethodType;
+import java.lang.reflect.Field;
+import java.lang.reflect.Member;
+import java.lang.reflect.Method;
 import java.time.Instant;
 import java.time.ZonedDateTime;
 import java.util.Collection;
@@ -33,7 +40,7 @@ import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.TypeT;
 import org.projectnessie.cel.common.types.pb.Checked;
-import org.projectnessie.cel.common.types.ref.FieldType;
+import org.projectnessie.cel.common.types.ref.FieldGetter;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeDescription;
 
@@ -58,12 +65,13 @@ final class JacksonTypeDescription implements TypeDescription {
     while (propIter.hasNext()) {
       PropertyWriter pw = propIter.next();
       String n = pw.getName();
+      FieldGetter getter = newFieldGetter(pw, n);
 
       JacksonFieldType ft =
           new JacksonFieldType(
               findTypeForJacksonType(pw.getType(), typeQuery),
-              target -> fromObject(target, n) != null,
-              target -> fromObject(target, n),
+              target -> getter.getFrom(target) != null,
+              getter,
               pw);
       fieldTypes.put(n, ft);
     }
@@ -139,29 +147,56 @@ final class JacksonTypeDescription implements TypeDescription {
     return elementType;
   }
 
-  boolean hasProperty(String property) {
-    return fieldTypes.containsKey(property);
-  }
-
-  Object fromObject(Object value, String property) {
-    JacksonFieldType ft = fieldTypes.get(property);
-    if (ft == null) {
-      throw new IllegalArgumentException(String.format("No property named '%s'", property));
+  private static FieldGetter newFieldGetter(PropertyWriter propertyWriter, String property) {
+    if (!(propertyWriter instanceof BeanPropertyWriter beanPropertyWriter)) {
+      return target -> {
+        throw new UnsupportedOperationException(
+            String.format(
+                "Unknown property-writer '%s' for property '%s'",
+                propertyWriter.getClass().getName(), property));
+      };
     }
-    PropertyWriter pw = ft.propertyWriter();
 
-    if (pw instanceof BeanPropertyWriter) {
+    if (propertyWriter.getClass() == BeanPropertyWriter.class) {
+      FieldGetter directGetter = newDirectGetter(beanPropertyWriter);
+      if (directGetter != null) {
+        return directGetter;
+      }
+    }
+
+    return target -> {
       try {
-        return ((BeanPropertyWriter) pw).get(value);
+        return beanPropertyWriter.get(target);
       } catch (Exception e) {
         throw new RuntimeException(e);
       }
-    } else if (pw == null) {
+    };
+  }
+
+  private static FieldGetter newDirectGetter(BeanPropertyWriter propertyWriter) {
+    AnnotatedMember annotatedMember = propertyWriter.getMember();
+    Member member = annotatedMember != null ? annotatedMember.getMember() : null;
+    try {
+      MethodHandle getter;
+      if (member instanceof Method method) {
+        getter = MethodHandles.lookup().unreflect(method);
+      } else if (member instanceof Field field) {
+        getter = MethodHandles.lookup().unreflectGetter(field);
+      } else {
+        return null;
+      }
+      MethodHandle objectGetter = getter.asType(MethodType.methodType(Object.class, Object.class));
+      return target -> invokeGetter(objectGetter, target);
+    } catch (IllegalAccessException | RuntimeException e) {
       return null;
-    } else {
-      throw new UnsupportedOperationException(
-          String.format(
-              "Unknown property-writer '%s' for property '%s'", pw.getClass().getName(), property));
+    }
+  }
+
+  private static Object invokeGetter(MethodHandle getter, Object target) {
+    try {
+      return (Object) getter.invokeExact(target);
+    } catch (Throwable e) {
+      throw new RuntimeException(e);
     }
   }
 
@@ -173,7 +208,7 @@ final class JacksonTypeDescription implements TypeDescription {
     return pbType;
   }
 
-  FieldType fieldType(String fieldName) {
+  JacksonFieldType fieldType(String fieldName) {
     return fieldTypes.get(fieldName);
   }
 

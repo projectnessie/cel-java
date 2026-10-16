@@ -24,6 +24,7 @@ import static org.projectnessie.cel.common.types.pb.Db.newDb;
 
 import com.google.api.expr.v1alpha1.Type;
 import com.google.protobuf.BoolValue;
+import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.Duration;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Int32Value;
@@ -39,6 +40,7 @@ import dev.cel.expr.conformance.proto3.TestAllTypes.NestedMessage;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -207,6 +209,42 @@ public class FieldDescriptionTest {
     assertThat(map.find(uintOf(42))).isNull();
     assertThat(map.contains(uintOf(2))).isSameAs(True);
     assertThat(map.contains(uintOf(42))).isSameAs(False);
+  }
+
+  @Test
+  void dynamicProtoMapUsesTheLastDuplicateEntry() {
+    FieldDescriptor mapField = TestAllTypes.getDescriptor().findFieldByName("map_string_int64");
+    FieldDescriptor keyField = mapField.getMessageType().findFieldByNumber(1);
+    FieldDescriptor valueField = mapField.getMessageType().findFieldByNumber(2);
+    DynamicMessage first =
+        DynamicMessage.newBuilder(mapField.getMessageType())
+            .setField(keyField, "duplicate")
+            .setField(valueField, 1L)
+            .build();
+    DynamicMessage last =
+        DynamicMessage.newBuilder(mapField.getMessageType())
+            .setField(keyField, "duplicate")
+            .setField(valueField, 2L)
+            .build();
+    DynamicMessage other =
+        DynamicMessage.newBuilder(mapField.getMessageType())
+            .setField(keyField, "other")
+            .setField(valueField, 3L)
+            .build();
+    DynamicMessage message =
+        DynamicMessage.newBuilder(TestAllTypes.getDescriptor())
+            .addRepeatedField(mapField, first)
+            .addRepeatedField(mapField, other)
+            .addRepeatedField(mapField, last)
+            .build();
+
+    ProtoTypeRegistry registry = ProtoTypeRegistry.newRegistry(TestAllTypes.getDefaultInstance());
+    Mapper map =
+        (Mapper) FieldDescription.newFieldDescription(mapField).getField(message, registry);
+
+    assertThat(map.find(stringOf("duplicate")).intValue()).isEqualTo(2L);
+    assertThat(map.size().intValue()).isEqualTo(2L);
+    assertThat(map.convertToNative(Map.class)).isEqualTo(Map.of("duplicate", 2L, "other", 3L));
   }
 
   static class TestCase {
