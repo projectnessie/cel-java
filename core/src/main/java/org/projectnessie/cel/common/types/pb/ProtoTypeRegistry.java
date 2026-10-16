@@ -93,12 +93,15 @@ import org.projectnessie.cel.common.types.TypeT;
 import org.projectnessie.cel.common.types.ref.FieldGetter;
 import org.projectnessie.cel.common.types.ref.FieldTester;
 import org.projectnessie.cel.common.types.ref.FieldType;
+import org.projectnessie.cel.common.types.ref.StandardScalarFieldProvider;
+import org.projectnessie.cel.common.types.ref.StandardScalarTypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeAdapterSupport;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Lister;
 
-public final class ProtoTypeRegistry implements TypeRegistry {
+public final class ProtoTypeRegistry
+    implements TypeRegistry, StandardScalarTypeAdapter, StandardScalarFieldProvider {
   private static final ProtoTypeRegistry DEFAULT_REGISTRY = newDefaultRegistry();
 
   private final Map<String, org.projectnessie.cel.common.types.ref.Type> revTypeMap;
