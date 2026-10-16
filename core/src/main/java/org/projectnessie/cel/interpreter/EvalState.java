@@ -18,57 +18,84 @@ package org.projectnessie.cel.interpreter;
 import org.agrona.collections.Long2ObjectHashMap;
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** EvalState tracks the values associated with expression ids during execution. */
+/**
+ * Mutable state containing values observed for expression IDs during one evaluation.
+ *
+ * <p>A state returned by {@link org.projectnessie.cel.Program#eval(Object)} belongs to that result
+ * and is not reused by another evaluation. Callers may inspect, augment, or reset it without
+ * affecting the program or another result. Instances are not thread-safe; externally synchronize
+ * access if a state is shared across threads.
+ */
 public interface EvalState {
-  /** IDs returns the list of ids with recorded values. */
+  /**
+   * Returns a snapshot of the expression IDs with recorded values.
+   *
+   * <p>The order is unspecified. Mutating the returned array does not affect this state.
+   *
+   * @return recorded expression IDs
+   */
   long[] ids();
 
   /**
-   * Value returns the observed value of the given expression id if found, and a nil false result if
-   * not.
+   * Returns the observed value for the given expression ID.
+   *
+   * @param id expression ID
+   * @return the recorded value, or {@code null} if no value is recorded
    */
   Val value(long id);
 
-  /** SetValue sets the observed value of the expression id. */
+  /**
+   * Records or replaces the observed value for an expression ID.
+   *
+   * @param id expression ID
+   * @param v value to record
+   */
   void setValue(long id, Val v);
 
-  /** Reset clears the previously recorded expression values. */
+  /** Clears all recorded expression values. */
   void reset();
 
   /**
-   * NewEvalState returns an EvalState instanced used to observe the intermediate evaluations of an
-   * expression.
+   * Creates an empty evaluation state.
+   *
+   * <p>The backing storage is allocated lazily when the first value is recorded.
+   *
+   * @return a new mutable evaluation state
    */
   static EvalState newEvalState() {
     return new EvalStateImpl();
   }
 
-  /** evalState permits the mutation of evaluation state for a given expression id. */
+  /** Default mutable {@link EvalState} implementation. */
   final class EvalStateImpl implements EvalState {
-    private final Long2ObjectHashMap<Val> values = new Long2ObjectHashMap<>();
+    private Long2ObjectHashMap<Val> values;
 
-    /** IDs implements the EvalState interface method. */
     @Override
     public long[] ids() {
+      if (values == null) {
+        return new long[0];
+      }
       return values.keySet().stream().mapToLong(l -> l).toArray();
     }
 
-    /** Value is an implementation of the EvalState interface method. */
     @Override
     public Val value(long id) {
-      return values.get(id);
+      return values != null ? values.get(id) : null;
     }
 
-    /** SetValue is an implementation of the EvalState interface method. */
     @Override
     public void setValue(long id, Val v) {
+      if (values == null) {
+        values = new Long2ObjectHashMap<>();
+      }
       values.put(id, v);
     }
 
-    /** Reset implements the EvalState interface method. */
     @Override
     public void reset() {
-      values.clear();
+      if (values != null) {
+        values.clear();
+      }
     }
   }
 }

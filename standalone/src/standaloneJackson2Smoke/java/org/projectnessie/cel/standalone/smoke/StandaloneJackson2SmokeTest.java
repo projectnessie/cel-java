@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.tools.Script;
-import org.projectnessie.cel.tools.ScriptHost;
+import org.projectnessie.cel.tools.ScriptCompiler;
 import org.projectnessie.cel.types.jackson.JacksonRegistry;
 
 class StandaloneJackson2SmokeTest {
@@ -34,23 +34,21 @@ class StandaloneJackson2SmokeTest {
     assertThat(Class.forName("com.fasterxml.jackson.databind.ObjectMapper")).isNotNull();
     assertThat(Class.forName("com.google.api.expr.v1alpha1.Decl")).isNotNull();
 
-    ScriptHost scriptHost = ScriptHost.newBuilder().registry(JacksonRegistry.newRegistry()).build();
     Script script =
-        scriptHost
-            .buildScript(
-                "input.name == 'reports' && input.labels.exists(label, label == 'finance')")
+        ScriptCompiler.newBuilder()
+            .registry(JacksonRegistry.newRegistry())
             .withDeclarations(Decls.newVar("input", Decls.newObjectType(Input.class.getName())))
             .withTypes(Input.class)
-            .build();
+            .build()
+            .compile("input.name == 'reports' && input.labels.exists(label, label == 'finance')");
 
     assertThat(script.execute(Boolean.class, singletonMap("input", new Input("reports")))).isTrue();
 
     Script re2 =
-        ScriptHost.newBuilder()
+        ScriptCompiler.newBuilder()
             .regexEngine(RegexEngine.RE2)
             .build()
-            .buildScript("'abc'.matches('b')")
-            .build();
+            .compile("'abc'.matches('b')");
     assertThat(re2.execute(Boolean.class, Map.of())).isTrue();
   }
 
