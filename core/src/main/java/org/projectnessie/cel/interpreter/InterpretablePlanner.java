@@ -52,6 +52,7 @@ public interface InterpretablePlanner {
         cont,
         checked.getReferenceMapMap(),
         checked.getTypeMapMap(),
+        PlanningPolicy.ESTABLISHED_ONLY,
         decorators);
   }
 
@@ -68,7 +69,16 @@ public interface InterpretablePlanner {
       Map<Long, Reference> refMap,
       Map<Long, Type> typeMap,
       InterpretableDecorator... decorators) {
-    return new Planner(disp, provider, adapter, attrFactory, cont, refMap, typeMap, decorators);
+    return new Planner(
+        disp,
+        provider,
+        adapter,
+        attrFactory,
+        cont,
+        refMap,
+        typeMap,
+        PlanningPolicy.ESTABLISHED_ONLY,
+        decorators);
   }
 
   /**
@@ -84,8 +94,14 @@ public interface InterpretablePlanner {
       Container cont,
       InterpretableDecorator... decorators) {
     return new Planner(
-        disp, provider, adapter, attrFactory, cont, new HashMap<>(), new HashMap<>(), decorators);
+        disp,
+        provider,
+        adapter,
+        attrFactory,
+        cont,
+        new HashMap<>(),
+        new HashMap<>(),
+        PlanningPolicy.ESTABLISHED_ONLY,
+        decorators);
   }
-
-  /** planner is an implementatio of the interpretablePlanner interface. */
 }

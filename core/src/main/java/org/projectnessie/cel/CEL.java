@@ -38,6 +38,7 @@ import com.google.api.expr.v1alpha1.Type;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.projectnessie.cel.interpreter.Activation;
 import org.projectnessie.cel.interpreter.Activation.PartialActivation;
 import org.projectnessie.cel.interpreter.AttributePattern;
@@ -50,10 +51,23 @@ import org.projectnessie.cel.interpreter.Interpreter;
 public final class CEL {
 
   /**
-   * newProgram creates a program instance with an environment, an ast, and an optional list of
-   * ProgramOption values.
+   * Creates an executable program for an AST in an environment.
    *
-   * <p>If the program cannot be configured the prog will be nil, with a non-nil error response.
+   * <p>Options are applied in argument order. A checked AST provides type and reference metadata
+   * used during planning; an unchecked AST is accepted but may require more runtime dispatch. The
+   * resulting program can be reused for multiple evaluations.
+   *
+   * <p>Native evaluation, when permitted by the selected options, is planner-selected evaluation
+   * over supported Java-native representations. Unsupported shapes fall back to the established
+   * evaluator; this does not generate Java or native machine code.
+   *
+   * @param e environment supplying types and name resolution
+   * @param ast parsed or checked expression
+   * @param opts program configuration tokens, normally created by {@link ProgramOption} factories
+   * @return reusable executable program
+   * @throws NullPointerException if {@code e}, {@code ast}, or {@code opts} is {@code null}, or if
+   *     an option is {@code null} or returns {@code null}
+   * @throws RuntimeException if program planning or option application fails
    */
   public static Program newProgram(Env e, Ast ast, ProgramOption... opts) {
     // Build the dispatcher, interpreter, and default program value.
@@ -86,7 +100,12 @@ public final class CEL {
 
     Interpreter interp =
         newInterpreter(
-            disp, e.getContainer(), e.getTypeProvider(), e.getTypeAdapter(), p.attrFactory);
+            disp,
+            e.getContainer(),
+            e.getTypeProvider(),
+            e.getTypeAdapter(),
+            p.attrFactory,
+            nativePlanningPermitted(p.evalOpts, p.decorators));
     p.interpreter = interp;
 
     // Translate the EvalOption flags into InterpretableDecorator instances.
@@ -156,6 +175,13 @@ public final class CEL {
     p.interpretable = p.interpreter.newInterpretable(ast.getExpr(), ast.refMap, ast.typeMap, decs);
 
     return p;
+  }
+
+  static boolean nativePlanningPermitted(
+      Set<EvalOption> evalOptions, List<InterpretableDecorator> decorators) {
+    return decorators.isEmpty()
+        && (evalOptions.isEmpty()
+            || evalOptions.size() == 1 && evalOptions.contains(EvalOption.OptOptimize));
   }
 
   /** CheckedExprToAst converts a checked expression proto message to an Ast. */
