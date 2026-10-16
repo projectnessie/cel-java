@@ -29,6 +29,7 @@ import static org.projectnessie.cel.interpreter.Coster.costOf;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.IterableT;
 import org.projectnessie.cel.common.types.IteratorT;
@@ -60,9 +61,11 @@ class EvalList extends AbstractEval implements Coster {
   /** Eval implements the Interpretable interface method. */
   @Override
   public Val eval(Activation ctx) {
+    var controller = ActivationControls.controller(ctx);
     List<Val> elemVals = new ArrayList<>(elems.length);
     // If any argument is unknown or error early terminate.
     for (int i = 0; i < elems.length; i++) {
+      controller.checkpoint(Phase.EVALUATE);
       Interpretable elem = elems[i];
       Val elemVal = elem.eval(ctx);
       if (isUnknownOrError(elemVal)) {
@@ -122,6 +125,7 @@ class EvalListFold extends AbstractEval implements Coster {
   @SuppressWarnings("DuplicatedCode")
   @Override
   public Val eval(Activation ctx) {
+    var controller = ActivationControls.controller(ctx);
     Val foldRange = iterRange.eval(ctx);
     if (!foldRange.type().hasTrait(Trait.IterableType)) {
       return valOrErr(
@@ -143,6 +147,7 @@ class EvalListFold extends AbstractEval implements Coster {
     var isLister = foldRange instanceof Lister;
     var mapper = (foldRange instanceof Mapper m) ? m : null;
     while (it.hasNext() == True) {
+      controller.checkpoint(Phase.EVALUATE);
       Val next = it.next();
       Activation loopCtx = iterCtx;
       if (iterCtx2 != null) {
@@ -274,6 +279,7 @@ class EvalFold extends AbstractEval implements Coster {
   @SuppressWarnings("DuplicatedCode")
   @Override
   public Val eval(org.projectnessie.cel.interpreter.Activation ctx) {
+    var controller = ActivationControls.controller(ctx);
     Val foldRange = iterRange.eval(ctx);
     if (!foldRange.type().hasTrait(Trait.IterableType)) {
       return valOrErr(
@@ -298,6 +304,7 @@ class EvalFold extends AbstractEval implements Coster {
     var isLister = foldRange instanceof Lister;
     var mapper = (foldRange instanceof Mapper m) ? m : null;
     while (it.hasNext() == True) {
+      controller.checkpoint(Phase.EVALUATE);
       // Modify the iter var in the fold activation.
       Val next = it.next();
       Activation loopCtx = iterCtx;
