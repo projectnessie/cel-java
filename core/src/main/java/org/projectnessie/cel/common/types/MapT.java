@@ -61,6 +61,7 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
           Trait.IterableType,
           Trait.SizerType);
 
+  /** Creates a CEL map backed by an already adapted map. */
   public static Val newWrappedMap(TypeAdapter adapter, Map<Val, Val> value) {
     return new ValMapT(adapter, value);
   }
@@ -138,6 +139,7 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
     return new NativeMapT(valueAdapter, newMap);
   }
 
+  /** Returns whether a CEL value is valid as a map-literal key. */
   public static boolean isSupportedLiteralKeyType(Val key) {
     return switch (key.type().typeEnum()) {
       case Bool, Int, String, Uint -> true;

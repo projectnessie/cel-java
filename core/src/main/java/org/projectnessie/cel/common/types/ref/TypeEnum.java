@@ -15,21 +15,56 @@
  */
 package org.projectnessie.cel.common.types.ref;
 
+/**
+ * Runtime categories of CEL values.
+ *
+ * <p>This enum supports interpreter dispatch; {@link #getName()} returns the corresponding CEL type
+ * name. Object values may have a more specific qualified name through {@link Type#typeName()}.
+ */
 public enum TypeEnum {
+  /** CEL boolean. */
   Bool("bool"),
+
+  /** CEL byte string. */
   Bytes("bytes"),
+
+  /** CEL double-precision number. */
   Double("double"),
+
+  /** CEL duration. */
   Duration("google.protobuf.Duration"),
+
+  /** CEL evaluation error. */
   Err("error"),
+
+  /** CEL signed integer. */
   Int("int"),
+
+  /** CEL list. */
   List("list"),
+
+  /** CEL map. */
   Map("map"),
+
+  /** CEL null. */
   Null("null_type"),
+
+  /** CEL object with a provider-defined qualified type. */
   Object("object"),
+
+  /** CEL string. */
   String("string"),
+
+  /** CEL timestamp. */
   Timestamp("google.protobuf.Timestamp"),
+
+  /** CEL type value. */
   Type("type"),
+
+  /** CEL unsigned integer. */
   Uint("uint"),
+
+  /** CEL unknown value. */
   Unknown("unknown");
 
   private final String name;
@@ -38,6 +73,11 @@ public enum TypeEnum {
     this.name = name;
   }
 
+  /**
+   * Returns the CEL name of this runtime category.
+   *
+   * @return the CEL type name
+   */
   public java.lang.String getName() {
     return name;
   }
