@@ -59,4 +59,22 @@ public final class Types {
   public static BoolT boolOf(boolean b) {
     return b ? BoolT.True : BoolT.False;
   }
+
+  static int numericHashCode(long value) {
+    return numericHashCode((double) value);
+  }
+
+  static int unsignedNumericHashCode(long value) {
+    // Round the unsigned magnitude once, keeping a sticky low bit before scaling back up.
+    double doubleValue =
+        value >= 0 ? (double) value : (double) ((value >>> 1) | (value & 1L)) * 2.0d;
+    return numericHashCode(doubleValue);
+  }
+
+  static int numericHashCode(double value) {
+    // CEL numeric equality compares signed and unsigned integers after conversion to double when
+    // either operand is a double. Use the same canonical representation for Java hash-based maps.
+    // Canonicalize signed zero because CEL considers -0.0 and 0.0 equal.
+    return Double.hashCode(value == 0.0d ? 0.0d : value);
+  }
 }
