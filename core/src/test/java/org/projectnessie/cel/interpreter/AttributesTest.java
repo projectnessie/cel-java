@@ -23,16 +23,20 @@ import static org.projectnessie.cel.checker.CheckerEnv.newStandardCheckerEnv;
 import static org.projectnessie.cel.common.containers.Container.newContainer;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
+import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
+import static org.projectnessie.cel.common.types.Err.isError;
 import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.IntT.IntType;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
+import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
 import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newRegistry;
 import static org.projectnessie.cel.interpreter.Activation.emptyActivation;
 import static org.projectnessie.cel.interpreter.Activation.newActivation;
 import static org.projectnessie.cel.interpreter.Activation.newPartialActivation;
 import static org.projectnessie.cel.interpreter.AttributeFactory.newAttributeFactory;
+import static org.projectnessie.cel.interpreter.AttributeFactory.refResolve;
 import static org.projectnessie.cel.interpreter.AttributePattern.newAttributePattern;
 import static org.projectnessie.cel.interpreter.AttributePattern.newPartialAttributeFactory;
 import static org.projectnessie.cel.interpreter.Coster.Cost.estimateCost;
@@ -72,6 +76,19 @@ import org.projectnessie.cel.parser.Parser;
 import org.projectnessie.cel.parser.Parser.ParseResult;
 
 class AttributesTest {
+
+  @Test
+  void refResolveUsesNativeListIndicesWithoutChangingIndexSemantics() {
+    TypeRegistry registry = newRegistry();
+    int[] values = {2, 42};
+
+    assertThat(refResolve(registry, intOf(1), values)).isEqualTo(intOf(42));
+    assertThat(refResolve(registry, uintOf(1), values)).isEqualTo(intOf(42));
+    assertThat(refResolve(registry, doubleOf(1), values)).isEqualTo(intOf(42));
+    assertThat(refResolve(registry, doubleOf(0.5), values)).matches(v -> isError(v));
+    assertThat(refResolve(registry, intOf((long) Integer.MAX_VALUE + 1), values))
+        .matches(v -> isError(v));
+  }
 
   @Test
   void attributesAbsoluteAttr() {

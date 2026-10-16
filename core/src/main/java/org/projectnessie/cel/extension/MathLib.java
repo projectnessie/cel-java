@@ -325,10 +325,10 @@ public final class MathLib implements Library {
 
   private static List<Val> candidates(Val[] values) {
     if (values.length == 1 && values[0] instanceof Lister list) {
-      int size = (int) list.size().intValue();
+      int size = list.nativeSize();
       List<Val> elements = new ArrayList<>(size);
       for (int i = 0; i < size; i++) {
-        elements.add(list.get(intOf(i)));
+        elements.add(list.nativeGetAt(i));
       }
       return elements;
     }

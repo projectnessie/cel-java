@@ -50,6 +50,7 @@ import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Indexer;
+import org.projectnessie.cel.common.types.traits.Lister;
 import org.projectnessie.cel.common.types.traits.Mapper;
 import org.projectnessie.cel.interpreter.AttributePattern.QualifierValueEquator;
 
@@ -1427,6 +1428,32 @@ public interface AttributeFactory {
         return noSuchKey(idx);
       }
       return elem;
+    }
+    if (celVal instanceof Lister list) {
+      switch (idx.type().typeEnum()) {
+        case Int:
+          long intIndex = idx.intValue();
+          if (intIndex >= Integer.MIN_VALUE && intIndex <= Integer.MAX_VALUE) {
+            return list.nativeGetAt((int) intIndex);
+          }
+          break;
+        case Uint:
+          long uintIndex = idx.intValue();
+          if (uintIndex >= 0 && uintIndex <= Integer.MAX_VALUE) {
+            return list.nativeGetAt((int) uintIndex);
+          }
+          break;
+        case Double:
+          double doubleIndex = idx.doubleValue();
+          if (doubleIndex >= Integer.MIN_VALUE
+              && doubleIndex <= Integer.MAX_VALUE
+              && Math.rint(doubleIndex) == doubleIndex) {
+            return list.nativeGetAt((int) doubleIndex);
+          }
+          break;
+        default:
+          break;
+      }
     }
     if (celVal instanceof Indexer indexer) {
       return indexer.get(idx);

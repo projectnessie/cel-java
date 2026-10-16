@@ -15,11 +15,14 @@
  */
 package org.projectnessie.cel.common.types.pb;
 
+import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
+import static org.projectnessie.cel.common.types.Err.noMoreElements;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.TypeT.TypeType;
 import static org.projectnessie.cel.common.types.Types.boolOf;
+import static org.projectnessie.cel.common.types.Util.isUnknownOrError;
 import static org.projectnessie.cel.common.types.pb.PbTypeDescription.reflectTypeOf;
 import static org.projectnessie.cel.common.types.pb.PbTypeDescription.unwrapDynamic;
 
@@ -38,17 +41,21 @@ import com.google.protobuf.NullValue;
 import java.lang.reflect.Array;
 import java.util.AbstractList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.IteratorT;
 import org.projectnessie.cel.common.types.MapT;
+import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
+import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
 
 /** FieldDescription holds metadata related to fields declared within a type. */
 public final class FieldDescription extends Description {
+  private static final Object NO_NATIVE_MAP_KEY = new Object();
 
   /** KeyType holds the key FieldDescription for map fields. */
   final FieldDescription keyType;
@@ -239,6 +246,9 @@ public final class FieldDescription extends Description {
     if (fieldVal instanceof EnumValue) {
       return (long) ((EnumValue) fieldVal).getNumber();
     }
+    if (fd.isRepeated() && fieldVal instanceof List) {
+      return fieldVal;
+    }
     if (fieldVal instanceof Message) {
       return maybeUnwrapDynamic(db, (Message) fieldVal);
     }
@@ -306,7 +316,14 @@ public final class FieldDescription extends Description {
     return desc.getName();
   }
 
-  /** ReflectType returns the Golang reflect.Type for this field. */
+  /**
+   * Returns the Java representation used when converting a CEL value for this field.
+   *
+   * <p>Map fields return {@link Map}; repeated fields return an array class; scalar fields return
+   * their boxed class. Ordinary message fields use {@link DynamicMessage}; recognized well-known
+   * message fields use their canonical generated class. Generated optimized field access is
+   * selected separately from this descriptor-level representation.
+   */
   public Class<?> reflectType() {
     boolean r = desc.isRepeated();
     if (r && desc.isMapField()) {
@@ -416,6 +433,39 @@ public final class FieldDescription extends Description {
       return new ProtoMapT(adapter, fd, (List<?>) value);
     }
     return getValueFromField(fd, message);
+  }
+
+  Object adaptGeneratedValue(Object value, TypeAdapter adapter) {
+    if (desc.isMapField() && value instanceof Map) {
+      return new ProtoMapT(adapter, desc, (Map<?, ?>) value);
+    }
+    if (desc.isRepeated()) {
+      FieldDescriptor.Type type = desc.getType();
+      if (value instanceof List
+          && (type == FieldDescriptor.Type.UINT32
+              || type == FieldDescriptor.Type.UINT64
+              || type == FieldDescriptor.Type.FIXED32
+              || type == FieldDescriptor.Type.FIXED64)) {
+        return new UnsignedLongList((List<?>) value);
+      }
+      return value;
+    }
+    return normalizeUnsignedValue(desc, value);
+  }
+
+  boolean isWrapper() {
+    return isWellKnownType(desc);
+  }
+
+  boolean generatedValueNeedsAdaptation() {
+    if (desc.isMapField()) {
+      return true;
+    }
+    FieldDescriptor.Type type = desc.getType();
+    return type == FieldDescriptor.Type.UINT32
+        || type == FieldDescriptor.Type.UINT64
+        || type == FieldDescriptor.Type.FIXED32
+        || type == FieldDescriptor.Type.FIXED64;
   }
 
   public static Object getValueFromField(FieldDescriptor desc, Message message) {
@@ -528,14 +578,25 @@ public final class FieldDescription extends Description {
   private static final class ProtoMapT extends MapT {
     private final TypeAdapter adapter;
     private final List<?> entries;
+    private final Map<?, ?> map;
     private final FieldDescriptor keyDesc;
     private final FieldDescriptor valueDesc;
     private volatile Map<Val, Val> indexedEntries;
+    private volatile Map<Object, Object> canonicalEntries;
     private volatile boolean scanned;
 
     private ProtoMapT(TypeAdapter adapter, FieldDescriptor field, List<?> entries) {
       this.adapter = adapter;
       this.entries = entries;
+      this.map = null;
+      this.keyDesc = field.getMessageType().findFieldByNumber(1);
+      this.valueDesc = field.getMessageType().findFieldByNumber(2);
+    }
+
+    private ProtoMapT(TypeAdapter adapter, FieldDescriptor field, Map<?, ?> map) {
+      this.adapter = adapter;
+      this.entries = null;
+      this.map = map;
       this.keyDesc = field.getMessageType().findFieldByNumber(1);
       this.valueDesc = field.getMessageType().findFieldByNumber(2);
     }
@@ -559,12 +620,36 @@ public final class FieldDescription extends Description {
 
     @Override
     public IteratorT iterator() {
-      return IteratorT.javaIterator(adapter, toJavaMap().keySet().iterator());
+      return new EntryKeyIterator();
     }
 
     @Override
     public Val equal(Val other) {
-      return MapT.newMaybeWrappedMap(adapter, toJavaMap()).equal(other);
+      if (other instanceof ProtoMapT protoOther
+          && map != null
+          && protoOther.map != null
+          && keyDesc.getType() == protoOther.keyDesc.getType()) {
+        if (nativeSize() != protoOther.nativeSize()) {
+          return False;
+        }
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+          Object key = entry.getKey();
+          Object otherRawValue = protoOther.map.get(key);
+          if (otherRawValue == null && !protoOther.map.containsKey(key)) {
+            return False;
+          }
+          Val equal =
+              mapValueEqual(
+                  adapter.nativeToValue(normalizeUnsignedValue(valueDesc, entry.getValue())),
+                  protoOther.adapter.nativeToValue(
+                      normalizeUnsignedValue(protoOther.valueDesc, otherRawValue)));
+          if (equal != True) {
+            return equal;
+          }
+        }
+        return True;
+      }
+      return mapEqual(other);
     }
 
     @Override
@@ -574,6 +659,15 @@ public final class FieldDescription extends Description {
 
     @Override
     public Val contains(Val value) {
+      if (isUnknownOrError(value)) {
+        return value;
+      }
+      if (map != null) {
+        Object nativeKey = nativeMapKey(value);
+        if (nativeKey != NO_NATIVE_MAP_KEY) {
+          return boolOf(map.containsKey(nativeKey));
+        }
+      }
       return boolOf(find(value) != null);
     }
 
@@ -584,28 +678,91 @@ public final class FieldDescription extends Description {
 
     @Override
     public Val size() {
-      return intOf(toJavaMap().size());
+      return intOf(entryCount());
+    }
+
+    @Override
+    public int nativeSize() {
+      return entryCount();
+    }
+
+    @Override
+    protected Iterable<?> mapEntries() {
+      return allEntries();
+    }
+
+    @Override
+    protected Val mapEntryKey(Object entry) {
+      return adapter.nativeToValue(nativeEntryKey(entry));
+    }
+
+    @Override
+    protected Val mapEntryValue(Object entry) {
+      return adapter.nativeToValue(nativeEntryValue(entry));
     }
 
     @Override
     public Val find(Val key) {
+      if (map != null) {
+        Object nativeKey = nativeMapKey(key);
+        if (nativeKey != NO_NATIVE_MAP_KEY) {
+          Object value = map.get(nativeKey);
+          return value != null || map.containsKey(nativeKey)
+              ? adapter.nativeToValue(normalizeUnsignedValue(valueDesc, value))
+              : null;
+        }
+      }
       Map<Val, Val> index = indexedEntries;
       if (index != null) {
         return index.get(key);
       }
-      if (!scanned || entries.size() <= 1) {
+      if (!scanned || entryCount() <= 1) {
         scanned = true;
         return scan(key);
       }
       return indexedEntries().get(key);
     }
 
+    private Object nativeMapKey(Val key) {
+      switch (keyDesc.getType()) {
+        case BOOL:
+          return key.type().typeEnum() == TypeEnum.Bool ? key.booleanValue() : NO_NATIVE_MAP_KEY;
+        case STRING:
+          return key.type().typeEnum() == TypeEnum.String ? key.value() : NO_NATIVE_MAP_KEY;
+        case INT32:
+        case SINT32:
+        case SFIXED32:
+          if (key.type().typeEnum() != TypeEnum.Int) {
+            return NO_NATIVE_MAP_KEY;
+          }
+          long int32 = key.intValue();
+          return int32 >= Integer.MIN_VALUE && int32 <= Integer.MAX_VALUE
+              ? (int) int32
+              : NO_NATIVE_MAP_KEY;
+        case INT64:
+        case SINT64:
+        case SFIXED64:
+          return key.type().typeEnum() == TypeEnum.Int ? key.intValue() : NO_NATIVE_MAP_KEY;
+        case UINT32:
+        case FIXED32:
+          if (key.type().typeEnum() != TypeEnum.Uint) {
+            return NO_NATIVE_MAP_KEY;
+          }
+          long uint32 = key.intValue();
+          return Long.compareUnsigned(uint32, 0xffff_ffffL) <= 0 ? (int) uint32 : NO_NATIVE_MAP_KEY;
+        case UINT64:
+        case FIXED64:
+          return key.type().typeEnum() == TypeEnum.Uint ? key.intValue() : NO_NATIVE_MAP_KEY;
+        default:
+          return NO_NATIVE_MAP_KEY;
+      }
+    }
+
     private Val scan(Val key) {
-      for (int i = entries.size() - 1; i >= 0; i--) {
-        Object entry = entries.get(i);
-        Val candidate = adapter.nativeToValue(mapEntryKey(entry));
+      for (Object entry : allEntries()) {
+        Val candidate = adapter.nativeToValue(nativeEntryKey(entry));
         if (candidate.equal(key) == True) {
-          return adapter.nativeToValue(mapEntryValue(entry));
+          return adapter.nativeToValue(nativeEntryValue(entry));
         }
       }
       return null;
@@ -619,10 +776,10 @@ public final class FieldDescription extends Description {
       synchronized (this) {
         index = indexedEntries;
         if (index == null) {
-          index = new HashMap<>(entries.size() * 4 / 3 + 1);
-          for (Object entry : entries) {
-            Val key = adapter.nativeToValue(mapEntryKey(entry));
-            Val value = adapter.nativeToValue(mapEntryValue(entry));
+          index = new HashMap<>(entryCount() * 4 / 3 + 1);
+          for (Object entry : allEntries()) {
+            Val key = adapter.nativeToValue(nativeEntryKey(entry));
+            Val value = adapter.nativeToValue(nativeEntryValue(entry));
             index.put(key, value);
           }
           indexedEntries = index;
@@ -632,22 +789,25 @@ public final class FieldDescription extends Description {
     }
 
     private Map<Object, Object> toJavaMap() {
-      Map<Object, Object> map = new HashMap<>(entries.size() * 4 / 3 + 1);
-      for (Object entry : entries) {
-        map.put(mapEntryKey(entry), mapEntryValue(entry));
+      Map<Object, Object> javaMap = new HashMap<>(entryCount() * 4 / 3 + 1);
+      for (Object entry : allEntries()) {
+        javaMap.put(nativeEntryKey(entry), nativeEntryValue(entry));
       }
-      return map;
+      return javaMap;
     }
 
-    private Object mapEntryKey(Object entry) {
+    private Object nativeEntryKey(Object entry) {
       return normalizeUnsignedValue(entryKeyDescriptor(entry), rawMapEntryValue(entry, 1));
     }
 
-    private Object mapEntryValue(Object entry) {
+    private Object nativeEntryValue(Object entry) {
       return normalizeUnsignedValue(entryValueDescriptor(entry), rawMapEntryValue(entry, 2));
     }
 
     private FieldDescriptor entryKeyDescriptor(Object entry) {
+      if (entry instanceof Map.Entry<?, ?>) {
+        return keyDesc;
+      }
       if (entry instanceof DynamicMessage) {
         List<FieldDescriptor> fields = ((DynamicMessage) entry).getDescriptorForType().getFields();
         if (fields.size() == 2) {
@@ -658,6 +818,9 @@ public final class FieldDescription extends Description {
     }
 
     private FieldDescriptor entryValueDescriptor(Object entry) {
+      if (entry instanceof Map.Entry<?, ?>) {
+        return valueDesc;
+      }
       if (entry instanceof DynamicMessage) {
         List<FieldDescriptor> fields = ((DynamicMessage) entry).getDescriptorForType().getFields();
         if (fields.size() == 2) {
@@ -668,6 +831,9 @@ public final class FieldDescription extends Description {
     }
 
     private Object rawMapEntryValue(Object entry, int fieldNumber) {
+      if (entry instanceof Map.Entry<?, ?> mapEntry) {
+        return fieldNumber == 1 ? mapEntry.getKey() : mapEntry.getValue();
+      }
       if (entry instanceof MapEntry<?, ?> mapEntry) {
         return fieldNumber == 1 ? mapEntry.getKey() : mapEntry.getValue();
       }
@@ -679,6 +845,75 @@ public final class FieldDescription extends Description {
       }
       throw new IllegalArgumentException(
           String.format("Unexpected %s (%s) in list of map fields", entry.getClass(), entry));
+    }
+
+    private int entryCount() {
+      return entries != null ? canonicalEntries().size() : map.size();
+    }
+
+    private Iterable<?> allEntries() {
+      return entries != null ? canonicalEntries().entrySet() : map.entrySet();
+    }
+
+    private Map<Object, Object> canonicalEntries() {
+      Map<Object, Object> canonical = canonicalEntries;
+      if (canonical != null) {
+        return canonical;
+      }
+      synchronized (this) {
+        canonical = canonicalEntries;
+        if (canonical == null) {
+          canonical = new LinkedHashMap<>(entries.size() * 4 / 3 + 1);
+          for (Object entry : entries) {
+            canonical.put(nativeEntryKey(entry), nativeEntryValue(entry));
+          }
+          canonicalEntries = canonical;
+        }
+        return canonical;
+      }
+    }
+
+    private final class EntryKeyIterator extends BaseVal implements IteratorT {
+      private final java.util.Iterator<?> iterator = allEntries().iterator();
+
+      @Override
+      public Val hasNext() {
+        return boolOf(iterator.hasNext());
+      }
+
+      @Override
+      public Val next() {
+        if (iterator.hasNext()) {
+          return adapter.nativeToValue(nativeEntryKey(iterator.next()));
+        }
+        return noMoreElements();
+      }
+
+      @Override
+      @SuppressWarnings("removal")
+      public <T> T convertToNative(Class<T> typeDesc) {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public Val convertToType(org.projectnessie.cel.common.types.ref.Type typeValue) {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public Val equal(Val other) {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public org.projectnessie.cel.common.types.ref.Type type() {
+        throw new UnsupportedOperationException();
+      }
+
+      @Override
+      public Object value() {
+        throw new UnsupportedOperationException();
+      }
     }
   }
 
