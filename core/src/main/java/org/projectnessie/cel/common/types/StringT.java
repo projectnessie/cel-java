@@ -185,7 +185,13 @@ public final class StringT extends BaseVal implements Adder, Comparer, Matcher, 
     };
   }
 
-  /** Match implements traits.Matcher.Match. */
+  /**
+   * Match implements traits.Matcher.Match using {@link java.util.regex.Pattern}.
+   *
+   * <p>This direct value-level operation retains CEL-Java's legacy Java-regex behavior. Programs
+   * created through the public CEL APIs may select a different engine for the standard {@code
+   * matches} function with {@link org.projectnessie.cel.ProgramOption#regexEngine}.
+   */
   @Override
   public Val match(Val pattern) {
     if (!(pattern instanceof StringT o)) {
