@@ -27,7 +27,6 @@ import static org.projectnessie.cel.ProgramOption.evalOptions;
 import com.google.api.expr.v1alpha1.Decl;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 import org.projectnessie.cel.Ast;
 import org.projectnessie.cel.Env;
 import org.projectnessie.cel.Env.AstIssuesTuple;
@@ -120,7 +119,7 @@ public final class ScriptHost {
       if (container != null) {
         envOptions.add(container(container));
       }
-      envOptions.addAll(libraries.stream().map(Library::Lib).collect(Collectors.toList()));
+      envOptions.addAll(libraries.stream().map(Library::Lib).toList());
 
       Env env = newCustomEnv(registry, envOptions);
 
@@ -134,6 +133,7 @@ public final class ScriptHost {
       if (astIss.hasIssues()) {
         throw new ScriptCreateException("check failed", astIss.getIssues());
       }
+      ast = astIss.getAst();
 
       List<ProgramOption> programOptions = new ArrayList<>();
       if (!disableOptimize) {
@@ -158,8 +158,11 @@ public final class ScriptHost {
     private TypeRegistry registry;
 
     /**
-     * Call to instruct the built {@link ScriptHost} to disable script optimizations.
+     * Disables {@link EvalOption#OptOptimize} for scripts built by the resulting host.
      *
+     * <p>This does not disable planner-selected native evaluation.
+     *
+     * @return this builder
      * @see EvalOption#OptOptimize
      */
     public Builder disableOptimize() {
