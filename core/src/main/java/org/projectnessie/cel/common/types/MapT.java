@@ -150,10 +150,12 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
       return struct.build();
     }
 
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    private Map toJavaMap() {
-      Map r = new HashMap();
-      map.forEach((k, v) -> r.put(k.value(), v.value()));
+    private Map<Object, Object> toJavaMap() {
+      Map<Object, Object> r = new HashMap<>();
+      map.forEach(
+          (k, v) ->
+              r.put(
+                  adapter.valueToNative(k, Object.class), adapter.valueToNative(v, Object.class)));
       return r;
     }
 
@@ -223,8 +225,9 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
     @Override
     public Object value() {
       // TODO this is expensive :(
-      Map<Object, Object> nativeMap = toJavaMap();
-      return nativeMap;
+      Map<Object, Object> rawMap = new HashMap<>();
+      map.forEach((k, v) -> rawMap.put(k.value(), v.value()));
+      return rawMap;
     }
 
     @Override

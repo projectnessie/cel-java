@@ -28,13 +28,60 @@ import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newRegistr
 
 import com.google.common.collect.ImmutableMap;
 import com.google.protobuf.Struct;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
+import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 
 public class MapTest {
+
+  @Test
+  void nativeMapConversionUsesAdapterRecursively() {
+    TypeAdapter adapter =
+        new TypeAdapter() {
+          @Override
+          public Val nativeToValue(Object value) {
+            return DefaultTypeAdapter.Instance.nativeToValue(value);
+          }
+
+          @Override
+          public <T> T valueToNative(Val value, Class<T> targetType) {
+            if (targetType == Object.class && value instanceof IntT) {
+              return targetType.cast(value.intValue() + 100);
+            }
+            return TypeAdapter.super.valueToNative(value, targetType);
+          }
+        };
+    Val nested = newWrappedMap(adapter, Map.of(intOf(1), intOf(2)));
+    Val list = ListT.newValArrayList(adapter, new Val[] {intOf(3), nested});
+    Val map = newWrappedMap(adapter, Map.of(intOf(4), list, stringOf("nested"), nested));
+
+    Map<Object, Object> expected =
+        Map.of(104L, List.of(103L, Map.of(101L, 102L)), "nested", Map.of(101L, 102L));
+    assertThat((Object) adapter.valueToNative(map, Map.class)).isEqualTo(expected);
+    assertThat(adapter.valueToNative(map, Object.class)).isEqualTo(expected);
+    assertThat(nested.value()).isEqualTo(Map.of(1L, 2L));
+  }
+
+  @Test
+  void nativeMapConversionPreservesNullAndTypeSemantics() {
+    TypeAdapter adapter = DefaultTypeAdapter.Instance;
+    Val nullMap = newWrappedMap(adapter, Map.of(stringOf("null"), NullT.NullValue));
+    assertThat((Object) adapter.valueToNative(nullMap, Map.class))
+        .isEqualTo(Collections.singletonMap("null", null));
+    assertThat(nullMap.value()).isEqualTo(Map.of("null", NullT.NullValue.value()));
+
+    Val typeMap = newWrappedMap(adapter, Map.of(stringOf("type"), IntT.IntType));
+    assertThat(typeMap.value()).isEqualTo(Map.of("type", "int"));
+    assertThatThrownBy(() -> adapter.valueToNative(typeMap, Map.class))
+        .isInstanceOf(UnsupportedOperationException.class)
+        .hasMessage("type conversion not supported for 'type'");
+  }
 
   @Test
   @SuppressWarnings("removal")

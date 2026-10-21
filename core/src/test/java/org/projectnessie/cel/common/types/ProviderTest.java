@@ -45,6 +45,7 @@ import com.google.protobuf.BoolValue;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.BytesValue;
 import com.google.protobuf.DoubleValue;
+import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.FloatValue;
 import com.google.protobuf.Int32Value;
 import com.google.protobuf.Int64Value;
@@ -60,19 +61,78 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Indexer;
 import org.projectnessie.cel.common.types.traits.Lister;
+import org.projectnessie.cel.proto.tests.ProtoTestTypes.UnsignedMaps;
 import org.projectnessie.cel.test.proto3.OutOfOrderEnumOuterClass;
 
 public class ProviderTest {
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void unsignedMapEntriesRoundTrip(boolean dynamic) throws Exception {
+    UnsignedMaps generated =
+        UnsignedMaps.newBuilder()
+            .putUint32Map(0x80000000, 0x80000000)
+            .putUint32Map(0xffffffff, 0xffffffff)
+            .putFixed32Map(0x80000000, 0x80000000)
+            .putFixed32Map(0xffffffff, 0xffffffff)
+            .putUint64Map(Long.MIN_VALUE, Long.MIN_VALUE)
+            .putUint64Map(-1L, -1L)
+            .putFixed64Map(Long.MIN_VALUE, Long.MIN_VALUE)
+            .putFixed64Map(-1L, -1L)
+            .build();
+    Message input =
+        dynamic
+            ? DynamicMessage.parseFrom(UnsignedMaps.getDescriptor(), generated.toByteString())
+            : generated;
+    TypeRegistry registry = newRegistry(input);
+    Val value = registry.nativeToValue(input);
+    Map<String, Val> fields = new HashMap<>();
+    for (String name : new String[] {"uint32_map", "fixed32_map", "uint64_map", "fixed64_map"}) {
+      MapT map = (MapT) ((Indexer) value).get(stringOf(name));
+      long[] expected =
+          name.contains("32")
+              ? new long[] {0x80000000L, 0xffffffffL}
+              : new long[] {Long.MIN_VALUE, -1L};
+      for (long entry : expected) {
+        assertThat(map.get(uintOf(entry))).isEqualTo(uintOf(entry));
+      }
+      fields.put(name, map);
+    }
+    Val rebuilt = registry.newValue(input.getDescriptorForType().getFullName(), fields);
+    assertThat(rebuilt).matches(v -> !Err.isError(v));
+    Message output = registry.valueToNative(rebuilt, Message.class);
+    assertThat(output.getAllFields()).isEqualTo(input.getAllFields());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"uint32_map", "fixed32_map"})
+  void unsignedMapEntriesRejectOutOfRangeKeysAndValues(String field) {
+    TypeRegistry registry = newRegistry(UnsignedMaps.getDefaultInstance());
+    for (Map<?, ?> entries :
+        new Map<?, ?>[] {
+          Map.of(uintOf(0x1_0000_0000L), uintOf(1)), Map.of(uintOf(1), uintOf(0x1_0000_0000L))
+        }) {
+      Val value =
+          registry.newValue(
+              UnsignedMaps.getDescriptor().getFullName(),
+              Map.of(field, newMaybeWrappedMap(registry, entries)));
+      assertThat(value).matches(Err::isError);
+      assertThat(value.toString()).contains("range error converting 4294967296 to uint32");
+    }
+  }
 
   @Test
   void typeRegistryCopy() {
