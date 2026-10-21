@@ -4,7 +4,7 @@ errorprone = "2.15.0"
 errorpronePlugin = "5.1.1"
 errorproneSlf4j = "0.1.29"
 googleJavaFormat = "1.36.1"
-grpc = "1.85.0"
+grpc = "1.85.1"
 immutables = "2.12.3"
 jacoco = "0.8.15"
 jandex = "3.1.5"
@@ -16,7 +16,7 @@ nessieRunPlugin = "0.27.3"
 protobuf = "4.36.2"
 protobuf3 = "4.36.2"
 protobufPlugin = "0.10.0"
-quarkus = "3.40.1"
+quarkus = "3.40.1.1"
 shadowPlugin = "9.6.1"
 slf4j = "1.7.36"
 spotlessPlugin = "8.10.4"
@@ -47,8 +47,8 @@ guava = { module = "com.google.guava:guava", version = "33.7.2-jre" }
 idea-ext = { module = "gradle.plugin.org.jetbrains.gradle.plugin.idea-ext:gradle-idea-ext", version = "1.4.1" }
 immutables-value-annotations = { module = "org.immutables:value-annotations", version.ref = "immutables" }
 immutables-value-processor = { module = "org.immutables:value-processor", version.ref = "immutables" }
-jackson2-bom = { module = "com.fasterxml.jackson:jackson-bom", version = "2.22.3" }
-jackson3-bom = { module = "tools.jackson:jackson-bom", version = "3.2.3" }
+jackson2-bom = { module = "com.fasterxml.jackson:jackson-bom", version = "2.22.4" }
+jackson3-bom = { module = "tools.jackson:jackson-bom", version = "3.2.4" }
 jacoco-maven-plugin = { module = "org.jacoco:jacoco-maven-plugin", version.ref = "jacoco" }
 jandex-plugin = { module = "com.github.vlsi.gradle:jandex-plugin", version.ref = "jandexPlugin" }
 jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
