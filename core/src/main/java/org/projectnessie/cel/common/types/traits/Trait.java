@@ -37,7 +37,11 @@ public enum Trait {
   /** IterableType types can be iterated over in comprehensions. */
   IterableType,
 
-  /** IteratorType types support iterator semantics. */
+  /**
+   * IteratorType marks low-level interpreter cursor values.
+   *
+   * <p>It is used for internal traversal dispatch and does not define a CEL language type.
+   */
   IteratorType,
 
   /** MatcherType types support pattern matching via 'matches' method. */

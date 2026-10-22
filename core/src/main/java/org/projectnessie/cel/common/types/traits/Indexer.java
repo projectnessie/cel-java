@@ -15,10 +15,26 @@
  */
 package org.projectnessie.cel.common.types.traits;
 
+import static org.projectnessie.cel.common.types.IntT.intOf;
+
 import org.projectnessie.cel.common.types.ref.Val;
 
 /** Indexer permits random access of elements by index 'a[b()]'. */
 public interface Indexer {
   /** Get the value at the specified index or error. */
   Val get(Val index);
+
+  /**
+   * Returns the value at a native integer index.
+   *
+   * <p>The default delegates to {@link #get(Val)} with a CEL int. Implementations may override it
+   * to avoid constructing that index, but must preserve the same result, error, and unknown
+   * semantics.
+   *
+   * @param index zero-based Java index
+   * @return the selected value, or the same absence, CEL error, or unknown result as {@code get}
+   */
+  default Val nativeGetAt(int index) {
+    return get(intOf(index));
+  }
 }
