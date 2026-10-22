@@ -102,7 +102,7 @@ public final class BytesT extends BaseVal implements Adder, Comparer, Sizer {
   }
 
   /** ConvertToNative implements the ref.Val interface method. */
-  @SuppressWarnings("unchecked")
+  @SuppressWarnings({"removal", "unchecked"})
   @Override
   public <T> T convertToNative(Class<T> typeDesc) {
     if (typeDesc == ByteString.class || typeDesc == Object.class) {

@@ -540,10 +540,16 @@ public final class FieldDescription extends Description {
       this.valueDesc = field.getMessageType().findFieldByNumber(2);
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings("removal")
     @Override
     public <T> T convertToNative(Class<T> typeDesc) {
-      return (T) MapT.newMaybeWrappedMap(adapter, toJavaMap()).convertToNative(typeDesc);
+      return toNative(adapter, typeDesc);
+    }
+
+    @Override
+    public <T> T toNative(TypeAdapter conversionAdapter, Class<T> typeDesc) {
+      return conversionAdapter.valueToNative(
+          MapT.newMaybeWrappedMap(adapter, toJavaMap()), typeDesc);
     }
 
     @Override
@@ -683,13 +689,12 @@ public final class FieldDescription extends Description {
   }
 
   private static Object normalizeUnsignedValue(FieldDescriptor desc, Object value) {
-    FieldDescriptor.Type type = desc.getType();
-    if (value instanceof Number
-        && (type == FieldDescriptor.Type.UINT32
-            || type == FieldDescriptor.Type.UINT64
-            || type == FieldDescriptor.Type.FIXED32
-            || type == FieldDescriptor.Type.FIXED64)) {
-      return ULong.valueOf(((Number) value).longValue());
+    if (value instanceof Number number) {
+      return switch (desc.getType()) {
+        case UINT32, FIXED32 -> ULong.valueOf(Integer.toUnsignedLong(number.intValue()));
+        case UINT64, FIXED64 -> ULong.valueOf(number.longValue());
+        default -> value;
+      };
     }
     return value;
   }

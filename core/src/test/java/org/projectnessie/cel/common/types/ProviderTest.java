@@ -45,6 +45,7 @@ import com.google.protobuf.BoolValue;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.BytesValue;
 import com.google.protobuf.DoubleValue;
+import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.FloatValue;
 import com.google.protobuf.Int32Value;
 import com.google.protobuf.Int64Value;
@@ -60,19 +61,163 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Indexer;
 import org.projectnessie.cel.common.types.traits.Lister;
+import org.projectnessie.cel.proto.tests.ProtoTestTypes.UnsignedMaps;
 import org.projectnessie.cel.test.proto3.OutOfOrderEnumOuterClass;
 
 public class ProviderTest {
+
+  @ParameterizedTest
+  @ValueSource(strings = {"bool", "int32", "int64", "double", "enum"})
+  void protobufMapsAcceptBoxedOnlyCustomValues(String fieldType) {
+    TypeRegistry registry = newRegistry(TestAllTypes.getDefaultInstance());
+    Object nativeValue =
+        switch (fieldType) {
+          case "bool" -> true;
+          case "int32", "enum" -> 1;
+          case "int64" -> 2L;
+          case "double" -> 3.0d;
+          default -> throw new AssertionError(fieldType);
+        };
+    Val custom = new BoxedOnlyVal(registry.nativeToValue(nativeValue), nativeValue);
+    String typeName = TestAllTypes.getDescriptor().getFullName();
+    if (!fieldType.equals("enum")) {
+      Val scalar = registry.newValue(typeName, Map.of("single_" + fieldType, custom));
+      assertThat(scalar).matches(v -> !Err.isError(v));
+    }
+    Val value =
+        registry.newValue(
+            typeName,
+            Map.of(
+                "map_bool_" + fieldType, new DirectConversionMap(registry, Map.of(true, custom))));
+    assertThat(value).matches(v -> !Err.isError(v));
+    TestAllTypes message = registry.valueToNative(value, TestAllTypes.class);
+    TestAllTypes.Builder expected = TestAllTypes.newBuilder();
+    switch (fieldType) {
+      case "bool" -> expected.putMapBoolBool(true, true);
+      case "int32" -> expected.putMapBoolInt32(true, 1);
+      case "int64" -> expected.putMapBoolInt64(true, 2L);
+      case "double" -> expected.putMapBoolDouble(true, 3.0d);
+      case "enum" -> expected.putMapBoolEnumValue(true, 1);
+      default -> throw new AssertionError(fieldType);
+    }
+    assertThat(message).isEqualTo(expected.build());
+    if (fieldType.equals("bool") || fieldType.equals("int32") || fieldType.equals("int64")) {
+      Val key =
+          registry.newValue(
+              typeName,
+              Map.of(
+                  "map_" + fieldType + "_bool",
+                  new DirectConversionMap(registry, Map.of(custom, True))));
+      assertThat(key).matches(v -> !Err.isError(v));
+    }
+  }
+
+  private static final class BoxedOnlyVal extends org.projectnessie.cel.common.types.ref.BaseVal {
+    private final Val delegate;
+    private final Object nativeValue;
+
+    private BoxedOnlyVal(Val delegate, Object nativeValue) {
+      this.delegate = delegate;
+      this.nativeValue = nativeValue;
+    }
+
+    @Override
+    @SuppressWarnings("removal")
+    public <T> T convertToNative(Class<T> targetType) {
+      if (targetType != nativeValue.getClass()) {
+        throw new UnsupportedOperationException("unsupported target " + targetType);
+      }
+      return targetType.cast(nativeValue);
+    }
+
+    @Override
+    public Val convertToType(org.projectnessie.cel.common.types.ref.Type typeValue) {
+      return delegate.convertToType(typeValue);
+    }
+
+    @Override
+    public Val equal(Val other) {
+      return delegate.equal(other instanceof BoxedOnlyVal boxed ? boxed.delegate : other);
+    }
+
+    @Override
+    public org.projectnessie.cel.common.types.ref.Type type() {
+      return delegate.type();
+    }
+
+    @Override
+    public Object value() {
+      return nativeValue;
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void unsignedMapEntriesRoundTrip(boolean dynamic) throws Exception {
+    UnsignedMaps generated =
+        UnsignedMaps.newBuilder()
+            .putUint32Map(0x80000000, 0x80000000)
+            .putUint32Map(0xffffffff, 0xffffffff)
+            .putFixed32Map(0x80000000, 0x80000000)
+            .putFixed32Map(0xffffffff, 0xffffffff)
+            .putUint64Map(Long.MIN_VALUE, Long.MIN_VALUE)
+            .putUint64Map(-1L, -1L)
+            .putFixed64Map(Long.MIN_VALUE, Long.MIN_VALUE)
+            .putFixed64Map(-1L, -1L)
+            .build();
+    Message input =
+        dynamic
+            ? DynamicMessage.parseFrom(UnsignedMaps.getDescriptor(), generated.toByteString())
+            : generated;
+    TypeRegistry registry = newRegistry(input);
+    Val value = registry.nativeToValue(input);
+    Map<String, Val> fields = new HashMap<>();
+    for (String name : new String[] {"uint32_map", "fixed32_map", "uint64_map", "fixed64_map"}) {
+      MapT map = (MapT) ((Indexer) value).get(stringOf(name));
+      long[] expected =
+          name.contains("32")
+              ? new long[] {0x80000000L, 0xffffffffL}
+              : new long[] {Long.MIN_VALUE, -1L};
+      for (long entry : expected) {
+        assertThat(map.get(uintOf(entry))).isEqualTo(uintOf(entry));
+      }
+      fields.put(name, map);
+    }
+    Val rebuilt = registry.newValue(input.getDescriptorForType().getFullName(), fields);
+    assertThat(rebuilt).matches(v -> !Err.isError(v));
+    Message output = registry.valueToNative(rebuilt, Message.class);
+    assertThat(output.getAllFields()).isEqualTo(input.getAllFields());
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"uint32_map", "fixed32_map"})
+  void unsignedMapEntriesRejectOutOfRangeKeysAndValues(String field) {
+    TypeRegistry registry = newRegistry(UnsignedMaps.getDefaultInstance());
+    for (Map<?, ?> entries :
+        new Map<?, ?>[] {
+          Map.of(uintOf(0x1_0000_0000L), uintOf(1)), Map.of(uintOf(1), uintOf(0x1_0000_0000L))
+        }) {
+      Val value =
+          registry.newValue(
+              UnsignedMaps.getDescriptor().getFullName(),
+              Map.of(field, newMaybeWrappedMap(registry, entries)));
+      assertThat(value).matches(Err::isError);
+      assertThat(value.toString()).contains("range error converting 4294967296 to uint32");
+    }
+  }
 
   @Test
   void typeRegistryCopy() {
@@ -186,7 +331,7 @@ public class ProviderTest {
                             mapOf("string_value", stringOf("oneof")))))));
 
     assertThat(exp).matches(v -> !Err.isError(v));
-    CheckedExpr ce = exp.convertToNative(CheckedExpr.class);
+    CheckedExpr ce = reg.valueToNative(exp, CheckedExpr.class);
     assertThat(ce)
         .extracting(CheckedExpr::getExpr)
         .extracting(Expr::getConstExpr)
@@ -201,7 +346,7 @@ public class ProviderTest {
         reg.newValue(
             "cel.expr.conformance.proto3.TestAllTypes", mapOf("single_int32_wrapper", intOf(123)));
     assertThat(exp).matches(v -> !Err.isError(v));
-    TestAllTypes ce = exp.convertToNative(TestAllTypes.class);
+    TestAllTypes ce = reg.valueToNative(exp, TestAllTypes.class);
     assertThat(ce)
         .extracting(TestAllTypes::getSingleInt32Wrapper)
         .extracting(Int32Value::getValue)
@@ -216,7 +361,7 @@ public class ProviderTest {
             "cel.expr.conformance.proto3.TestAllTypes", mapOf("single_int32_wrapper", NullValue));
 
     assertThat(exp).matches(v -> !Err.isError(v));
-    TestAllTypes ce = exp.convertToNative(TestAllTypes.class);
+    TestAllTypes ce = reg.valueToNative(exp, TestAllTypes.class);
     assertThat(ce.hasSingleInt32Wrapper()).isFalse();
   }
 
@@ -235,7 +380,7 @@ public class ProviderTest {
                 NullValue));
 
     assertThat(exp).matches(v -> !Err.isError(v));
-    TestAllTypes ce = exp.convertToNative(TestAllTypes.class);
+    TestAllTypes ce = reg.valueToNative(exp, TestAllTypes.class);
     assertThat(ce.hasSingleNestedMessage()).isFalse();
     assertThat(ce.hasSingleDuration()).isFalse();
     assertThat(ce.hasSingleTimestamp()).isFalse();
@@ -258,7 +403,7 @@ public class ProviderTest {
                 newGenericArrayList(reg, new Val[] {intOf(1), NullValue})));
 
     assertThat(exp).matches(v -> !Err.isError(v));
-    TestAllTypes ce = exp.convertToNative(TestAllTypes.class);
+    TestAllTypes ce = reg.valueToNative(exp, TestAllTypes.class);
     assertThat(ce.getRepeatedTimestampList())
         .containsExactly(Timestamp.newBuilder().setSeconds(1).build());
     assertThat(ce.getRepeatedDurationList())
@@ -288,7 +433,7 @@ public class ProviderTest {
                 newMaybeWrappedMap(reg, mapOf(true, NullValue, false, intOf(1)))));
 
     assertThat(exp).matches(v -> !Err.isError(v));
-    TestAllTypes ce = exp.convertToNative(TestAllTypes.class);
+    TestAllTypes ce = reg.valueToNative(exp, TestAllTypes.class);
     assertThat(ce.getMapBoolTimestampMap())
         .containsExactlyEntriesOf(mapOf(false, Timestamp.newBuilder().setSeconds(1).build()));
     assertThat(ce.getMapBoolDurationMap())
@@ -327,7 +472,7 @@ public class ProviderTest {
                 new DirectConversionMap(reg, mapOf(true, nestedMessage))));
 
     assertThat(exp).matches(v -> !Err.isError(v));
-    TestAllTypes value = exp.convertToNative(TestAllTypes.class);
+    TestAllTypes value = reg.valueToNative(exp, TestAllTypes.class);
     assertThat(value.getMapBoolBytesMap()).containsEntry(true, ByteString.copyFromUtf8("bytes"));
     assertThat(value.getMapBoolInt32Map()).containsEntry(true, Integer.MIN_VALUE);
     assertThat(value.getMapBoolUint32Map()).containsEntry(true, -1);
@@ -337,6 +482,21 @@ public class ProviderTest {
     assertThat(value.getMapBoolNullValueMap()).containsEntry(true, NULL_VALUE);
     assertThat(value.getMapBoolMessageMap())
         .containsEntry(true, TestAllTypes.NestedMessage.newBuilder().setBb(42).build());
+  }
+
+  @Test
+  void typeRegistryNewValue_RejectsOutOfRangeUint32MapEntries() {
+    TypeRegistry reg = newRegistry(TestAllTypes.getDefaultInstance());
+
+    Val value =
+        reg.newValue(
+            "cel.expr.conformance.proto3.TestAllTypes",
+            mapOf(
+                "map_bool_uint32",
+                new DirectConversionMap(reg, mapOf(true, uintOf(0x1_0000_0000L)))));
+
+    assertThat(value).matches(Err::isError);
+    assertThat(value.toString()).contains("range error converting 4294967296 to uint32");
   }
 
   @Test
@@ -363,6 +523,7 @@ public class ProviderTest {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public <T> T convertToNative(Class<T> typeDesc) {
       throw new AssertionError("protobuf map conversion must not materialize a native Java map");
     }
@@ -455,67 +616,80 @@ public class ProviderTest {
     TypeRegistry reg = newRegistry(ParsedExpr.getDefaultInstance());
 
     // Core type conversion tests.
-    expectValueToNative(True, true);
-    expectValueToNative(True, True);
+    expectValueToNative(reg, True, true);
+    expectValueToNative(reg, True, True);
     expectValueToNative(
-        newGenericArrayList(reg, new Val[] {True, False}), new Object[] {true, false});
-    expectValueToNative(newGenericArrayList(reg, new Val[] {True, False}), new Val[] {True, False});
-    expectValueToNative(intOf(-1), -1);
-    expectValueToNative(intOf(2), 2L);
-    expectValueToNative(intOf(-1), -1);
-    expectValueToNative(newGenericArrayList(reg, new Val[] {intOf(4)}), new Object[] {4L});
-    expectValueToNative(newGenericArrayList(reg, new Val[] {intOf(5)}), new Val[] {intOf(5)});
-    expectValueToNative(uintOf(3), ULong.valueOf(3));
-    expectValueToNative(uintOf(4), ULong.valueOf(4));
-    expectValueToNative(uintOf(5), 5);
+        reg, newGenericArrayList(reg, new Val[] {True, False}), new Object[] {true, false});
     expectValueToNative(
-        newGenericArrayList(reg, new Val[] {uintOf(4)}), new Object[] {4L}); // loses "ULong" here
-    expectValueToNative(newGenericArrayList(reg, new Val[] {uintOf(5)}), new Val[] {uintOf(5)});
-    expectValueToNative(doubleOf(5.5d), 5.5f);
-    expectValueToNative(doubleOf(-5.5d), -5.5d);
-    expectValueToNative(newGenericArrayList(reg, new Val[] {doubleOf(-5.5)}), new Object[] {-5.5});
+        reg, newGenericArrayList(reg, new Val[] {True, False}), new Val[] {True, False});
+    expectValueToNative(reg, intOf(-1), -1);
+    expectValueToNative(reg, intOf(2), 2L);
+    expectValueToNative(reg, intOf(-1), -1);
+    expectValueToNative(reg, newGenericArrayList(reg, new Val[] {intOf(4)}), new Object[] {4L});
+    expectValueToNative(reg, newGenericArrayList(reg, new Val[] {intOf(5)}), new Val[] {intOf(5)});
+    expectValueToNative(reg, uintOf(3), ULong.valueOf(3));
+    expectValueToNative(reg, uintOf(4), ULong.valueOf(4));
+    expectValueToNative(reg, uintOf(5), 5);
     expectValueToNative(
-        newGenericArrayList(reg, new Val[] {doubleOf(-5.5)}), new Val[] {doubleOf(-5.5)});
-    expectValueToNative(doubleOf(-5.5), doubleOf(-5.5));
-    expectValueToNative(stringOf("hello"), "hello");
-    expectValueToNative(stringOf("hello"), stringOf("hello"));
-    expectValueToNative(NullValue, NULL_VALUE);
-    expectValueToNative(NullValue, NullValue);
-    expectValueToNative(newGenericArrayList(reg, new Val[] {NullValue}), new Object[] {null});
-    expectValueToNative(newGenericArrayList(reg, new Val[] {NullValue}), new Val[] {NullValue});
-    expectValueToNative(bytesOf("world"), "world".getBytes(StandardCharsets.UTF_8));
-    expectValueToNative(bytesOf("world"), "world".getBytes(StandardCharsets.UTF_8));
+        reg,
+        newGenericArrayList(reg, new Val[] {uintOf(4)}),
+        new Object[] {4L}); // loses "ULong" here
     expectValueToNative(
+        reg, newGenericArrayList(reg, new Val[] {uintOf(5)}), new Val[] {uintOf(5)});
+    expectValueToNative(reg, doubleOf(5.5d), 5.5f);
+    expectValueToNative(reg, doubleOf(-5.5d), -5.5d);
+    expectValueToNative(
+        reg, newGenericArrayList(reg, new Val[] {doubleOf(-5.5)}), new Object[] {-5.5});
+    expectValueToNative(
+        reg, newGenericArrayList(reg, new Val[] {doubleOf(-5.5)}), new Val[] {doubleOf(-5.5)});
+    expectValueToNative(reg, doubleOf(-5.5), doubleOf(-5.5));
+    expectValueToNative(reg, stringOf("hello"), "hello");
+    expectValueToNative(reg, stringOf("hello"), stringOf("hello"));
+    expectValueToNative(reg, NullValue, NULL_VALUE);
+    expectValueToNative(reg, NullValue, NullValue);
+    expectValueToNative(reg, newGenericArrayList(reg, new Val[] {NullValue}), new Object[] {null});
+    expectValueToNative(
+        reg, newGenericArrayList(reg, new Val[] {NullValue}), new Val[] {NullValue});
+    expectValueToNative(reg, bytesOf("world"), "world".getBytes(StandardCharsets.UTF_8));
+    expectValueToNative(reg, bytesOf("world"), "world".getBytes(StandardCharsets.UTF_8));
+    expectValueToNative(
+        reg,
         newGenericArrayList(reg, new Val[] {bytesOf("hello")}),
         new Object[] {ByteString.copyFromUtf8("hello")});
     expectValueToNative(
-        newGenericArrayList(reg, new Val[] {bytesOf("hello")}), new Val[] {bytesOf("hello")});
+        reg, newGenericArrayList(reg, new Val[] {bytesOf("hello")}), new Val[] {bytesOf("hello")});
     expectValueToNative(
+        reg,
         newGenericArrayList(reg, new Val[] {intOf(1), intOf(2), intOf(3)}),
         new Object[] {1L, 2L, 3L});
-    expectValueToNative(durationOf(Duration.ofSeconds(500)), Duration.ofSeconds(500));
+    expectValueToNative(reg, durationOf(Duration.ofSeconds(500)), Duration.ofSeconds(500));
     expectValueToNative(
+        reg,
         durationOf(Duration.ofSeconds(500)),
         com.google.protobuf.Duration.newBuilder().setSeconds(500).build());
-    expectValueToNative(durationOf(Duration.ofSeconds(500)), durationOf(Duration.ofSeconds(500)));
     expectValueToNative(
+        reg, durationOf(Duration.ofSeconds(500)), durationOf(Duration.ofSeconds(500)));
+    expectValueToNative(
+        reg,
         timestampOf(Timestamp.newBuilder().setSeconds(12345).build()),
         Instant.ofEpochSecond(12345, 0).atZone(ZoneIdZ));
     expectValueToNative(
+        reg,
         timestampOf(Timestamp.newBuilder().setSeconds(12345).build()),
         timestampOf(Timestamp.newBuilder().setSeconds(12345).build()));
     expectValueToNative(
+        reg,
         timestampOf(Timestamp.newBuilder().setSeconds(12345).build()),
         Timestamp.newBuilder().setSeconds(12345).build());
     expectValueToNative(
-        newMaybeWrappedMap(reg, mapOf(1L, 1L, 2L, 1L, 3L, 1L)), mapOf(1L, 1L, 2L, 1L, 3L, 1L));
+        reg, newMaybeWrappedMap(reg, mapOf(1L, 1L, 2L, 1L, 3L, 1L)), mapOf(1L, 1L, 2L, 1L, 3L, 1L));
 
     // Null conversion tests.
-    expectValueToNative(NullValue, NULL_VALUE);
+    expectValueToNative(reg, NullValue, NULL_VALUE);
 
     // Proto conversion tests.
     ParsedExpr parsedExpr = ParsedExpr.getDefaultInstance();
-    expectValueToNative(reg.nativeToValue(parsedExpr), parsedExpr);
+    expectValueToNative(reg, reg.nativeToValue(parsedExpr), parsedExpr);
   }
 
   @Test
@@ -675,8 +849,8 @@ public class ProviderTest {
 
   static class nonConvertible {}
 
-  static void expectValueToNative(Val in, Object out) {
-    Object val = in.convertToNative(out.getClass());
+  static void expectValueToNative(TypeRegistry registry, Val in, Object out) {
+    Object val = registry.valueToNative(in, out.getClass());
     assertThat(val).isNotNull();
 
     if (val instanceof byte[]) {

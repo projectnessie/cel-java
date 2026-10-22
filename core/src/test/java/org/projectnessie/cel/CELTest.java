@@ -295,6 +295,7 @@ public class CELTest {
   }
 
   @Test
+  @SuppressWarnings("removal")
   void Abbrevs_Disambiguation() {
     Env env =
         newEnv(
@@ -341,6 +342,7 @@ public class CELTest {
   }
 
   @Test
+  @SuppressWarnings("removal")
   void CustomEnvCanSubsetStandardLibrary() {
     Env withoutStdLib = newCustomEnv(declarations(Decls.newVar("resource.name", Decls.String)));
     AstIssuesTuple missingStartsWith =

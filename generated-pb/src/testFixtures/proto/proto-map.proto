@@ -8,3 +8,10 @@ message EventA {
   bool property_bool = 5;
   map<string, string> map_str = 11;
 }
+
+message UnsignedMaps {
+  map<uint32, uint32> uint32_map = 1;
+  map<fixed32, fixed32> fixed32_map = 2;
+  map<uint64, uint64> uint64_map = 3;
+  map<fixed64, fixed64> fixed64_map = 4;
+}
