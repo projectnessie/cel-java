@@ -44,7 +44,7 @@ import org.projectnessie.cel.common.types.traits.Receiver;
 import org.projectnessie.cel.common.types.traits.Trait;
 import org.projectnessie.cel.interpreter.functions.Overload;
 
-/** NetworkLib provides CEL helper functions from the standard network extension library. */
+/** CEL standard network extension library for IP addresses and CIDR prefixes. */
 public final class NetworkLib implements Library {
   private static final String IP = "ip";
   private static final String CIDR = "cidr";
@@ -63,6 +63,9 @@ public final class NetworkLib implements Library {
 
   private NetworkLib() {}
 
+  /**
+   * Returns an environment option installing the network types, declarations, and implementations.
+   */
   public static EnvOption network() {
     return Library.Lib(new NetworkLib());
   }

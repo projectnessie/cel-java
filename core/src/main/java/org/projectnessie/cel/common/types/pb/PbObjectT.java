@@ -32,10 +32,18 @@ import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
 import org.projectnessie.cel.common.types.ObjectT;
 import org.projectnessie.cel.common.types.StringT;
+import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 
+/**
+ * CEL object value backed by a generated or dynamic Protocol Buffer message.
+ *
+ * <p>Instances are created by {@link ProtoTypeRegistry} after the message type has been registered.
+ * Field selection and presence testing use protobuf presence/default semantics and return CEL error
+ * values for invalid field names or operand types. The wrapped protobuf message is immutable.
+ */
 public final class PbObjectT extends ObjectT {
 
   private PbObjectT(
@@ -44,25 +52,38 @@ public final class PbObjectT extends ObjectT {
   }
 
   /**
-   * NewObject returns an object based on a proto.Message value which handles conversion between
-   * protobuf type values and expression type values. Objects support indexing and iteration.
+   * Wraps a registered protobuf message as a CEL object.
    *
-   * <p>Note: the type value is pulled from the list of registered types within the type provider.
-   * If the proto type is not registered within the type provider, then this will result in an error
-   * within the type adapter / provider.
+   * <p>Callers normally use {@link ProtoTypeRegistry#nativeToValue(Object)}; this low-level factory
+   * assumes that {@code typeDesc}, {@code typeValue}, and {@code value} describe the same
+   * registered protobuf type.
+   *
+   * @param adapter adapter used for nested field values
+   * @param typeDesc protobuf message metadata
+   * @param typeValue CEL runtime object type
+   * @param value immutable protobuf message
+   * @return the wrapped CEL object value
    */
   public static Val newObject(
       TypeAdapter adapter, PbTypeDescription typeDesc, Type typeValue, Message value) {
     return new PbObjectT(adapter, value, typeDesc, typeValue);
   }
 
-  /** IsSet tests whether a field which is defined is set to a non-default value. */
+  /**
+   * Tests protobuf presence for a named field.
+   *
+   * @return a CEL boolean, or a CEL error for a non-string or unknown field
+   */
   @Override
   public Val isSet(Val field) {
     if (!(field instanceof StringT)) {
       return noSuchOverload(this, "isSet", field);
     }
     String protoFieldStr = (String) field.value();
+    FieldType fieldType = fieldType(protoFieldStr, true);
+    if (fieldType != null) {
+      return boolOf(fieldType.isSet.isSet(value));
+    }
     FieldDescription fd = fieldDescription(protoFieldStr);
     if (fd == null) {
       return noSuchField(protoFieldStr);
@@ -70,12 +91,21 @@ public final class PbObjectT extends ObjectT {
     return boolOf(fd.hasField(value));
   }
 
+  /**
+   * Selects and adapts a named protobuf field.
+   *
+   * @return the field's CEL value, or a CEL error for a non-string or unknown field
+   */
   @Override
   public Val get(Val index) {
     if (!(index instanceof StringT)) {
       return noSuchOverload(this, "get", index);
     }
     String protoFieldStr = (String) index.value();
+    FieldType fieldType = fieldType(protoFieldStr, false);
+    if (fieldType != null) {
+      return adapter.nativeToValue(fieldType.getFrom.getFrom(value));
+    }
     FieldDescription fd = fieldDescription(protoFieldStr);
     if (fd == null) {
       return noSuchField(protoFieldStr);
@@ -83,6 +113,13 @@ public final class PbObjectT extends ObjectT {
     return adapter.nativeToValue(fd.getField(value, adapter));
   }
 
+  /**
+   * Compares protobuf objects using CEL equality semantics.
+   *
+   * <p>Objects with different protobuf type names are unequal. A message containing a {@code NaN}
+   * at any nested or repeated field is unequal, including to itself, as required by CEL numeric
+   * equality.
+   */
   @Override
   public Val equal(Val other) {
     if (!(other instanceof PbObjectT otherObject)) {
@@ -230,6 +267,13 @@ public final class PbObjectT extends ObjectT {
       return field;
     }
     return ((ProtoTypeRegistry) adapter).findFieldDescription(typeDesc().name(), fieldName);
+  }
+
+  private FieldType fieldType(String fieldName, boolean presenceTest) {
+    if (adapter instanceof ProtoTypeRegistry registry) {
+      return registry.findFieldTypeForObjectAccess(typeDesc().name(), fieldName, presenceTest);
+    }
+    return null;
   }
 
   @SuppressWarnings("unchecked")

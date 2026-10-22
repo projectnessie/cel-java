@@ -78,7 +78,7 @@ final class JacksonObjectT extends ObjectT {
   }
 
   @Override
-  @SuppressWarnings("removal")
+  @SuppressWarnings({"removal", "unchecked"})
   public <T> T convertToNative(Class<T> typeDesc) {
     if (typeDesc.isAssignableFrom(value.getClass())) {
       return (T) value;

@@ -17,8 +17,27 @@ package org.projectnessie.cel.common.types.traits;
 
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** Sizer interface for supporting 'size()' overloads. */
+/** Capability for values that support the CEL {@code size()} operation. */
 public interface Sizer {
-  /** Size returns the number of elements or length of the value. */
+  /**
+   * Returns the number of elements or the length as a CEL int.
+   *
+   * @return a non-negative CEL int, or a CEL error or unknown value
+   */
   Val size();
+
+  /**
+   * Returns the same size as a Java {@code int}.
+   *
+   * <p>The default converts {@link #size()}; implementations may override it to avoid constructing
+   * a CEL integer but must preserve the same numeric result.
+   *
+   * @return the non-negative size
+   * @throws ArithmeticException if the size cannot be represented as a Java {@code int}
+   * @throws RuntimeException if {@link #size()} returns a value that cannot be converted to an
+   *     integer
+   */
+  default int nativeSize() {
+    return Math.toIntExact(size().intValue());
+  }
 }

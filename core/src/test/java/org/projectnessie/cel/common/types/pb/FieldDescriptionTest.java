@@ -16,8 +16,11 @@
 package org.projectnessie.cel.common.types.pb;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
+import static org.projectnessie.cel.common.types.IntT.intOf;
+import static org.projectnessie.cel.common.types.IteratorT.IteratorType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.pb.Db.newDb;
@@ -40,15 +43,114 @@ import dev.cel.expr.conformance.proto3.TestAllTypes.NestedMessage;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.projectnessie.cel.common.ULong;
+import org.projectnessie.cel.common.types.BoolT;
+import org.projectnessie.cel.common.types.Err;
+import org.projectnessie.cel.common.types.IntT;
+import org.projectnessie.cel.common.types.IteratorT;
+import org.projectnessie.cel.common.types.MapT;
 import org.projectnessie.cel.common.types.TimestampT;
+import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Mapper;
+import org.projectnessie.cel.common.types.traits.Trait;
 
 public class FieldDescriptionTest {
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void unsignedReadersAgreeForGeneratedAndDynamicMessages(boolean dynamic) throws Exception {
+    TestAllTypes generated =
+        TestAllTypes.newBuilder()
+            .setSingleUint32(-1)
+            .setSingleFixed32(-1)
+            .setSingleUint64(-1L)
+            .setSingleFixed64(-1L)
+            .addRepeatedUint32(Integer.MIN_VALUE)
+            .addRepeatedUint32(-1)
+            .addRepeatedFixed32(Integer.MIN_VALUE)
+            .addRepeatedFixed32(-1)
+            .addRepeatedUint64(Long.MIN_VALUE)
+            .addRepeatedUint64(-1L)
+            .addRepeatedFixed64(Long.MIN_VALUE)
+            .addRepeatedFixed64(-1L)
+            .build();
+    Message message =
+        dynamic
+            ? DynamicMessage.parseFrom(TestAllTypes.getDescriptor(), generated.toByteString())
+            : generated;
+    ProtoTypeRegistry registry = ProtoTypeRegistry.newRegistry(generated);
+    for (String name :
+        List.of("single_uint32", "single_fixed32", "single_uint64", "single_fixed64")) {
+      long expected = name.endsWith("32") ? 0xffffffffL : -1L;
+      FieldDescriptor descriptor = message.getDescriptorForType().findFieldByName(name);
+      assertThat(FieldDescription.getValueFromField(descriptor, message))
+          .as(name)
+          .isEqualTo(ULong.valueOf(expected));
+      assertThat(
+              registry
+                  .findFieldType(descriptor.getContainingType().getFullName(), name)
+                  .getFrom
+                  .getFrom(message))
+          .as(name)
+          .isEqualTo(ULong.valueOf(expected));
+    }
+    for (String name :
+        List.of("repeated_uint32", "repeated_fixed32", "repeated_uint64", "repeated_fixed64")) {
+      List<ULong> expected =
+          name.endsWith("32")
+              ? List.of(ULong.valueOf(0x80000000L), ULong.valueOf(0xffffffffL))
+              : List.of(ULong.valueOf(Long.MIN_VALUE), ULong.valueOf(-1L));
+      FieldDescriptor descriptor = message.getDescriptorForType().findFieldByName(name);
+      assertThat(FieldDescription.getValueFromField(descriptor, message))
+          .as(name)
+          .isEqualTo(expected);
+      assertThat(
+              registry
+                  .findFieldType(descriptor.getContainingType().getFullName(), name)
+                  .getFrom
+                  .getFrom(message))
+          .as(name)
+          .isEqualTo(expected);
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void protobufMapIteratorsFollowTheIteratorProtocol(boolean dynamic) throws Exception {
+    TestAllTypes generated = TestAllTypes.newBuilder().putMapStringString("key", "value").build();
+    Message message =
+        dynamic
+            ? DynamicMessage.parseFrom(TestAllTypes.getDescriptor(), generated.toByteString())
+            : generated;
+    ProtoTypeRegistry registry = ProtoTypeRegistry.newRegistry(generated);
+    MapT map =
+        (MapT)
+            registry
+                .findFieldType(TestAllTypes.getDescriptor().getFullName(), "map_string_string")
+                .getFrom
+                .getFrom(message);
+    IteratorT iterator = map.iterator();
+    assertThat(iterator.type()).isSameAs(IteratorT.IteratorType);
+    assertThat(iterator.value()).isNull();
+    assertThat(iterator.equal(iterator)).matches(Err::isError);
+    assertThat(iterator.convertToType(IntT.IntType)).matches(Err::isError);
+    assertThatThrownBy(iterator::intValue)
+        .isInstanceOf(UnsupportedOperationException.class)
+        .hasMessage("iterator cannot be used as integer");
+    assertThat(iterator.equals(iterator)).isTrue();
+    assertThat(iterator.equals(map.iterator())).isFalse();
+    assertThat(iterator.next()).isEqualTo(stringOf("key"));
+    assertThat(iterator.hasNext()).isSameAs(BoolT.False);
+    assertThat(iterator.next()).matches(Err::isError);
+  }
 
   @Test
   void fieldDescription() {
@@ -109,6 +211,12 @@ public class FieldDescriptionTest {
       new GetFromTestCase()
           .field("single_nested_message")
           .want(NestedMessage.newBuilder().setBb(123).build()),
+      new GetFromTestCase()
+          .field("repeated_nested_message")
+          .want(
+              Arrays.asList(
+                  NestedMessage.newBuilder().setBb(456).build(),
+                  NestedMessage.newBuilder().setBb(789).build())),
       new GetFromTestCase().field("standalone_enum").want(NestedEnum.BAR.getValueDescriptor()),
       new GetFromTestCase().field("single_value").want("hello world"),
       new GetFromTestCase()
@@ -135,6 +243,8 @@ public class FieldDescriptionTest {
     builder.setSingleInt32Wrapper(Int32Value.of(42));
     builder.setStandaloneEnum(NestedEnum.BAR);
     builder.setSingleNestedMessage(NestedMessage.newBuilder().setBb(123));
+    builder.addRepeatedNestedMessage(NestedMessage.newBuilder().setBb(456));
+    builder.addRepeatedNestedMessage(NestedMessage.newBuilder().setBb(789));
     builder.setSingleValue(Value.newBuilder().setStringValue("hello world"));
     builder.setSingleStruct(
         Struct.newBuilder()
@@ -152,6 +262,27 @@ public class FieldDescriptionTest {
     assertThat(f).isNotNull();
     Object got = f.getFrom(pbdb, msg);
     assertThat(got).isEqualTo(tc.want);
+  }
+
+  @Test
+  void getFromRepeatedMessageFieldOnDynamicMessage() {
+    Db pbdb = newDb();
+    TestAllTypes generated =
+        TestAllTypes.newBuilder()
+            .addRepeatedNestedMessage(NestedMessage.newBuilder().setBb(456))
+            .addRepeatedNestedMessage(NestedMessage.newBuilder().setBb(789))
+            .build();
+    pbdb.registerMessage(generated);
+    PbTypeDescription type = pbdb.describeType(generated.getDescriptorForType().getFullName());
+    FieldDescription field = type.fieldByName("repeated_nested_message");
+    DynamicMessage dynamic =
+        DynamicMessage.newBuilder(generated.getDescriptorForType()).mergeFrom(generated).build();
+
+    List<?> values = (List<?>) field.getFrom(pbdb, dynamic);
+
+    assertThat(values).hasSize(2).allMatch(Message.class::isInstance);
+    Message first = (Message) values.get(0);
+    assertThat(first.getField(first.getDescriptorForType().findFieldByName("bb"))).isEqualTo(456);
   }
 
   @Test
@@ -204,14 +335,35 @@ public class FieldDescriptionTest {
 
     Mapper map = (Mapper) field.getField(msg, registry);
     assertThat(map.find(uintOf(2)).equal(stringOf("two"))).isSameAs(True);
+    assertThat(map.find(intOf(2)).equal(stringOf("two"))).isSameAs(True);
     assertThat(map.find(uintOf(-1L)).equal(stringOf("large"))).isSameAs(True);
     assertThat(map.find(uintOf(1)).equal(stringOf("one"))).isSameAs(True);
     assertThat(map.find(uintOf(42))).isNull();
     assertThat(map.contains(uintOf(2))).isSameAs(True);
     assertThat(map.contains(uintOf(42))).isSameAs(False);
+    assertProtoMapIterator(map, uintOf(1), uintOf(2), uintOf(-1L));
+
+    DynamicMessage dynamicMessage =
+        DynamicMessage.newBuilder(msg.getDescriptorForType()).mergeFrom(msg).build();
+    Mapper dynamicMap = (Mapper) field.getField(dynamicMessage, registry);
+    assertThat(dynamicMap.find(uintOf(2)).equal(stringOf("two"))).isSameAs(True);
+    assertThat(((MapT) map).equal((MapT) dynamicMap)).isSameAs(True);
+    assertThat(dynamicMap).isEqualTo(map);
+    assertThat(dynamicMap.hashCode()).isEqualTo(map.hashCode());
+    assertProtoMapIterator(dynamicMap, uintOf(1), uintOf(2), uintOf(-1L));
+
+    TestAllTypes equalMessage = msg.toBuilder().build();
+    Mapper equalGeneratedMap = (Mapper) field.getField(equalMessage, registry);
+    assertThat(((MapT) map).equal((MapT) equalGeneratedMap)).isSameAs(True);
+    assertThat(map).isEqualTo(equalGeneratedMap);
+
+    TestAllTypes differentMessage = msg.toBuilder().putMapUint64String(2L, "different").build();
+    Mapper differentGeneratedMap = (Mapper) field.getField(differentMessage, registry);
+    assertThat(((MapT) map).equal((MapT) differentGeneratedMap)).isSameAs(False);
   }
 
   @Test
+  @SuppressWarnings("removal")
   void dynamicProtoMapUsesTheLastDuplicateEntry() {
     FieldDescriptor mapField = TestAllTypes.getDescriptor().findFieldByName("map_string_int64");
     FieldDescriptor keyField = mapField.getMessageType().findFieldByNumber(1);
@@ -245,6 +397,28 @@ public class FieldDescriptionTest {
     assertThat(map.find(stringOf("duplicate")).intValue()).isEqualTo(2L);
     assertThat(map.size().intValue()).isEqualTo(2L);
     assertThat(map.convertToNative(Map.class)).isEqualTo(Map.of("duplicate", 2L, "other", 3L));
+  }
+
+  private static void assertProtoMapIterator(Mapper map, Val... expectedKeys) {
+    IteratorT iterator = map.iterator();
+    int iteratorHash = iterator.hashCode();
+    assertThat(iterator.type()).isSameAs(IteratorType);
+    assertThat(iterator.type().hasTrait(Trait.IteratorType)).isTrue();
+    assertThat(iterator).hasToString("iterator");
+    assertThat(iterator.equals(iterator)).isTrue();
+    assertThat(iterator.equals(map.iterator())).isFalse();
+    assertThat(iterator.value()).isNull();
+    assertThat(iterator.equal(map.iterator())).matches(Err::isError);
+
+    Set<Val> keys = new HashSet<>();
+    while (iterator.hasNext() == True) {
+      keys.add(iterator.next());
+    }
+    assertThat(keys).containsExactlyInAnyOrder(expectedKeys);
+    assertThat(iterator.next()).matches(Err::isError).hasToString("no more elements");
+    assertThat(iterator.next()).matches(Err::isError).hasToString("no more elements");
+    assertThat(iterator.hashCode()).isEqualTo(iteratorHash);
+    assertThat(iterator).hasToString("iterator");
   }
 
   static class TestCase {

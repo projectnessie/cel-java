@@ -52,6 +52,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.checker.Types.Kind;
 import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.Source;
@@ -59,10 +60,20 @@ import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.Err.ErrException;
 import org.projectnessie.cel.common.types.ref.FieldType;
+import org.projectnessie.cel.internal.OperationCheckpoints;
+import org.projectnessie.cel.internal.OperationController;
 import org.projectnessie.cel.parser.Parser.ParseResult;
 
+/**
+ * Low-level CEL type checker.
+ *
+ * <p>Applications normally use {@link org.projectnessie.cel.Env#check(org.projectnessie.cel.Ast)}.
+ * Direct callers must provide a successful parse result and a fully configured {@link CheckerEnv}.
+ * One {@link CheckResult} contains the checked protobuf expression and any type diagnostics.
+ */
 public final class Checker {
 
+  /** Standard CEL declarations installed by a standard checker environment. */
   public static final List<Decl> StandardDeclarations = Standard.makeStandardDeclarations();
 
   private CheckerEnv env;
@@ -70,6 +81,7 @@ public final class Checker {
   private Mapping mappings;
   private int freeTypeVarCounter;
   private final SourceInfo sourceInfo;
+  private final OperationController controller;
   private final Map<Long, Type> types = new HashMap<>();
   private final Map<Long, Reference> references = new HashMap<>();
   private final Map<String, FieldType> fieldTypes = new HashMap<>();
@@ -85,8 +97,10 @@ public final class Checker {
     this.mappings = mappings;
     this.freeTypeVarCounter = freeTypeVarCounter;
     this.sourceInfo = sourceInfo;
+    this.controller = OperationCheckpoints.currentController();
   }
 
+  /** Result of one low-level type-check operation. */
   public static final class CheckResult {
     private final CheckedExpr expr;
     private final TypeErrors errors;
@@ -96,14 +110,17 @@ public final class Checker {
       this.errors = errors;
     }
 
+    /** Returns the checked expression produced by the checker. */
     public CheckedExpr getCheckedExpr() {
       return expr;
     }
 
+    /** Returns the type-checking diagnostics. */
     public TypeErrors getErrors() {
       return errors;
     }
 
+    /** Returns whether type checking produced at least one error diagnostic. */
     public boolean hasErrors() {
       return errors.hasErrors();
     }
@@ -115,10 +132,16 @@ public final class Checker {
   }
 
   /**
-   * Check performs type checking, giving a typed AST. The input is a ParsedExpr proto and an env
-   * which encapsulates type binding of variables, declarations of built-in functions, descriptions
-   * of protocol buffers, and a registry for errors. Returns a CheckedExpr proto, which might not be
-   * usable if there are errors in the error registry.
+   * Type-checks a successfully parsed expression.
+   *
+   * <p>The checker environment supplies the container, type provider, variables, functions, and
+   * overloads. Callers must inspect {@link CheckResult#hasErrors()} before using the checked
+   * expression to create a program.
+   *
+   * @param parsedExpr successful parse result with a non-null expression
+   * @param source source used to render diagnostics
+   * @param env fully configured checker environment
+   * @return checked expression and diagnostics
    */
   public static CheckResult Check(ParseResult parsedExpr, Source source, CheckerEnv env) {
     TypeErrors errors = new TypeErrors(source);
@@ -145,6 +168,7 @@ public final class Checker {
   }
 
   void check(Expr.Builder e) {
+    controller.checkpoint(Phase.CHECK);
     switch (e.getExprKindCase()) {
       case CONST_EXPR:
         Constant literal = e.getConstExpr();

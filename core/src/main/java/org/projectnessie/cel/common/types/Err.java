@@ -25,7 +25,13 @@ import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** Err type which extends the built-in go error and implements ref.Val. */
+/**
+ * CEL error value.
+ *
+ * <p>Evaluation failures are commonly returned as {@code Err} values so CEL error propagation can
+ * follow expression semantics. They are distinct from Java exceptions thrown for invalid
+ * configuration or unsupported host integration. An error may retain a Java cause for diagnostics.
+ */
 public final class Err extends BaseVal {
 
   /** ErrType singleton. */
@@ -86,26 +92,17 @@ public final class Err extends BaseVal {
         Arrays.stream(args).map(a -> a.type().typeName()).collect(Collectors.joining(", ")));
   }
 
-  /**
-   * MaybeNoSuchOverloadErr returns the error or unknown if the input ref.Val is one of these types,
-   * else a new no such overload error.
-   */
+  /** Preserves an error/unknown value, otherwise returns a no-such-overload CEL error. */
   public static Val maybeNoSuchOverloadErr(Val val) {
     return valOrErr(val, "no such overload");
   }
 
-  /**
-   * NewErr creates a new Err described by the format string and args. TODO: Audit the use of this
-   * function and standardize the error messages and codes.
-   */
+  /** Creates a CEL error from a formatted message. */
   public static Val newErr(String format, Object... args) {
     return new Err(format(format, args));
   }
 
-  /**
-   * NewErr creates a new Err described by the format string and args. TODO: Audit the use of this
-   * function and standardize the error messages and codes.
-   */
+  /** Creates a CEL error from a cause and formatted message. */
   public static Val newErr(Throwable cause, String format, Object... args) {
     if (cause instanceof ErrException) {
       return ((ErrException) cause).getErr();
