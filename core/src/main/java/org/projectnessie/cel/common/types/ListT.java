@@ -59,6 +59,21 @@ public abstract class ListT extends BaseVal implements Lister {
     return newGenericArrayList(v -> stringOf((String) v), value);
   }
 
+  /**
+   * Converts a list using the supplied adapter for its elements.
+   *
+   * <p>Built-in lists retain their inbound adapter for element access. Outbound conversion uses the
+   * calling adapter, including for lists created by extension functions. Custom list
+   * implementations retain their legacy conversion fallback.
+   */
+  @SuppressWarnings("removal")
+  public static <T> T toNative(TypeAdapter adapter, ListT value, Class<T> targetType) {
+    if (value instanceof BaseListT list) {
+      return list.convertToNative(adapter, targetType);
+    }
+    return value.convertToNative(targetType);
+  }
+
   public static Val newGenericArrayList(TypeAdapter adapter, Object[] value) {
     return new GenericListT(adapter, value);
   }
@@ -97,25 +112,30 @@ public abstract class ListT extends BaseVal implements Lister {
       this.size = size;
     }
 
-    @SuppressWarnings({"removal", "unchecked"})
+    @SuppressWarnings("removal")
     @Override
     public <T> T convertToNative(Class<T> typeDesc) {
+      return convertToNative(adapter, typeDesc);
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> T convertToNative(TypeAdapter adapter, Class<T> typeDesc) {
       if (typeDesc.isArray()) {
-        Object array = toJavaArray(typeDesc);
+        Object array = toJavaArray(adapter, typeDesc);
 
         return (T) array;
       }
       if (typeDesc == List.class || typeDesc == Object.class) {
-        return (T) toJavaList();
+        return (T) toJavaList(adapter);
       }
       if (typeDesc == ListValue.class) {
-        return (T) toPbListValue();
+        return (T) toPbListValue(adapter);
       }
       if (typeDesc == Value.class) {
-        return (T) toPbValue();
+        return (T) toPbValue(adapter);
       }
       if (typeDesc == Any.class) {
-        ListValue v = toPbListValue();
+        ListValue v = toPbListValue(adapter);
         //        Descriptor anyDesc = Any.getDescriptor();
         //        FieldDescriptor anyFieldTypeUrl = anyDesc.findFieldByName("type_url");
         //        FieldDescriptor anyFieldValue = anyDesc.findFieldByName("value");
@@ -137,11 +157,11 @@ public abstract class ListT extends BaseVal implements Lister {
           String.format("Unsupported conversion of '%s' to '%s'", ListType, typeDesc.getName()));
     }
 
-    private Value toPbValue() {
-      return Value.newBuilder().setListValue(toPbListValue()).build();
+    private Value toPbValue(TypeAdapter adapter) {
+      return Value.newBuilder().setListValue(toPbListValue(adapter)).build();
     }
 
-    private ListValue toPbListValue() {
+    private ListValue toPbListValue(TypeAdapter adapter) {
       ListValue.Builder list = ListValue.newBuilder();
       int s = (int) size;
       for (int i = 0; i < s; i++) {
@@ -152,12 +172,12 @@ public abstract class ListT extends BaseVal implements Lister {
       return list.build();
     }
 
-    private List<Object> toJavaList() {
-      return asList((Object[]) toJavaArray(Object[].class));
+    private List<Object> toJavaList(TypeAdapter adapter) {
+      return asList((Object[]) toJavaArray(adapter, Object[].class));
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private <T> Object toJavaArray(Class<T> typeDesc) {
+    private <T> Object toJavaArray(TypeAdapter adapter, Class<T> typeDesc) {
       int s = (int) size;
       Class compType = typeDesc.getComponentType();
       if (compType == Enum.class) {

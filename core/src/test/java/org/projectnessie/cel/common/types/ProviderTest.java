@@ -80,6 +80,91 @@ import org.projectnessie.cel.test.proto3.OutOfOrderEnumOuterClass;
 public class ProviderTest {
 
   @ParameterizedTest
+  @ValueSource(strings = {"bool", "int32", "int64", "double", "enum"})
+  void protobufMapsAcceptBoxedOnlyCustomValues(String fieldType) {
+    TypeRegistry registry = newRegistry(TestAllTypes.getDefaultInstance());
+    Object nativeValue =
+        switch (fieldType) {
+          case "bool" -> true;
+          case "int32", "enum" -> 1;
+          case "int64" -> 2L;
+          case "double" -> 3.0d;
+          default -> throw new AssertionError(fieldType);
+        };
+    Val custom = new BoxedOnlyVal(registry.nativeToValue(nativeValue), nativeValue);
+    String typeName = TestAllTypes.getDescriptor().getFullName();
+    if (!fieldType.equals("enum")) {
+      Val scalar = registry.newValue(typeName, Map.of("single_" + fieldType, custom));
+      assertThat(scalar).matches(v -> !Err.isError(v));
+    }
+    Val value =
+        registry.newValue(
+            typeName,
+            Map.of(
+                "map_bool_" + fieldType, new DirectConversionMap(registry, Map.of(true, custom))));
+    assertThat(value).matches(v -> !Err.isError(v));
+    TestAllTypes message = registry.valueToNative(value, TestAllTypes.class);
+    TestAllTypes.Builder expected = TestAllTypes.newBuilder();
+    switch (fieldType) {
+      case "bool" -> expected.putMapBoolBool(true, true);
+      case "int32" -> expected.putMapBoolInt32(true, 1);
+      case "int64" -> expected.putMapBoolInt64(true, 2L);
+      case "double" -> expected.putMapBoolDouble(true, 3.0d);
+      case "enum" -> expected.putMapBoolEnumValue(true, 1);
+      default -> throw new AssertionError(fieldType);
+    }
+    assertThat(message).isEqualTo(expected.build());
+    if (fieldType.equals("bool") || fieldType.equals("int32") || fieldType.equals("int64")) {
+      Val key =
+          registry.newValue(
+              typeName,
+              Map.of(
+                  "map_" + fieldType + "_bool",
+                  new DirectConversionMap(registry, Map.of(custom, True))));
+      assertThat(key).matches(v -> !Err.isError(v));
+    }
+  }
+
+  private static final class BoxedOnlyVal extends org.projectnessie.cel.common.types.ref.BaseVal {
+    private final Val delegate;
+    private final Object nativeValue;
+
+    private BoxedOnlyVal(Val delegate, Object nativeValue) {
+      this.delegate = delegate;
+      this.nativeValue = nativeValue;
+    }
+
+    @Override
+    @SuppressWarnings("removal")
+    public <T> T convertToNative(Class<T> targetType) {
+      if (targetType != nativeValue.getClass()) {
+        throw new UnsupportedOperationException("unsupported target " + targetType);
+      }
+      return targetType.cast(nativeValue);
+    }
+
+    @Override
+    public Val convertToType(org.projectnessie.cel.common.types.ref.Type typeValue) {
+      return delegate.convertToType(typeValue);
+    }
+
+    @Override
+    public Val equal(Val other) {
+      return delegate.equal(other instanceof BoxedOnlyVal boxed ? boxed.delegate : other);
+    }
+
+    @Override
+    public org.projectnessie.cel.common.types.ref.Type type() {
+      return delegate.type();
+    }
+
+    @Override
+    public Object value() {
+      return nativeValue;
+    }
+  }
+
+  @ParameterizedTest
   @ValueSource(booleans = {false, true})
   void unsignedMapEntriesRoundTrip(boolean dynamic) throws Exception {
     UnsignedMaps generated =

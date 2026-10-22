@@ -22,17 +22,88 @@ import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.StringT.StringType;
+import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 
+import com.google.protobuf.Any;
+import com.google.protobuf.ListValue;
+import com.google.protobuf.Value;
+import java.util.List;
+import java.util.Locale;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.projectnessie.cel.Env;
+import org.projectnessie.cel.EnvOption;
 import org.projectnessie.cel.common.types.Err;
+import org.projectnessie.cel.common.types.ListT;
 import org.projectnessie.cel.common.types.NullT;
+import org.projectnessie.cel.common.types.StringT;
 import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
+import org.projectnessie.cel.extension.StringsLib;
 
 @SuppressWarnings("removal")
 class TypeAdapterTest {
 
   private static final TypeAdapter DEFAULT_ADAPTER = DefaultTypeAdapter.Instance;
+
+  @Test
+  void stringArraysPreserveLegacyNullElementAdaptation() {
+    Val list = DEFAULT_ADAPTER.nativeToValue(new String[] {null});
+    Val element = ((ListT) list).get(intOf(0));
+
+    assertThat(element).isInstanceOf(StringT.class);
+    assertThat(element.value()).isNull();
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "array",
+        "list",
+        "factory",
+        "['a', 'b']",
+        "'a,b'.split(',')",
+        "'a,b'.split(',', 2)"
+      })
+  void stringListsUseConfiguredOutboundAdapter(String source) throws Exception {
+    TypeAdapter adapter =
+        new TypeAdapter() {
+          @Override
+          public Val nativeToValue(Object value) {
+            return TypeAdapterSupport.maybeNativeToValue(this, value);
+          }
+
+          @Override
+          public <T> T valueToNative(Val value, Class<T> targetType) {
+            if (value instanceof StringT) {
+              return DEFAULT_ADAPTER.valueToNative(
+                  stringOf(((String) value.value()).toUpperCase(Locale.ROOT)), targetType);
+            }
+            return TypeAdapter.super.valueToNative(value, targetType);
+          }
+        };
+    Env env = Env.newEnv(EnvOption.customTypeAdapter(adapter), StringsLib.strings());
+    Val value =
+        switch (source) {
+          case "array" -> adapter.nativeToValue(new String[] {"a", "b"});
+          case "list" -> adapter.nativeToValue(List.of("a", "b"));
+          case "factory" -> ListT.newStringArrayList(new String[] {"a", "b"});
+          default -> env.program(env.compile(source).getAst()).eval(java.util.Map.of()).getVal();
+        };
+    assertThat(adapter.valueToNative(value, String[].class)).containsExactly("A", "B");
+    assertThat((Object) adapter.valueToNative(value, List.class)).isEqualTo(List.of("A", "B"));
+    assertThat(adapter.valueToNative(value, Object.class)).isEqualTo(List.of("A", "B"));
+    ListValue expected =
+        ListValue.newBuilder()
+            .addValues(Value.newBuilder().setStringValue("A"))
+            .addValues(Value.newBuilder().setStringValue("B"))
+            .build();
+    assertThat(adapter.valueToNative(value, ListValue.class)).isEqualTo(expected);
+    assertThat(adapter.valueToNative(value, Value.class))
+        .isEqualTo(Value.newBuilder().setListValue(expected).build());
+    assertThat(adapter.valueToNative(value, Any.class).unpack(ListValue.class)).isEqualTo(expected);
+  }
 
   @Test
   void primitiveInboundDefaultsPreserveExactWrapperType() {

@@ -86,10 +86,15 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import org.projectnessie.cel.common.ULong;
+import org.projectnessie.cel.common.types.BoolT;
+import org.projectnessie.cel.common.types.DoubleT;
+import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.IteratorT;
 import org.projectnessie.cel.common.types.MapT;
 import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.TypeT;
+import org.projectnessie.cel.common.types.UintT;
+import org.projectnessie.cel.common.types.UnknownT;
 import org.projectnessie.cel.common.types.ref.FieldGetter;
 import org.projectnessie.cel.common.types.ref.FieldType;
 import org.projectnessie.cel.common.types.ref.TypeAdapterSupport;
@@ -429,13 +434,18 @@ public final class ProtoTypeRegistry implements TypeRegistry {
 
   private Object toNativeMapEntryValue(Val value, FieldDescriptor field) {
     return switch (field.getType()) {
-      case DOUBLE -> valueToDouble(value);
+      case DOUBLE ->
+          value instanceof DoubleT ? valueToDouble(value) : valueToNative(value, Double.class);
       case FLOAT -> valueToNative(value, Float.class);
-      case INT64, SINT64, SFIXED64 -> valueToLong(value);
+      case INT64, SINT64, SFIXED64 ->
+          value instanceof IntT || value instanceof UintT || value instanceof UnknownT
+              ? valueToLong(value)
+              : valueToNative(value, Long.class);
       case UINT64, FIXED64 -> valueToNative(value, ULong.class).longValue();
-      case INT32, SINT32, SFIXED32 -> valueToInt(value);
+      case INT32, SINT32, SFIXED32 -> toNativeMapInt(value);
       case UINT32, FIXED32 -> toUnsignedInt(value);
-      case BOOL -> valueToBoolean(value);
+      case BOOL ->
+          value instanceof BoolT ? valueToBoolean(value) : valueToNative(value, Boolean.class);
       case STRING -> valueToNative(value, String.class);
       case BYTES -> valueToNative(value, ByteString.class);
       case ENUM -> {
@@ -445,11 +455,17 @@ public final class ProtoTypeRegistry implements TypeRegistry {
           }
           throw new IllegalArgumentException("null is only valid for google.protobuf.NullValue");
         }
-        yield valueToInt(value);
+        yield toNativeMapInt(value);
       }
       case MESSAGE -> valueToNative(value, messageNativeType(field));
       case GROUP -> throw new IllegalArgumentException("protobuf maps cannot contain group values");
     };
+  }
+
+  private int toNativeMapInt(Val value) {
+    return value instanceof IntT || value instanceof UintT
+        ? valueToInt(value)
+        : valueToNative(value, Integer.class);
   }
 
   private int toUnsignedInt(Val value) {
