@@ -26,26 +26,165 @@ import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 
 import com.google.protobuf.Any;
+import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.ListValue;
+import com.google.protobuf.Message;
+import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
+import dev.cel.expr.conformance.proto3.TestAllTypes;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.projectnessie.cel.Env;
 import org.projectnessie.cel.EnvOption;
+import org.projectnessie.cel.checker.Decls;
+import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.Err;
+import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.ListT;
 import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.StringT;
 import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
+import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
+import org.projectnessie.cel.common.types.traits.Indexer;
+import org.projectnessie.cel.common.types.traits.Lister;
 import org.projectnessie.cel.extension.StringsLib;
 
 @SuppressWarnings("removal")
 class TypeAdapterTest {
 
   private static final TypeAdapter DEFAULT_ADAPTER = DefaultTypeAdapter.Instance;
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void nestedMapsUseCallingAdapterForJavaAndProtobufExports(boolean dynamic) throws Exception {
+    TypeAdapter adapter =
+        new TypeAdapter() {
+          @Override
+          public Val nativeToValue(Object value) {
+            return DEFAULT_ADAPTER.nativeToValue(value);
+          }
+
+          @Override
+          public <T> T valueToNative(Val value, Class<T> targetType) {
+            if (value instanceof StringT) {
+              value = stringOf(((String) value.value()).toUpperCase(Locale.ROOT));
+            } else if (value instanceof IntT) {
+              value = intOf(value.intValue() + 100);
+            }
+            return TypeAdapter.super.valueToNative(value, targetType);
+          }
+        };
+    Map<String, Object> raw = Map.of("items", List.of(1L, Map.of("leaf", 2L)));
+    Val value = adapter.nativeToValue(raw);
+    Map<String, Object> expectedJava = Map.of("ITEMS", List.of(101L, Map.of("LEAF", 102L)));
+    assertThat((Object) adapter.valueToNative(value, Map.class)).isEqualTo(expectedJava);
+    assertThat(adapter.valueToNative(value, Object.class)).isEqualTo(expectedJava);
+    assertThat(value.value()).isEqualTo(raw);
+    Struct expectedProto =
+        Struct.newBuilder()
+            .putFields(
+                "ITEMS",
+                Value.newBuilder()
+                    .setListValue(
+                        ListValue.newBuilder()
+                            .addValues(Value.newBuilder().setNumberValue(101))
+                            .addValues(
+                                Value.newBuilder()
+                                    .setStructValue(
+                                        Struct.newBuilder()
+                                            .putFields(
+                                                "LEAF",
+                                                Value.newBuilder().setNumberValue(102).build()))))
+                    .build())
+            .build();
+    assertThat(adapter.valueToNative(value, Struct.class)).isEqualTo(expectedProto);
+    assertThat(adapter.valueToNative(value, Value.class))
+        .isEqualTo(Value.newBuilder().setStructValue(expectedProto).build());
+    assertThat(adapter.valueToNative(value, Any.class).unpack(Struct.class))
+        .isEqualTo(expectedProto);
+    Val numericKeys = adapter.nativeToValue(Map.of(1L, 2L));
+    assertThat((Object) adapter.valueToNative(numericKeys, Map.class))
+        .isEqualTo(Map.of(101L, 102L));
+
+    TestAllTypes generated = TestAllTypes.newBuilder().putMapBoolInt64(true, 1L).build();
+    Message message =
+        dynamic
+            ? DynamicMessage.parseFrom(TestAllTypes.getDescriptor(), generated.toByteString())
+            : generated;
+    ProtoTypeRegistry registry = ProtoTypeRegistry.newRegistry(message);
+    Val protoMap = ((Indexer) registry.nativeToValue(message)).get(stringOf("map_bool_int64"));
+    assertThat((Object) adapter.valueToNative(protoMap, Map.class)).isEqualTo(Map.of(true, 101L));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"boxed", "objects", "list", "primitive"})
+  void concatenationDoesNotInvokeOutboundHooks(String source) {
+    AtomicInteger conversions = new AtomicInteger();
+    TypeAdapter adapter =
+        new TypeAdapter() {
+          @Override
+          public Val nativeToValue(Object value) {
+            return value instanceof Val val
+                ? val
+                : TypeAdapterSupport.maybeNativeToValue(this, value);
+          }
+
+          @Override
+          public <T> T valueToNative(Val value, Class<T> targetType) {
+            if (value instanceof IntT) {
+              conversions.incrementAndGet();
+              value = intOf(value.intValue() + 100);
+            }
+            return TypeAdapter.super.valueToNative(value, targetType);
+          }
+        };
+    Object input =
+        switch (source) {
+          case "boxed" -> new Long[] {1L};
+          case "objects" -> new Object[] {1L};
+          case "list" -> List.of(1L);
+          case "primitive" -> new long[] {1L};
+          default -> throw new AssertionError(source);
+        };
+    Env env =
+        Env.newEnv(
+            EnvOption.customTypeAdapter(adapter),
+            EnvOption.declarations(Decls.newVar("xs", Decls.newListType(Decls.Int))));
+    Val result =
+        env.program(env.compile("(xs + [2])[1] == 2").getAst()).eval(Map.of("xs", input)).getVal();
+    assertThat(result).isSameAs(True);
+    Val concatenated =
+        env.program(env.compile("xs + [2]").getAst()).eval(Map.of("xs", input)).getVal();
+    assertThat(((Lister) concatenated).get(intOf(0))).isEqualTo(intOf(1));
+    assertThat(((Lister) concatenated).get(intOf(1))).isEqualTo(intOf(2));
+    assertThat(conversions).hasValue(0);
+    assertThat(adapter.valueToNative(concatenated, Long[].class)).containsExactly(101L, 102L);
+    assertThat(conversions).hasValue(2);
+  }
+
+  @Test
+  void typedArrayConcatenationPreservesCelElementTypes() {
+    Val[] suffix = {uintOf(2), NullT.NullValue, StringType, Err.newErr("element error")};
+    Lister left = (Lister) DEFAULT_ADAPTER.nativeToValue(new Long[] {1L});
+    Lister combined = (Lister) left.add(ListT.newValArrayList(DEFAULT_ADAPTER, suffix));
+    assertThat(combined.get(intOf(0))).isEqualTo(intOf(1));
+    for (int i = 0; i < suffix.length; i++) {
+      assertThat(combined.get(intOf(i + 1))).isSameAs(suffix[i]);
+    }
+    Lister unsigned =
+        (Lister) left.add(ListT.newValArrayList(DEFAULT_ADAPTER, new Val[] {uintOf(-1L)}));
+    Val repeated = unsigned.add(left);
+    assertThat((Object[]) repeated.value()).containsExactly(1L, ULong.valueOf(-1L), 1L);
+    assertThat(DEFAULT_ADAPTER.valueToNative(repeated, Object[].class))
+        .containsExactly(1L, -1L, 1L);
+    assertThat((Object[]) ListT.newValArrayList(DEFAULT_ADAPTER, new Val[] {uintOf(2)}).value())
+        .containsExactly(2L);
+  }
 
   @Test
   void stringArraysPreserveLegacyNullElementAdaptation() {

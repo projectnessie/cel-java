@@ -54,6 +54,17 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
     return new ValMapT(adapter, value);
   }
 
+  /**
+   * Converts this map using the calling adapter for its entries.
+   *
+   * <p>Built-in maps override this method to separate inbound adaptation from outbound conversion.
+   * Custom map implementations retain their legacy conversion fallback.
+   */
+  @SuppressWarnings("removal")
+  public <T> T toNative(TypeAdapter adapter, Class<T> targetType) {
+    return convertToNative(targetType);
+  }
+
   @SuppressWarnings("unchecked")
   public static Val newMaybeWrappedMap(TypeAdapter adapter, Map<?, ?> value) {
     boolean alreadyWrapped = true;
@@ -107,20 +118,26 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
       this.map = map;
     }
 
-    @SuppressWarnings({"removal", "unchecked"})
+    @SuppressWarnings("removal")
     @Override
     public <T> T convertToNative(Class<T> typeDesc) {
+      return toNative(adapter, typeDesc);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <T> T toNative(TypeAdapter adapter, Class<T> typeDesc) {
       if (Map.class.isAssignableFrom(typeDesc) || typeDesc == Object.class) {
-        return (T) toJavaMap();
+        return (T) toJavaMap(adapter);
       }
       if (typeDesc == Struct.class) {
-        return (T) toPbStruct();
+        return (T) toPbStruct(adapter);
       }
       if (typeDesc == Value.class) {
-        return (T) toPbValue();
+        return (T) toPbValue(adapter);
       }
       if (typeDesc == Any.class) {
-        Struct v = toPbStruct();
+        Struct v = toPbStruct(adapter);
         //        DynamicMessage dyn = DynamicMessage.newBuilder(v).build();
         //        return (T) Any.newBuilder().mergeFrom(dyn).build();
         return (T)
@@ -134,23 +151,24 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
               "native type conversion error from '%s' to '%s'", MapType, typeDesc.getName()));
     }
 
-    private Value toPbValue() {
-      return Value.newBuilder().setStructValue(toPbStruct()).build();
+    private Value toPbValue(TypeAdapter adapter) {
+      return Value.newBuilder().setStructValue(toPbStruct(adapter)).build();
     }
 
-    private Struct toPbStruct() {
+    private Struct toPbStruct(TypeAdapter adapter) {
       Struct.Builder struct = Struct.newBuilder();
       map.forEach(
           (k, v) -> {
             if (k.type().typeEnum() != TypeEnum.String) {
               throw new IllegalArgumentException("bad key type");
             }
-            struct.putFields(k.value().toString(), adapter.valueToNative(v, Value.class));
+            struct.putFields(
+                adapter.valueToNative(k, String.class), adapter.valueToNative(v, Value.class));
           });
       return struct.build();
     }
 
-    private Map<Object, Object> toJavaMap() {
+    private Map<Object, Object> toJavaMap(TypeAdapter adapter) {
       Map<Object, Object> r = new HashMap<>();
       map.forEach(
           (k, v) ->

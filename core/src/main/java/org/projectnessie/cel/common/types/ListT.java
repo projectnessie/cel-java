@@ -35,6 +35,7 @@ import com.google.protobuf.Value;
 import java.lang.reflect.Array;
 import java.util.Arrays;
 import java.util.List;
+import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
@@ -110,6 +111,19 @@ public abstract class ListT extends BaseVal implements Lister {
     BaseListT(TypeAdapter adapter, long size) {
       this.adapter = adapter;
       this.size = size;
+    }
+
+    final Val concatValues(int thisSize, Lister other) {
+      // Concatenation is CEL evaluation; outbound conversion belongs to result export.
+      int otherSize = (int) other.size().intValue();
+      Val[] values = new Val[thisSize + otherSize];
+      for (int i = 0; i < thisSize; i++) {
+        values[i] = get(intOf(i));
+      }
+      for (int i = 0; i < otherSize; i++) {
+        values[thisSize + i] = other.get(intOf(i));
+      }
+      return new ValListT(adapter, values, true);
     }
 
     @SuppressWarnings("removal")
@@ -375,17 +389,7 @@ public abstract class ListT extends BaseVal implements Lister {
       if (!(other instanceof Lister otherList)) {
         return noSuchOverload(this, "add", other);
       }
-      int otherSize = (int) otherList.size().intValue();
-      Object[] newArray = Arrays.copyOf(array, array.length + otherSize);
-      Class<?> componentType = array.getClass().getComponentType();
-      for (int i = 0; i < otherSize; i++) {
-        Val otherValue = otherList.get(intOf(i));
-        newArray[array.length + i] =
-            componentType.isInstance(otherValue)
-                ? otherValue
-                : adapter.valueToNative(otherValue, componentType);
-      }
-      return new GenericListT(adapter, newArray);
+      return concatValues(array.length, otherList);
     }
 
     @Override
@@ -431,15 +435,7 @@ public abstract class ListT extends BaseVal implements Lister {
       if (!(other instanceof Lister otherList)) {
         return noSuchOverload(this, "add", other);
       }
-      int otherSize = (int) otherList.size().intValue();
-      Object[] newArray = new Object[list.size() + otherSize];
-      for (int i = 0; i < list.size(); i++) {
-        newArray[i] = list.get(i);
-      }
-      for (int i = 0; i < otherSize; i++) {
-        newArray[list.size() + i] = otherList.get(intOf(i));
-      }
-      return new GenericListT(adapter, newArray);
+      return concatValues(list.size(), otherList);
     }
 
     @Override
@@ -457,17 +453,27 @@ public abstract class ListT extends BaseVal implements Lister {
 
   static final class ValListT extends BaseListT {
     private final Val[] array;
+    // Concatenation snapshots keep raw uint values distinguishable from signed integers.
+    private final boolean preserveUnsignedRepresentation;
 
     ValListT(TypeAdapter adapter, Val[] array) {
+      this(adapter, array, false);
+    }
+
+    ValListT(TypeAdapter adapter, Val[] array, boolean preserveUnsignedRepresentation) {
       super(adapter, array.length);
       this.array = array;
+      this.preserveUnsignedRepresentation = preserveUnsignedRepresentation;
     }
 
     @Override
     public Object value() {
       Object[] nativeArray = new Object[array.length];
       for (int i = 0; i < array.length; i++) {
-        nativeArray[i] = array[i].value();
+        nativeArray[i] =
+            preserveUnsignedRepresentation && array[i] instanceof UintT
+                ? ULong.valueOf(array[i].intValue())
+                : array[i].value();
       }
       return nativeArray;
     }
@@ -477,18 +483,21 @@ public abstract class ListT extends BaseVal implements Lister {
       if (!(other instanceof Lister otherLister)) {
         return noSuchOverload(this, "add", other);
       }
+      boolean preserveUnsigned =
+          preserveUnsignedRepresentation
+              || other instanceof ValListT values && values.preserveUnsignedRepresentation;
       if (other instanceof ValListT) {
         Val[] otherArray = ((ValListT) other).array;
         Val[] newArray = Arrays.copyOf(array, array.length + otherArray.length);
         System.arraycopy(otherArray, 0, newArray, array.length, otherArray.length);
-        return new ValListT(adapter, newArray);
+        return new ValListT(adapter, newArray, preserveUnsigned);
       } else {
         int otherSIze = (int) otherLister.size().intValue();
         Val[] newArray = Arrays.copyOf(array, array.length + otherSIze);
         for (int i = 0; i < otherSIze; i++) {
           newArray[array.length + i] = otherLister.get(intOf(i));
         }
-        return new ValListT(adapter, newArray);
+        return new ValListT(adapter, newArray, preserveUnsigned);
       }
     }
 

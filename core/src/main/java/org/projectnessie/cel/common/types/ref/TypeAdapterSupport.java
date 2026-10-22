@@ -62,6 +62,7 @@ import org.projectnessie.cel.common.types.DoubleT;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.ListT;
+import org.projectnessie.cel.common.types.MapT;
 import org.projectnessie.cel.common.types.NullT;
 import org.projectnessie.cel.common.types.UintT;
 import org.projectnessie.cel.common.types.UnknownT;
@@ -261,6 +262,9 @@ public final class TypeAdapterSupport {
     }
     if (value instanceof ListT list) {
       return ListT.toNative(adapter, list, targetType);
+    }
+    if (value instanceof MapT map) {
+      return map.toNative(adapter, targetType);
     }
     return legacyValueToNative(value, targetType);
   }
