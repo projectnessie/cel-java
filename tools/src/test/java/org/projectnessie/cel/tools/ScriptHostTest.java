@@ -141,7 +141,7 @@ class ScriptHostTest {
 
     assertThatThrownBy(() -> scriptHost.buildScript("-.,").build())
         .isInstanceOf(ScriptCreateException.class)
-        .hasMessageContaining("Found string \",\" of type COMMA")
+        .hasMessageContaining("Found string \",\"")
         .hasMessageContaining("Was expecting: IDENTIFIER");
   }
 
