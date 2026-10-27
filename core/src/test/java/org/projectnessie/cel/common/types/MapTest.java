@@ -37,12 +37,14 @@ import com.google.protobuf.Struct;
 import java.math.BigInteger;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
+import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Trait;
@@ -75,6 +77,113 @@ public class MapTest {
             newWrappedMap(adapter, Map.of(stringOf("nan"), doubleOf(Double.NaN))))) {
       assertThat(map.equal(map)).isSameAs(BoolT.False);
       assertThat(map.equals(map)).isTrue();
+    }
+  }
+
+  @Test
+  void javaMapEqualityDistinguishesUnknownExpressionIds() {
+    TypeAdapter adapter = DefaultTypeAdapter.Instance;
+    List<MapT> maps =
+        List.of(
+            (MapT) newWrappedMap(adapter, Map.of(stringOf("key"), unknownOf(1))),
+            (MapT) newMaybeWrappedMap(adapter, Map.of("key", unknownOf(1))));
+    List<MapT> different =
+        List.of(
+            (MapT) newWrappedMap(adapter, Map.of(stringOf("key"), unknownOf(2))),
+            (MapT) newMaybeWrappedMap(adapter, Map.of("key", unknownOf(2))));
+    for (MapT map : maps) {
+      for (MapT same : maps) {
+        assertThat(map.equals(same)).isTrue();
+        assertThat(map.hashCode()).isEqualTo(same.hashCode());
+        assertThat(new HashSet<>(List.of(map))).contains(same);
+      }
+      for (MapT other : different) {
+        assertThat(map.equal(other)).isSameAs(True);
+        assertThat(map.equals(other)).isFalse();
+        assertThat(other.equals(map)).isFalse();
+      }
+    }
+  }
+
+  @Test
+  void javaMapEqualityRespectsCustomIdentityEquality() {
+    TypeAdapter adapter = DefaultTypeAdapter.Instance;
+    for (Map<String, Long> entries : List.of(Map.<String, Long>of(), Map.of("key", 1L))) {
+      MapT nativeMap = (MapT) newMaybeWrappedMap(adapter, entries);
+      Map<Val, Val> wrapped = new HashMap<>();
+      entries.forEach((key, value) -> wrapped.put(stringOf(key), intOf(value)));
+      MapT valMap = (MapT) newWrappedMap(adapter, wrapped);
+      MapT custom = new IdentityMap(valMap);
+      for (MapT builtin : List.of(nativeMap, valMap)) {
+        assertThat(builtin.equal(custom)).isSameAs(True);
+        assertThat(builtin.equals(custom)).isFalse();
+        assertThat(custom.equals(builtin)).isFalse();
+      }
+      assertThat(custom.equals(custom)).isTrue();
+    }
+  }
+
+  private static final class IdentityMap extends MapT {
+    private final MapT delegate;
+
+    private IdentityMap(MapT delegate) {
+      this.delegate = delegate;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      return this == other;
+    }
+
+    @Override
+    public int hashCode() {
+      return System.identityHashCode(this);
+    }
+
+    @Override
+    @SuppressWarnings("removal")
+    public <T> T convertToNative(Class<T> type) {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Val convertToType(Type type) {
+      return delegate.convertToType(type);
+    }
+
+    @Override
+    public Val equal(Val other) {
+      return delegate.equal(other);
+    }
+
+    @Override
+    public Object value() {
+      return delegate.value();
+    }
+
+    @Override
+    public Val find(Val key) {
+      return delegate.find(key);
+    }
+
+    @Override
+    public Val get(Val key) {
+      return delegate.get(key);
+    }
+
+    @Override
+    public Val contains(Val key) {
+      return delegate.contains(key);
+    }
+
+    @Override
+    public Val size() {
+      return delegate.size();
+    }
+
+    @Override
+    public IteratorT iterator() {
+      return delegate.iterator();
     }
   }
 

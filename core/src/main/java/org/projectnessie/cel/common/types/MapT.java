@@ -29,6 +29,7 @@ import com.google.protobuf.Struct;
 import com.google.protobuf.Value;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import org.projectnessie.cel.common.types.ref.BaseVal;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
@@ -123,6 +124,10 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
   }
 
   protected final Val mapEqual(Val other) {
+    return mapEqual(other, false);
+  }
+
+  private Val mapEqual(Val other, boolean javaEquality) {
     if (!(other instanceof MapT o)) {
       return False;
     }
@@ -139,7 +144,7 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
         if (oVal == null) {
           return False;
         }
-        Val equal = mapValueEqual(value, oVal);
+        Val equal = javaEquality ? boolOf(Objects.equals(value, oVal)) : mapValueEqual(value, oVal);
         if (equal != True) {
           return equal;
         }
@@ -156,7 +161,7 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
       if (oVal == null) {
         return False;
       }
-      Val eq = mapValueEqual(val, oVal);
+      Val eq = javaEquality ? boolOf(Objects.equals(val, oVal)) : mapValueEqual(val, oVal);
       if (eq == True) {
         continue;
       }
@@ -201,7 +206,20 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
 
   @Override
   public boolean equals(Object other) {
-    return this == other || other instanceof MapT o && mapEqual(o) == True;
+    if (this == other) {
+      return true;
+    }
+    if (!(other instanceof MapT o)) {
+      return false;
+    }
+    // Built-in representations share Java equality. External implementations may override it.
+    if (getClass() != o.getClass()
+        && !((this instanceof ValMapT || this instanceof NativeMapT)
+            && (o instanceof ValMapT || o instanceof NativeMapT))) {
+      return false;
+    }
+    // CEL equality can ignore Java identity data, such as an unknown value's expression ID.
+    return mapEqual(o, true) == True;
   }
 
   @Override
