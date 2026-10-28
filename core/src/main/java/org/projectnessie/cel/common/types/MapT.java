@@ -22,6 +22,7 @@ import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.newTypeConversionError;
 import static org.projectnessie.cel.common.types.TypeT.TypeType;
 import static org.projectnessie.cel.common.types.Types.boolOf;
+import static org.projectnessie.cel.common.types.Util.isUnknownOrError;
 
 import com.google.protobuf.Any;
 import com.google.protobuf.Struct;
@@ -40,6 +41,14 @@ import org.projectnessie.cel.common.types.traits.Mapper;
 import org.projectnessie.cel.common.types.traits.Sizer;
 import org.projectnessie.cel.common.types.traits.Trait;
 
+/**
+ * Base class and factories for CEL map values.
+ *
+ * <p>Map keys are CEL values and obey CEL equality. Factory ownership differs by input: already
+ * adapted maps can remain live views, while ordinary Java maps are re-keyed into an internal map
+ * and retain their raw values for lazy adaptation. Source keys and equality/hash-relevant objects
+ * must remain stable while the resulting map is used.
+ */
 public abstract class MapT extends BaseVal implements Mapper, Container, Indexer, IterableT, Sizer {
   /** MapType singleton. */
   public static final Type MapType =
@@ -65,6 +74,11 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
     return convertToNative(targetType);
   }
 
+  /**
+   * Creates a CEL map from either already adapted entries or ordinary Java entries.
+   *
+   * @return the map value, or a CEL error for null or CEL-equivalent duplicate keys
+   */
   @SuppressWarnings("unchecked")
   public static Val newMaybeWrappedMap(TypeAdapter adapter, Map<?, ?> value) {
     boolean alreadyWrapped = true;
@@ -81,19 +95,20 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
       return newWrappedMap(adapter, (Map<Val, Val>) value);
     }
 
-    Map<Val, Val> newMap = new HashMap<>(value.size() * 4 / 3 + 1);
+    Map<Val, Object> newMap = new HashMap<>(value.size() * 4 / 3 + 1);
     for (Map.Entry<?, ?> entry : value.entrySet()) {
       Val k = adapter.nativeToValue(entry.getKey());
-      Val v = adapter.nativeToValue(entry.getValue());
       if (k.type().typeEnum() == TypeEnum.Null) {
         return newErr("unsupported key type");
       }
-      if (newMap.putIfAbsent(k, v) != null) {
+      int previousSize = newMap.size();
+      newMap.put(k, entry.getValue());
+      if (newMap.size() == previousSize) {
         // Prevent duplicate keys, error out.
         return newErr("Failed with repeated key");
       }
     }
-    return newWrappedMap(adapter, newMap);
+    return new NativeMapT(adapter, newMap);
   }
 
   public static boolean isSupportedLiteralKeyType(Val key) {
@@ -106,6 +121,127 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
   @Override
   public Type type() {
     return MapType;
+  }
+
+  protected final Val mapEqual(Val other) {
+    return mapEqual(other, false);
+  }
+
+  private Val mapEqual(Val other, boolean javaEquality) {
+    if (!(other instanceof MapT o)) {
+      return False;
+    }
+    if (nativeSize() != o.nativeSize()) {
+      return False;
+    }
+
+    Iterable<?> entries = mapEntries();
+    if (entries != null) {
+      for (Object entry : entries) {
+        Val key = mapEntryKey(entry);
+        Val value = mapEntryValue(entry);
+        Val oVal = o.find(key);
+        if (oVal == null) {
+          return False;
+        }
+        Val equal = javaEquality ? boolOf(Objects.equals(value, oVal)) : mapValueEqual(value, oVal);
+        if (equal != True) {
+          return equal;
+        }
+      }
+      return True;
+    }
+
+    IteratorT myIter = iterator();
+    while (myIter.hasNext() == True) {
+      Val key = myIter.next();
+
+      Val val = get(key);
+      Val oVal = o.find(key);
+      if (oVal == null) {
+        return False;
+      }
+      Val eq = javaEquality ? boolOf(Objects.equals(val, oVal)) : mapValueEqual(val, oVal);
+      if (eq == True) {
+        continue;
+      }
+      return eq;
+    }
+    return True;
+  }
+
+  /** Returns backing entries when this implementation can traverse them directly. */
+  protected Iterable<?> mapEntries() {
+    return null;
+  }
+
+  /** Adapts the key of an entry returned by {@link #mapEntries()}. */
+  protected Val mapEntryKey(Object entry) {
+    throw new UnsupportedOperationException();
+  }
+
+  /** Adapts the value of an entry returned by {@link #mapEntries()}. */
+  protected Val mapEntryValue(Object entry) {
+    throw new UnsupportedOperationException();
+  }
+
+  protected static Val mapValueEqual(Val value, Val otherValue) {
+    if (isError(value)) {
+      return value;
+    }
+    if (isError(otherValue)) {
+      return otherValue;
+    }
+
+    Val equal = value.equal(otherValue);
+    if (equal == True || equal == False) {
+      return equal;
+    }
+    if (!value.type().equals(otherValue.type())) {
+      return False;
+    }
+    equal = value.equal(otherValue);
+    return equal instanceof Err ? equal : boolOf(equal == True);
+  }
+
+  @Override
+  public boolean equals(Object other) {
+    if (this == other) {
+      return true;
+    }
+    if (!(other instanceof MapT o)) {
+      return false;
+    }
+    // Built-in representations share Java equality. External implementations may override it.
+    if (getClass() != o.getClass()
+        && !((this instanceof ValMapT || this instanceof NativeMapT)
+            && (o instanceof ValMapT || o instanceof NativeMapT))) {
+      return false;
+    }
+    // CEL equality can ignore Java identity data, such as an unknown value's expression ID.
+    return mapEqual(o, true) == True;
+  }
+
+  @Override
+  public int hashCode() {
+    int hash = 0;
+    Iterable<?> entries = mapEntries();
+    if (entries != null) {
+      for (Object entry : entries) {
+        Val key = mapEntryKey(entry);
+        Val value = mapEntryValue(entry);
+        hash += key.hashCode() ^ (value != null ? value.hashCode() : 0);
+      }
+      return hash;
+    }
+
+    IteratorT keys = iterator();
+    while (keys.hasNext() == True) {
+      Val key = keys.next();
+      Val value = find(key);
+      hash += key.hashCode() ^ (value != null ? value.hashCode() : 0);
+    }
+    return hash;
   }
 
   static final class ValMapT extends MapT {
@@ -195,49 +331,7 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
 
     @Override
     public Val equal(Val other) {
-      // TODO this is expensive :(
-      if (!(other instanceof MapT o)) {
-        return False;
-      }
-      if (!size().equal(o.size()).booleanValue()) {
-        return False;
-      }
-      IteratorT myIter = iterator();
-      while (myIter.hasNext() == True) {
-        Val key = myIter.next();
-
-        Val val = get(key);
-        Val oVal = o.find(key);
-        if (oVal == null) {
-          return False;
-        }
-        if (isError(val)) {
-          return val;
-        }
-        if (isError(oVal)) {
-          return val;
-        }
-
-        Val eq = val.equal(oVal);
-        if (eq == True) {
-          continue;
-        }
-        if (eq == False) {
-          return False;
-        }
-
-        if (!val.type().equals(oVal.type())) {
-          return False;
-        }
-        eq = val.equal(oVal);
-        if (eq instanceof Err) {
-          return eq;
-        }
-        if (eq != True) {
-          return False;
-        }
-      }
-      return True;
+      return mapEqual(other);
     }
 
     @Override
@@ -250,6 +344,9 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
 
     @Override
     public Val contains(Val value) {
+      if (isUnknownOrError(value)) {
+        return value;
+      }
       return boolOf(find(value) != null);
     }
 
@@ -264,6 +361,26 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
     }
 
     @Override
+    public int nativeSize() {
+      return map.size();
+    }
+
+    @Override
+    protected Iterable<?> mapEntries() {
+      return map.entrySet();
+    }
+
+    @Override
+    protected Val mapEntryKey(Object entry) {
+      return (Val) ((Map.Entry<?, ?>) entry).getKey();
+    }
+
+    @Override
+    protected Val mapEntryValue(Object entry) {
+      return (Val) ((Map.Entry<?, ?>) entry).getValue();
+    }
+
+    @Override
     public Val find(Val key) {
       // Note: no special handling for heterogenous numeric map keys needed, the Val type
       // implementations implement .hashCode() and .equals() do deal with heterogenous numeric keys.
@@ -271,25 +388,133 @@ public abstract class MapT extends BaseVal implements Mapper, Container, Indexer
     }
 
     @Override
-    public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      ValMapT valMapT = (ValMapT) o;
-      return Objects.equals(map, valMapT.map);
+    public String toString() {
+      return "JavaMapT{" + "adapter=" + adapter + ", map=" + map + '}';
+    }
+  }
+
+  static final class NativeMapT extends MapT {
+    private final TypeAdapter adapter;
+    private final Map<Val, Object> map;
+
+    NativeMapT(TypeAdapter adapter, Map<Val, Object> map) {
+      this.adapter = adapter;
+      this.map = map;
+    }
+
+    @SuppressWarnings("removal")
+    @Override
+    public <T> T convertToNative(Class<T> typeDesc) {
+      return toNative(adapter, typeDesc);
     }
 
     @Override
-    public int hashCode() {
-      return Objects.hash(super.hashCode(), map);
+    public <T> T toNative(TypeAdapter conversionAdapter, Class<T> typeDesc) {
+      return conversionAdapter.valueToNative(newWrappedMap(adapter, adaptedMap()), typeDesc);
+    }
+
+    @Override
+    public Val convertToType(Type typeValue) {
+      if (typeValue == MapType) {
+        return this;
+      }
+      if (typeValue == TypeType) {
+        return MapType;
+      }
+      return newTypeConversionError(MapType, typeValue);
+    }
+
+    @Override
+    public IteratorT iterator() {
+      return IteratorT.javaIterator(adapter, map.keySet().iterator());
+    }
+
+    @Override
+    public Val equal(Val other) {
+      if (other instanceof NativeMapT nativeOther) {
+        if (map.size() != nativeOther.map.size()) {
+          return False;
+        }
+        for (Map.Entry<Val, Object> entry : map.entrySet()) {
+          Object otherRawValue = nativeOther.map.get(entry.getKey());
+          if (otherRawValue == null && !nativeOther.map.containsKey(entry.getKey())) {
+            return False;
+          }
+          Val equal =
+              mapValueEqual(
+                  adapter.nativeToValue(entry.getValue()),
+                  nativeOther.adapter.nativeToValue(otherRawValue));
+          if (equal != True) {
+            return equal;
+          }
+        }
+        return True;
+      }
+      return mapEqual(other);
+    }
+
+    @Override
+    public Object value() {
+      Map<Object, Object> nativeMap = new HashMap<>(map.size() * 4 / 3 + 1);
+      map.forEach(
+          (key, rawValue) -> nativeMap.put(key.value(), adapter.nativeToValue(rawValue).value()));
+      return nativeMap;
+    }
+
+    @Override
+    public Val contains(Val value) {
+      if (isUnknownOrError(value)) {
+        return value;
+      }
+      Object rawValue = map.get(value);
+      return boolOf(rawValue != null || map.containsKey(value));
+    }
+
+    @Override
+    public Val get(Val index) {
+      return find(index);
+    }
+
+    @Override
+    public Val size() {
+      return IntT.intOf(map.size());
+    }
+
+    @Override
+    public int nativeSize() {
+      return map.size();
+    }
+
+    @Override
+    protected Iterable<?> mapEntries() {
+      return map.entrySet();
+    }
+
+    @Override
+    protected Val mapEntryKey(Object entry) {
+      return (Val) ((Map.Entry<?, ?>) entry).getKey();
+    }
+
+    @Override
+    protected Val mapEntryValue(Object entry) {
+      return adapter.nativeToValue(((Map.Entry<?, ?>) entry).getValue());
+    }
+
+    @Override
+    public Val find(Val key) {
+      Object rawValue = map.get(key);
+      return rawValue != null || map.containsKey(key) ? adapter.nativeToValue(rawValue) : null;
+    }
+
+    private Map<Val, Val> adaptedMap() {
+      Map<Val, Val> adapted = new HashMap<>(map.size() * 4 / 3 + 1);
+      map.forEach((key, rawValue) -> adapted.put(key, adapter.nativeToValue(rawValue)));
+      return adapted;
     }
 
     @Override
     public String toString() {
-      return "JavaMapT{" + "adapter=" + adapter + ", map=" + map + '}';
+      return "NativeMapT{" + "adapter=" + adapter + ", map=" + map + '}';
     }
   }
 

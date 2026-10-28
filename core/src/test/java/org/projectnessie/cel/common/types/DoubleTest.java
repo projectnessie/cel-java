@@ -73,6 +73,11 @@ public class DoubleTest {
     DoubleT n0 = doubleOf(-0.0d);
     assertThat(p0.equal(n0)).isSameAs(True);
     assertThat(n0.compare(p0)).isSameAs(IntZero); // "-0.0 < 0.0" --> False
+
+    Double p0Obj = (Double) p0.value();
+    Double n0Obj = (Double) n0.value();
+    assertThat(Double.doubleToRawLongBits(p0Obj)).isEqualTo(Double.doubleToRawLongBits(0.0d));
+    assertThat(Double.doubleToRawLongBits(n0Obj)).isEqualTo(Double.doubleToRawLongBits(-0.0d));
   }
 
   @Test

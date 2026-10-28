@@ -15,7 +15,6 @@
  */
 package org.projectnessie.cel.interpreter;
 
-import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.Err.throwErrorAsIllegalStateException;
 import static org.projectnessie.cel.common.types.IntT.IntZero;
@@ -208,7 +207,7 @@ public interface InterpretableDecorator {
     // always be convertible to a `traits.Lister` type.
     Lister list = (Lister) l.value();
     if (list.size() == IntZero) {
-      return newConstValue(inlist.id(), False);
+      return new EvalSetMembership(inlist, lhs, null, Set.of());
     }
     IteratorT it = list.iterator();
     Type typ = null;
