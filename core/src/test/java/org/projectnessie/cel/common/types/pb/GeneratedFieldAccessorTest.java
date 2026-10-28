@@ -26,11 +26,14 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors.FieldDescriptor;
 import com.google.protobuf.DynamicMessage;
 import com.google.protobuf.Int32Value;
+import com.google.protobuf.Message;
 import com.google.protobuf.NullValue;
 import dev.cel.expr.conformance.proto3.TestAllTypes;
 import dev.cel.expr.conformance.proto3.TestAllTypes.NestedEnum;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.MapT;
 import org.projectnessie.cel.common.types.ref.FieldGetter;
@@ -203,6 +206,46 @@ class GeneratedFieldAccessorTest {
     assertThat(object.get(stringOf("single_int32_wrapper"))).isEqualTo(intOf(50_000));
     assertThat(((Lister) object.get(stringOf("repeated_null_value"))).get(intOf(0)))
         .isEqualTo(intOf(0));
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "repeated_int64_wrapper", "repeated_int32_wrapper", "repeated_double_wrapper",
+        "repeated_float_wrapper", "repeated_uint64_wrapper", "repeated_uint32_wrapper",
+        "repeated_string_wrapper", "repeated_bool_wrapper", "repeated_bytes_wrapper"
+      })
+  void repeatedWrapperGettersPreserveLists(String fieldName) {
+    TestAllTypes empty = TestAllTypes.getDefaultInstance();
+    FieldDescriptor descriptor = empty.getDescriptorForType().findFieldByName(fieldName);
+    Message wrapper = empty.newBuilderForType().newBuilderForField(descriptor).build();
+    TestAllTypes populated = empty.toBuilder().addRepeatedField(descriptor, wrapper).build();
+    ProtoTypeRegistry registry = ProtoTypeRegistry.newRegistry(empty);
+    String typeName = empty.getDescriptorForType().getFullName();
+    FieldType field = registry.findFieldType(typeName, fieldName);
+    FieldType objectField = registry.findFieldTypeForObjectAccess(typeName, fieldName, false);
+    assertThat(objectField).isNotNull();
+
+    for (TestAllTypes generated : List.of(empty, populated)) {
+      int expectedSize = generated.getRepeatedFieldCount(descriptor);
+      DynamicMessage dynamic =
+          DynamicMessage.newBuilder(generated.getDescriptorForType()).mergeFrom(generated).build();
+      for (Message target : List.of(generated, dynamic)) {
+        for (FieldType getter : List.of(field, objectField)) {
+          Object value = getter.getFrom.getFrom(target);
+          assertThat(value).isInstanceOf(List.class);
+          assertThat((List<?>) value).hasSize(expectedSize);
+          assertThat(getter.isSet.isSet(target)).isEqualTo(expectedSize != 0);
+        }
+        PbObjectT object = (PbObjectT) registry.nativeToValue(target);
+        assertThat(object.get(stringOf(fieldName))).isInstanceOf(Lister.class);
+        Lister list = (Lister) object.get(stringOf(fieldName));
+        assertThat(list.size()).isEqualTo(intOf(expectedSize));
+        if (expectedSize != 0) {
+          assertThat(list.get(intOf(0))).isEqualTo(registry.nativeToValue(wrapper));
+        }
+      }
+    }
   }
 
   @Test

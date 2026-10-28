@@ -288,7 +288,7 @@ public final class ProtoTypeRegistry implements TypeRegistry {
       FieldGetter generatedGetter,
       FieldTester tester) {
     Class<?> generatedType = type.reflectType();
-    if (field.isWrapper()) {
+    if (field.isWrapper() && !field.descriptor().isRepeated()) {
       return target ->
           generatedType.isInstance(target)
               ? !tester.isSet(target)
