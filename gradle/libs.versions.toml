@@ -67,7 +67,7 @@ tomcat-annotations-api = { module = "org.apache.tomcat:annotations-api", version
 [plugins]
 idea-ext = { id = "org.jetbrains.gradle.plugin.idea-ext", version = "1.4.1" }
 jandex = { id = "com.github.vlsi.jandex", version.ref = "jandexPlugin" }
-jmh = { id = "me.champeau.jmh", version = "0.7.3" }
+jmh = { id = "me.champeau.jmh", version = "0.7.4" }
 protobuf = { id = "com.google.protobuf", version.ref = "protobufPlugin" }
 quarkus = { id = "io.quarkus", version.ref = "quarkus" }
 shadow = { id = "com.gradleup.shadow", version.ref = "shadowPlugin" }
