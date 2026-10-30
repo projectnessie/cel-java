@@ -29,8 +29,11 @@ import com.google.protobuf.FieldMask;
 import com.google.protobuf.Message;
 import com.google.protobuf.Timestamp;
 import com.google.protobuf.Value;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -38,11 +41,19 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Db maps from file / message / enum name to file description.
+ * Mutable descriptor database used by the Protocol Buffer checker and runtime adapters.
  *
- * <p>Each Db is isolated from each other, and while information about protobuf descriptors may be
- * fetched from the global protobuf registry, no descriptors are added to this registry, else the
- * isolation guarantees of the Db object would be violated.
+ * <p>The database indexes files, messages, enum constants, and extensions by their protobuf names.
+ * It is low-level registry infrastructure; applications normally configure a {@link
+ * ProtoTypeRegistry} instead.
+ *
+ * <p>A database owns its mutable description and index state. {@link #copy()} duplicates that state
+ * while sharing immutable protobuf descriptors. Generated-versus-dynamic message representation
+ * bindings are independent between copies.
+ *
+ * <p>Registration mutates the database and is not a concurrent operation. Complete registration
+ * before sharing a database with evaluation callers. Do not mutate {@link #defaultDb}; use {@link
+ * #newDb()} to obtain an isolated database initialized with the built-in well-known types.
  */
 public final class Db {
 
@@ -53,7 +64,11 @@ public final class Db {
 
   private volatile ExtensionRegistry extensionRegistry;
 
-  /** DefaultDb used at evaluation time or unless overridden at check time. */
+  /**
+   * Shared descriptor database containing Protocol Buffer well-known types.
+   *
+   * <p>This instance is registry infrastructure and must be treated as read-only.
+   */
   public static final Db defaultDb = new Db(new HashMap<>(), new ArrayList<>());
 
   static {
@@ -77,31 +92,59 @@ public final class Db {
     this.files = files;
   }
 
-  /** NewDb creates a new `pb.Db` with an empty type name to file description map. */
+  /**
+   * Creates an isolated descriptor database initialized with the built-in well-known types.
+   *
+   * @return a mutable database independent of {@link #defaultDb}
+   */
   public static Db newDb() {
-    // The FileDescription objects in the default db contain lazily initialized TypeDescription
-    // values which may point to the state contained in the DefaultDb irrespective of this shallow
-    // copy; however, the type graph for a field is idempotently computed, and is guaranteed to
-    // only be initialized once thanks to atomic values within the TypeDescription objects, so it
-    // is safe to share these values across instances.
     return defaultDb.copy();
   }
 
-  /** Copy creates a copy of the current database with its own internal descriptor mapping. */
+  /**
+   * Copies this database with independent mutable indexes and type descriptions.
+   *
+   * <p>Immutable protobuf descriptors and enum/field descriptions may be shared. Changes to message
+   * representation bindings or subsequent registrations in either database are isolated from the
+   * other.
+   *
+   * @return an independent mutable copy
+   */
   public Db copy() {
-    Map<String, FileDescription> revFileDescriptorMap = new HashMap<>(this.revFileDescriptorMap);
-    List<FileDescription> files = new ArrayList<>(this.files);
+    Map<FileDescription, FileDescription> copiedDescriptions = new IdentityHashMap<>();
+    Map<String, FileDescription> revFileDescriptorMap =
+        new HashMap<>(this.revFileDescriptorMap.size());
+    this.revFileDescriptorMap.forEach(
+        (name, description) ->
+            revFileDescriptorMap.put(
+                name, copiedDescriptions.computeIfAbsent(description, FileDescription::copy)));
+    List<FileDescription> files = new ArrayList<>(this.files.size());
+    this.files.forEach(
+        description ->
+            files.add(copiedDescriptions.computeIfAbsent(description, FileDescription::copy)));
     return new Db(revFileDescriptorMap, files);
   }
 
-  /** FileDescriptions returns the set of file descriptions associated with this db. */
+  /**
+   * Returns the registered file descriptions.
+   *
+   * <p>The returned list is live and registry-owned. Callers must treat it as read-only.
+   *
+   * @return the live list in registration order
+   */
   public List<FileDescription> fileDescriptions() {
     return files;
   }
 
   /**
-   * RegisterDescriptor produces a `FileDescription` from a `FileDescriptor` and registers the
-   * message and enum types into the `pb.Db`.
+   * Registers the messages, enum constants, and extensions declared by one protobuf file.
+   *
+   * <p>Registration of the same file is idempotent. Dependencies are not traversed by this
+   * low-level method; {@link ProtoTypeRegistry#registerMessage(Message)} registers a message's
+   * complete descriptor dependency set.
+   *
+   * @param fileDesc descriptor to register
+   * @return the existing or newly created description for that file
    */
   public FileDescription registerDescriptor(FileDescriptor fileDesc) {
     String path = path(fileDesc);
@@ -145,8 +188,13 @@ public final class Db {
   }
 
   /**
-   * RegisterMessage produces a `FileDescription` from a `message` and registers the message and all
-   * other definitions within the message file into the `pb.Db`.
+   * Registers the definitions in a message's file and binds its generated or dynamic Java
+   * representation.
+   *
+   * <p>Dependencies are not traversed by this low-level method.
+   *
+   * @param message representative message instance
+   * @return the description for the message's file
    */
   public FileDescription registerMessage(Message message) {
     Descriptor msgDesc = message.getDescriptorForType();
@@ -162,8 +210,10 @@ public final class Db {
   }
 
   /**
-   * DescribeEnum takes a qualified enum name and returns an `EnumDescription` if it exists in the
-   * `pb.Db`.
+   * Looks up a protobuf enum constant by qualified name.
+   *
+   * @param enumName qualified enum-constant name, optionally beginning with a dot
+   * @return the description, or {@code null} if the constant is not registered
    */
   public EnumValueDescription describeEnum(String enumName) {
     enumName = sanitizeProtoName(enumName);
@@ -171,13 +221,25 @@ public final class Db {
     return fd != null ? fd.getEnumDescription(enumName) : null;
   }
 
-  /** DescribeType returns a `TypeDescription` for the `typeName` if it exists in the `pb.Db`. */
+  /**
+   * Looks up a protobuf message type by qualified name.
+   *
+   * @param typeName qualified message name, optionally beginning with a dot
+   * @return the description, or {@code null} if the type is not registered
+   */
   public PbTypeDescription describeType(String typeName) {
     typeName = sanitizeProtoName(typeName);
     FileDescription fd = revFileDescriptorMap.get(typeName);
     return fd != null ? fd.getTypeDescription(typeName) : null;
   }
 
+  /**
+   * Looks up an extension and verifies that it extends the requested message type.
+   *
+   * @param messageType qualified extended-message name
+   * @param extensionName qualified extension name
+   * @return the extension description, or {@code null} if either name does not match
+   */
   public FieldDescription describeExtension(String messageType, String extensionName) {
     extensionName = sanitizeProtoName(extensionName);
     FieldDescription extension = describeExtension(extensionName);
@@ -189,6 +251,12 @@ public final class Db {
     return extension;
   }
 
+  /**
+   * Looks up a protobuf extension by qualified name.
+   *
+   * @param extensionName qualified extension name, optionally beginning with a dot
+   * @return the extension description, or {@code null} if it is not registered
+   */
   public FieldDescription describeExtension(String extensionName) {
     extensionName = sanitizeProtoName(extensionName);
     FileDescription fd = revFileDescriptorMap.get(extensionName);
@@ -220,35 +288,22 @@ public final class Db {
   }
 
   /**
-   * CollectFileDescriptorSet builds a file descriptor set associated with the file where the input
-   * message is declared.
+   * Collects the descriptor for a message's file and all transitive file dependencies.
+   *
+   * @param message message whose descriptor graph to traverse
+   * @return a newly allocated set in dependency-discovery order
    */
   public static Set<FileDescriptor> collectFileDescriptorSet(Message message) {
-    Set<FileDescriptor> fdMap = new LinkedHashSet<>();
-    Descriptor messageDesc = message.getDescriptorForType();
-    FileDescriptor messageFile = messageDesc.getFile();
-    fdMap.add(messageFile);
-    fdMap.addAll(messageFile.getPublicDependencies());
-
-    //    parentFile = message.ProtoReflect().Descriptor().ParentFile()
-    //    fdMap[parentFile.Path()] = parentFile
-    //    // Initialize list of dependencies
-    //    deps := make([]protoreflect.FileImport, parentFile.Imports().Len())
-    //    for i := 0; i < parentFile.Imports().Len(); i++ {
-    //      deps[i] = parentFile.Imports().Get(i)
-    //    }
-    //    // Expand list for new dependencies
-    //    for i := 0; i < len(deps); i++ {
-    //      dep := deps[i]
-    //      if _, found := fdMap[dep.Path()]; found {
-    //        continue
-    //      }
-    //      fdMap[dep.Path()] = dep.FileDescriptor
-    //      for j := 0; j < dep.FileDescriptor.Imports().Len(); j++ {
-    //        deps = append(deps, dep.FileDescriptor.Imports().Get(j))
-    //      }
-    //    }
-    return fdMap;
+    Set<FileDescriptor> descriptors = new LinkedHashSet<>();
+    Deque<FileDescriptor> pending = new ArrayDeque<>();
+    pending.add(message.getDescriptorForType().getFile());
+    while (!pending.isEmpty()) {
+      FileDescriptor descriptor = pending.removeFirst();
+      if (descriptors.add(descriptor)) {
+        pending.addAll(descriptor.getDependencies());
+      }
+    }
+    return descriptors;
   }
 
   @Override

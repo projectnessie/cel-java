@@ -16,33 +16,63 @@
 package org.projectnessie.cel;
 
 /**
- * EvalOption indicates an evaluation option that may affect the evaluation behavior or information
- * in the output result.
+ * Built-in evaluation modes selected through {@link ProgramOption#evalOptions(EvalOption...)}.
+ *
+ * <p>Options are additive. Every built-in option except {@link #OptOptimize} selects the
+ * established interpreter planning path; custom decorators do so as well. With no such option, the
+ * planner may select native evaluation for eligible checked expression shapes and falls back to the
+ * established evaluator elsewhere.
  */
 public enum EvalOption {
 
-  /** OptTrackState will cause the runtime to return an immutable EvalState value in the Result. */
+  /**
+   * Causes the runtime to record intermediate expression values in the result's mutable,
+   * evaluation-owned {@link org.projectnessie.cel.interpreter.EvalState}.
+   *
+   * <p>State tracking adds evaluation overhead and selects established interpreter planning.
+   */
   OptTrackState(1),
 
-  /** OptExhaustiveEval causes the runtime to disable short-circuits and track state. */
+  /**
+   * Causes the runtime to disable short-circuit evaluation and record intermediate expression
+   * values in the result's mutable, evaluation-owned state.
+   *
+   * <p>This option includes {@link #OptTrackState} behavior and selects established interpreter
+   * planning. Because normally skipped branches are evaluated, their functions and errors may also
+   * be observed.
+   */
   OptExhaustiveEval(2 | OptTrackState.mask),
 
   /**
-   * OptOptimize precomputes functions and operators with constants as arguments at program creation
-   * time. This flag is useful when the expression will be evaluated repeatedly against a series of
-   * different inputs.
+   * Enables program-creation-time optimization of functions and operators whose arguments are
+   * constant.
+   *
+   * <p>This is useful for programs evaluated repeatedly. It does not guarantee that a particular
+   * expression is folded, and it is independent of whether eligible nodes use native evaluation.
    */
   OptOptimize(4),
 
   /**
-   * OptPartialEval enables the evaluation of a partial state where the input data that may be known
-   * to be missing, either as top-level variables, or somewhere within a variable's object member
-   * graph.
+   * Enables partial evaluation for variables or qualified attributes whose values are marked
+   * unknown.
    *
-   * <p>By itself, OptPartialEval does not change evaluation behavior unless the input to the
-   * Program Eval is an PartialVars.
+   * <p>By itself this does not change a result. Supply a {@link
+   * org.projectnessie.cel.interpreter.Activation.PartialActivation}, for example from {@link
+   * CEL#partialVars(Object, org.projectnessie.cel.interpreter.AttributePattern...)}, to mark
+   * unknown input. Combine with {@link #OptTrackState} when creating a residual AST through {@link
+   * Env#residualAst(Ast, EvalDetails)}. Partial evaluation selects established interpreter
+   * planning.
    */
-  OptPartialEval(8);
+  OptPartialEval(8),
+
+  /**
+   * Forces checked expressions to use established interpreter planning.
+   *
+   * <p>Without this option, the planner may evaluate eligible expression nodes directly over
+   * supported Java-native representations and falls back when a shape is not eligible. Native
+   * evaluation does not mean generated Java, bytecode, JNI, or machine code.
+   */
+  OptDisableNativeEval(16);
 
   private final int mask;
 
@@ -50,6 +80,11 @@ public enum EvalOption {
     this.mask = mask;
   }
 
+  /**
+   * Returns the internal bit mask associated with this option.
+   *
+   * @return option mask
+   */
   public int getMask() {
     return mask;
   }

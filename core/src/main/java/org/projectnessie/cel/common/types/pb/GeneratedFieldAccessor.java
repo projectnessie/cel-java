@@ -26,6 +26,7 @@ import java.lang.invoke.MethodType;
 import java.util.List;
 import java.util.Map;
 import org.projectnessie.cel.common.types.ref.FieldGetter;
+import org.projectnessie.cel.common.types.ref.FieldGetter.Primitive;
 import org.projectnessie.cel.common.types.ref.FieldTester;
 
 final class GeneratedFieldAccessor {
@@ -92,12 +93,84 @@ final class GeneratedFieldAccessor {
           continue;
         }
         MethodHandle objectGetter = getter.asType(OBJECT_GETTER);
+        Primitive primitiveGetter = primitiveGetter(messageClass, descriptor, getter, objectGetter);
+        if (primitiveGetter != null) {
+          return primitiveGetter;
+        }
         return target -> invoke(objectGetter, target);
       } catch (IllegalAccessException | NoSuchMethodException | RuntimeException e) {
         // Generated-name collisions and inaccessible generated classes use descriptor access.
       }
     }
     return null;
+  }
+
+  private static Primitive primitiveGetter(
+      Class<?> targetType,
+      FieldDescriptor descriptor,
+      MethodHandle getter,
+      MethodHandle objectGetter) {
+    if (descriptor.isRepeated()) {
+      return null;
+    }
+    MethodHandle booleanGetter = null;
+    MethodHandle longGetter = null;
+    MethodHandle doubleGetter = null;
+    switch (descriptor.getType()) {
+      case BOOL ->
+          booleanGetter = getter.asType(MethodType.methodType(boolean.class, Object.class));
+      case INT32, SINT32, SFIXED32, INT64, SINT64, SFIXED64, ENUM ->
+          longGetter = getter.asType(MethodType.methodType(long.class, Object.class));
+      case FLOAT, DOUBLE ->
+          doubleGetter = getter.asType(MethodType.methodType(double.class, Object.class));
+      default -> {
+        return null;
+      }
+    }
+    return new PrimitiveGetter(targetType, objectGetter, booleanGetter, longGetter, doubleGetter);
+  }
+
+  private record PrimitiveGetter(
+      Class<?> targetType,
+      MethodHandle objectGetter,
+      MethodHandle booleanGetter,
+      MethodHandle longGetter,
+      MethodHandle doubleGetter)
+      implements Primitive {
+
+    @Override
+    public Class<?> optimizedTargetType() {
+      return targetType;
+    }
+
+    @Override
+    public Object getFrom(Object target) {
+      return invoke(objectGetter, target);
+    }
+
+    @Override
+    public boolean getBooleanFrom(Object target) {
+      if (booleanGetter == null) {
+        return Primitive.super.getBooleanFrom(target);
+      }
+      return invokeBoolean(booleanGetter, target);
+    }
+
+    @Override
+    public long getLongFrom(Object target) {
+      if (longGetter == null) {
+        return Primitive.super.getLongFrom(target);
+      }
+      return invokeLong(longGetter, target);
+    }
+
+    @Override
+    public double getDoubleFrom(Object target) {
+      if (doubleGetter == null) {
+        return Primitive.super.getDoubleFrom(target);
+      }
+      return invokeDouble(doubleGetter, target);
+    }
   }
 
   static FieldTester createTester(PbTypeDescription type, FieldDescription field) {
@@ -279,6 +352,22 @@ final class GeneratedFieldAccessor {
   private static boolean invokeBoolean(MethodHandle tester, Object target) {
     try {
       return (boolean) tester.invokeExact(target);
+    } catch (Throwable e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private static long invokeLong(MethodHandle getter, Object target) {
+    try {
+      return (long) getter.invokeExact(target);
+    } catch (Throwable e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  private static double invokeDouble(MethodHandle getter, Object target) {
+    try {
+      return (double) getter.invokeExact(target);
     } catch (Throwable e) {
       throw new RuntimeException(e);
     }

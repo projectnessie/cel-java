@@ -113,18 +113,17 @@ import org.projectnessie.cel.common.types.traits.Negater;
 import org.projectnessie.cel.common.types.traits.Receiver;
 import org.projectnessie.cel.common.types.traits.Trait;
 import org.projectnessie.cel.interpreter.AttributeFactory.ConstantQualifier;
-import org.projectnessie.cel.interpreter.AttributeFactory.FieldQualifier;
 import org.projectnessie.cel.interpreter.AttributeFactory.NamespacedAttribute;
 import org.projectnessie.cel.interpreter.AttributeFactory.Qualifier;
 import org.projectnessie.cel.interpreter.AttributesTest.CustAttrFactory;
 import org.projectnessie.cel.interpreter.Coster.Cost;
-import org.projectnessie.cel.interpreter.Interpretable.EvalListFold;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableAttribute;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableConst;
 import org.projectnessie.cel.interpreter.functions.Overload;
 import org.projectnessie.cel.parser.Parser;
 import org.projectnessie.cel.parser.Parser.ParseResult;
 
+@SuppressWarnings("SameParameterValue")
 class InterpreterTest {
 
   private static final Type RECEIVER_TEST_TYPE =
@@ -578,7 +577,7 @@ class InterpreterTest {
                   "addall",
                   AdderType,
                   args -> {
-                    int val = 0;
+                    long val = 0;
                     for (Val arg : args) {
                       val += arg.intValue();
                     }
@@ -627,10 +626,11 @@ class InterpreterTest {
           .out("aGVsbG8="),
       new TestCase(InterpreterTestCase.complex)
           .expr(
-              "!(headers.ip in [\"10.0.1.4\", \"10.0.1.5\"]) && \n"
-                  + "((headers.path.startsWith(\"v1\") && headers.token in [\"v1\", \"v2\", \"admin\"]) || \n"
-                  + "(headers.path.startsWith(\"v2\") && headers.token in [\"v2\", \"admin\"]) || \n"
-                  + "(headers.path.startsWith(\"/admin\") && headers.token == \"admin\" && headers.ip in [\"10.0.1.2\", \"10.0.1.2\", \"10.0.1.2\"]))")
+              """
+              !(headers.ip in ["10.0.1.4", "10.0.1.5"]) &&\s
+              ((headers.path.startsWith("v1") && headers.token in ["v1", "v2", "admin"]) ||\s
+              (headers.path.startsWith("v2") && headers.token in ["v2", "admin"]) ||\s
+              (headers.path.startsWith("/admin") && headers.token == "admin" && headers.ip in ["10.0.1.2", "10.0.1.2", "10.0.1.2"]))""")
           .cost(costOf(3, 24))
           .exhaustiveCost(costOf(24, 24))
           .optimizedCost(costOf(2, 20))
@@ -643,10 +643,11 @@ class InterpreterTest {
                   "token", "admin")),
       new TestCase(InterpreterTestCase.complex_qual_vars)
           .expr(
-              "!(headers.ip in [\"10.0.1.4\", \"10.0.1.5\"]) && \n"
-                  + "((headers.path.startsWith(\"v1\") && headers.token in [\"v1\", \"v2\", \"admin\"]) || \n"
-                  + "(headers.path.startsWith(\"v2\") && headers.token in [\"v2\", \"admin\"]) || \n"
-                  + "(headers.path.startsWith(\"/admin\") && headers.token == \"admin\" && headers.ip in [\"10.0.1.2\", \"10.0.1.2\", \"10.0.1.2\"]))")
+              """
+              !(headers.ip in ["10.0.1.4", "10.0.1.5"]) &&\s
+              ((headers.path.startsWith("v1") && headers.token in ["v1", "v2", "admin"]) ||\s
+              (headers.path.startsWith("v2") && headers.token in ["v2", "admin"]) ||\s
+              (headers.path.startsWith("/admin") && headers.token == "admin" && headers.ip in ["10.0.1.2", "10.0.1.2", "10.0.1.2"]))""")
           .cost(costOf(3, 24))
           .exhaustiveCost(costOf(24, 24))
           .optimizedCost(costOf(2, 20))
@@ -739,12 +740,13 @@ class InterpreterTest {
           .container("google.api.expr")
           .types(Expr.getDefaultInstance())
           .expr(
-              "v1alpha1.Expr{ \n"
-                  + "	id: 1, \n"
-                  + "	const_expr: v1alpha1.Constant{ \n"
-                  + "		string_value: \"oneof_test\" \n"
-                  + "	}\n"
-                  + "}")
+              """
+              v1alpha1.Expr{\s
+                id: 1,\s
+                const_expr: v1alpha1.Constant{\s
+                    string_value: "oneof_test"\s
+                }
+              }""")
           .cost(costOf(0, 0))
           .out(
               Expr.newBuilder()
@@ -755,14 +757,15 @@ class InterpreterTest {
           .container("cel.expr.conformance.proto3")
           .types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance())
           .expr(
-              "TestAllTypes{\n"
-                  + "repeated_nested_enum: [\n"
-                  + "	0,\n"
-                  + "	TestAllTypes.NestedEnum.BAZ,\n"
-                  + "	TestAllTypes.NestedEnum.BAR],\n"
-                  + "repeated_int32: [\n"
-                  + "	TestAllTypes.NestedEnum.FOO,\n"
-                  + "	TestAllTypes.NestedEnum.BAZ]}")
+              """
+              TestAllTypes{
+              repeated_nested_enum: [
+                0,
+                TestAllTypes.NestedEnum.BAZ,
+                TestAllTypes.NestedEnum.BAR],
+              repeated_int32: [
+                TestAllTypes.NestedEnum.FOO,
+                TestAllTypes.NestedEnum.BAZ]}""")
           .cost(costOf(0, 0))
           .out(
               dev.cel.expr.conformance.proto3.TestAllTypes.newBuilder()
@@ -810,8 +813,9 @@ class InterpreterTest {
           .exhaustiveCost(costOf(38, 38)),
       new TestCase(InterpreterTestCase.macro_all_non_strict_var)
           .expr(
-              "code == \"111\" && [\"a\", \"b\"].all(x, x in tags) \n"
-                  + "|| code == \"222\" && [\"a\", \"b\"].all(x, x in tags)")
+              """
+              code == "111" && ["a", "b"].all(x, x in tags)\s
+              || code == "222" && ["a", "b"].all(x, x in tags)""")
           .env(
               Decls.newVar("code", Decls.String),
               Decls.newVar("tags", Decls.newListType(Decls.String)))
@@ -845,16 +849,17 @@ class InterpreterTest {
                       1, dev.cel.expr.conformance.proto2.NestedTestAllTypes.getDefaultInstance())
                   .build())
           .expr(
-              "has(TestAllTypes{standalone_enum: TestAllTypes.NestedEnum.BAR}.standalone_enum) \n"
-                  + "&& has(TestAllTypes{standalone_enum: TestAllTypes.NestedEnum.FOO}.standalone_enum) \n"
-                  + "&& !has(TestAllTypes{single_nested_enum: TestAllTypes.NestedEnum.FOO}.single_nested_message) \n"
-                  + "&& !has(TestAllTypes{}.standalone_enum) \n"
-                  + "&& has(TestAllTypes{single_nested_enum: TestAllTypes.NestedEnum.FOO}.single_nested_enum) \n"
-                  + "&& !has(pb2.single_int64) \n"
-                  + "&& has(pb2.repeated_bool) \n"
-                  + "&& !has(pb2.repeated_int32) \n"
-                  + "&& has(pb2.map_int64_nested_type) \n"
-                  + "&& !has(pb2.map_string_string)")
+              """
+                          has(TestAllTypes{standalone_enum: TestAllTypes.NestedEnum.BAR}.standalone_enum)\s
+                          && has(TestAllTypes{standalone_enum: TestAllTypes.NestedEnum.FOO}.standalone_enum)\s
+                          && !has(TestAllTypes{single_nested_enum: TestAllTypes.NestedEnum.FOO}.single_nested_message)\s
+                          && !has(TestAllTypes{}.standalone_enum)\s
+                          && has(TestAllTypes{single_nested_enum: TestAllTypes.NestedEnum.FOO}.single_nested_enum)\s
+                          && !has(pb2.single_int64)\s
+                          && has(pb2.repeated_bool)\s
+                          && !has(pb2.repeated_int32)\s
+                          && has(pb2.map_int64_nested_type)\s
+                          && !has(pb2.map_string_string)""")
           .cost(costOf(1, 29))
           .exhaustiveCost(costOf(29, 29)),
       new TestCase(InterpreterTestCase.macro_has_pb3_field)
@@ -869,18 +874,19 @@ class InterpreterTest {
                       1, dev.cel.expr.conformance.proto3.NestedTestAllTypes.getDefaultInstance())
                   .build())
           .expr(
-              "has(TestAllTypes{standalone_enum: TestAllTypes.NestedEnum.BAR}.standalone_enum) \n"
-                  + "&& !has(TestAllTypes{standalone_enum: TestAllTypes.NestedEnum.FOO}.standalone_enum) \n"
-                  + "&& !has(TestAllTypes{single_nested_enum: TestAllTypes.NestedEnum.FOO}.single_nested_message) \n"
-                  + "&& has(TestAllTypes{single_nested_enum: TestAllTypes.NestedEnum.FOO}.single_nested_enum) \n"
-                  + "&& !has(TestAllTypes{}.single_nested_message) \n"
-                  + "&& has(TestAllTypes{single_nested_message: TestAllTypes.NestedMessage{}}.single_nested_message) \n"
-                  + "&& !has(TestAllTypes{}.standalone_enum) \n"
-                  + "&& !has(pb3.single_int64) \n"
-                  + "&& has(pb3.repeated_bool) \n"
-                  + "&& !has(pb3.repeated_int32) \n"
-                  + "&& has(pb3.map_int64_nested_type) \n"
-                  + "&& !has(pb3.map_string_string)")
+              """
+                          has(TestAllTypes{standalone_enum: TestAllTypes.NestedEnum.BAR}.standalone_enum)\s
+                          && !has(TestAllTypes{standalone_enum: TestAllTypes.NestedEnum.FOO}.standalone_enum)\s
+                          && !has(TestAllTypes{single_nested_enum: TestAllTypes.NestedEnum.FOO}.single_nested_message)\s
+                          && has(TestAllTypes{single_nested_enum: TestAllTypes.NestedEnum.FOO}.single_nested_enum)\s
+                          && !has(TestAllTypes{}.single_nested_message)\s
+                          && has(TestAllTypes{single_nested_message: TestAllTypes.NestedMessage{}}.single_nested_message)\s
+                          && !has(TestAllTypes{}.standalone_enum)\s
+                          && !has(pb3.single_int64)\s
+                          && has(pb3.repeated_bool)\s
+                          && !has(pb3.repeated_int32)\s
+                          && has(pb3.map_int64_nested_type)\s
+                          && !has(pb3.map_string_string)""")
           .cost(costOf(1, 35))
           .exhaustiveCost(costOf(35, 35)),
       new TestCase(InterpreterTestCase.macro_map)
@@ -889,10 +895,11 @@ class InterpreterTest {
           .exhaustiveCost(costOf(7, 7)),
       new TestCase(InterpreterTestCase.matches)
           .expr(
-              "input.matches('k.*') \n"
-                  + "&& !'foo'.matches('k.*') \n"
-                  + "&& !'bar'.matches('k.*') \n"
-                  + "&& 'kilimanjaro'.matches('.*ro')")
+              """
+              input.matches('k.*')\s
+              && !'foo'.matches('k.*')\s
+              && !'bar'.matches('k.*')\s
+              && 'kilimanjaro'.matches('.*ro')""")
           .cost(costOf(2, 10))
           .exhaustiveCost(costOf(10, 10))
           .env(Decls.newVar("input", Decls.String))
@@ -994,17 +1001,18 @@ class InterpreterTest {
           .in("a.b.c", mapOf("d", 10)),
       new TestCase(InterpreterTestCase.select_key)
           .expr(
-              "m.strMap['val'] == 'string'\n"
-                  + "&& m.floatMap['val'] == 1.5\n"
-                  + "&& m.doubleMap['val'] == -2.0\n"
-                  + "&& m.intMap['val'] == -3\n"
-                  + "&& m.int32Map['val'] == 4\n"
-                  + "&& m.int64Map['val'] == -5\n"
-                  + "&& m.uintMap['val'] == 6u\n"
-                  + "&& m.uint32Map['val'] == 7u\n"
-                  + "&& m.uint64Map['val'] == 8u\n"
-                  + "&& m.boolMap['val'] == true\n"
-                  + "&& m.boolMap['val'] != false")
+              """
+                          m.strMap['val'] == 'string'
+                          && m.floatMap['val'] == 1.5
+                          && m.doubleMap['val'] == -2.0
+                          && m.intMap['val'] == -3
+                          && m.int32Map['val'] == 4
+                          && m.int64Map['val'] == -5
+                          && m.uintMap['val'] == 6u
+                          && m.uint32Map['val'] == 7u
+                          && m.uint64Map['val'] == 8u
+                          && m.boolMap['val'] == true
+                          && m.boolMap['val'] != false""")
           .cost(costOf(2, 32))
           .exhaustiveCost(costOf(32, 32))
           .env(Decls.newVar("m", Decls.newMapType(Decls.String, Decls.Dyn)))
@@ -1023,17 +1031,18 @@ class InterpreterTest {
                   "boolMap", mapOf("val", true))),
       new TestCase(InterpreterTestCase.select_bool_key)
           .expr(
-              "m.boolStr[true] == 'string'\n"
-                  + "&& m.boolFloat32[true] == 1.5\n"
-                  + "&& m.boolFloat64[false] == -2.1\n"
-                  + "&& m.boolInt[false] == -3\n"
-                  + "&& m.boolInt32[false] == 0\n"
-                  + "&& m.boolInt64[true] == 4\n"
-                  + "&& m.boolUint[true] == 5u\n"
-                  + "&& m.boolUint32[true] == 6u\n"
-                  + "&& m.boolUint64[false] == 7u\n"
-                  + "&& m.boolBool[true]\n"
-                  + "&& m.boolIface[false] == true")
+              """
+                          m.boolStr[true] == 'string'
+                          && m.boolFloat32[true] == 1.5
+                          && m.boolFloat64[false] == -2.1
+                          && m.boolInt[false] == -3
+                          && m.boolInt32[false] == 0
+                          && m.boolInt64[true] == 4
+                          && m.boolUint[true] == 5u
+                          && m.boolUint32[true] == 6u
+                          && m.boolUint64[false] == 7u
+                          && m.boolBool[true]
+                          && m.boolIface[false] == true""")
           .cost(costOf(2, 31))
           .exhaustiveCost(costOf(31, 31))
           .env(Decls.newVar("m", Decls.newMapType(Decls.String, Decls.Dyn)))
@@ -1053,10 +1062,11 @@ class InterpreterTest {
                   "boolIface", mapOf(false, true))),
       new TestCase(InterpreterTestCase.select_uint_key)
           .expr(
-              "m.uintIface[1u] == 'string'\n"
-                  + "&& m.uint32Iface[2u] == 1.5\n"
-                  + "&& m.uint64Iface[3u] == -2.1\n"
-                  + "&& m.uint64String[4u] == 'three'")
+              """
+              m.uintIface[1u] == 'string'
+              && m.uint32Iface[2u] == 1.5
+              && m.uint64Iface[3u] == -2.1
+              && m.uint64String[4u] == 'three'""")
           .cost(costOf(2, 11))
           .exhaustiveCost(costOf(11, 11))
           .env(Decls.newVar("m", Decls.newMapType(Decls.String, Decls.Dyn)))
@@ -1069,18 +1079,19 @@ class InterpreterTest {
                   "uint64String", mapOf(ULong.valueOf(4), "three"))),
       new TestCase(InterpreterTestCase.select_index)
           .expr(
-              "m.strList[0] == 'string'\n"
-                  + "&& m.floatList[0] == 1.5\n"
-                  + "&& m.doubleList[0] == -2.0\n"
-                  + "&& m.intList[0] == -3\n"
-                  + "&& m.int32List[0] == 4\n"
-                  + "&& m.int64List[0] == -5\n"
-                  + "&& m.uintList[0] == 6u\n"
-                  + "&& m.uint32List[0] == 7u\n"
-                  + "&& m.uint64List[0] == 8u\n"
-                  + "&& m.boolList[0] == true\n"
-                  + "&& m.boolList[1] != true\n"
-                  + "&& m.ifaceList[0] == {}")
+              """
+              m.strList[0] == 'string'
+              && m.floatList[0] == 1.5
+              && m.doubleList[0] == -2.0
+              && m.intList[0] == -3
+              && m.int32List[0] == 4
+              && m.int64List[0] == -5
+              && m.uintList[0] == 6u
+              && m.uint32List[0] == 7u
+              && m.uint64List[0] == 8u
+              && m.boolList[0] == true
+              && m.boolList[1] != true
+              && m.ifaceList[0] == {}""")
           .cost(costOf(2, 35))
           .exhaustiveCost(costOf(35, 35))
           .env(Decls.newVar("m", Decls.newMapType(Decls.String, Decls.Dyn)))
@@ -1100,9 +1111,10 @@ class InterpreterTest {
                   "ifaceList", new Object[] {new HashMap<>()})),
       new TestCase(InterpreterTestCase.select_field)
           .expr(
-              "a.b.c\n"
-                  + "&& pb3.repeated_nested_enum[0] == TestAllTypes.NestedEnum.BAR\n"
-                  + "&& json.list[0] == 'world'")
+              """
+                          a.b.c
+                          && pb3.repeated_nested_enum[0] == TestAllTypes.NestedEnum.BAR
+                          && json.list[0] == 'world'""")
           .cost(costOf(1, 7))
           .exhaustiveCost(costOf(7, 7))
           .container("cel.expr.conformance.proto3")
@@ -1134,15 +1146,16 @@ class InterpreterTest {
       // pb2 primitive fields may have default values set.
       new TestCase(InterpreterTestCase.select_pb2_primitive_fields)
           .expr(
-              "!has(a.single_int32)\n"
-                  + "&& a.single_int32 == -32\n"
-                  + "&& a.single_int64 == -64\n"
-                  + "&& a.single_uint32 == 32u\n"
-                  + "&& a.single_uint64 == 64u\n"
-                  + "&& a.single_float == 3.0\n"
-                  + "&& a.single_double == 6.4\n"
-                  + "&& a.single_bool\n"
-                  + "&& \"empty\" == a.single_string")
+              """
+                          !has(a.single_int32)
+                          && a.single_int32 == -32
+                          && a.single_int64 == -64
+                          && a.single_uint32 == 32u
+                          && a.single_uint64 == 64u
+                          && a.single_float == 3.0
+                          && a.single_double == 6.4
+                          && a.single_bool
+                          && "empty" == a.single_string""")
           .cost(costOf(3, 26))
           .exhaustiveCost(costOf(26, 26))
           .types(TestAllTypes.getDefaultInstance())
@@ -1151,10 +1164,11 @@ class InterpreterTest {
       // Wrapper type nil or value test.
       new TestCase(InterpreterTestCase.select_pb3_wrapper_fields)
           .expr(
-              "!has(a.single_int32_wrapper) && a.single_int32_wrapper == null\n"
-                  + "&& has(a.single_int64_wrapper) && a.single_int64_wrapper == 0\n"
-                  + "&& has(a.single_string_wrapper) && a.single_string_wrapper == \"hello\"\n"
-                  + "&& a.single_int64_wrapper == Int32Value{value: 0}")
+              """
+                          !has(a.single_int32_wrapper) && a.single_int32_wrapper == null
+                          && has(a.single_int64_wrapper) && a.single_int64_wrapper == 0
+                          && has(a.single_string_wrapper) && a.single_string_wrapper == "hello"
+                          && a.single_int64_wrapper == Int32Value{value: 0}""")
           .cost(costOf(3, 21))
           .exhaustiveCost(costOf(21, 21))
           .types(dev.cel.expr.conformance.proto3.TestAllTypes.getDefaultInstance())
@@ -1483,6 +1497,61 @@ class InterpreterTest {
   }
 
   @Test
+  void exhaustiveListFoldRetainsTransformErrorBeforeFilterError() {
+    assertExhaustiveFoldRetainsTransformErrorBeforeFilterError(
+        "[1, 2, 3].map(x, include(x), transform(x))", EvalExhaustiveListFold.class);
+  }
+
+  @Test
+  void exhaustiveMapFoldRetainsTransformErrorBeforeFilterError() {
+    assertExhaustiveFoldRetainsTransformErrorBeforeFilterError(
+        "[1, 2, 3].transformMap(i, x, include(x), transform(x))", EvalExhaustiveMapFold.class);
+  }
+
+  private static void assertExhaustiveFoldRetainsTransformErrorBeforeFilterError(
+      String expression, Class<? extends Interpretable> expectedFoldType) {
+    AtomicInteger filterCalls = new AtomicInteger();
+    AtomicInteger transformCalls = new AtomicInteger();
+    Program program =
+        program(
+            new TestCase(InterpreterTestCase.macro_map)
+                .expr(expression)
+                .env(
+                    Decls.newFunction(
+                        "include",
+                        singletonList(
+                            Decls.newOverload(
+                                "include_int", singletonList(Decls.Int), Decls.Bool))),
+                    Decls.newFunction(
+                        "transform",
+                        singletonList(
+                            Decls.newOverload(
+                                "transform_int", singletonList(Decls.Int), Decls.Int))))
+                .funcs(
+                    Overload.unary(
+                        "include_int",
+                        value -> {
+                          filterCalls.incrementAndGet();
+                          return value.intValue() == 2 ? Err.newErr("second") : True;
+                        }),
+                    Overload.unary(
+                        "transform_int",
+                        value -> {
+                          transformCalls.incrementAndGet();
+                          return value.intValue() == 1 ? Err.newErr("first") : value;
+                        })),
+            InterpretableDecorator.decDisableShortcircuits());
+
+    assertThat(program.interpretable).isInstanceOf(expectedFoldType);
+
+    Val result = program.interpretable.eval(program.activation);
+
+    assertThat(result).isInstanceOf(Err.class).hasToString("first");
+    assertThat(filterCalls.get()).isEqualTo(3);
+    assertThat(transformCalls.get()).isEqualTo(3);
+  }
+
+  @Test
   void nestedMacroAccumulatorDoesNotDisableListFoldSpecialization() {
     Program program =
         program(
@@ -1528,16 +1597,17 @@ class InterpreterTest {
     // Test the use of proto2 primitives within object construction.
     Source src =
         newTextSource(
-            "input == TestAllTypes{\n"
-                + "  single_int32: 1,\n"
-                + "  single_int64: 2,\n"
-                + "  single_uint32: 3u,\n"
-                + "  single_uint64: 4u,\n"
-                + "  single_float: -3.3,\n"
-                + "  single_double: -2.2,\n"
-                + "  single_string: \"hello world\",\n"
-                + "  single_bool: true\n"
-                + "}");
+            """
+                        input == TestAllTypes{
+                          single_int32: 1,
+                          single_int64: 2,
+                          single_uint32: 3u,
+                          single_uint64: 4u,
+                          single_float: -3.3,
+                          single_double: -2.2,
+                          single_string: "hello world",
+                          single_bool: true
+                        }""");
     ParseResult parsed = Parser.parseAllMacros(src);
     assertThat(parsed.hasErrors()).withFailMessage(parsed.getErrors()::toDisplayString).isFalse();
 
@@ -1872,10 +1942,7 @@ class InterpreterTest {
     return newContainer(Container.name(name));
   }
 
-  static class Program {
-    final Interpretable interpretable;
-    final Activation activation;
-
+  record Program(Interpretable interpretable, Activation activation) {
     Program(Interpretable interpretable, Activation activation) {
       this.interpretable = Objects.requireNonNull(interpretable);
       this.activation = Objects.requireNonNull(activation);
@@ -1956,6 +2023,6 @@ class InterpreterTest {
     if (!(q instanceof FieldQualifier)) {
       return false;
     }
-    return ((FieldQualifier) q).name.equals(fieldName);
+    return ((FieldQualifier) q).name().equals(fieldName);
   }
 }

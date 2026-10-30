@@ -32,6 +32,7 @@ import org.projectnessie.cel.common.types.pb.Checked;
 import org.projectnessie.cel.common.types.ref.FieldGetter;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeDescription;
+import org.projectnessie.cel.common.types.ref.Val;
 import tools.jackson.databind.JavaType;
 import tools.jackson.databind.ValueSerializer;
 import tools.jackson.databind.ser.BeanPropertyWriter;
@@ -44,16 +45,22 @@ final class JacksonTypeDescription implements TypeDescription {
   private final Type type;
   private final com.google.api.expr.v1alpha1.Type pbType;
 
-  private final Map<String, JacksonFieldType> fieldTypes;
+  private volatile Map<String, JacksonFieldType> fieldTypes;
 
-  JacksonTypeDescription(JavaType javaType, ValueSerializer<?> ser, TypeQuery typeQuery) {
+  JacksonTypeDescription(JavaType javaType) {
     this.javaType = javaType;
     this.name = javaType.getRawClass().getName();
     this.type = TypeT.newObjectTypeValue(name);
     this.pbType = com.google.api.expr.v1alpha1.Type.newBuilder().setMessageType(name).build();
+  }
 
-    fieldTypes = new HashMap<>();
+  void initialize(ValueSerializer<?> ser, TypeQuery typeQuery) {
+    if (fieldTypes != null) {
+      throw new IllegalStateException(
+          String.format("Jackson type '%s' is already initialized", name));
+    }
 
+    Map<String, JacksonFieldType> fields = new HashMap<>();
     Iterator<PropertyWriter> propIter = ser.properties();
     while (propIter.hasNext()) {
       PropertyWriter pw = propIter.next();
@@ -66,8 +73,13 @@ final class JacksonTypeDescription implements TypeDescription {
               target -> getter.getFrom(target) != null,
               getter,
               pw);
-      fieldTypes.put(n, ft);
+      fields.put(n, ft);
     }
+    fieldTypes = Map.copyOf(fields);
+  }
+
+  boolean initialized() {
+    return fieldTypes != null;
   }
 
   @FunctionalInterface
@@ -107,9 +119,27 @@ final class JacksonTypeDescription implements TypeDescription {
       return Checked.checkedTimestamp;
     } else if (Optional.class.isAssignableFrom(rawClass)) {
       return findTypeForJacksonType(elementType(type), typeQuery);
+    } else if (rawClass.isArray()) {
+      Class<?> componentType = rawClass.getComponentType();
+      if (componentType.isPrimitive()
+          && componentType != int.class
+          && componentType != long.class
+          && componentType != double.class) {
+        throw new IllegalArgumentException(
+            String.format("Unsupported Java array type '%s'", rawClass.getTypeName()));
+      }
+      com.google.api.expr.v1alpha1.Type valueType =
+          componentType == Object.class || Val.class.isAssignableFrom(componentType)
+              ? Checked.checkedDyn
+              : findTypeForJacksonType(elementType(type), typeQuery);
+      return Decls.newListType(valueType);
     } else if (Map.class.isAssignableFrom(rawClass)) {
       com.google.api.expr.v1alpha1.Type keyType =
           findTypeForJacksonType(type.getKeyType(), typeQuery);
+      if (!isSupportedMapKeyType(keyType)) {
+        throw new IllegalArgumentException(
+            String.format("Unsupported CEL map key type for Java type '%s'", type.getKeyType()));
+      }
       com.google.api.expr.v1alpha1.Type valueType =
           findTypeForJacksonType(type.getContentType(), typeQuery);
       return Decls.newMapType(keyType, valueType);
@@ -126,6 +156,16 @@ final class JacksonTypeDescription implements TypeDescription {
       }
       return t;
     }
+  }
+
+  private static boolean isSupportedMapKeyType(com.google.api.expr.v1alpha1.Type type) {
+    if (type.getTypeKindCase() != com.google.api.expr.v1alpha1.Type.TypeKindCase.PRIMITIVE) {
+      return false;
+    }
+    return switch (type.getPrimitive()) {
+      case BOOL, INT64, UINT64, STRING -> true;
+      default -> false;
+    };
   }
 
   private JavaType elementType(JavaType type) {
@@ -167,7 +207,11 @@ final class JacksonTypeDescription implements TypeDescription {
   }
 
   JacksonFieldType fieldType(String fieldName) {
-    return fieldTypes.get(fieldName);
+    Map<String, JacksonFieldType> fields = fieldTypes;
+    if (fields == null) {
+      throw new IllegalStateException(String.format("Jackson type '%s' is not initialized", name));
+    }
+    return fields.get(fieldName);
   }
 
   @Override
