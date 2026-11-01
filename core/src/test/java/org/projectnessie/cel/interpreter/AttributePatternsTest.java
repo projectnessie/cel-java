@@ -229,6 +229,21 @@ class AttributePatternsTest {
   }
 
   @Test
+  void partialActivationCopiesUnknownPatternArrays() {
+    AttributePattern original = newAttributePattern("original");
+    AttributePattern replacement = newAttributePattern("replacement");
+    AttributePattern[] source = {original};
+    PartialActivation activation = newPartialActivation(emptyActivation(), source);
+
+    source[0] = replacement;
+    assertThat(activation.unknownAttributePatterns()).containsExactly(original);
+
+    AttributePattern[] returned = activation.unknownAttributePatterns();
+    returned[0] = replacement;
+    assertThat(activation.unknownAttributePatterns()).containsExactly(original);
+  }
+
+  @Test
   void crossReference() {
     TypeRegistry reg = newRegistry();
     AttributeFactory fac = newPartialAttributeFactory(Container.defaultContainer, reg, reg);

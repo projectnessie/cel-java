@@ -113,12 +113,10 @@ import org.projectnessie.cel.common.types.traits.Negater;
 import org.projectnessie.cel.common.types.traits.Receiver;
 import org.projectnessie.cel.common.types.traits.Trait;
 import org.projectnessie.cel.interpreter.AttributeFactory.ConstantQualifier;
-import org.projectnessie.cel.interpreter.AttributeFactory.FieldQualifier;
 import org.projectnessie.cel.interpreter.AttributeFactory.NamespacedAttribute;
 import org.projectnessie.cel.interpreter.AttributeFactory.Qualifier;
 import org.projectnessie.cel.interpreter.AttributesTest.CustAttrFactory;
 import org.projectnessie.cel.interpreter.Coster.Cost;
-import org.projectnessie.cel.interpreter.Interpretable.EvalListFold;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableAttribute;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableConst;
 import org.projectnessie.cel.interpreter.functions.Overload;
@@ -1956,6 +1954,6 @@ class InterpreterTest {
     if (!(q instanceof FieldQualifier)) {
       return false;
     }
-    return ((FieldQualifier) q).name.equals(fieldName);
+    return ((FieldQualifier) q).name().equals(fieldName);
   }
 }

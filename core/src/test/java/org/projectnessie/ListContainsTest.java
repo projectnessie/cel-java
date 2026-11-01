@@ -45,7 +45,7 @@ public class ListContainsTest {
     arguments.put("this", 1);
     arguments.put("rules", rule);
 
-    String result = script.execute(String.class, arguments);
+    String result = script.executeWithActivation(String.class, arguments);
     assertThat(result).isEqualTo("");
   }
 
@@ -66,7 +66,7 @@ public class ListContainsTest {
     arguments.put("this", 15);
     arguments.put("rules", rule);
 
-    String result = script.execute(String.class, arguments);
+    String result = script.executeWithActivation(String.class, arguments);
     assertThat(result).isEqualTo("value must be in list");
   }
 
@@ -86,7 +86,7 @@ public class ListContainsTest {
     Map<String, Object> arguments = new HashMap<>();
     arguments.put("rules", rule);
 
-    Boolean result = script.execute(Boolean.class, arguments);
+    Boolean result = script.executeWithActivation(Boolean.class, arguments);
     assertThat(result).isTrue();
   }
 
@@ -106,7 +106,7 @@ public class ListContainsTest {
     Map<String, Object> arguments = new HashMap<>();
     arguments.put("rules", rule);
 
-    Boolean result = script.execute(Boolean.class, arguments);
+    Boolean result = script.executeWithActivation(Boolean.class, arguments);
     assertThat(result).isFalse();
   }
 }
