@@ -27,14 +27,26 @@ import com.google.protobuf.Message;
 import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.Types;
+import org.projectnessie.cel.common.types.ref.StandardScalarTypeAdapter;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeAdapterSupport;
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** defaultTypeAdapter converts go native types to CEL values. */
-public final class DefaultTypeAdapter implements TypeAdapter {
-  /** DefaultTypeAdapter adapts canonical CEL types from their equivalent Go values. */
+/**
+ * Default adapter for standard Java values and registered Protocol Buffer well-known types.
+ *
+ * <p>{@link #Instance} uses the shared default descriptor database. Applications that need custom
+ * protobuf messages should use a {@link ProtoTypeRegistry}, which combines adaptation with
+ * application-specific type registration.
+ *
+ * <p>Conversion failures are represented as CEL {@link Err} values rather than Java exceptions,
+ * except where malformed or unexpected protobuf input causes the underlying protobuf conversion to
+ * fail.
+ */
+public final class DefaultTypeAdapter implements StandardScalarTypeAdapter {
+
+  /** Shared adapter for standard values and the built-in protobuf descriptor database. */
   public static final DefaultTypeAdapter Instance = new DefaultTypeAdapter(Db.defaultDb);
 
   private final Db db;
@@ -43,7 +55,11 @@ public final class DefaultTypeAdapter implements TypeAdapter {
     this.db = db;
   }
 
-  /** NativeToValue implements the ref.TypeAdapter interface. */
+  /**
+   * Converts a Java value to its CEL representation.
+   *
+   * @return the converted value, or a CEL error when no conversion is supported
+   */
   @Override
   public Val nativeToValue(Object value) {
     Val val = nativeToValue(db, this, value);
@@ -89,8 +105,16 @@ public final class DefaultTypeAdapter implements TypeAdapter {
   }
 
   /**
-   * nativeToValue returns the converted (ref.Val, true) of a conversion is found, otherwise (nil,
-   * false)
+   * Attempts conversion using a particular protobuf descriptor database and adapter.
+   *
+   * <p>Already adapted values are returned unchanged. Protocol Buffer messages are unwrapped when
+   * they represent CEL scalar or well-known values; other messages must be registered in {@code
+   * db}. Unsupported inputs produce a CEL error.
+   *
+   * @param db descriptor database used to resolve protobuf message types
+   * @param a adapter used for recursive conversion
+   * @param value Java value to convert
+   * @return the converted CEL value, or a CEL error if conversion is unsupported
    */
   public static Val nativeToValue(Db db, TypeAdapter a, Object value) {
     Val v = maybeNativeToValue(a, value);

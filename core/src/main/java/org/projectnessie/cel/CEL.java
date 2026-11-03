@@ -38,6 +38,7 @@ import com.google.api.expr.v1alpha1.Type;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.projectnessie.cel.interpreter.Activation;
 import org.projectnessie.cel.interpreter.Activation.PartialActivation;
 import org.projectnessie.cel.interpreter.AttributePattern;
@@ -47,13 +48,34 @@ import org.projectnessie.cel.interpreter.Dispatcher;
 import org.projectnessie.cel.interpreter.InterpretableDecorator;
 import org.projectnessie.cel.interpreter.Interpreter;
 
+/**
+ * Low-level factories and conversion utilities for CEL environments, programs, activations, and
+ * ASTs.
+ *
+ * <p>Most applications begin with {@link Env#newEnv(EnvOption...)} and follow the
+ * parse/check/program/evaluate lifecycle. This class supports integrations that need explicit
+ * Protobuf AST conversion, partial activations, attribute patterns, or cost estimates.
+ */
 public final class CEL {
 
   /**
-   * newProgram creates a program instance with an environment, an ast, and an optional list of
-   * ProgramOption values.
+   * Creates an executable program for an AST in an environment.
    *
-   * <p>If the program cannot be configured the prog will be nil, with a non-nil error response.
+   * <p>Options are applied in argument order. A checked AST provides type and reference metadata
+   * used during planning; an unchecked AST is accepted but may require more runtime dispatch. The
+   * resulting program can be reused for multiple evaluations.
+   *
+   * <p>Native evaluation, when permitted by the selected options, is planner-selected evaluation
+   * over supported Java-native representations. Unsupported shapes fall back to the established
+   * evaluator; this does not generate Java or native machine code.
+   *
+   * @param e environment supplying types and name resolution
+   * @param ast parsed or checked expression
+   * @param opts program configuration tokens, normally created by {@link ProgramOption} factories
+   * @return reusable executable program
+   * @throws NullPointerException if {@code e}, {@code ast}, or {@code opts} is {@code null}, or if
+   *     an option is {@code null} or returns {@code null}
+   * @throws RuntimeException if program planning or option application fails
    */
   public static Program newProgram(Env e, Ast ast, ProgramOption... opts) {
     // Build the dispatcher, interpreter, and default program value.
@@ -86,7 +108,13 @@ public final class CEL {
 
     Interpreter interp =
         newInterpreter(
-            disp, e.getContainer(), e.getTypeProvider(), e.getTypeAdapter(), p.attrFactory);
+            disp,
+            e.getContainer(),
+            e.getTypeProvider(),
+            e.getTypeAdapter(),
+            p.attrFactory,
+            nativePlanningPermitted(p.evalOpts, p.decorators),
+            p.regexEngine);
     p.interpreter = interp;
 
     // Translate the EvalOption flags into InterpretableDecorator instances.
@@ -107,7 +135,8 @@ public final class CEL {
           state -> {
             List<InterpretableDecorator> decs = new ArrayList<>(decorators);
             decs.add(exhaustiveEval(state));
-            Prog clone = new Prog(e, pp.evalOpts, pp.defaultVars, disp, interp, state);
+            Prog clone =
+                new Prog(e, pp.evalOpts, pp.regexEngine, pp.defaultVars, disp, interp, state);
             return initInterpretable(clone, ast, decs);
           };
       return initProgGen(factory);
@@ -118,7 +147,8 @@ public final class CEL {
           state -> {
             List<InterpretableDecorator> decs = new ArrayList<>(decorators);
             decs.add(trackState(state));
-            Prog clone = new Prog(e, pp.evalOpts, pp.defaultVars, disp, interp, state);
+            Prog clone =
+                new Prog(e, pp.evalOpts, pp.regexEngine, pp.defaultVars, disp, interp, state);
             return initInterpretable(clone, ast, decs);
           };
       return initProgGen(factory);
@@ -158,7 +188,23 @@ public final class CEL {
     return p;
   }
 
-  /** CheckedExprToAst converts a checked expression proto message to an Ast. */
+  static boolean nativePlanningPermitted(
+      Set<EvalOption> evalOptions, List<InterpretableDecorator> decorators) {
+    return decorators.isEmpty()
+        && (evalOptions.isEmpty()
+            || evalOptions.size() == 1 && evalOptions.contains(EvalOption.OptOptimize));
+  }
+
+  /**
+   * Converts a checked-expression Protobuf message to an AST.
+   *
+   * <p>The returned source is reconstructed from the message's {@link SourceInfo}; it need not
+   * contain the original source text.
+   *
+   * @param checkedExpr checked expression message
+   * @return an AST that is considered checked when the message contains non-empty type metadata
+   * @throws NullPointerException if {@code checkedExpr} is {@code null}
+   */
   public static Ast checkedExprToAst(CheckedExpr checkedExpr) {
     Map<Long, Reference> refMap = checkedExpr.getReferenceMapMap();
     Map<Long, Type> typeMap = checkedExpr.getTypeMapMap();
@@ -171,9 +217,16 @@ public final class CEL {
   }
 
   /**
-   * AstToCheckedExpr converts an Ast to an protobuf CheckedExpr value.
+   * Converts a checked AST to a checked-expression Protobuf message.
    *
-   * <p>If the Ast.IsChecked() returns false, this conversion method will return an error.
+   * <p>The conversion preserves CEL-Java's current expression, reference, type, and source-info
+   * shape. It does not establish cross-runtime support for implementation-specific macro
+   * expansions.
+   *
+   * @param a checked AST
+   * @return checked-expression message
+   * @throws NullPointerException if {@code a} is {@code null}
+   * @throws IllegalArgumentException if {@code a} is unchecked
    */
   public static CheckedExpr astToCheckedExpr(Ast a) {
     if (!a.isChecked()) {
@@ -187,22 +240,44 @@ public final class CEL {
         .build();
   }
 
-  /** ParsedExprToAst converts a parsed expression proto message to an Ast. */
+  /**
+   * Converts a parsed-expression Protobuf message to an unchecked AST.
+   *
+   * <p>The returned source is reconstructed from the message's {@link SourceInfo}; it need not
+   * contain the original source text.
+   *
+   * @param parsedExpr parsed expression message
+   * @return unchecked AST
+   * @throws NullPointerException if {@code parsedExpr} is {@code null}
+   */
   public static Ast parsedExprToAst(ParsedExpr parsedExpr) {
     SourceInfo si = parsedExpr.getSourceInfo();
     return new Ast(parsedExpr.getExpr(), si, newInfoSource(si));
   }
 
-  /** AstToParsedExpr converts an Ast to an protobuf ParsedExpr value. */
+  /**
+   * Converts an AST to a parsed-expression Protobuf message.
+   *
+   * <p>Checked reference and type maps are not part of {@link ParsedExpr} and are therefore not
+   * included.
+   *
+   * @param a parsed or checked AST
+   * @return parsed-expression message
+   * @throws NullPointerException if {@code a} is {@code null}
+   */
   public static ParsedExpr astToParsedExpr(Ast a) {
     return ParsedExpr.newBuilder().setExpr(a.getExpr()).setSourceInfo(a.getSourceInfo()).build();
   }
 
   /**
-   * AstToString converts an Ast back to a string if possible.
+   * Unparses an AST to stable CEL source text.
    *
    * <p>Note, the conversion may not be an exact replica of the original expression, but will
    * produce a string that is semantically equivalent and whose textual representation is stable.
+   *
+   * @param a AST to unparse
+   * @return stable CEL expression text
+   * @throws NullPointerException if {@code a} is {@code null}
    */
   public static String astToString(Ast a) {
     Expr expr = a.getExpr();
@@ -210,45 +285,62 @@ public final class CEL {
     return unparse(expr, info);
   }
 
-  /** NoVars returns an empty Activation. */
+  /**
+   * Returns an activation with no variable bindings.
+   *
+   * @return empty activation
+   */
   public static Activation noVars() {
     return emptyActivation();
   }
 
   /**
-   * PartialVars returns a PartialActivation which contains variables and a set of AttributePattern
-   * values that indicate variables or parts of variables whose value are not yet known.
+   * Creates a partial activation containing bindings and attributes whose values are unknown.
    *
-   * <p>The `vars` value may either be an interpreter.Activation or any valid input to the
-   * interpreter.NewActivation call.
+   * <p>{@code vars} may be an {@link Activation}, a Java map, a {@link
+   * java.util.function.Function}, or an {@link
+   * org.projectnessie.cel.interpreter.ActivationFunction}. The returned activation copies the
+   * unknown-pattern array but retains its mutable pattern elements.
+   *
+   * @param vars bindings accepted by {@link Activation#newActivation(Object)}
+   * @param unknowns attribute patterns that evaluate as unknown
+   * @return partial activation
+   * @throws NullPointerException if {@code vars} or {@code unknowns} is {@code null}
+   * @throws IllegalArgumentException if {@code vars} is not a supported activation input
    */
   public static PartialActivation partialVars(Object vars, AttributePattern... unknowns) {
     return newPartialActivation(vars, unknowns);
   }
 
   /**
-   * AttributePattern returns an AttributePattern that matches a top-level variable. The pattern is
-   * mutable, and its methods support the specification of one or more qualifier patterns.
+   * Creates a mutable attribute pattern matching a top-level variable.
    *
-   * <p>For example, the AttributePattern(`a`).QualString(`b`) represents a variable access `a` with
-   * a string field or index qualification `b`. This pattern will match Attributes `a`, and `a.b`,
-   * but not `a.c`.
+   * <p>For example, {@code attributePattern("a").qualString("b")} represents the access {@code
+   * a.b}. It matches attributes {@code a} and {@code a.b}, but not {@code a.c}.
    *
    * <p>When using a CEL expression within a container, e.g. a package or namespace, the variable
    * name in the pattern must match the qualified name produced during the variable namespace
-   * resolution. For example, when variable `a` is declared within an expression whose container is
-   * `ns.app`, the fully qualified variable name may be `ns.app.a`, `ns.a`, or `a` per the CEL
-   * namespace resolution rules. Pick the fully qualified variable name that makes sense within the
-   * container as the AttributePattern `varName` argument.
+   * resolution. For example, when variable {@code a} is declared within an expression whose
+   * container is {@code ns.app}, the fully qualified variable name may be {@code ns.app.a}, {@code
+   * ns.a}, or {@code a} per the CEL namespace resolution rules. Use the qualified name selected by
+   * resolution as {@code varName}.
    *
-   * <p>See the interpreter.AttributePattern and interpreter.AttributeQualifierPattern for more info
-   * about how to create and manipulate AttributePattern values.
+   * @param varName top-level or resolved qualified variable name
+   * @return mutable attribute pattern
    */
   public static AttributePattern attributePattern(String varName) {
     return newAttributePattern(varName);
   }
 
-  /** EstimateCost returns the heuristic cost interval for the program. */
+  /**
+   * Returns the heuristic cost interval reported by an object that implements {@link Coster}.
+   *
+   * <p>A cost estimate is descriptive only; it does not impose an evaluation budget or runtime
+   * limit.
+   *
+   * @param p program or other cost-reporting object
+   * @return reported cost interval, or {@link Cost#Unknown} when {@code p} is not a {@code Coster}
+   */
   public static Cost estimateCost(Object p) {
     if (p instanceof Coster) {
       return ((Coster) p).cost();

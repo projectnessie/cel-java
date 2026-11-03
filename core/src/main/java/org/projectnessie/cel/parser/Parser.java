@@ -52,11 +52,15 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
+import org.projectnessie.cel.OperationAbortedException;
+import org.projectnessie.cel.OperationAbortedException.Phase;
 import org.projectnessie.cel.common.ErrorWithLocation;
 import org.projectnessie.cel.common.Errors;
 import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.Source;
 import org.projectnessie.cel.common.operators.Operator;
+import org.projectnessie.cel.internal.OperationCheckpoints;
+import org.projectnessie.cel.internal.OperationController;
 import org.projectnessie.cel.parser.Helper.Balancer;
 import org.projectnessie.cel.parser.ast.ConstantLiteral;
 import org.projectnessie.cel.parser.ast.ExprList;
@@ -66,6 +70,13 @@ import org.projectnessie.cel.parser.ast.ListInitializerList;
 import org.projectnessie.cel.parser.ast.MapInitializerList;
 import org.projectnessie.cel.parser.ast.Start;
 
+/**
+ * Low-level CEL parser.
+ *
+ * <p>Applications normally parse and check source through {@link org.projectnessie.cel.Env}. These
+ * static entry points are useful when a caller needs a parsed protobuf expression, source metadata,
+ * and parse diagnostics without type checking.
+ */
 public final class Parser {
 
   private static final Set<String> reservedIds =
@@ -93,24 +104,30 @@ public final class Parser {
           "while");
 
   private final Options options;
+  private final OperationController controller;
 
+  /** Parses a source with all standard macros enabled. */
   public static ParseResult parseAllMacros(Source source) {
     return parse(Options.builder().macros(AllMacros).build(), source);
   }
 
+  /** Parses a source with exactly the supplied macro set and default resource limits. */
   public static ParseResult parseWithMacros(Source source, List<Macro> macros) {
     return parse(Options.builder().macros(macros).build(), source);
   }
 
+  /** Parses a source using the supplied limits and macro configuration. */
   public static ParseResult parse(Options options, Source source) {
     return new Parser(options).parse(source);
   }
 
   Parser(Options options) {
     this.options = options;
+    this.controller = OperationCheckpoints.currentController();
   }
 
   ParseResult parse(Source source) {
+    controller.checkpointNow(Phase.PARSE);
     Helper helper = new Helper(source);
     Errors errors = new Errors(source);
     Expr expr = null;
@@ -126,6 +143,7 @@ public final class Parser {
       CelGrammarParser parser = new CelGrammarParser(source.description(), source.content());
       try {
         parser.Start();
+        controller.checkpointNow(Phase.AST_BUILD);
         expr = new AstBuilder(helper, errors).exprVisit(firstExpressionNode(parser.rootNode()));
       } catch (ParseException e) {
         errors.syntaxError(location(e.getLocation()), e.getMessage());
@@ -159,29 +177,40 @@ public final class Parser {
     return Location.newLocation(node.getBeginLine(), node.getBeginColumn() - 1);
   }
 
+  /**
+   * Result of one parse operation.
+   *
+   * <p>If parsing reports errors, {@link #getExpr()} is {@code null}. Source information and the
+   * diagnostic collection remain available in both success and failure cases.
+   */
   public static final class ParseResult {
     private final Expr expr;
     private final Errors errors;
     private final SourceInfo sourceInfo;
 
+    /** Creates a parse result from its expression, diagnostics, and source metadata. */
     public ParseResult(Expr expr, Errors errors, SourceInfo sourceInfo) {
       this.expr = expr;
       this.errors = errors;
       this.sourceInfo = sourceInfo;
     }
 
+    /** Returns the parsed expression, or {@code null} when parsing failed. */
     public Expr getExpr() {
       return expr;
     }
 
+    /** Returns parse diagnostics. */
     public Errors getErrors() {
       return errors;
     }
 
+    /** Returns source metadata collected while parsing. */
     public SourceInfo getSourceInfo() {
       return sourceInfo;
     }
 
+    /** Returns whether parsing produced at least one error diagnostic. */
     public boolean hasErrors() {
       return errors.hasErrors();
     }
@@ -204,6 +233,7 @@ public final class Parser {
     }
 
     Expr exprVisit(Node node) {
+      controller.checkpoint(Phase.AST_BUILD);
       if (node == null) {
         return reportError(Location.NoLocation, "unknown parse element encountered: <<nil>>");
       }
@@ -712,7 +742,12 @@ public final class Parser {
 
       ExprHelperImpl eh = new ExprHelperImpl(helper, exprID);
       try {
-        return macro.expander().expand(eh, target, args);
+        controller.checkpointNow(Phase.AST_BUILD);
+        var expanded = macro.expander().expand(eh, target, args);
+        controller.checkpointNow(Phase.AST_BUILD);
+        return expanded;
+      } catch (OperationAbortedException e) {
+        throw e;
       } catch (ErrorWithLocation err) {
         Location loc = err.getLocation();
         if (loc == null) {

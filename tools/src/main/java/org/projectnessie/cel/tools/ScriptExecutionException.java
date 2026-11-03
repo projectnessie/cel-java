@@ -15,12 +15,29 @@
  */
 package org.projectnessie.cel.tools;
 
+/**
+ * Reports a CEL error result or an incompatible unknown result from {@link Script} execution.
+ *
+ * <p>Unexpected internal Java failures and native result-conversion failures may instead propagate
+ * as runtime exceptions.
+ */
 public final class ScriptExecutionException extends ScriptException {
 
+  /**
+   * Creates an execution exception with a message.
+   *
+   * @param message detail message
+   */
   public ScriptExecutionException(String message) {
     super(message);
   }
 
+  /**
+   * Creates an execution exception with a message and cause.
+   *
+   * @param message detail message
+   * @param cause underlying cause
+   */
   public ScriptExecutionException(String message, Throwable cause) {
     super(message, cause);
   }

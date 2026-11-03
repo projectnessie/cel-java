@@ -17,8 +17,20 @@ package org.projectnessie.cel.interpreter.functions;
 
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** BinaryOp is a function that takes two values and produces an output. */
+/**
+ * Runtime implementation of a two-argument CEL function overload.
+ *
+ * <p>For receiver-style calls, {@code lhs} is the receiver. Implementations registered on a
+ * reusable program must be thread-safe.
+ */
 @FunctionalInterface
 public interface BinaryOp {
+  /**
+   * Invokes the function.
+   *
+   * @param lhs evaluated first argument or receiver
+   * @param rhs evaluated second argument
+   * @return the non-null CEL result, which may be a CEL error or unknown value
+   */
   Val invoke(Val lhs, Val rhs);
 }

@@ -18,6 +18,7 @@ package org.projectnessie.cel.common;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.google.api.expr.v1alpha1.SourceInfo;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -108,6 +109,104 @@ class SourceTest {
     assertThat(source.locationOffset(Location.newLocation(4, 0)))
         .withFailMessage("Character offset was out of range of source, but still found.")
         .isEqualTo(-1);
+  }
+
+  @Test
+  void textCoordinateBoundsAndRoundTrips() {
+    for (String contents : List.of("", "abc", "ab\ncd", "\n\nx\n", "ab\n")) {
+      Source source = Source.newStringSource(contents, "round-trip");
+
+      for (int offset = 0; offset <= contents.length(); offset++) {
+        Location location = source.offsetLocation(offset);
+        assertThat(location)
+            .describedAs("location for offset %s in %s", offset, contents)
+            .isNotEqualTo(Location.NoLocation);
+        assertThat(source.locationOffset(location))
+            .describedAs("round trip for offset %s in %s", offset, contents)
+            .isEqualTo(offset);
+      }
+
+      assertThat(source.offsetLocation(-1)).isEqualTo(Location.NoLocation);
+      assertThat(source.offsetLocation(contents.length() + 1)).isEqualTo(Location.NoLocation);
+    }
+  }
+
+  @Test
+  void textLocationBounds() {
+    Source source = Source.newStringSource("ab\nc", "bounds");
+
+    assertThat(source.locationOffset(Location.newLocation(1, 0))).isZero();
+    assertThat(source.locationOffset(Location.newLocation(1, 2))).isEqualTo(2);
+    assertThat(source.locationOffset(Location.newLocation(2, 0))).isEqualTo(3);
+    assertThat(source.locationOffset(Location.newLocation(2, 1))).isEqualTo(4);
+
+    assertThat(source.locationOffset(Location.newLocation(-1, 0))).isEqualTo(-1);
+    assertThat(source.locationOffset(Location.newLocation(0, 0))).isEqualTo(-1);
+    assertThat(source.locationOffset(Location.newLocation(1, -1))).isEqualTo(-1);
+    assertThat(source.locationOffset(Location.newLocation(1, 3))).isEqualTo(-1);
+    assertThat(source.locationOffset(Location.newLocation(2, 2))).isEqualTo(-1);
+    assertThat(source.locationOffset(Location.newLocation(3, 0))).isEqualTo(-1);
+    assertThat(source.locationOffset(Location.newLocation(3, 3))).isEqualTo(-1);
+    assertThatThrownBy(() -> source.locationOffset(null))
+        .isInstanceOf(NullPointerException.class)
+        .hasMessage("location");
+  }
+
+  @Test
+  void emptyAndFinalNewlineBounds() {
+    Source empty = Source.newStringSource("", "empty");
+    assertThat(empty.locationOffset(Location.newLocation(1, 0))).isZero();
+    assertThat(empty.locationOffset(Location.newLocation(1, 1))).isEqualTo(-1);
+    assertThat(empty.locationOffset(Location.newLocation(2, 0))).isEqualTo(-1);
+
+    Source finalNewline = Source.newStringSource("ab\n", "final-newline");
+    assertThat(finalNewline.locationOffset(Location.newLocation(1, 2))).isEqualTo(2);
+    assertThat(finalNewline.locationOffset(Location.newLocation(2, 0))).isEqualTo(3);
+    assertThat(finalNewline.locationOffset(Location.newLocation(2, 1))).isEqualTo(-1);
+    assertThat(finalNewline.offsetLocation(3)).isEqualTo(Location.newLocation(2, 0));
+  }
+
+  @Test
+  void metadataCoordinateBounds() {
+    Source source =
+        Source.newInfoSource(
+            SourceInfo.newBuilder()
+                .setLocation("metadata")
+                .addAllLineOffsets(List.of(3, 7))
+                .build());
+
+    assertThat(source.locationOffset(Location.newLocation(1, 2))).isEqualTo(2);
+    assertThat(source.locationOffset(Location.newLocation(1, 3))).isEqualTo(-1);
+    assertThat(source.locationOffset(Location.newLocation(2, 0))).isEqualTo(3);
+    assertThat(source.locationOffset(Location.newLocation(2, 3))).isEqualTo(6);
+    assertThat(source.locationOffset(Location.newLocation(2, 4))).isEqualTo(-1);
+    assertThat(source.locationOffset(Location.newLocation(3, 0))).isEqualTo(7);
+    assertThat(source.locationOffset(Location.newLocation(3, 100))).isEqualTo(107);
+    assertThat(source.locationOffset(Location.newLocation(4, 0))).isEqualTo(-1);
+
+    assertThat(source.offsetLocation(-1)).isEqualTo(Location.NoLocation);
+    assertThat(source.offsetLocation(0)).isEqualTo(Location.newLocation(1, 0));
+    assertThat(source.offsetLocation(2)).isEqualTo(Location.newLocation(1, 2));
+    assertThat(source.offsetLocation(3)).isEqualTo(Location.newLocation(2, 0));
+    assertThat(source.offsetLocation(6)).isEqualTo(Location.newLocation(2, 3));
+    assertThat(source.offsetLocation(7)).isEqualTo(Location.newLocation(3, 0));
+    assertThat(source.offsetLocation(100)).isEqualTo(Location.newLocation(3, 93));
+  }
+
+  @Test
+  void metadataWithoutLineOffsetsAndIntegerOverflow() {
+    Source oneLine = Source.newInfoSource(SourceInfo.newBuilder().build());
+    assertThat(oneLine.locationOffset(Location.newLocation(1, Integer.MAX_VALUE)))
+        .isEqualTo(Integer.MAX_VALUE);
+    assertThat(oneLine.locationOffset(Location.newLocation(2, 0))).isEqualTo(-1);
+    assertThat(oneLine.offsetLocation(Integer.MAX_VALUE))
+        .isEqualTo(Location.newLocation(1, Integer.MAX_VALUE));
+
+    Source largeLineStart =
+        Source.newInfoSource(SourceInfo.newBuilder().addLineOffsets(Integer.MAX_VALUE).build());
+    assertThat(largeLineStart.locationOffset(Location.newLocation(2, 0)))
+        .isEqualTo(Integer.MAX_VALUE);
+    assertThat(largeLineStart.locationOffset(Location.newLocation(2, 1))).isEqualTo(-1);
   }
 
   @Test

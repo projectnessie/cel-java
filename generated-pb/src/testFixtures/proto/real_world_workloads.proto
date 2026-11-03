@@ -1,0 +1,79 @@
+syntax = "proto3";
+
+package org.projectnessie.cel.benchmark.proto;
+
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_package = "org.projectnessie.cel.benchmark.proto";
+
+message PolicyResource {
+  string type = 1;
+  string name = 2;
+}
+
+message Member {
+  string type = 1;
+  string value = 2;
+}
+
+message Binding {
+  string role = 1;
+  repeated Member members = 2;
+}
+
+message OrganizationResource {
+  repeated Binding bindings = 1;
+}
+
+message GatewayAddress {
+  string type = 1;
+  optional string value = 2;
+}
+
+message DeviceAttributes {
+  string color = 1;
+  string size = 2;
+}
+
+message Device {
+  map<string, DeviceAttributes> attributes = 1;
+}
+
+message Condition {
+  string type = 1;
+  string status = 2;
+}
+
+message ResourceStatus {
+  repeated Condition conditions = 1;
+}
+
+message KubernetesResource {
+  ResourceStatus status = 1;
+}
+
+message EventData {
+  optional bool important = 1;
+  string amount = 2;
+}
+
+message CloudEvent {
+  string type = 1;
+  EventData data = 2;
+}
+
+message Booking {
+  string cloud_provider_id = 1;
+  optional string cloud_provider_region_id = 2;
+}
+
+message TraceInterval {
+  google.protobuf.Timestamp start_time = 1;
+  google.protobuf.Timestamp end_time = 2;
+}
+
+message Notification {
+  optional string webhook = 1;
+  optional string email = 2;
+}

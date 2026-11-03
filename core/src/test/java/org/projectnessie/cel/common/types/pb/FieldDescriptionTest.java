@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.IntT.intOf;
+import static org.projectnessie.cel.common.types.IteratorT.IteratorType;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.pb.Db.newDb;
@@ -42,8 +43,10 @@ import dev.cel.expr.conformance.proto3.TestAllTypes.NestedMessage;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -55,7 +58,9 @@ import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.IteratorT;
 import org.projectnessie.cel.common.types.MapT;
 import org.projectnessie.cel.common.types.TimestampT;
+import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Mapper;
+import org.projectnessie.cel.common.types.traits.Trait;
 
 public class FieldDescriptionTest {
 
@@ -336,6 +341,7 @@ public class FieldDescriptionTest {
     assertThat(map.find(uintOf(42))).isNull();
     assertThat(map.contains(uintOf(2))).isSameAs(True);
     assertThat(map.contains(uintOf(42))).isSameAs(False);
+    assertProtoMapIterator(map, uintOf(1), uintOf(2), uintOf(-1L));
 
     DynamicMessage dynamicMessage =
         DynamicMessage.newBuilder(msg.getDescriptorForType()).mergeFrom(msg).build();
@@ -344,6 +350,7 @@ public class FieldDescriptionTest {
     assertThat(((MapT) map).equal((MapT) dynamicMap)).isSameAs(True);
     assertThat(dynamicMap).isEqualTo(map);
     assertThat(dynamicMap.hashCode()).isEqualTo(map.hashCode());
+    assertProtoMapIterator(dynamicMap, uintOf(1), uintOf(2), uintOf(-1L));
 
     TestAllTypes equalMessage = msg.toBuilder().build();
     Mapper equalGeneratedMap = (Mapper) field.getField(equalMessage, registry);
@@ -390,6 +397,28 @@ public class FieldDescriptionTest {
     assertThat(map.find(stringOf("duplicate")).intValue()).isEqualTo(2L);
     assertThat(map.size().intValue()).isEqualTo(2L);
     assertThat(map.convertToNative(Map.class)).isEqualTo(Map.of("duplicate", 2L, "other", 3L));
+  }
+
+  private static void assertProtoMapIterator(Mapper map, Val... expectedKeys) {
+    IteratorT iterator = map.iterator();
+    int iteratorHash = iterator.hashCode();
+    assertThat(iterator.type()).isSameAs(IteratorType);
+    assertThat(iterator.type().hasTrait(Trait.IteratorType)).isTrue();
+    assertThat(iterator).hasToString("iterator");
+    assertThat(iterator.equals(iterator)).isTrue();
+    assertThat(iterator.equals(map.iterator())).isFalse();
+    assertThat(iterator.value()).isNull();
+    assertThat(iterator.equal(map.iterator())).matches(Err::isError);
+
+    Set<Val> keys = new HashSet<>();
+    while (iterator.hasNext() == True) {
+      keys.add(iterator.next());
+    }
+    assertThat(keys).containsExactlyInAnyOrder(expectedKeys);
+    assertThat(iterator.next()).matches(Err::isError).hasToString("no more elements");
+    assertThat(iterator.next()).matches(Err::isError).hasToString("no more elements");
+    assertThat(iterator.hashCode()).isEqualTo(iteratorHash);
+    assertThat(iterator).hasToString("iterator");
   }
 
   static class TestCase {

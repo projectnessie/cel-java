@@ -17,21 +17,142 @@ package org.projectnessie.cel.types.jackson;
 
 import static java.util.Collections.singletonMap;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.projectnessie.cel.common.types.StringT.stringOf;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.checker.Decls;
+import org.projectnessie.cel.common.ULong;
 import org.projectnessie.cel.common.types.ObjectT;
+import org.projectnessie.cel.common.types.ref.TypeRegistry;
+import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.tools.Script;
+import org.projectnessie.cel.tools.ScriptCompiler;
 import org.projectnessie.cel.tools.ScriptHost;
+import org.projectnessie.cel.types.jackson.types.AnEnum;
+import org.projectnessie.cel.types.jackson.types.ArrayObject;
 import org.projectnessie.cel.types.jackson.types.ClassWithEnum;
 import org.projectnessie.cel.types.jackson.types.ClassWithEnum.ClassEnum;
+import org.projectnessie.cel.types.jackson.types.InnerType;
 import org.projectnessie.cel.types.jackson.types.MetaTest;
 import org.projectnessie.cel.types.jackson.types.MyPojo;
 import org.projectnessie.cel.types.jackson.types.ObjectListEnum;
 
+@SuppressWarnings("deprecation")
 public class Jackson2ScriptHostTest {
+
+  @Test
+  void scriptCompilerConfiguresJacksonTypesBeforeCompilingSources() throws Exception {
+    for (TypeRegistry registry :
+        List.of(JacksonRegistry.newRegistry(), JacksonRegistry.newExactAggregateRegistry())) {
+      ScriptCompiler compiler =
+          ScriptCompiler.newBuilder()
+              .registry(registry)
+              .withDeclarations(
+                  Decls.newVar("param", Decls.newObjectType(MetaTest.class.getName())))
+              .withTypes(MetaTest.class)
+              .build();
+      MetaTest value = MetaTest.builder().author("author").build();
+
+      assertThat(compiler.compile("param.author").execute(String.class, Map.of("param", value)))
+          .isEqualTo("author");
+      assertThat(
+              compiler
+                  .compile("param.author == 'author'")
+                  .execute(Boolean.class, Map.of("param", value)))
+          .isTrue();
+    }
+  }
+
+  @Test
+  void repeatedTypesAreIdempotentForGeneralAndExactRegistries() throws Exception {
+    for (TypeRegistry registry :
+        List.of(JacksonRegistry.newRegistry(), JacksonRegistry.newExactAggregateRegistry())) {
+      ScriptHost host = ScriptHost.newBuilder().registry(registry).build();
+      for (int i = 0; i < 3; i++) {
+        Script script =
+            host.buildScript("param.author")
+                .withDeclarations(
+                    Decls.newVar("param", Decls.newObjectType(MetaTest.class.getName())))
+                .withTypes(MetaTest.class)
+                .build();
+        assertThat(
+                script.executeWithActivation(
+                    String.class, Map.of("param", MetaTest.builder().author("author").build())))
+            .isEqualTo("author");
+      }
+    }
+  }
+
+  @Test
+  void standaloneEnum() throws Exception {
+    ScriptHost scriptHost = ScriptHost.newBuilder().registry(JacksonRegistry.newRegistry()).build();
+    String enumConstant = AnEnum.class.getName() + "." + AnEnum.ENUM_VALUE_2.name();
+
+    Script script =
+        scriptHost
+            .buildScript("value == " + enumConstant)
+            .withDeclarations(Decls.newVar("value", Decls.Int))
+            .withTypes(AnEnum.class)
+            .build();
+
+    assertThat(
+            script.executeWithActivation(Boolean.class, singletonMap("value", AnEnum.ENUM_VALUE_2)))
+        .isTrue();
+  }
+
+  @Test
+  void arraysUseTheirAdaptedCelTypes() throws Exception {
+    ScriptHost scriptHost = ScriptHost.newBuilder().registry(JacksonRegistry.newRegistry()).build();
+    String enumConstant = AnEnum.class.getName() + "." + AnEnum.ENUM_VALUE_2.name();
+    Script script =
+        scriptHost
+            .buildScript(
+                "param.bytes == b'root'"
+                    + " && param.ints[1] == 2"
+                    + " && param.longs[0] == 3"
+                    + " && param.doubles[0] == 4.5"
+                    + " && param.strings[0] == 'string'"
+                    + " && param.boxedInts[0] == 5"
+                    + " && param.uints[0] == 6u"
+                    + " && param.enums[0] == "
+                    + enumConstant
+                    + " && param.objects[0].intProp == 7"
+                    + " && param.dynamic[0] == 'dynamic'"
+                    + " && param.values[0] == 'value'"
+                    + " && param.nestedInts[0][1] == 9"
+                    + " && param.nestedBytes[0] == b'bytes'")
+            .withDeclarations(
+                Decls.newVar("param", Decls.newObjectType(ArrayObject.class.getName())))
+            .withTypes(ArrayObject.class)
+            .build();
+
+    assertThat(script.executeWithActivation(Boolean.class, singletonMap("param", arrayObject())))
+        .isTrue();
+  }
+
+  private static ArrayObject arrayObject() {
+    ArrayObject value = new ArrayObject();
+    value.bytes = "root".getBytes(StandardCharsets.UTF_8);
+    value.ints = new int[] {1, 2};
+    value.longs = new long[] {3};
+    value.doubles = new double[] {4.5d};
+    value.strings = new String[] {"string"};
+    value.boxedInts = new Integer[] {5};
+    value.uints = new ULong[] {ULong.valueOf(6)};
+    value.enums = new AnEnum[] {AnEnum.ENUM_VALUE_2};
+    InnerType object = new InnerType();
+    object.intProp = 7;
+    value.objects = new InnerType[] {object};
+    value.dynamic = new Object[] {"dynamic"};
+    value.values = new Val[] {stringOf("value")};
+    value.nestedInts = new int[][] {{8, 9}};
+    value.nestedBytes = new byte[][] {"bytes".getBytes(StandardCharsets.UTF_8)};
+    return value;
+  }
 
   @Test
   void simple() throws Exception {
@@ -47,8 +168,10 @@ public class Jackson2ScriptHostTest {
     MetaTest cmMatch = MetaTest.builder().author("foo@bar.baz").build();
     MetaTest cmNoMatch = MetaTest.builder().author("foo@foo.foo").build();
 
-    assertThat(script.execute(Boolean.class, singletonMap("param", cmMatch))).isTrue();
-    assertThat(script.execute(Boolean.class, singletonMap("param", cmNoMatch))).isFalse();
+    assertThat(script.executeWithActivation(Boolean.class, singletonMap("param", cmMatch)))
+        .isTrue();
+    assertThat(script.executeWithActivation(Boolean.class, singletonMap("param", cmNoMatch)))
+        .isFalse();
 
     script =
         scriptHost
@@ -57,8 +180,9 @@ public class Jackson2ScriptHostTest {
             .withTypes(MetaTest.class)
             .build();
 
-    assertThat(script.execute(Object.class, singletonMap("param", cmMatch))).isEqualTo(cmMatch);
-    assertThat(script.execute(ObjectT.class, singletonMap("param", cmMatch)).value())
+    assertThat(script.executeWithActivation(Object.class, singletonMap("param", cmMatch)))
+        .isEqualTo(cmMatch);
+    assertThat(script.executeWithActivation(ObjectT.class, singletonMap("param", cmMatch)).value())
         .isEqualTo(cmMatch);
   }
 
@@ -84,7 +208,7 @@ public class Jackson2ScriptHostTest {
     arguments.put("inp", pojo);
     arguments.put("checkName", checkName);
 
-    assertThat(script.execute(Boolean.class, arguments)).isTrue();
+    assertThat(script.executeWithActivation(Boolean.class, arguments)).isTrue();
   }
 
   @Test
@@ -109,7 +233,7 @@ public class Jackson2ScriptHostTest {
                     .build())
             .build();
 
-    assertThat(script.execute(Boolean.class, singletonMap("param", val))).isTrue();
+    assertThat(script.executeWithActivation(Boolean.class, singletonMap("param", val))).isTrue();
 
     // same as above, but use the 'container'
 
@@ -122,7 +246,7 @@ public class Jackson2ScriptHostTest {
             .withTypes(ObjectListEnum.class)
             .build();
 
-    assertThat(script.execute(Boolean.class, singletonMap("param", val))).isTrue();
+    assertThat(script.executeWithActivation(Boolean.class, singletonMap("param", val))).isTrue();
 
     // return the enum
 
@@ -135,7 +259,7 @@ public class Jackson2ScriptHostTest {
             .withTypes(ObjectListEnum.class)
             .build();
 
-    assertThat(script.execute(Integer.class, singletonMap("param", val)))
+    assertThat(script.executeWithActivation(Integer.class, singletonMap("param", val)))
         .isEqualTo(ClassEnum.VAL_2.ordinal());
   }
 }
