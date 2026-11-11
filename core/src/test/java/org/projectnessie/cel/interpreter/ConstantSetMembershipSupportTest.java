@@ -20,6 +20,7 @@ import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
 import static org.projectnessie.cel.common.types.DoubleT.doubleOf;
 import static org.projectnessie.cel.common.types.Err.newErr;
+import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
 import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
@@ -33,7 +34,7 @@ import org.projectnessie.cel.common.types.ref.Val;
 class ConstantSetMembershipSupportTest {
 
   @Test
-  void preservesErrorUnknownEmptyAndTypeCheckOrder() {
+  void preservesErrorUnknownAndEmptySetSemantics() {
     Val error = newErr("carried");
     Val unknown = unknownOf(7L);
     Set<Val> values = Set.of(stringOf("value"));
@@ -41,24 +42,29 @@ class ConstantSetMembershipSupportTest {
     assertThat(evaluate(error, "string", values)).isSameAs(error);
     assertThat(evaluate(unknown, "string", values)).isSameAs(unknown);
     assertThat(evaluate(uintOf(1), null, Set.of())).isSameAs(False);
-    assertThat(evaluate(uintOf(1), "string", values).type().typeName()).isEqualTo("error");
+    assertThat(evaluate(uintOf(1), "string", values)).isSameAs(False);
   }
 
   @Test
-  void delegatesExactEqualityAndHashingToTheStoredValSet() {
+  void preservesCelNumericEquality() {
     DoubleT nan = doubleOf(Double.NaN);
     Set<Val> nanSet = Set.of(nan);
-    assertThat(evaluate(nan, "double", nanSet)).isSameAs(True);
+    assertThat(evaluate(nan, "double", nanSet)).isSameAs(False);
     assertThat(evaluate(doubleOf(Double.NaN), "double", nanSet)).isSameAs(False);
 
     for (double stored : new double[] {-0.0d, 0.0d}) {
       Set<Val> zeroSet = Set.of(doubleOf(stored));
       for (double needle : new double[] {-0.0d, 0.0d}) {
         Val needleValue = doubleOf(needle);
-        assertThat(evaluate(needleValue, "double", zeroSet).booleanValue())
-            .isEqualTo(zeroSet.contains(needleValue));
+        assertThat(evaluate(needleValue, "double", zeroSet).booleanValue()).isTrue();
       }
     }
+
+    assertThat(evaluate(doubleOf(1.0), "int", Set.of(intOf(1)))).isSameAs(True);
+    assertThat(evaluate(intOf(1), "double", Set.of(doubleOf(1.0)))).isSameAs(True);
+    assertThat(evaluate(uintOf(1), "int", Set.of(intOf(1)))).isSameAs(True);
+    assertThat(evaluate(intOf(-1), "uint", Set.of(uintOf(-1)))).isSameAs(False);
+    assertThat(evaluate(doubleOf(1.5), "int", Set.of(intOf(1)))).isSameAs(False);
 
     UintT highBit = uintOf(Long.MIN_VALUE);
     assertThat(evaluate(highBit, "uint", Set.of(highBit))).isSameAs(True);

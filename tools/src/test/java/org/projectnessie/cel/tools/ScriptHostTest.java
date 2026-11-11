@@ -51,6 +51,19 @@ class ScriptHostTest {
           + " && request.time < timestamp(\"2026-08-01T00:00:00Z\")";
 
   @Test
+  void checkedPlanningPreservesCrossTypeListMembership() throws Exception {
+    for (String expression : List.of("dyn(1.0) in [1]", "dyn(1) in [1.0]", "dyn(1u) in [1]")) {
+      Script optimized = ScriptHost.newBuilder().build().buildScript(expression).build();
+      Script unoptimized =
+          ScriptHost.newBuilder().disableOptimize().build().buildScript(expression).build();
+      assertThat(optimized.execute(Boolean.class, Map.of())).isTrue();
+      assertThat(unoptimized.execute(Boolean.class, Map.of())).isTrue();
+    }
+    Script mismatch = ScriptHost.newBuilder().build().buildScript("dyn('1') in [1]").build();
+    assertThat(mismatch.execute(Boolean.class, Map.of())).isFalse();
+  }
+
+  @Test
   void basic() throws Exception {
     ScriptHost scriptHost = ScriptHost.newBuilder().build();
 

@@ -27,9 +27,20 @@ import static org.projectnessie.cel.interpreter.Interpretable.newConstValue;
 
 import java.lang.reflect.Proxy;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.projectnessie.cel.Ast;
+import org.projectnessie.cel.Env;
+import org.projectnessie.cel.EnvOption;
+import org.projectnessie.cel.EvalOption;
+import org.projectnessie.cel.ProgramOption;
+import org.projectnessie.cel.checker.Decls;
+import org.projectnessie.cel.common.types.DoubleT;
 import org.projectnessie.cel.common.types.Overloads;
+import org.projectnessie.cel.common.types.UintT;
 import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Lister;
@@ -79,6 +90,47 @@ class SetMembershipOptimizationTest {
     MembershipCall original = new MembershipCall(lhs, rhs);
 
     assertThat(BuiltInOptimizer.maybeOptimizeSetMembership(original, original)).isSameAs(original);
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "x in [1]",
+        "x in [1u]",
+        "x in [1.0]",
+        "x in ['1']",
+        "x in [double('NaN')]",
+        "x in [0.0]",
+        "x in []"
+      })
+  void optimizedMembershipMatchesListEquality(String expression) {
+    Env env = Env.newEnv(EnvOption.declarations(Decls.newVar("x", Decls.Dyn)));
+    var compiled = env.compile(expression);
+    assertThat(compiled.hasIssues()).isFalse();
+    Ast ast = compiled.getAst();
+    var plain = env.program(ast, ProgramOption.evalOptions(EvalOption.OptDisableNativeEval));
+    var optimized = env.program(ast, ProgramOption.evalOptions(EvalOption.OptOptimize));
+    var establishedOptimized =
+        env.program(
+            ast,
+            ProgramOption.evalOptions(EvalOption.OptOptimize, EvalOption.OptDisableNativeEval));
+    for (Object value :
+        List.of(1L, 1.0, UintT.uintOf(1), "1", -1L, 1.5, -0.0, 0.0, DoubleT.doubleOf(Double.NaN))) {
+      Object input = Map.of("x", value);
+      Val expected = plain.eval(input).getVal();
+      assertThat(optimized.eval(input).getVal())
+          .as(expression + " with " + value)
+          .isEqualTo(expected);
+      assertThat(establishedOptimized.eval(input).getVal()).isEqualTo(expected);
+    }
+  }
+
+  @Test
+  void crossTypeMembershipEvaluatesLeftOperandOnce() {
+    AtomicInteger evaluations = new AtomicInteger();
+    Interpretable lhs = countingValue(DoubleT.doubleOf(1), evaluations);
+    assertThat(optimize(lhs, new Val[] {intOf(1)}).eval(emptyActivation()).booleanValue()).isTrue();
+    assertThat(evaluations).hasValue(1);
   }
 
   private static Interpretable optimize(Interpretable lhs, Val[] values) {

@@ -17,11 +17,10 @@ package org.projectnessie.cel.interpreter;
 
 import static org.projectnessie.cel.common.types.BoolT.False;
 import static org.projectnessie.cel.common.types.BoolT.True;
-import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.Util.isUnknownOrError;
 
 import java.util.Set;
-import org.projectnessie.cel.common.operators.Operator;
+import org.projectnessie.cel.common.types.DoubleT;
 import org.projectnessie.cel.common.types.ref.Val;
 
 /** Shared post-evaluation semantics for optimized constant-set membership. */
@@ -35,9 +34,19 @@ final class ConstantSetMembershipSupport {
     if (values.isEmpty()) {
       return False;
     }
-    if (!needle.type().typeName().equals(needleTypeName)) {
-      return noSuchOverload(null, Operator.In.id, needle);
+    // Set.contains() accepts reference identity, but CEL NaN never equals even itself.
+    if (needle instanceof DoubleT && Double.isNaN(needle.doubleValue())) {
+      return False;
     }
-    return values.contains(needle) ? True : False;
+    if (needle.type().typeName().equals(needleTypeName)) {
+      return values.contains(needle) ? True : False;
+    }
+    // CEL equality permits cross-type numeric matches without requiring matching Java hashes.
+    for (Val value : values) {
+      if (needle.equal(value) == True) {
+        return True;
+      }
+    }
+    return False;
   }
 }

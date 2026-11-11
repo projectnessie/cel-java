@@ -17,6 +17,7 @@ package org.projectnessie.cel.interpreter;
 
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableAttribute;
+import org.projectnessie.cel.interpreter.Interpretable.InterpretableCall;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableConst;
 
 /**
@@ -106,5 +107,25 @@ public interface InterpretableDecorator {
    */
   static InterpretableDecorator decOptimize() {
     return BuiltInOptimizer.INSTANCE;
+  }
+
+  /** Folds a unary call with a constant argument when supported. */
+  static Interpretable maybeOptimizeConstUnary(Interpretable i, InterpretableCall call) {
+    return BuiltInOptimizer.maybeOptimizeConstUnary(i, call);
+  }
+
+  /** Folds a list literal whose elements are constant. */
+  static Interpretable maybeBuildListLiteral(Interpretable i, EvalList list) {
+    return BuiltInOptimizer.maybeBuildListLiteral(i, list);
+  }
+
+  /** Folds a map literal whose keys and values are constant. */
+  static Interpretable maybeBuildMapLiteral(Interpretable i, EvalMap map) {
+    return BuiltInOptimizer.maybeBuildMapLiteral(i, map);
+  }
+
+  /** Optimizes membership in an eligible constant list. */
+  static Interpretable maybeOptimizeSetMembership(Interpretable i, InterpretableCall inList) {
+    return BuiltInOptimizer.maybeOptimizeSetMembership(i, inList);
   }
 }
