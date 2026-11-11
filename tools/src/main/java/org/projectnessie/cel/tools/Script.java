@@ -26,6 +26,7 @@ import org.projectnessie.cel.Program;
 import org.projectnessie.cel.Program.EvalResult;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.interpreter.ActivationFunction;
 
 public final class Script {
   private final Env env;
@@ -36,12 +37,24 @@ public final class Script {
     this.prg = prg;
   }
 
+  /** Migrate to {@link #executeWithActivation(Class, ActivationFunction)}. */
+  @Deprecated(forRemoval = true)
   public <T> T execute(Class<T> resultType, Function<String, Object> arguments)
       throws ScriptException {
     return evaluate(resultType, arguments);
   }
 
   public <T> T execute(Class<T> resultType, Map<String, Object> arguments) throws ScriptException {
+    return executeWithActivation(resultType, arguments);
+  }
+
+  public <T> T executeWithActivation(Class<T> resultType, ActivationFunction arguments)
+      throws ScriptException {
+    return evaluate(resultType, arguments);
+  }
+
+  public <T> T executeWithActivation(Class<T> resultType, Map<String, Object> arguments)
+      throws ScriptException {
     return evaluate(resultType, arguments);
   }
 

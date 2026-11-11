@@ -37,6 +37,7 @@ import org.projectnessie.cel.common.types.ListT;
 import org.projectnessie.cel.common.types.MapT;
 import org.projectnessie.cel.common.types.StringT;
 import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.interpreter.ActivationFunction;
 import org.projectnessie.cel.interpreter.functions.Overload;
 import org.projectnessie.cel.toolstests.Dummy;
 
@@ -63,7 +64,7 @@ class ScriptHostTest {
     arguments.put("x", "hello");
     arguments.put("y", "world");
 
-    String result = script.execute(String.class, arguments);
+    String result = script.executeWithActivation(String.class, arguments);
 
     assertThat(result).isEqualTo("hello world");
   }
@@ -81,7 +82,7 @@ class ScriptHostTest {
             .build();
 
     String result =
-        script.execute(
+        script.executeWithActivation(
             String.class,
             arg -> {
               if ("x".equals(arg)) {
@@ -89,7 +90,7 @@ class ScriptHostTest {
               } else if ("y".equals(arg)) {
                 return "world";
               } else {
-                return null;
+                return ActivationFunction.ABSENT;
               }
             });
 
@@ -101,12 +102,12 @@ class ScriptHostTest {
     ScriptHost scriptHost = ScriptHost.newBuilder().build();
 
     Script listScript = scriptHost.buildScript("[1, 2, 3]").build();
-    Val list = listScript.execute(Val.class, Collections.emptyMap());
+    Val list = listScript.executeWithActivation(Val.class, Collections.emptyMap());
     assertThat(list).isInstanceOf(ListT.class);
     assertThat((Object[]) list.value()).containsExactly(1L, 2L, 3L);
 
     Script mapScript = scriptHost.buildScript("{\"a\": 1, \"b\": 2}").build();
-    Val map = mapScript.execute(Val.class, Collections.emptyMap());
+    Val map = mapScript.executeWithActivation(Val.class, Collections.emptyMap());
     assertThat(map).isInstanceOf(MapT.class);
     Map<String, Long> expectedMap = new HashMap<>();
     expectedMap.put("a", 1L);
@@ -118,7 +119,7 @@ class ScriptHostTest {
   void executeObjectStillConvertsToNativeResult() throws Exception {
     Script script = ScriptHost.newBuilder().build().buildScript("[1, 2, 3]").build();
 
-    Object result = script.execute(Object.class, Collections.emptyMap());
+    Object result = script.executeWithActivation(Object.class, Collections.emptyMap());
 
     assertThat(result).isEqualTo(Arrays.asList(1L, 2L, 3L));
   }
@@ -130,7 +131,8 @@ class ScriptHostTest {
     // create the script, will be parsed and checked
     Script script = scriptHost.buildScript("1/0 != 0").build();
 
-    assertThatThrownBy(() -> script.execute(String.class, singletonMap("x", "hello world")))
+    assertThatThrownBy(
+            () -> script.executeWithActivation(String.class, singletonMap("x", "hello world")))
         .isInstanceOf(ScriptExecutionException.class)
         .hasMessage("divide by zero");
   }
@@ -177,7 +179,7 @@ class ScriptHostTest {
 
     Script script = scriptHost.buildScript("foo()").withLibraries(new MyLib()).build();
 
-    assertThat(script.execute(Integer.class, Collections.emptyMap())).isEqualTo(42);
+    assertThat(script.executeWithActivation(Integer.class, Collections.emptyMap())).isEqualTo(42);
   }
 
   @Test
@@ -202,7 +204,7 @@ class ScriptHostTest {
     arguments.put("inp", pojo);
     arguments.put("checkName", checkName);
 
-    assertThat(script.execute(Boolean.class, arguments)).isTrue();
+    assertThat(script.executeWithActivation(Boolean.class, arguments)).isTrue();
   }
 
   @Test
@@ -277,7 +279,7 @@ class ScriptHostTest {
     Map<String, Object> arguments = authorizationArguments("storage.googleapis.com");
     arguments.remove("resource.name");
 
-    assertThatThrownBy(() -> script.execute(Boolean.class, arguments))
+    assertThatThrownBy(() -> script.executeWithActivation(Boolean.class, arguments))
         .isInstanceOf(ScriptExecutionException.class);
     assertThat(grants(script, arguments)).isFalse();
   }
@@ -325,7 +327,7 @@ class ScriptHostTest {
             .withLibraries(new AttributeLibrary("prod"))
             .build();
 
-    assertThatThrownBy(() -> script.execute(Boolean.class, Collections.emptyMap()))
+    assertThatThrownBy(() -> script.executeWithActivation(Boolean.class, Collections.emptyMap()))
         .isInstanceOf(ScriptExecutionException.class)
         .hasMessageContaining("forced getAttribute error");
     assertThat(grants(script, Collections.emptyMap())).isFalse();
@@ -375,7 +377,7 @@ class ScriptHostTest {
         .isFalse();
     assertThatThrownBy(
             () ->
-                script.execute(
+                script.executeWithActivation(
                     Boolean.class,
                     Collections.singletonMap(
                         "resource.name", "projects/_/buckets/example/objects/reports/q1.csv")))
@@ -415,7 +417,7 @@ class ScriptHostTest {
 
   private static boolean grants(Script script, Map<String, Object> arguments) {
     try {
-      return Boolean.TRUE.equals(script.execute(Boolean.class, arguments));
+      return Boolean.TRUE.equals(script.executeWithActivation(Boolean.class, arguments));
     } catch (ScriptException | RuntimeException e) {
       return false;
     }
