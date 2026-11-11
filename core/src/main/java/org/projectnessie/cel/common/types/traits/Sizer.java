@@ -17,9 +17,13 @@ package org.projectnessie.cel.common.types.traits;
 
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** Sizer interface for supporting 'size()' overloads. */
+/** Capability for values that support the CEL {@code size()} operation. */
 public interface Sizer {
-  /** Size returns the number of elements or length of the value. */
+  /**
+   * Returns the number of elements or the length as a CEL int.
+   *
+   * @return a non-negative CEL int, or a CEL error or unknown value
+   */
   Val size();
 
   /**

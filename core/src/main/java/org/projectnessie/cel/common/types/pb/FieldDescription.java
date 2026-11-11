@@ -51,8 +51,19 @@ import org.projectnessie.cel.common.types.MapT;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeEnum;
 import org.projectnessie.cel.common.types.ref.Val;
+import org.projectnessie.cel.internal.OperationCheckpoints;
 
-/** FieldDescription holds metadata related to fields declared within a type. */
+/**
+ * Protocol Buffer field metadata and low-level access operations.
+ *
+ * <p>The description maps a protobuf {@link FieldDescriptor} to its checked CEL type, Java
+ * representation, presence semantics, and generated/dynamic message access. Repeated fields become
+ * CEL lists, protobuf map fields become CEL maps, unsigned integers use {@link ULong}, and
+ * well-known wrapper fields use CEL null when absent.
+ *
+ * <p>Applications normally obtain field metadata through {@link
+ * ProtoTypeRegistry#findFieldType(String, String)} rather than constructing descriptions directly.
+ */
 public final class FieldDescription extends Description {
   private static final Object NO_NATIVE_MAP_KEY = new Object();
 
@@ -66,7 +77,15 @@ public final class FieldDescription extends Description {
   private final Class<?> reflectType;
   private final Message zeroMsg;
 
-  /** NewFieldDescription creates a new field description from a protoreflect.FieldDescriptor. */
+  /**
+   * Creates metadata for a protobuf field.
+   *
+   * <p>Map-entry key and value descriptions are created recursively.
+   *
+   * @param fieldDesc immutable protobuf field descriptor
+   * @return a new field description
+   * @throws NullPointerException if {@code fieldDesc} is null
+   */
   public static FieldDescription newFieldDescription(FieldDescriptor fieldDesc) {
     Objects.requireNonNull(fieldDesc);
     Class<?> reflectType;
@@ -166,7 +185,11 @@ public final class FieldDescription extends Description {
     this.zeroMsg = zeroMsg;
   }
 
-  /** CheckedType returns the type-definition used at type-check time. */
+  /**
+   * Returns the checked CEL type for this field.
+   *
+   * <p>Repeated non-map fields become lists and protobuf map fields become maps.
+   */
   public Type checkedType() {
     if (desc.isMapField()) {
       return Type.newBuilder()
@@ -184,17 +207,17 @@ public final class FieldDescription extends Description {
     return typeDefToType();
   }
 
-  /** Descriptor returns the protoreflect.FieldDescriptor for this type. */
+  /** Returns the immutable protobuf field descriptor. */
   public FieldDescriptor descriptor() {
     return desc;
   }
 
   /**
-   * IsSet returns whether the field is set on the target value, per the proto presence conventions
-   * of proto2 or proto3 accordingly.
+   * Tests field presence using the applicable proto2 or proto3 rules.
    *
-   * <p>This function implements the FieldType.IsSet function contract which can be used to operate
-   * on more than just protobuf field accesses; however, the target here must be a protobuf.Message.
+   * @param target generated or dynamic protobuf message
+   * @return {@code false} if {@code target} is not a message, has no matching field descriptor, or
+   *     the field is absent
    */
   public boolean isSet(Object target) {
     if (target instanceof Message v) {
@@ -205,13 +228,17 @@ public final class FieldDescription extends Description {
   }
 
   /**
-   * GetFrom returns the accessor method associated with the field on the proto generated struct.
+   * Reads a field and normalizes it to the Java representation expected by CEL.
    *
-   * <p>If the field is not set, the proto default value is returned instead.
+   * <p>Absent ordinary fields use protobuf defaults. Absent well-known wrapper fields use protobuf
+   * null. Dynamic well-known messages are unwrapped with {@code db}.
    *
-   * <p>This function implements the FieldType.GetFrom function contract which can be used to
-   * operate on more than just protobuf field accesses; however, the target here must be a
-   * protobuf.Message.
+   * @param db descriptor database used to unwrap nested messages
+   * @param target non-null generated or dynamic protobuf message whose schema contains this field
+   * @return normalized scalar, list, map, or message value
+   * @throws IllegalArgumentException if {@code target} is not a protobuf message
+   * @throws NullPointerException if {@code target} is {@code null} or its schema does not contain
+   *     this field
    */
   public Object getFrom(Db db, Object target) {
     if (!(target instanceof Message v)) {
@@ -270,47 +297,52 @@ public final class FieldDescription extends Description {
     //    }
   }
 
-  /** IsEnum returns true if the field type refers to an enum value. */
+  /**
+   * Returns whether this field descriptor has protobuf enum Java type.
+   *
+   * <p>Repeated enum fields qualify; map fields do not, even when their value type is an enum.
+   */
   public boolean isEnum() {
     return desc.getJavaType() == JavaType.ENUM;
   }
 
-  /** IsMap returns true if the field is of map type. */
+  /** Returns whether this is a protobuf map field. */
   public boolean isMap() {
     return desc.isMapField();
   }
 
-  /** IsMessage returns true if the field is of message type. */
+  /**
+   * Returns whether this field descriptor has protobuf message Java type.
+   *
+   * <p>Every protobuf map field qualifies because its descriptor uses a synthetic message entry,
+   * regardless of the map value type.
+   */
   public boolean isMessage() {
     return desc.getJavaType() == JavaType.MESSAGE;
   }
 
-  /** IsOneof returns true if the field is declared within a oneof block. */
+  /** Returns whether the field is declared in a protobuf {@code oneof}. */
   public boolean isOneof() {
     return desc.getContainingOneof() != null;
   }
 
-  /**
-   * IsList returns true if the field is a repeated value.
-   *
-   * <p>This method will also return true for map values, so check whether the field is also a map.
-   */
+  /** Returns whether this is a repeated non-map field. */
   public boolean isList() {
     return desc.isRepeated() && !desc.isMapField();
   }
 
   /**
-   * MaybeUnwrapDynamic takes the reflected protoreflect.Message and determines whether the value
-   * can be unwrapped to a more primitive CEL type.
+   * Unwraps a dynamic well-known message to the Java representation expected by CEL.
    *
-   * <p>This function returns the unwrapped value and 'true' on success, or the original value and
-   * 'false' otherwise.
+   * @param db descriptor database used for nested {@code Any} values and extensions
+   * @param msg message to inspect
+   * @return the unwrapped value, or the original message when no conversion applies
    */
   public Object maybeUnwrapDynamic(Db db, Message msg) {
     return unwrapDynamic(db, this, msg);
   }
 
-  /** Name returns the CamelCase name of the field within the proto-based struct. */
+  /** Returns the protobuf source name of the field. */
   public String name() {
     return desc.getName();
   }
@@ -341,19 +373,21 @@ public final class FieldDescription extends Description {
   }
 
   /**
-   * String returns the fully qualified name of the field within its type as well as whether the
-   * field occurs within a oneof. func (fd *FieldDescription) String() string { return
-   * fmt.Sprintf("%v.%s `oneof=%t`", desc.ContainingMessage().FullName(), name(), isOneof()) }
+   * Returns the default protobuf message for a message-valued field.
    *
-   * <p>/** Zero returns the zero value for the protobuf message represented by this field.
-   *
-   * <p>If the field is not a proto.Message type, the zero value is nil.
+   * @return a dynamic default message, or {@code null} for non-message fields
    */
   @Override
   public Message zero() {
     return zeroMsg;
   }
 
+  /**
+   * Returns the scalar or message CEL type for one value of this field.
+   *
+   * <p>Unlike {@link #checkedType()}, this method does not wrap repeated and map fields in their
+   * aggregate type.
+   */
   public Type typeDefToType() {
     switch (desc.getJavaType()) {
       case MESSAGE:
@@ -412,6 +446,12 @@ public final class FieldDescription extends Description {
     return Objects.hash(desc, reflectType);
   }
 
+  /**
+   * Tests presence on a generated or dynamic protobuf message.
+   *
+   * @return {@code false} for a non-message target, a message without a matching field descriptor,
+   *     or an absent field
+   */
   public boolean hasField(Object target) {
     if (!(target instanceof Message message)) {
       return false;
@@ -420,18 +460,53 @@ public final class FieldDescription extends Description {
     return fd != null && hasValueForField(fd, message);
   }
 
+  /**
+   * Reads and normalizes this field using {@link DefaultTypeAdapter#Instance} for map values.
+   *
+   * @param target non-null generated or dynamic protobuf message whose schema contains this field
+   * @return a normalized Java value or CEL map wrapper
+   * @throws ClassCastException if {@code target} is not a protobuf message
+   * @throws NullPointerException if {@code target} is {@code null} or its schema does not contain
+   *     this field
+   */
   public Object getField(Object target) {
     return getField(target, DefaultTypeAdapter.Instance);
   }
 
+  /**
+   * Reads and normalizes this field using the supplied adapter for map values.
+   *
+   * @param target non-null generated or dynamic protobuf message whose schema contains this field
+   * @param adapter adapter retained by protobuf map wrappers for nested conversion
+   * @return a normalized Java value or CEL map wrapper
+   * @throws ClassCastException if {@code target} is not a protobuf message
+   * @throws NullPointerException if {@code target} is {@code null} or its schema does not contain
+   *     this field
+   */
   public Object getField(Object target, TypeAdapter adapter) {
     Message message = (Message) target;
     FieldDescriptor fd = fieldDescriptorFor(message);
-    Object value = message.getField(fd);
+    return adaptDescriptorValue(message, fd, message.getField(fd), adapter);
+  }
+
+  Object rawField(Object target) {
+    Message message = (Message) target;
+    FieldDescriptor fd = fieldDescriptorFor(message);
+    return message.getField(fd);
+  }
+
+  Object adaptDescriptorValue(Object target, Object value, TypeAdapter adapter) {
+    Message message = (Message) target;
+    FieldDescriptor fd = fieldDescriptorFor(message);
+    return adaptDescriptorValue(message, fd, value, adapter);
+  }
+
+  private static Object adaptDescriptorValue(
+      Message message, FieldDescriptor fd, Object value, TypeAdapter adapter) {
     if (fd.isMapField() && value instanceof List) {
       return new ProtoMapT(adapter, fd, (List<?>) value);
     }
-    return getValueFromField(fd, message);
+    return normalizeValueFromField(fd, message, value);
   }
 
   Object adaptGeneratedValue(Object value, TypeAdapter adapter) {
@@ -452,28 +527,40 @@ public final class FieldDescription extends Description {
     return normalizeUnsignedValue(desc, value);
   }
 
+  Object exactRepeatedValue(Object value) {
+    FieldDescriptor.Type type = desc.getType();
+    if (value instanceof List
+        && (type == FieldDescriptor.Type.UINT32
+            || type == FieldDescriptor.Type.UINT64
+            || type == FieldDescriptor.Type.FIXED32
+            || type == FieldDescriptor.Type.FIXED64)) {
+      return new UnsignedLongList(desc, (List<?>) value);
+    }
+    return value;
+  }
+
   boolean isWrapper() {
     return isWellKnownType(desc);
   }
 
-  boolean generatedValueNeedsAdaptation() {
-    if (desc.isMapField()) {
-      return true;
-    }
-    FieldDescriptor.Type type = desc.getType();
-    return type == FieldDescriptor.Type.UINT32
-        || type == FieldDescriptor.Type.UINT64
-        || type == FieldDescriptor.Type.FIXED32
-        || type == FieldDescriptor.Type.FIXED64;
+  /**
+   * Reads a field through protobuf reflection and normalizes unsigned, map, and wrapper values.
+   *
+   * @param desc descriptor belonging to {@code message}
+   * @param message generated or dynamic message
+   * @return the normalized Java value
+   */
+  public static Object getValueFromField(FieldDescriptor desc, Message message) {
+    return normalizeValueFromField(desc, message, message.getField(desc));
   }
 
-  public static Object getValueFromField(FieldDescriptor desc, Message message) {
-
+  private static Object normalizeValueFromField(
+      FieldDescriptor desc, Message message, Object fieldValue) {
     if (!desc.isRepeated() && isWellKnownType(desc) && !message.hasField(desc)) {
       return NullValue.NULL_VALUE;
     }
 
-    Object v = message.getField(desc);
+    Object v = fieldValue;
     if (!desc.isMapField() && !desc.isRepeated()) {
       v = normalizeUnsignedValue(desc, v);
     } else if (desc.isMapField()) {
@@ -601,8 +688,21 @@ public final class FieldDescription extends Description {
       return toNative(adapter, typeDesc);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public <T> T toNative(TypeAdapter conversionAdapter, Class<T> typeDesc) {
+      if (typeDesc == Map.class) {
+        Map<Object, Object> converted = new LinkedHashMap<>();
+        var controller = OperationCheckpoints.currentController();
+        for (Map.Entry<Object, Object> entry : toJavaMap().entrySet()) {
+          controller.checkpoint();
+          converted.put(
+              conversionAdapter.valueToNative(adapter.nativeToValue(entry.getKey()), Object.class),
+              conversionAdapter.valueToNative(
+                  adapter.nativeToValue(entry.getValue()), Object.class));
+        }
+        return (T) converted;
+      }
       return conversionAdapter.valueToNative(
           MapT.newMaybeWrappedMap(adapter, toJavaMap()), typeDesc);
     }
@@ -716,7 +816,7 @@ public final class FieldDescription extends Description {
       if (index != null) {
         return index.get(key);
       }
-      if (!scanned || entryCount() <= 1) {
+      if (!scanned || physicalEntryCount() <= 1) {
         scanned = true;
         return scan(key);
       }
@@ -759,10 +859,20 @@ public final class FieldDescription extends Description {
     }
 
     private Val scan(Val key) {
-      for (Object entry : allEntries()) {
-        Val candidate = adapter.nativeToValue(nativeEntryKey(entry));
-        if (candidate.equal(key) == True) {
-          return adapter.nativeToValue(nativeEntryValue(entry));
+      if (entries != null) {
+        for (int i = entries.size() - 1; i >= 0; i--) {
+          Object entry = entries.get(i);
+          Val candidate = adapter.nativeToValue(nativeEntryKey(entry));
+          if (candidate.equal(key) == True) {
+            return adapter.nativeToValue(nativeEntryValue(entry));
+          }
+        }
+      } else {
+        for (Object entry : map.entrySet()) {
+          Val candidate = adapter.nativeToValue(nativeEntryKey(entry));
+          if (candidate.equal(key) == True) {
+            return adapter.nativeToValue(nativeEntryValue(entry));
+          }
         }
       }
       return null;
@@ -789,7 +899,10 @@ public final class FieldDescription extends Description {
     }
 
     private Map<Object, Object> toJavaMap() {
-      Map<Object, Object> javaMap = new HashMap<>(entryCount() * 4 / 3 + 1);
+      if (entries != null) {
+        return new LinkedHashMap<>(canonicalEntries());
+      }
+      Map<Object, Object> javaMap = new LinkedHashMap<>(map.size() * 4 / 3 + 1);
       for (Object entry : allEntries()) {
         javaMap.put(nativeEntryKey(entry), nativeEntryValue(entry));
       }
@@ -797,58 +910,19 @@ public final class FieldDescription extends Description {
     }
 
     private Object nativeEntryKey(Object entry) {
-      return normalizeUnsignedValue(entryKeyDescriptor(entry), rawMapEntryValue(entry, 1));
+      return ProtoMapSupport.key(entry, keyDesc);
     }
 
     private Object nativeEntryValue(Object entry) {
-      return normalizeUnsignedValue(entryValueDescriptor(entry), rawMapEntryValue(entry, 2));
-    }
-
-    private FieldDescriptor entryKeyDescriptor(Object entry) {
-      if (entry instanceof Map.Entry<?, ?>) {
-        return keyDesc;
-      }
-      if (entry instanceof DynamicMessage) {
-        List<FieldDescriptor> fields = ((DynamicMessage) entry).getDescriptorForType().getFields();
-        if (fields.size() == 2) {
-          return fields.get(0);
-        }
-      }
-      return keyDesc;
-    }
-
-    private FieldDescriptor entryValueDescriptor(Object entry) {
-      if (entry instanceof Map.Entry<?, ?>) {
-        return valueDesc;
-      }
-      if (entry instanceof DynamicMessage) {
-        List<FieldDescriptor> fields = ((DynamicMessage) entry).getDescriptorForType().getFields();
-        if (fields.size() == 2) {
-          return fields.get(1);
-        }
-      }
-      return valueDesc;
-    }
-
-    private Object rawMapEntryValue(Object entry, int fieldNumber) {
-      if (entry instanceof Map.Entry<?, ?> mapEntry) {
-        return fieldNumber == 1 ? mapEntry.getKey() : mapEntry.getValue();
-      }
-      if (entry instanceof MapEntry<?, ?> mapEntry) {
-        return fieldNumber == 1 ? mapEntry.getKey() : mapEntry.getValue();
-      }
-      if (entry instanceof DynamicMessage dynMsg) {
-        List<FieldDescriptor> fields = dynMsg.getDescriptorForType().getFields();
-        if (fields.size() == 2) {
-          return dynMsg.getField(fields.get(fieldNumber - 1));
-        }
-      }
-      throw new IllegalArgumentException(
-          String.format("Unexpected %s (%s) in list of map fields", entry.getClass(), entry));
+      return ProtoMapSupport.value(entry, valueDesc);
     }
 
     private int entryCount() {
       return entries != null ? canonicalEntries().size() : map.size();
+    }
+
+    private int physicalEntryCount() {
+      return entries != null ? entries.size() : map.size();
     }
 
     private Iterable<?> allEntries() {
@@ -856,20 +930,17 @@ public final class FieldDescription extends Description {
     }
 
     private Map<Object, Object> canonicalEntries() {
-      Map<Object, Object> canonical = canonicalEntries;
-      if (canonical != null) {
-        return canonical;
+      Map<Object, Object> result = canonicalEntries;
+      if (result != null) {
+        return result;
       }
       synchronized (this) {
-        canonical = canonicalEntries;
-        if (canonical == null) {
-          canonical = new LinkedHashMap<>(entries.size() * 4 / 3 + 1);
-          for (Object entry : entries) {
-            canonical.put(nativeEntryKey(entry), nativeEntryValue(entry));
-          }
-          canonicalEntries = canonical;
+        result = canonicalEntries;
+        if (result == null) {
+          result = ProtoMapSupport.canonicalMap(entries, keyDesc, valueDesc);
+          canonicalEntries = result;
         }
-        return canonical;
+        return result;
       }
     }
 
@@ -896,7 +967,7 @@ public final class FieldDescription extends Description {
     }
   }
 
-  private static Object normalizeUnsignedValue(FieldDescriptor desc, Object value) {
+  static Object normalizeUnsignedValue(FieldDescriptor desc, Object value) {
     if (value instanceof Number number) {
       return switch (desc.getType()) {
         case UINT32, FIXED32 -> ULong.valueOf(Integer.toUnsignedLong(number.intValue()));
@@ -918,6 +989,12 @@ public final class FieldDescription extends Description {
     return wellKnown.hasWrapper();
   }
 
+  /**
+   * Tests protobuf field presence.
+   *
+   * <p>Repeated fields are present when non-empty; singular fields delegate to {@link
+   * Message#hasField(FieldDescriptor)}.
+   */
   public static boolean hasValueForField(FieldDescriptor desc, Message message) {
     if (desc.isRepeated()) {
       return message.getRepeatedFieldCount(desc) > 0;

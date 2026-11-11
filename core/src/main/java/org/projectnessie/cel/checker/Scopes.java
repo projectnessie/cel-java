@@ -18,12 +18,17 @@ package org.projectnessie.cel.checker;
 import com.google.api.expr.v1alpha1.Decl;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Scopes represents nested Decl sets where the Scopes value contains a Groups containing all
- * identifiers in scope and an optional parent representing outer scopes. Each Groups value is a
- * mapping of names to Decls in the ident and function namespaces. Lookups are performed such that
- * bindings in inner scopes shadow those in outer scopes.
+ * Nested variable and function declaration scopes used by the checker.
+ *
+ * <p>Each scope has separate identifier and function namespaces. Lookups search from the innermost
+ * scope outward, so inner declarations shadow outer declarations. A pushed scope is a new value
+ * referencing its parent; declarations within each scope remain mutable.
+ *
+ * <p>The root identifier cache supports concurrent checker lookups after declarations are
+ * configured. Pushed scopes and declaration mutation are intended to remain confined to one check.
  */
 public final class Scopes {
   private final Scopes parent;
@@ -34,23 +39,17 @@ public final class Scopes {
     this.scopes = scopes;
   }
 
-  /**
-   * NewScopes creates a new, empty Scopes. Some operations can't be safely performed until a Group
-   * is added with Push.
-   */
+  /** Creates an empty root scope. */
   public static Scopes newScopes() {
-    return new Scopes(null, newGroup());
+    return new Scopes(null, newRootGroup());
   }
 
-  /** Push creates a new Scopes value which references the current Scope as its parent. */
+  /** Creates an empty child scope whose parent is this scope. */
   public Scopes push() {
     return new Scopes(this, newGroup());
   }
 
-  /**
-   * Pop returns the parent Scopes value for the current scope, or the current scope if the parent
-   * is nil.
-   */
+  /** Returns the parent scope, or this root scope when no parent exists. */
   public Scopes pop() {
     if (parent != null) {
       return parent;
@@ -71,10 +70,7 @@ public final class Scopes {
     scopes.idents.put(decl.getName(), decl);
   }
 
-  /**
-   * FindIdent finds the first ident Decl with a matching name in Scopes, or nil if one cannot be
-   * found. Note: The search is performed from innermost to outermost.
-   */
+  /** Returns the nearest matching identifier declaration, or {@code null} when absent. */
   public Decl findIdent(String name) {
     Decl ident = scopes.idents.get(name);
     if (ident != null) {
@@ -86,11 +82,7 @@ public final class Scopes {
     return null;
   }
 
-  /**
-   * FindIdentInScope finds the first ident Decl with a matching name in the current Scopes value,
-   * or nil if one does not exist. Note: The search is only performed on the current scope and does
-   * not search outer scopes.
-   */
+  /** Returns the matching identifier in this scope only, or {@code null} when absent. */
   public Decl findIdentInScope(String name) {
     return scopes.idents.get(name);
   }
@@ -103,10 +95,7 @@ public final class Scopes {
     scopes.functions.put(fn.getName(), fn);
   }
 
-  /**
-   * FindFunction finds the first function Decl with a matching name in Scopes. The search is
-   * performed from innermost to outermost. Returns nil if no such function in Scopes.
-   */
+  /** Returns the nearest matching function declaration, or {@code null} when absent. */
   public Decl findFunction(String name) {
     Decl ident = scopes.functions.get(name);
     if (ident != null) {
@@ -118,6 +107,11 @@ public final class Scopes {
     return null;
   }
 
+  /**
+   * Replaces the nearest matching function declaration.
+   *
+   * @return always {@code null}; retained for compatibility
+   */
   public Decl updateFunction(String name, Decl ident) {
     if (scopes.functions.containsKey(name)) {
       scopes.functions.put(name, ident);
@@ -129,10 +123,7 @@ public final class Scopes {
     return null;
   }
 
-  /**
-   * Group is a set of Decls that is pushed on or popped off a Scopes as a unit. Contains separate
-   * namespaces for idenifier and function Decls. (Should be named "Scope" perhaps?)
-   */
+  /** Mutable identifier and function declaration maps associated with one lexical scope. */
   public static final class Group {
     private final Map<String, Decl> idents;
     private final Map<String, Decl> functions;
@@ -145,5 +136,11 @@ public final class Scopes {
 
   static Group newGroup() {
     return new Group(new HashMap<>(), new HashMap<>());
+  }
+
+  private static Group newRootGroup() {
+    // CheckerEnv lazily caches provider-resolved identifiers in the shared root scope during
+    // checking. Function declarations are fully configured before that scope is shared.
+    return new Group(new ConcurrentHashMap<>(), new HashMap<>());
   }
 }

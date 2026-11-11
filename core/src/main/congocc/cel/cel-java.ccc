@@ -23,6 +23,11 @@ INCLUDE "cel.ccc"
 
 INJECT PARSER_CLASS :
 {
+  private void resourceCheckpoint() {
+    org.projectnessie.cel.internal.OperationCheckpoints.currentController().checkpoint(
+        org.projectnessie.cel.OperationAbortedException.Phase.PARSE);
+  }
+
   private boolean nextTokenStartsExpression() {
     TokenType type = getToken(1).getType();
     return switch (type) {

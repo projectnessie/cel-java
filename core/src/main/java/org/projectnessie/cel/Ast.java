@@ -25,8 +25,21 @@ import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.Source;
 
 /**
- * Ast representing the checked or unchecked expression, its source, and related metadata such as
- * source position information.
+ * A parsed or type-checked CEL abstract syntax tree and its source metadata.
+ *
+ * <p>An AST returned by {@link Env#parse(String)} is unchecked. Passing it to {@link
+ * Env#check(Ast)} produces a checked AST with reference and type metadata. Prefer a checked AST
+ * when creating a {@link Program}; unchecked ASTs are supported but provide less planning
+ * information.
+ *
+ * <p>The expression and source-info values are immutable Protobuf messages. The constructors retain
+ * the supplied {@link Source} and, for the full constructor, the supplied reference and type maps.
+ * Callers that construct an AST directly must keep retained mutable state stable while the AST is
+ * in use.
+ *
+ * <p>{@link CEL#astToParsedExpr(Ast)} and {@link CEL#astToCheckedExpr(Ast)} expose the
+ * corresponding Protobuf representations. Exporting those messages does not by itself guarantee
+ * that another CEL runtime recognizes implementation-specific macro expansions.
  */
 public final class Ast {
   private final Expr expr;
@@ -35,10 +48,28 @@ public final class Ast {
   final Map<Long, Reference> refMap;
   final Map<Long, Type> typeMap;
 
+  /**
+   * Creates an unchecked AST.
+   *
+   * @param expr parsed CEL expression
+   * @param info source and position metadata
+   * @param source source used to parse the expression
+   */
   public Ast(Expr expr, SourceInfo info, Source source) {
     this(expr, info, source, new HashMap<>(), new HashMap<>());
   }
 
+  /**
+   * Creates an AST with explicit reference and type metadata.
+   *
+   * <p>The maps are retained rather than copied. A non-empty type map marks the AST as checked.
+   *
+   * @param expr parsed or checked CEL expression
+   * @param info source and position metadata
+   * @param source source used to parse or check the expression
+   * @param refMap checked reference metadata keyed by expression ID
+   * @param typeMap checked type metadata keyed by expression ID
+   */
   public Ast(
       Expr expr,
       SourceInfo info,
@@ -52,30 +83,46 @@ public final class Ast {
     this.typeMap = typeMap;
   }
 
-  /** Expr returns the proto serializable instance of the parsed/checked expression. */
+  /**
+   * Returns the parsed or checked expression Protobuf message.
+   *
+   * @return expression tree
+   */
   public Expr getExpr() {
     return expr;
   }
 
-  /** IsChecked returns whether the Ast value has been successfully type-checked. */
+  /**
+   * Reports whether this AST contains checked type metadata.
+   *
+   * @return {@code true} when the type map is non-null and non-empty
+   */
   public boolean isChecked() {
     return typeMap != null && !typeMap.isEmpty();
   }
 
+  /**
+   * Returns the source associated with this AST.
+   *
+   * @return retained source
+   */
   public Source getSource() {
     return source;
   }
 
   /**
-   * SourceInfo returns character offset and newling position information about expression elements.
+   * Returns source-location and macro-expansion metadata for expression elements.
+   *
+   * @return source information
    */
   public SourceInfo getSourceInfo() {
     return info;
   }
 
   /**
-   * ResultType returns the output type of the expression if the Ast has been type-checked, else
-   * returns decls.Dyn as the parse step cannot infer the type.
+   * Returns the checked result type of this expression.
+   *
+   * @return the root expression's checked type, or {@link Decls#Dyn} for an unchecked AST
    */
   public Type getResultType() {
     if (!isChecked()) {
@@ -85,8 +132,12 @@ public final class Ast {
   }
 
   /**
-   * Source returns a view of the input used to create the Ast. This source may be complete or
-   * constructed from the SourceInfo.
+   * Returns the source text associated with this AST.
+   *
+   * <p>This is the retained source's content, not a newly unparsed representation of the
+   * expression. Use {@link CEL#astToString(Ast)} to obtain a stable unparsed expression.
+   *
+   * @return source content
    */
   @Override
   public String toString() {

@@ -63,7 +63,13 @@ import org.projectnessie.cel.interpreter.AttributeFactory.Qualifier;
 import org.projectnessie.cel.interpreter.AttributeFactory.ValQualifier;
 import org.projectnessie.cel.interpreter.AttributePattern.QualifierValueEquator;
 
-/** AttributeFactory provides methods creating Attribute and Qualifier values. */
+/**
+ * Creates variable attributes and field/index qualifiers for low-level evaluation plans.
+ *
+ * <p>Attributes resolve activation bindings and then apply qualifiers in expression order. Factory
+ * instances retain the configured container, adapter, and provider and are intended to be
+ * configured as part of interpreter construction.
+ */
 public interface AttributeFactory {
   /**
    * AbsoluteAttribute creates an attribute that refers to a top-level variable name.
@@ -109,10 +115,7 @@ public interface AttributeFactory {
    */
   Qualifier newQualifier(Type objType, long qualID, Object val);
 
-  /**
-   * Qualifier marker interface for designating different qualifier values and where they appear
-   * within field selections and index call expressions (`_[_]`).
-   */
+  /** Field-selection or index operation associated with an expression identifier. */
   interface Qualifier {
     /** ID where the qualifier appears within an expression. */
     long id();
@@ -124,19 +127,18 @@ public interface AttributeFactory {
     Object qualify(Activation vars, Object obj);
   }
 
-  /**
-   * ConstantQualifier interface embeds the Qualifier interface and provides an option to inspect
-   * the qualifier's constant value.
-   *
-   * <p>Non-constant qualifiers are of Attribute type.
-   */
+  /** Qualifier whose key or field value is a CEL constant. */
   interface ConstantQualifier extends Qualifier {
+    /** Returns the constant CEL qualifier value. */
     Val value();
   }
 
+  /** Constant qualifier that can compare its value without applying the qualifier. */
   interface ConstantQualifierEquator extends QualifierValueEquator, ConstantQualifier {}
 
+  /** Qualifier capable of returning a CEL value directly. */
   interface ValQualifier extends Qualifier {
+    /** Applies this qualifier and returns its CEL value or CEL error. */
     Val qualifyToVal(Activation vars, Object obj);
   }
 
@@ -170,18 +172,18 @@ public interface AttributeFactory {
     List<Qualifier> qualifiers();
 
     /**
-     * TryResolve attempts to return the value of the attribute given the current Activation. If an
-     * error is encountered during attribute resolution, it will be returned immediately. If the
-     * attribute cannot be resolved within the Activation, the result must be: `nil`, `false`,
-     * `nil`.
+     * Resolves the first candidate available from the activation or type provider.
+     *
+     * @throws RuntimeException if no candidate resolves or a qualifier cannot be applied
      */
     Object tryResolve(Activation a);
   }
 
   /**
-   * NewAttributeFactory returns a default AttributeFactory which is produces Attribute values
-   * capable of resolving types by simple names and qualify the values using the supported qualifier
-   * types: bool, int, string, and uint.
+   * Creates the default attribute factory.
+   *
+   * <p>The factory resolves names through the supplied container and provider and adapts
+   * qualification targets with the supplied adapter.
    */
   static AttributeFactory newAttributeFactory(Container cont, TypeAdapter a, TypeProvider p) {
     return new AttrFactory(cont, a, p);
@@ -1315,8 +1317,16 @@ record NullQualifier(long id, Val celValue, TypeAdapter adapter)
  * When the field type is known this can be used to improve the speed and efficiency of field
  * resolution.
  */
-record FieldQualifier(long id, String name, FieldType fieldType, TypeAdapter adapter)
+record FieldQualifier(
+    long id,
+    String name,
+    FieldType fieldType,
+    TypeAdapter adapter,
+    CheckedAggregateMaterializer aggregateMaterializer)
     implements Coster, ConstantQualifierEquator, ValQualifier {
+  FieldQualifier(long id, String name, FieldType fieldType, TypeAdapter adapter) {
+    this(id, name, fieldType, adapter, null);
+  }
 
   /** ID is an implementation of the Qualifier interface method. */
   @Override
@@ -1336,7 +1346,9 @@ record FieldQualifier(long id, String name, FieldType fieldType, TypeAdapter ada
   @Override
   public Val qualifyToVal(Activation vars, Object obj) {
     Object value = qualify(vars, obj);
-    return adapter.nativeToValue(value);
+    return aggregateMaterializer != null
+        ? aggregateMaterializer.materialize(value)
+        : adapter.nativeToValue(value);
   }
 
   /** Value implements the ConstantQualifier interface */
@@ -1379,3 +1391,40 @@ record FieldQualifier(long id, String name, FieldType fieldType, TypeAdapter ada
  * Exact aggregate field qualifier that deliberately retains the raw host value for a checked
  * aggregate source node.
  */
+final class RawExactAggregateFieldQualifier implements Coster, ConstantQualifierEquator {
+  private final FieldQualifier delegate;
+
+  RawExactAggregateFieldQualifier(long id, String name, FieldType fieldType, TypeAdapter adapter) {
+    this.delegate = new FieldQualifier(id, name, fieldType, adapter);
+  }
+
+  @Override
+  public long id() {
+    return delegate.id();
+  }
+
+  @Override
+  public Object qualify(Activation vars, Object obj) {
+    return delegate.qualify(vars, obj);
+  }
+
+  @Override
+  public Val value() {
+    return delegate.value();
+  }
+
+  @Override
+  public Cost cost() {
+    return delegate.cost();
+  }
+
+  @Override
+  public boolean qualifierValueEquals(Object value) {
+    return delegate.qualifierValueEquals(value);
+  }
+
+  @Override
+  public String toString() {
+    return "RawExactAggregateFieldQualifier{" + "delegate=" + delegate + '}';
+  }
+}

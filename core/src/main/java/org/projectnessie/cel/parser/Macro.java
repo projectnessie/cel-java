@@ -29,11 +29,19 @@ import org.projectnessie.cel.common.Location;
 import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.Overloads;
 
+/**
+ * Describes a parser macro and the function-call shape that triggers it.
+ *
+ * <p>A macro rewrites a matching global or receiver-style call during parsing. Its {@link
+ * MacroExpander} receives source-aware expression construction helpers; failures are reported as
+ * parse diagnostics by {@link Parser}. Macro names and arity participate in parser configuration,
+ * not runtime overload dispatch.
+ */
 public final class Macro {
-  /** AccumulatorName is the traditional variable name assigned to the fold accumulator variable. */
+  /** Conventional accumulator variable name used by built-in comprehension macros. */
   public static final String AccumulatorName = "__result__";
 
-  /** AllMacros includes the list of all spec-supported macros. */
+  /** Immutable list of CEL macros enabled by {@link Parser#parseAllMacros}. */
   public static final List<Macro> AllMacros =
       List.of(
           /* The macro "has(m.f)" which tests the presence of a field, avoiding the need to specify
@@ -84,7 +92,7 @@ public final class Macro {
           /* The macro "cel.bind(var, value, result)" binds a local variable for use in result. */
           newReceiverMacro("bind", 3, Macro::makeBind));
 
-  /** TestOnlyBlockMacros includes the test-only macros used by CEL-Spec block conformance tests. */
+  /** Immutable list of test-only macros used by CEL block conformance tests. */
   public static final List<Macro> TestOnlyBlockMacros =
       List.of(
           newReceiverMacro("block", 2, Macro::makeBlock),
@@ -92,7 +100,7 @@ public final class Macro {
           newReceiverMacro("iterVar", 2, Macro::makeIterVar),
           newReceiverMacro("accuVar", 2, Macro::makeAccuVar));
 
-  /** NoMacros list. */
+  /** Empty macro list for parser configurations that disable macro expansion. */
   public static List<Macro> MoMacros = emptyList();
 
   private final String function;
@@ -101,6 +109,15 @@ public final class Macro {
   private final int argCount;
   private final MacroExpander expander;
 
+  /**
+   * Creates a macro descriptor.
+   *
+   * @param function function name matched by the parser
+   * @param receiverStyle whether the macro matches receiver-style calls
+   * @param varArgStyle whether the macro accepts any argument count
+   * @param argCount required argument count when {@code varArgStyle} is false
+   * @param expander source rewrite invoked for a matching call
+   */
   public Macro(
       String function,
       boolean receiverStyle,
@@ -142,7 +159,7 @@ public final class Macro {
     return new Macro(function, false, false, argCount, expander);
   }
 
-  /** NewReceiverMacro creates a Macro for a receiver function matching the specified arg count. */
+  /** Creates a receiver-style macro with an exact argument count. */
   public static Macro newReceiverMacro(String function, int argCount, MacroExpander expander) {
     return new Macro(function, true, false, argCount, expander);
   }
@@ -521,26 +538,32 @@ public final class Macro {
     throw new ErrorWithLocation(null, "invalid argument to has() macro");
   }
 
+  /** Returns the function name matched by this macro. */
   public String function() {
     return function;
   }
 
+  /** Returns whether this macro matches receiver-style calls. */
   public boolean isReceiverStyle() {
     return receiverStyle;
   }
 
+  /** Returns whether this macro accepts any argument count. */
   public boolean isVarArgStyle() {
     return varArgStyle;
   }
 
+  /** Returns the required argument count for a fixed-arity macro. */
   public int argCount() {
     return argCount;
   }
 
+  /** Returns the rewrite operation invoked for a matching call. */
   public MacroExpander expander() {
     return expander;
   }
 
+  /** Returns the parser lookup key for this macro's name, arity, and call style. */
   public String macroKey() {
     if (varArgStyle) {
       return makeVarArgMacroKey(function, receiverStyle);

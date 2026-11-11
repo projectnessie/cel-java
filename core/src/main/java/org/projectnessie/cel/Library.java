@@ -17,37 +17,51 @@ package org.projectnessie.cel;
 
 import static org.projectnessie.cel.EnvOption.declarations;
 import static org.projectnessie.cel.EnvOption.macros;
-import static org.projectnessie.cel.ProgramOption.functions;
 import static org.projectnessie.cel.checker.Checker.StandardDeclarations;
 import static org.projectnessie.cel.interpreter.functions.Overload.standardOverloads;
 import static org.projectnessie.cel.parser.Macro.AllMacros;
 
 import java.util.List;
+import org.projectnessie.cel.interpreter.functions.Overload;
 
 /**
- * Library provides a collection of EnvOption and ProgramOption values used to confiugre a CEL
- * environment for a particular use case or with a related set of functionality.
+ * Contributes related compile-time and runtime functionality to a CEL environment.
  *
- * <p>Note, the ProgramOption values provided by a library are expected to be static and not vary
- * between calls to Env.Program(). If there is a need for such dynamic configuration, prefer to
- * configure these options outside the Library and within the Env.Program() call directly.
+ * <p>Compile options typically add declarations and macros. Program options provide the matching
+ * function overload implementations or evaluation configuration. Install a library with {@link
+ * #Lib(Library)}; high-level compiler builders also accept libraries directly.
+ *
+ * <p>A library's program options are captured when the library is applied to an environment and
+ * reused for every program created from that environment. They should therefore describe stable
+ * configuration rather than vary between calls. Mutable library state and supplied functions must
+ * be safe for the concurrent compilation and evaluation they receive.
  */
 public interface Library {
   /**
-   * CompileOptions returns a collection of funcitional options for configuring the Parse / Check
-   * environment.
+   * Returns options that configure parsing and type checking.
+   *
+   * @return non-null compile options containing no null elements
    */
   List<EnvOption> getCompileOptions();
 
   /**
-   * ProgramOptions returns a collection of functional options which should be included in every
-   * Program generated from the Env.Program() call.
+   * Returns options included in every program created from the configured environment.
+   *
+   * @return non-null program options containing no null elements
    */
   List<ProgramOption> getProgramOptions();
 
   /**
-   * Lib creates an EnvOption out of a Library, allowing libraries to be provided as functional
-   * args, and to be linked to each other.
+   * Wraps a library as an environment option.
+   *
+   * <p>Compile options are applied in returned-list order, followed by capture of the program
+   * options. The library and its returned values are dereferenced when the returned option is
+   * applied, not when this factory is called.
+   *
+   * @param l library to install
+   * @return option that installs {@code l}
+   * @throws NullPointerException when the returned option is applied if {@code l}, a returned
+   *     option list, an option, or an applied compile-option result is {@code null}
    */
   static EnvOption Lib(Library l) {
     return e -> {
@@ -63,27 +77,41 @@ public interface Library {
     };
   }
 
-  /** StdLib returns an EnvOption for the standard library of CEL functions and macros. */
+  /**
+   * Returns an option that installs the standard CEL library.
+   *
+   * @return standard-library environment option
+   */
   static EnvOption StdLib() {
     return Lib(new StdLibrary());
   }
 
-  /**
-   * stdLibrary implements the Library interface and provides functional options for the core CEL
-   * features documented in the specification.
-   */
+  /** Standard declarations, macros, and function implementations from the CEL specification. */
   final class StdLibrary implements Library {
 
-    /** EnvOptions returns options for the standard CEL function declarations and macros. */
+    /**
+     * Returns standard CEL declarations and macros.
+     *
+     * @return compile options
+     */
     @Override
     public List<EnvOption> getCompileOptions() {
       return List.of(declarations(StandardDeclarations), macros(AllMacros));
     }
 
-    /** ProgramOptions returns function implementations for the standard CEL functions. */
+    /**
+     * Returns standard CEL function implementations.
+     *
+     * @return program options
+     */
     @Override
     public List<ProgramOption> getProgramOptions() {
-      return List.of(functions(standardOverloads()));
+      Overload[] overloads = standardOverloads();
+      return List.of(
+          p -> {
+            p.dispatcher.add(overloads);
+            return p;
+          });
     }
   }
 }

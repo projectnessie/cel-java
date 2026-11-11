@@ -15,23 +15,30 @@
  */
 package org.projectnessie.cel.common.types.traits;
 
+/**
+ * Behavioral capabilities advertised by a runtime CEL {@link
+ * org.projectnessie.cel.common.types.ref.Type}.
+ *
+ * <p>Each advertised constant corresponds to an interface in this package, except {@link
+ * #IterableType} and {@link #IteratorType}, whose interfaces live in {@code common.types}.
+ */
 public enum Trait {
-  /** AdderType types provide a '+' operator overload. */
+  /** Types implementing {@link Adder}. */
   AdderType,
 
-  /** ComparerType types support ordering comparisons '&lt;', '&lt;=', '&lt;', '&lt;='. */
+  /** Types implementing {@link Comparer}. */
   ComparerType,
 
-  /** ContainerType types support 'in' operations. */
+  /** Types implementing {@link Container}. */
   ContainerType,
 
-  /** DividerType types support '/' operations. */
+  /** Types implementing {@link Divider}. */
   DividerType,
 
-  /** FieldTesterType types support the detection of field value presence. */
+  /** Types implementing {@link FieldTester}. */
   FieldTesterType,
 
-  /** IndexerType types support index access with dynamic values. */
+  /** Types implementing {@link Indexer}. */
   IndexerType,
 
   /** IterableType types can be iterated over in comprehensions. */
@@ -44,24 +51,24 @@ public enum Trait {
    */
   IteratorType,
 
-  /** MatcherType types support pattern matching via 'matches' method. */
+  /** Types implementing {@link Matcher}. */
   MatcherType,
 
-  /** ModderType types support modulus operations '%' */
+  /** Types implementing {@link Modder}. */
   ModderType,
 
-  /** MultiplierType types support '*' operations. */
+  /** Types implementing {@link Multiplier}. */
   MultiplierType,
 
-  /** NegatorType types support either negation via '!' or '-' */
+  /** Types implementing {@link Negater}. */
   NegatorType,
 
-  /** ReceiverType types support dynamic dispatch to instance methods. */
+  /** Types implementing {@link Receiver}. */
   ReceiverType,
 
-  /** SizerType types support the size() method. */
+  /** Types implementing {@link Sizer}. */
   SizerType,
 
-  /** SubtractorType type support '-' operations. */
+  /** Types implementing {@link Subtractor}. */
   SubtractorType
 }

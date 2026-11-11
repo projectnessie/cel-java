@@ -17,8 +17,13 @@ package org.projectnessie.cel.common.types.traits;
 
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** Matcher interface for supporting 'matches()' overloads. */
+/** Capability for values that support the CEL {@code matches()} operation. */
 public interface Matcher {
-  /** Match returns true if the pattern matches the current value. */
+  /**
+   * Tests this value against {@code pattern}.
+   *
+   * @param pattern CEL pattern value
+   * @return a CEL boolean, error, or unknown value
+   */
   Val match(Val pattern);
 }

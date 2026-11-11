@@ -21,20 +21,28 @@ import com.google.api.expr.v1alpha1.Reference;
 import com.google.api.expr.v1alpha1.Type;
 import java.util.HashMap;
 import java.util.Map;
+import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.TypeProvider;
 
-/** interpretablePlanner creates an Interpretable evaluation plan from a proto Expr value. */
+/**
+ * Creates executable {@link Interpretable} plans from protobuf CEL expressions.
+ *
+ * <p>Checked planners use reference and type metadata to resolve calls, types, and names during
+ * planning. Unchecked planners defer more resolution to evaluation. Most applications should obtain
+ * programs through {@link org.projectnessie.cel.Env}.
+ */
 public interface InterpretablePlanner {
-  /** Plan generates an Interpretable value (or error) from the input proto Expr. */
+  /** Plans an expression or throws when the expression cannot be planned. */
   Interpretable plan(Expr expr);
 
   /**
-   * newPlanner creates an interpretablePlanner which references a Dispatcher, TypeProvider,
-   * TypeAdapter, Container, and CheckedExpr value. These pieces of data are used to resolve
-   * functions, types, and namespaced identifiers at plan time rather than at runtime since it only
-   * needs to be done once and may be semi-expensive to compute.
+   * Creates a checked planner using the Java regex engine.
+   *
+   * <p>The dispatcher, provider, adapter, attribute factory, container, and checked metadata
+   * resolve functions, types, and namespaced identifiers at plan time rather than at runtime since
+   * it only needs to be done once.
    */
   static InterpretablePlanner newPlanner(
       Dispatcher disp,
@@ -44,6 +52,25 @@ public interface InterpretablePlanner {
       Container cont,
       CheckedExpr checked,
       InterpretableDecorator... decorators) {
+    return newPlanner(
+        disp, provider, adapter, attrFactory, cont, checked, RegexEngine.JAVA, decorators);
+  }
+
+  /**
+   * Creates a checked planner that uses {@code regexEngine} for the built-in CEL {@code matches}
+   * function.
+   *
+   * @throws NullPointerException if {@code regexEngine} is {@code null}
+   */
+  static InterpretablePlanner newPlanner(
+      Dispatcher disp,
+      TypeProvider provider,
+      TypeAdapter adapter,
+      AttributeFactory attrFactory,
+      Container cont,
+      CheckedExpr checked,
+      RegexEngine regexEngine,
+      InterpretableDecorator... decorators) {
     return new Planner(
         disp,
         provider,
@@ -52,13 +79,12 @@ public interface InterpretablePlanner {
         cont,
         checked.getReferenceMapMap(),
         checked.getTypeMapMap(),
+        PlanningPolicy.ESTABLISHED_ONLY,
+        regexEngine,
         decorators);
   }
 
-  /**
-   * newPlanner creates an interpretablePlanner from checked expression metadata without requiring a
-   * CheckedExpr wrapper.
-   */
+  /** Creates a checked planner from reference and type maps using the Java regex engine. */
   static InterpretablePlanner newPlanner(
       Dispatcher disp,
       TypeProvider provider,
@@ -68,13 +94,44 @@ public interface InterpretablePlanner {
       Map<Long, Reference> refMap,
       Map<Long, Type> typeMap,
       InterpretableDecorator... decorators) {
-    return new Planner(disp, provider, adapter, attrFactory, cont, refMap, typeMap, decorators);
+    return newPlanner(
+        disp, provider, adapter, attrFactory, cont, refMap, typeMap, RegexEngine.JAVA, decorators);
   }
 
   /**
-   * newUncheckedPlanner creates an interpretablePlanner which references a Dispatcher,
-   * TypeProvider, TypeAdapter, and Container to resolve functions and types at plan time.
-   * Namespaces present in Select expressions are resolved lazily at evaluation time.
+   * Creates a checked planner from metadata that uses {@code regexEngine} for the built-in CEL
+   * {@code matches} function.
+   *
+   * @throws NullPointerException if {@code regexEngine} is {@code null}
+   */
+  static InterpretablePlanner newPlanner(
+      Dispatcher disp,
+      TypeProvider provider,
+      TypeAdapter adapter,
+      AttributeFactory attrFactory,
+      Container cont,
+      Map<Long, Reference> refMap,
+      Map<Long, Type> typeMap,
+      RegexEngine regexEngine,
+      InterpretableDecorator... decorators) {
+    return new Planner(
+        disp,
+        provider,
+        adapter,
+        attrFactory,
+        cont,
+        refMap,
+        typeMap,
+        PlanningPolicy.ESTABLISHED_ONLY,
+        regexEngine,
+        decorators);
+  }
+
+  /**
+   * Creates an unchecked planner using the Java regex engine.
+   *
+   * <p>The planner uses the dispatcher, provider, adapter, attribute factory, and container where
+   * possible. Namespaces in select expressions are resolved lazily during evaluation.
    */
   static InterpretablePlanner newUncheckedPlanner(
       Dispatcher disp,
@@ -83,9 +140,34 @@ public interface InterpretablePlanner {
       AttributeFactory attrFactory,
       Container cont,
       InterpretableDecorator... decorators) {
-    return new Planner(
-        disp, provider, adapter, attrFactory, cont, new HashMap<>(), new HashMap<>(), decorators);
+    return newUncheckedPlanner(
+        disp, provider, adapter, attrFactory, cont, RegexEngine.JAVA, decorators);
   }
 
-  /** planner is an implementatio of the interpretablePlanner interface. */
+  /**
+   * Creates an unchecked planner that uses {@code regexEngine} for the built-in CEL {@code matches}
+   * function.
+   *
+   * @throws NullPointerException if {@code regexEngine} is {@code null}
+   */
+  static InterpretablePlanner newUncheckedPlanner(
+      Dispatcher disp,
+      TypeProvider provider,
+      TypeAdapter adapter,
+      AttributeFactory attrFactory,
+      Container cont,
+      RegexEngine regexEngine,
+      InterpretableDecorator... decorators) {
+    return new Planner(
+        disp,
+        provider,
+        adapter,
+        attrFactory,
+        cont,
+        new HashMap<>(),
+        new HashMap<>(),
+        PlanningPolicy.ESTABLISHED_ONLY,
+        regexEngine,
+        decorators);
+  }
 }

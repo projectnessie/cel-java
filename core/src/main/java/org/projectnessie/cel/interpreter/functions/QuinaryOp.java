@@ -17,8 +17,23 @@ package org.projectnessie.cel.interpreter.functions;
 
 import org.projectnessie.cel.common.types.ref.Val;
 
-/** QuinaryOp is a function that takes five values and produces an output. */
+/**
+ * Runtime implementation of a five-argument CEL function overload.
+ *
+ * <p>For receiver-style calls, {@code first} is the receiver. Implementations registered on a
+ * reusable program must be thread-safe.
+ */
 @FunctionalInterface
 public interface QuinaryOp {
+  /**
+   * Invokes the function.
+   *
+   * @param first evaluated first argument or receiver
+   * @param second evaluated second argument
+   * @param third evaluated third argument
+   * @param fourth evaluated fourth argument
+   * @param fifth evaluated fifth argument
+   * @return the non-null CEL result, which may be a CEL error or unknown value
+   */
   Val invoke(Val first, Val second, Val third, Val fourth, Val fifth);
 }
