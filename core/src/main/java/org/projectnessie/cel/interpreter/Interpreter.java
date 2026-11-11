@@ -81,8 +81,10 @@ public interface Interpreter {
   }
 
   /**
-   * Optimize will pre-compute operations such as list and map construction and optimize call
-   * arguments to set membership tests. The set of optimizations will increase over time.
+   * Returns the established-plan decorator for constant folding and constant-data optimization.
+   *
+   * <p>This decorator is independent of native planning and does not guarantee that a particular
+   * expression is rewritten.
    */
   static InterpretableDecorator optimize() {
     return decOptimize();
@@ -98,7 +100,31 @@ public interface Interpreter {
       TypeProvider provider,
       TypeAdapter adapter,
       AttributeFactory attrFactory) {
-    return new ExprInterpreter(dispatcher, container, provider, adapter, attrFactory);
+    return new ExprInterpreter(
+        dispatcher, container, provider, adapter, attrFactory, PlanningPolicy.ESTABLISHED_ONLY);
+  }
+
+  /**
+   * Builds an interpreter with planning-time permission to use native specializations for eligible
+   * checked expressions.
+   *
+   * <p>Native planning remains disabled for unchecked expressions and whenever decorators are
+   * supplied directly to {@link #newInterpretable}.
+   */
+  static Interpreter newInterpreter(
+      Dispatcher dispatcher,
+      Container container,
+      TypeProvider provider,
+      TypeAdapter adapter,
+      AttributeFactory attrFactory,
+      boolean allowNativePlanning) {
+    return new ExprInterpreter(
+        dispatcher,
+        container,
+        provider,
+        adapter,
+        attrFactory,
+        PlanningPolicy.nativeSpecialization(allowNativePlanning));
   }
 
   /**

@@ -20,6 +20,7 @@ import static org.projectnessie.cel.common.types.Err.newErr;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.projectnessie.cel.common.types.ref.FieldType;
+import org.projectnessie.cel.common.types.ref.StandardScalarTypeAdapter;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeAdapterSupport;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
@@ -40,7 +41,7 @@ import tools.jackson.databind.type.TypeFactory;
  * therefore returning Jackson objects from CEL expressions is not possible/implemented and results
  * in {@link UnsupportedOperationException}s.
  */
-public final class Jackson3Registry implements TypeRegistry {
+public final class Jackson3Registry implements TypeRegistry, StandardScalarTypeAdapter {
   final ObjectMapper objectMapper;
   private final SerializationContextExt serializationContextExt;
   private final TypeFactory typeFactory;
