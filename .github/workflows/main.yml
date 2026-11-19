@@ -45,7 +45,7 @@ jobs:
 
       - name: Build
         run: >
-          ./gradlew --rerun-tasks ${{ env.ADDITIONAL_GRADLE_OPTS }}
+          ./gradlew ${{ env.ADDITIONAL_GRADLE_OPTS }}
           assemble check publishToMavenLocal
           --scan
 
