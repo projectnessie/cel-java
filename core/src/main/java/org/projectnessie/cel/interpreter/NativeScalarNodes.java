@@ -22,6 +22,7 @@ import static org.projectnessie.cel.common.types.Err.errIntOverflow;
 import static org.projectnessie.cel.common.types.Err.isError;
 import static org.projectnessie.cel.common.types.Err.maybeNoSuchOverloadErr;
 import static org.projectnessie.cel.common.types.Err.modulusByZero;
+import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.Overflow.addInt64Checked;
@@ -775,6 +776,8 @@ abstract class NativeConditional extends EvalAttr {
         throw NativeSupport.propagatedError(valueSignal.value);
       }
       throw signal(maybeNoSuchOverloadErr(valueSignal.value));
+    } catch (Exception failure) {
+      throw signal(newErr(failure, failure.toString()));
     }
   }
 
@@ -809,6 +812,8 @@ final class NativeBooleanConditional extends NativeConditional implements Native
       return selectTruthy ? truthy.evalBoolean(activation) : falsy.evalBoolean(activation);
     } catch (ValueSignal valueSignal) {
       throw selectedBranch(valueSignal, selectTruthy ? truthy : falsy);
+    } catch (Exception failure) {
+      throw signal(newErr(failure, failure.toString()));
     }
   }
 }
@@ -835,6 +840,8 @@ final class NativeIntConditional extends NativeConditional implements NativeIntC
       return selectTruthy ? truthy.evalInt(activation) : falsy.evalInt(activation);
     } catch (ValueSignal valueSignal) {
       throw selectedBranch(valueSignal, selectTruthy ? truthy : falsy);
+    } catch (Exception failure) {
+      throw signal(newErr(failure, failure.toString()));
     }
   }
 }
@@ -861,6 +868,8 @@ final class NativeUintConditional extends NativeConditional implements NativeUin
       return selectTruthy ? truthy.evalUint(activation) : falsy.evalUint(activation);
     } catch (ValueSignal valueSignal) {
       throw selectedBranch(valueSignal, selectTruthy ? truthy : falsy);
+    } catch (Exception failure) {
+      throw signal(newErr(failure, failure.toString()));
     }
   }
 }
@@ -887,6 +896,8 @@ final class NativeDoubleConditional extends NativeConditional implements NativeD
       return selectTruthy ? truthy.evalDouble(activation) : falsy.evalDouble(activation);
     } catch (ValueSignal valueSignal) {
       throw selectedBranch(valueSignal, selectTruthy ? truthy : falsy);
+    } catch (Exception failure) {
+      throw signal(newErr(failure, failure.toString()));
     }
   }
 }
@@ -913,6 +924,8 @@ final class NativeStringConditional extends NativeConditional implements NativeS
       return selectTruthy ? truthy.evalString(activation) : falsy.evalString(activation);
     } catch (ValueSignal valueSignal) {
       throw selectedBranch(valueSignal, selectTruthy ? truthy : falsy);
+    } catch (Exception failure) {
+      throw signal(newErr(failure, failure.toString()));
     }
   }
 }
@@ -943,6 +956,8 @@ final class NativeNullConditional extends NativeConditional implements NativeNul
       }
     } catch (ValueSignal valueSignal) {
       throw selectedBranch(valueSignal, selectTruthy ? truthy : falsy);
+    } catch (Exception failure) {
+      throw signal(newErr(failure, failure.toString()));
     }
   }
 }

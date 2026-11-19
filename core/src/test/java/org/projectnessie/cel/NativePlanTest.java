@@ -40,6 +40,7 @@ import static org.projectnessie.cel.common.types.IntT.intOf;
 import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
 
+import com.google.api.expr.v1alpha1.Type;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -153,6 +154,68 @@ class NativePlanTest {
     assertThat(interpreterFailure).isNotNull();
     assertThat(nativeFailure.getClass()).isEqualTo(interpreterFailure.getClass());
     assertThat(nativeFailure.getMessage()).isEqualTo(interpreterFailure.getMessage());
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "(b ? s == 'value' : false) || true",
+        "(b ? false : s == 'value') || true",
+        "(s == 'value' ? true : false) || true",
+        "b ? s == 'value' : false",
+        "b ? false : s == 'value'",
+        "s == 'value' ? true : false"
+      })
+  void conditionalComparisonExceptionsBecomeCelErrors(String expression) {
+    for (boolean condition : new boolean[] {true, false}) {
+      assertExpression(expression, Map.of("b", condition, "s", stringOf(null)));
+    }
+  }
+
+  static Stream<Type> conditionalResultTypes() {
+    return Stream.of(Decls.Bool, Decls.Int, Decls.Uint, Decls.Double, Decls.String, Decls.Null);
+  }
+
+  @ParameterizedTest
+  @MethodSource("conditionalResultTypes")
+  void conditionalEvaluationExceptionsBecomeCelErrors(Type type) {
+    Env conditionalEnv =
+        newEnv(declarations(Decls.newVar("condition", Decls.Bool), Decls.newVar("value", type)));
+    Ast ast = compile(conditionalEnv, "condition ? value : value");
+    for (boolean condition : new boolean[] {true, false}) {
+      for (String failingName : List.of("condition", "value")) {
+        AtomicInteger nativeFailures = new AtomicInteger();
+        AtomicInteger establishedFailures = new AtomicInteger();
+        Val expected =
+            conditionalEnv
+                .program(ast, evalOptions(OptDisableNativeEval))
+                .eval(throwingConditionalActivation(condition, failingName, establishedFailures))
+                .getVal();
+        for (ProgramOption[] options : new ProgramOption[][] {{}, {evalOptions(OptOptimize)}}) {
+          nativeFailures.set(0);
+          Val actual =
+              conditionalEnv
+                  .program(ast, options)
+                  .eval(throwingConditionalActivation(condition, failingName, nativeFailures))
+                  .getVal();
+          assertThat(actual).isInstanceOf(Err.class);
+          assertEquivalent(actual, expected);
+          assertThat(nativeFailures).hasValue(1);
+        }
+        assertThat(establishedFailures).hasValue(1);
+      }
+    }
+  }
+
+  private static ActivationFunction throwingConditionalActivation(
+      boolean condition, String failingName, AtomicInteger failures) {
+    return name -> {
+      if (name.equals(failingName)) {
+        failures.incrementAndGet();
+        throw new IllegalArgumentException("conditional evaluation failed");
+      }
+      return name.equals("condition") ? condition : ActivationFunction.ABSENT;
+    };
   }
 
   @Test
