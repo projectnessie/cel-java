@@ -16,6 +16,7 @@
 package org.projectnessie.cel.checker;
 
 import static java.util.Collections.singletonList;
+import static org.projectnessie.cel.checker.CheckerEnv.newCheckerEnv;
 import static org.projectnessie.cel.checker.CheckerEnv.newStandardCheckerEnv;
 import static org.projectnessie.cel.common.containers.Container.name;
 import static org.projectnessie.cel.common.containers.Container.newContainer;
@@ -24,10 +25,20 @@ import static org.projectnessie.cel.common.types.pb.ProtoTypeRegistry.newRegistr
 import com.google.api.expr.v1alpha1.Type;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.types.Overloads;
+import org.projectnessie.cel.common.types.ref.FieldType;
+import org.projectnessie.cel.common.types.ref.TypeProvider;
+import org.projectnessie.cel.common.types.ref.Val;
 
 public class CheckerEnvTest {
 
@@ -94,5 +105,80 @@ public class CheckerEnvTest {
                 "custom_receiver_string",
                 Arrays.asList(Decls.String, Decls.String),
                 Decls.String)));
+  }
+
+  @Test
+  void providerIdentifiersAreCachedDuringConcurrentLookups() throws Exception {
+    int concurrency = 8;
+    int identifiersPerThread = 500;
+    AtomicInteger providerLookups = new AtomicInteger();
+    TypeProvider provider =
+        new TypeProvider() {
+          @Override
+          public Val enumValue(String enumName) {
+            throw new AssertionError("unexpected enum lookup");
+          }
+
+          @Override
+          public Val findIdent(String identName) {
+            throw new AssertionError("unexpected identifier lookup");
+          }
+
+          @Override
+          public Type findType(String typeName) {
+            providerLookups.incrementAndGet();
+            return Decls.String;
+          }
+
+          @Override
+          public FieldType findFieldType(String messageType, String fieldName) {
+            throw new AssertionError("unexpected field lookup");
+          }
+
+          @Override
+          public Val newValue(String typeName, Map<String, Val> fields) {
+            throw new AssertionError("unexpected value construction");
+          }
+        };
+    CheckerEnv env = newCheckerEnv(Container.defaultContainer, provider);
+    CountDownLatch ready = new CountDownLatch(concurrency);
+    CountDownLatch start = new CountDownLatch(1);
+    ExecutorService executor = Executors.newFixedThreadPool(concurrency);
+    try {
+      List<Future<Object>> futures =
+          java.util.stream.IntStream.range(0, concurrency)
+              .mapToObj(
+                  thread ->
+                      executor.submit(
+                          () -> {
+                            ready.countDown();
+                            Assertions.assertThat(start.await(30, TimeUnit.SECONDS)).isTrue();
+                            for (int i = 0; i < identifiersPerThread; i++) {
+                              String name = "type_" + thread + '_' + i;
+                              Assertions.assertThat(env.lookupIdent(name).getName())
+                                  .isEqualTo(name);
+                            }
+                            return null;
+                          }))
+              .toList();
+      Assertions.assertThat(ready.await(30, TimeUnit.SECONDS)).isTrue();
+      start.countDown();
+      for (Future<Object> future : futures) {
+        future.get(30, TimeUnit.SECONDS);
+      }
+    } finally {
+      executor.shutdownNow();
+      Assertions.assertThat(executor.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
+    }
+
+    int expectedLookups = concurrency * identifiersPerThread;
+    Assertions.assertThat(providerLookups).hasValue(expectedLookups);
+    for (int thread = 0; thread < concurrency; thread++) {
+      for (int i = 0; i < identifiersPerThread; i++) {
+        String name = "type_" + thread + '_' + i;
+        Assertions.assertThat(env.lookupIdent(name).getName()).isEqualTo(name);
+      }
+    }
+    Assertions.assertThat(providerLookups).hasValue(expectedLookups);
   }
 }

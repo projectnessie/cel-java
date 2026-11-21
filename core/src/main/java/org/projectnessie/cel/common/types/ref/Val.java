@@ -16,8 +16,18 @@
 package org.projectnessie.cel.common.types.ref;
 
 /**
- * Val interface defines the functions supported by all expression values. Val implementations may
- * specialize the behavior of the value through the addition of traits.
+ * Runtime representation of a CEL value.
+ *
+ * <p>Implementations provide conversion, equality, type, and underlying-value access. Additional
+ * operators are exposed by implementing interfaces from {@link
+ * org.projectnessie.cel.common.types.traits} and advertising the same traits through {@link
+ * Type#hasTrait(org.projectnessie.cel.common.types.traits.Trait)}.
+ *
+ * <p>CEL errors and unknowns are values and propagate through these operations. Implementations
+ * should return a non-null CEL error or unknown value for an evaluation failure rather than Java
+ * {@code null}. Methods that convert a CEL value to a Java representation may instead throw when
+ * the requested representation is incompatible. Values supplied to a reusable program must be
+ * immutable or safe for the caller's concurrent evaluation pattern.
  */
 public interface Val {
   /**
@@ -32,18 +42,27 @@ public interface Val {
   <T> T convertToNative(Class<T> typeDesc);
 
   /**
-   * ConvertToType supports type conversions between value types supported by the expression
-   * language.
+   * Converts this value to another CEL type.
+   *
+   * @param typeValue target CEL type
+   * @return the converted value, or a CEL error or unknown value if conversion does not produce a
+   *     concrete value
    */
   Val convertToType(Type typeValue);
 
   /**
-   * Equal returns true if the `other` value has the same type and content as the implementing
-   * struct.
+   * Evaluates CEL equality between this value and {@code other}.
+   *
+   * @param other value to compare
+   * @return a CEL boolean, error, or unknown value
    */
   Val equal(Val other);
 
-  /** Type returns the TypeValue of the value. */
+  /**
+   * Returns this value's runtime CEL type.
+   *
+   * @return a stable, non-null type value
+   */
   Type type();
 
   /**
@@ -57,9 +76,24 @@ public interface Val {
    */
   Object value();
 
+  /**
+   * Returns this value as a primitive boolean.
+   *
+   * @throws RuntimeException if this value cannot be represented as a boolean
+   */
   boolean booleanValue();
 
+  /**
+   * Returns this CEL int or uint as Java {@code long} bits.
+   *
+   * @throws RuntimeException if this value cannot be represented as an integer
+   */
   long intValue();
 
+  /**
+   * Returns this value as a primitive double.
+   *
+   * @throws RuntimeException if this value cannot be represented as a double
+   */
   double doubleValue();
 }

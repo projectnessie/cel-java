@@ -15,8 +15,20 @@
  */
 package org.projectnessie.cel.common.types.ref;
 
-/** FieldTester is used to test field presence on an input object. */
+/**
+ * Tests whether a field is present on a host object.
+ *
+ * <p>This host-object callback is used by {@link FieldType}; it is distinct from the CEL value
+ * trait {@link org.projectnessie.cel.common.types.traits.FieldTester}. Implementations must use the
+ * presence semantics of the represented host type and must not mutate the target.
+ */
 @FunctionalInterface
 public interface FieldTester {
+  /**
+   * Tests field presence on {@code target}.
+   *
+   * @param target host object accepted by the owning {@link TypeProvider}
+   * @return whether the field is present
+   */
   boolean isSet(Object target);
 }

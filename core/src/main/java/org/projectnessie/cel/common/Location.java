@@ -17,10 +17,16 @@ package org.projectnessie.cel.common;
 
 import java.util.Objects;
 
+/**
+ * Source coordinate with a one-based line and zero-based column.
+ *
+ * <p>{@link #NoLocation} represents an unavailable coordinate.
+ */
 public interface Location extends Comparable<Location> {
+  /** Sentinel location used when no source coordinate is available. */
   Location NoLocation = newLocation(-1, -1);
 
-  // NewLocation creates a new location.
+  /** Creates a location from a one-based line and zero-based column. */
   static Location newLocation(int line, int column) {
     return new SourceLocation(line, column);
   }

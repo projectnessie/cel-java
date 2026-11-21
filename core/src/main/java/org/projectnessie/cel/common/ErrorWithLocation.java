@@ -15,14 +15,25 @@
  */
 package org.projectnessie.cel.common;
 
+/**
+ * Runtime exception carrying an optional CEL source location.
+ *
+ * <p>Parser macro implementations may throw this exception to turn a failed rewrite into a
+ * source-aware parse diagnostic. A {@code null} location asks the parser to use the location of the
+ * macro call.
+ */
 public final class ErrorWithLocation extends RuntimeException {
   private final Location location;
 
+  /** Creates an exception with an optional source location and diagnostic message. */
   public ErrorWithLocation(Location location, String message) {
     super(message);
     this.location = location;
   }
 
+  /**
+   * Returns the explicit source location, or {@code null} when the caller location should be used.
+   */
   public Location getLocation() {
     return location;
   }
