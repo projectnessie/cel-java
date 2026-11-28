@@ -36,10 +36,13 @@ if (testNativeRequested) {
 }
 
 dependencies {
-  implementation(platform(libs.quarkus.bom))
+  implementation(enforcedPlatform(libs.quarkus.bom))
   implementation("io.quarkus:quarkus-arc")
   implementation("io.quarkus:quarkus-rest-jackson")
   implementation(project(":cel-standalone")) { isTransitive = false }
+  // Quarkus 4 uses Jackson 3; this smoke test covers cel-standalone with Jackson 2.
+  implementation(platform(libs.jackson2.bom))
+  implementation("com.fasterxml.jackson.core:jackson-databind")
 
   testImplementation("io.quarkus:quarkus-junit5")
   testImplementation("io.rest-assured:rest-assured")
