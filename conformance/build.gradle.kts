@@ -60,14 +60,12 @@ sourceSets.test {
   }
 }
 
-configurations.all { exclude(group = "org.projectnessie.cel", module = "cel-generated-pb") }
-
 dependencies {
   implementation(project(":cel-core"))
-  implementation(project(":cel-generated-pb3"))
-  implementation(testFixtures(project(":cel-generated-pb3")))
+  implementation(project(":cel-generated-pb"))
+  implementation(testFixtures(project(":cel-generated-pb")))
 
-  implementation(libs.protobuf.java) { version { strictly(libs.versions.protobuf3.get()) } }
+  implementation(libs.protobuf.java)
 
   testImplementation(testFixtures(project(":cel-core")))
 
@@ -82,7 +80,7 @@ configure<ProtobufExtension> {
   // Configure the protoc executable
   protoc {
     // Download from repositories
-    artifact = "com.google.protobuf:protoc:${libs.versions.protobuf3.get()}"
+    artifact = "com.google.protobuf:protoc:${libs.versions.protobuf.get()}"
   }
 }
 
