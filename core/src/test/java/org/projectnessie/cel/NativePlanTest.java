@@ -28,6 +28,7 @@ import static org.projectnessie.cel.EnvOption.declarations;
 import static org.projectnessie.cel.EvalOption.OptDisableNativeEval;
 import static org.projectnessie.cel.EvalOption.OptOptimize;
 import static org.projectnessie.cel.EvalOption.OptPartialEval;
+import static org.projectnessie.cel.EvalOption.OptTrackState;
 import static org.projectnessie.cel.ProgramOption.customDecorator;
 import static org.projectnessie.cel.ProgramOption.evalOptions;
 import static org.projectnessie.cel.ProgramOption.functions;
@@ -62,6 +63,7 @@ import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.Err;
 import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.Overloads;
+import org.projectnessie.cel.common.types.UnknownT;
 import org.projectnessie.cel.common.types.pb.DefaultTypeAdapter;
 import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
 import org.projectnessie.cel.common.types.ref.StandardScalarFieldProvider;
@@ -261,19 +263,41 @@ class NativePlanTest {
     assertExpression(evaluation.expression(), evaluation.input());
   }
 
-  @Test
-  void mapSelectorsPreservePartialQualifierMatchingAndResolutionCounts() {
-    Ast ast = compile("attrs.answer == target");
-    Prog nativeProgram = (Prog) env.program(ast);
-    Prog interpreterProgram =
-        (Prog) env.program(ast, evalOptions(OptPartialEval, OptDisableNativeEval));
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "attrs.answer == target",
+        "b ? attrs.answer == target : false",
+        "b ? attrs.answer : numbers[0]"
+      })
+  void mapSelectorsMatchQualifierPatternsOnlyWithPartialEval(String expression) {
+    Ast ast = compile(expression);
     Object input =
         partialVars(
-            Map.of("attrs", Map.of("answer", 50_021L), "target", 50_021L),
+            Map.of("attrs", Map.of("answer", 1L), "target", 1L, "b", true, "numbers", List.of(0L)),
             attributePattern("attrs").qualString("answer"));
 
-    assertIntegratedPlan(nativeProgram, "attrs.answer == target");
-    assertEquivalent(nativeProgram.eval(input).getVal(), interpreterProgram.eval(input).getVal());
+    Val expected = env.program(ast, evalOptions(OptDisableNativeEval)).eval(input).getVal();
+    for (EvalOption[] options : new EvalOption[][] {{}, {OptOptimize}, {OptTrackState}}) {
+      assertEquivalent(env.program(ast, evalOptions(options)).eval(input).getVal(), expected);
+    }
+    Val partial = env.program(ast, evalOptions(OptPartialEval)).eval(input).getVal();
+    assertThat(partial).isInstanceOf(UnknownT.class);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"answer", "other"})
+  void constantMapIndexUsesTheConfiguredAttributePath(String key) {
+    Ast ast = compile("attrs['answer'] == target");
+    Object input =
+        partialVars(
+            Map.of("attrs", Map.of("answer", 1L), "target", 1L),
+            attributePattern("attrs").qualString(key));
+
+    Prog nativeProgram = (Prog) env.program(ast);
+    assertIntegratedPlan(nativeProgram, "attrs['answer'] == target");
+    Val expected = env.program(ast, evalOptions(OptDisableNativeEval)).eval(input).getVal();
+    assertEquivalent(nativeProgram.eval(input).getVal(), expected);
   }
 
   @Test
@@ -391,19 +415,6 @@ class NativePlanTest {
         assertEquivalent(env.program(ast, evalOptions(OptOptimize)).eval(input).getVal(), expected);
       }
     }
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = {"b ? attrs.answer : 0", "b ? attrs.answer : numbers[0]"})
-  void conditionalAttributeBranchesPreservePartialQualifierMatching(String expression) {
-    Ast ast = compile(expression);
-    Object input =
-        partialVars(
-            Map.of("b", true, "attrs", Map.of("answer", 1L), "numbers", List.of(0L)),
-            attributePattern("attrs").qualString("answer"));
-    Val expected =
-        env.program(ast, evalOptions(OptPartialEval, OptDisableNativeEval)).eval(input).getVal();
-    assertEquivalent(env.program(ast).eval(input).getVal(), expected);
   }
 
   @Test

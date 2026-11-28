@@ -23,7 +23,6 @@ import static org.projectnessie.cel.common.types.StringT.stringOf;
 import static org.projectnessie.cel.common.types.TimestampT.timestampOf;
 import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.UintT.uintOf;
-import static org.projectnessie.cel.interpreter.AttributePattern.newPartialAttributeFactory;
 import static org.projectnessie.cel.interpreter.Interpretable.newConstValue;
 
 import com.google.api.expr.v1alpha1.Constant;
@@ -84,7 +83,6 @@ final class Planner implements InterpretablePlanner {
   private final Map<String, FieldType> fieldTypes = new HashMap<>();
   private final PlanningPolicy policy;
   private final InterpretableDecorator[] decorators;
-  private AttributeFactory partialAttrFactory;
   private int planDepth;
 
   Planner(
@@ -284,8 +282,7 @@ final class Planner implements InterpretablePlanner {
     // Lastly, create a field selection Interpretable.
     if (op instanceof InterpretableAttribute attr) {
       attr.addQualifier(qual);
-      return specializeScalarSelector(
-          expr, opType, fieldType, attr, partialSelectAttribute(expr, sel, opType));
+      return specializeScalarSelector(expr, opType, fieldType, attr);
     }
 
     InterpretableAttribute relAttr = relativeAttr(op.id(), asEstablished(op));
@@ -293,17 +290,14 @@ final class Planner implements InterpretablePlanner {
       return null;
     }
     relAttr.addQualifier(qual);
-    return specializeScalarSelector(
-        expr, opType, fieldType, relAttr, partialSelectAttribute(expr, sel, opType));
+    return specializeScalarSelector(expr, opType, fieldType, relAttr);
   }
 
   private Interpretable specializeScalarSelector(
-      Expr expr,
-      Type operandType,
-      FieldType fieldType,
-      InterpretableAttribute attribute,
-      Attribute partialAttribute) {
-    if (!nativeScalarPlanning() || operandType == null || partialAttribute == null) {
+      Expr expr, Type operandType, FieldType fieldType, InterpretableAttribute attribute) {
+    if (!nativeScalarPlanning()
+        || operandType == null
+        || !isCheckedVariable(expr.getSelectExpr().getOperand())) {
       return attribute;
     }
     boolean exactMap = exactStringMapResult(expr, operandType);
@@ -313,9 +307,7 @@ final class Planner implements InterpretablePlanner {
             && !operandType.getMessageType().startsWith("google.protobuf.")
             && (provider instanceof ProtoTypeRegistry
                 || hasPrimitiveType(expr.getId(), PrimitiveType.STRING));
-    return exactMap || exactField
-        ? specializeScalarAttribute(expr, attribute, partialAttribute)
-        : attribute;
+    return exactMap || exactField ? specializeScalarAttribute(expr, attribute) : attribute;
   }
 
   private Interpretable planSelectOperand(Expr operand) {
@@ -923,10 +915,6 @@ final class Planner implements InterpretablePlanner {
   }
 
   private Attribute conditionalBranchAttribute(Interpretable branch) {
-    if (branch instanceof NativeScalarAttr scalarAttribute) {
-      // Preserve both direct attribute error propagation and partial qualifier matching.
-      return scalarAttribute;
-    }
     if (branch instanceof InterpretableAttribute attribute) {
       return attribute.attr();
     }
@@ -974,12 +962,11 @@ final class Planner implements InterpretablePlanner {
         return null;
       }
       opAttr.addQualifier(qual);
-      if (ind instanceof InterpretableConst indConst2
-          && resolvedFunction.nativeDescriptor() != null
+      if (resolvedFunction.nativeDescriptor() != null
+          && isCheckedVariable(operandExpr)
           && resolvedFunction.overloadId.equals(Overloads.IndexMap)
           && exactStringMapResult(expr, opType)) {
-        return specializeScalarAttribute(
-            expr, opAttr, partialIndexAttribute(expr, operandExpr, opType, indConst2.value()));
+        return specializeScalarAttribute(expr, opAttr);
       }
       return opAttr;
     }
@@ -999,75 +986,40 @@ final class Planner implements InterpretablePlanner {
     return opAttr;
   }
 
-  private Interpretable specializeScalarAttribute(
-      Expr expr, InterpretableAttribute attribute, Attribute partialAttribute) {
-    if (!nativeScalarPlanning() || partialAttribute == null) {
+  private Interpretable specializeScalarAttribute(Expr expr, InterpretableAttribute attribute) {
+    if (!nativeScalarPlanning()) {
       return attribute;
     }
     if (hasPrimitiveType(expr.getId(), PrimitiveType.BOOL)) {
-      return new NativeBooleanAttr(expr.getId(), adapter, attribute.attr(), partialAttribute);
+      return new NativeBooleanAttr(expr.getId(), adapter, attribute.attr());
     }
     if (hasPrimitiveType(expr.getId(), PrimitiveType.INT64)) {
-      return new NativeIntAttr(expr.getId(), adapter, attribute.attr(), partialAttribute);
+      return new NativeIntAttr(expr.getId(), adapter, attribute.attr());
     }
     if (hasPrimitiveType(expr.getId(), PrimitiveType.UINT64)) {
-      return new NativeUintAttr(expr.getId(), adapter, attribute.attr(), partialAttribute);
+      return new NativeUintAttr(expr.getId(), adapter, attribute.attr());
     }
     if (hasPrimitiveType(expr.getId(), PrimitiveType.DOUBLE)) {
-      return new NativeDoubleAttr(expr.getId(), adapter, attribute.attr(), partialAttribute);
+      return new NativeDoubleAttr(expr.getId(), adapter, attribute.attr());
     }
     if (hasPrimitiveType(expr.getId(), PrimitiveType.STRING)) {
-      return new NativeStringAttr(expr.getId(), adapter, attribute.attr(), partialAttribute);
+      return new NativeStringAttr(expr.getId(), adapter, attribute.attr());
     }
     return hasNullType(expr.getId())
-        ? new NativeNullAttr(expr.getId(), adapter, attribute.attr(), partialAttribute)
+        ? new NativeNullAttr(expr.getId(), adapter, attribute.attr())
         : attribute;
   }
 
-  private Attribute partialSelectAttribute(Expr expr, Select select, Type operandType) {
-    return partialQualifiedAttribute(
-        expr.getId(), select.getOperand(), operandType, select.getField());
-  }
-
-  private Attribute partialIndexAttribute(Expr expr, Expr operand, Type operandType, Val index) {
-    return partialQualifiedAttribute(expr.getId(), operand, operandType, index);
-  }
-
-  private Attribute partialQualifiedAttribute(
-      long id, Expr operand, Type operandType, Object qualifierValue) {
-    Reference reference = topLevelReference(operand);
-    if (reference == null) {
-      return null;
-    }
-    AttributeFactory partial = partialAttributeFactory();
-    Attribute attribute = partial.absoluteAttribute(operand.getId(), reference.getName());
-    Qualifier qualifier = partial.newQualifier(operandType, id, qualifierValue);
-    if (qualifier == null) {
-      return null;
-    }
-    attribute.addQualifier(qualifier);
-    return attribute;
-  }
-
-  private Reference topLevelReference(Expr expression) {
+  private boolean isCheckedVariable(Expr expression) {
     if (expression.getExprKindCase() != Expr.ExprKindCase.IDENT_EXPR) {
-      return null;
+      return false;
     }
     Reference reference = refMap.get(expression.getId());
-    if (reference == null || reference.getValue() != Reference.getDefaultInstance().getValue()) {
-      return null;
-    }
     Type checkedType = typeMap.get(expression.getId());
-    return checkedType != null && checkedType.getType() == Type.getDefaultInstance()
-        ? reference
-        : null;
-  }
-
-  private AttributeFactory partialAttributeFactory() {
-    if (partialAttrFactory == null) {
-      partialAttrFactory = newPartialAttributeFactory(container, adapter, provider);
-    }
-    return partialAttrFactory;
+    return reference != null
+        && reference.getValue() == Reference.getDefaultInstance().getValue()
+        && checkedType != null
+        && checkedType.getType() == Type.getDefaultInstance();
   }
 
   private boolean exactStringMapResult(Expr expr, Type operandType) {

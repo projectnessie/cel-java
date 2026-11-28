@@ -23,12 +23,10 @@ import org.projectnessie.cel.interpreter.AttributeFactory.Attribute;
 
 abstract class NativeScalarAttr extends EvalAttr {
   private final long semanticId;
-  private final Attribute partialAttribute;
 
-  NativeScalarAttr(long id, TypeAdapter adapter, Attribute attribute, Attribute partialAttribute) {
+  NativeScalarAttr(long id, TypeAdapter adapter, Attribute attribute) {
     super(adapter, attribute);
     this.semanticId = id;
-    this.partialAttribute = partialAttribute;
   }
 
   @Override
@@ -45,22 +43,11 @@ abstract class NativeScalarAttr extends EvalAttr {
       throw signal(newErr(e, e.toString()));
     }
   }
-
-  @Override
-  public final Object resolve(Activation activation) {
-    return usesPartialAttribute(activation)
-        ? partialAttribute.resolve(activation)
-        : attr.resolve(activation);
-  }
-
-  final boolean usesPartialAttribute(Activation activation) {
-    return activation instanceof Activation.PartialActivation && partialAttribute != null;
-  }
 }
 
 class NativeIntAttr extends NativeScalarAttr implements NativeIntCapability {
-  NativeIntAttr(long id, TypeAdapter adapter, Attribute attribute, Attribute partialAttribute) {
-    super(id, adapter, attribute, partialAttribute);
+  NativeIntAttr(long id, TypeAdapter adapter, Attribute attribute) {
+    super(id, adapter, attribute);
   }
 
   @Override
@@ -70,8 +57,8 @@ class NativeIntAttr extends NativeScalarAttr implements NativeIntCapability {
 }
 
 final class NativeUintAttr extends NativeScalarAttr implements NativeUintCapability {
-  NativeUintAttr(long id, TypeAdapter adapter, Attribute attribute, Attribute partialAttribute) {
-    super(id, adapter, attribute, partialAttribute);
+  NativeUintAttr(long id, TypeAdapter adapter, Attribute attribute) {
+    super(id, adapter, attribute);
   }
 
   @Override
@@ -81,8 +68,8 @@ final class NativeUintAttr extends NativeScalarAttr implements NativeUintCapabil
 }
 
 final class NativeBooleanAttr extends NativeScalarAttr implements NativeBooleanCapability {
-  NativeBooleanAttr(long id, TypeAdapter adapter, Attribute attribute, Attribute partialAttribute) {
-    super(id, adapter, attribute, partialAttribute);
+  NativeBooleanAttr(long id, TypeAdapter adapter, Attribute attribute) {
+    super(id, adapter, attribute);
   }
 
   @Override
@@ -92,8 +79,8 @@ final class NativeBooleanAttr extends NativeScalarAttr implements NativeBooleanC
 }
 
 final class NativeDoubleAttr extends NativeScalarAttr implements NativeDoubleCapability {
-  NativeDoubleAttr(long id, TypeAdapter adapter, Attribute attribute, Attribute partialAttribute) {
-    super(id, adapter, attribute, partialAttribute);
+  NativeDoubleAttr(long id, TypeAdapter adapter, Attribute attribute) {
+    super(id, adapter, attribute);
   }
 
   @Override
@@ -103,8 +90,8 @@ final class NativeDoubleAttr extends NativeScalarAttr implements NativeDoubleCap
 }
 
 final class NativeStringAttr extends NativeScalarAttr implements NativeStringCapability {
-  NativeStringAttr(long id, TypeAdapter adapter, Attribute attribute, Attribute partialAttribute) {
-    super(id, adapter, attribute, partialAttribute);
+  NativeStringAttr(long id, TypeAdapter adapter, Attribute attribute) {
+    super(id, adapter, attribute);
   }
 
   @Override
@@ -114,8 +101,8 @@ final class NativeStringAttr extends NativeScalarAttr implements NativeStringCap
 }
 
 final class NativeNullAttr extends NativeScalarAttr implements NativeNullCapability {
-  NativeNullAttr(long id, TypeAdapter adapter, Attribute attribute, Attribute partialAttribute) {
-    super(id, adapter, attribute, partialAttribute);
+  NativeNullAttr(long id, TypeAdapter adapter, Attribute attribute) {
+    super(id, adapter, attribute);
   }
 
   @Override
