@@ -79,7 +79,15 @@
     "allDeclaredMethods": true
   },
   {
+    "name": "com.google.protobuf.Any$Builder",
+    "allDeclaredMethods": true
+  },
+  {
     "name": "com.google.protobuf.BoolValue",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.BoolValue$Builder",
     "allDeclaredMethods": true
   },
   {
@@ -87,7 +95,15 @@
     "allDeclaredMethods": true
   },
   {
+    "name": "com.google.protobuf.BytesValue$Builder",
+    "allDeclaredMethods": true
+  },
+  {
     "name": "com.google.protobuf.DoubleValue",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.DoubleValue$Builder",
     "allDeclaredMethods": true
   },
   {
@@ -95,7 +111,15 @@
     "allDeclaredMethods": true
   },
   {
+    "name": "com.google.protobuf.Duration$Builder",
+    "allDeclaredMethods": true
+  },
+  {
     "name": "com.google.protobuf.Empty",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.Empty$Builder",
     "allDeclaredMethods": true
   },
   {
@@ -103,7 +127,15 @@
     "allDeclaredMethods": true
   },
   {
+    "name": "com.google.protobuf.FieldMask$Builder",
+    "allDeclaredMethods": true
+  },
+  {
     "name": "com.google.protobuf.FloatValue",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.FloatValue$Builder",
     "allDeclaredMethods": true
   },
   {
@@ -111,7 +143,15 @@
     "allDeclaredMethods": true
   },
   {
+    "name": "com.google.protobuf.Int32Value$Builder",
+    "allDeclaredMethods": true
+  },
+  {
     "name": "com.google.protobuf.Int64Value",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.Int64Value$Builder",
     "allDeclaredMethods": true
   },
   {
@@ -119,7 +159,15 @@
     "allDeclaredMethods": true
   },
   {
+    "name": "com.google.protobuf.ListValue$Builder",
+    "allDeclaredMethods": true
+  },
+  {
     "name": "com.google.protobuf.StringValue",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.StringValue$Builder",
     "allDeclaredMethods": true
   },
   {
@@ -127,7 +175,15 @@
     "allDeclaredMethods": true
   },
   {
+    "name": "com.google.protobuf.Struct$Builder",
+    "allDeclaredMethods": true
+  },
+  {
     "name": "com.google.protobuf.Timestamp",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.Timestamp$Builder",
     "allDeclaredMethods": true
   },
   {
@@ -135,11 +191,23 @@
     "allDeclaredMethods": true
   },
   {
+    "name": "com.google.protobuf.UInt32Value$Builder",
+    "allDeclaredMethods": true
+  },
+  {
     "name": "com.google.protobuf.UInt64Value",
     "allDeclaredMethods": true
   },
   {
+    "name": "com.google.protobuf.UInt64Value$Builder",
+    "allDeclaredMethods": true
+  },
+  {
     "name": "com.google.protobuf.Value",
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.google.protobuf.Value$Builder",
     "allDeclaredMethods": true
   },
   {
