@@ -23,6 +23,7 @@ val nonPublishedProjects =
     "cel-conformance",
     "cel-quarkus-smoke-standalone",
     "cel-quarkus-smoke-core-pb3-jackson3",
+    "cel-quarkus-smoke-core-pb4-jackson3",
   )
 
 if (project.name !in nonPublishedProjects) {

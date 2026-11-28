@@ -81,6 +81,12 @@ longer choose a generated protobuf runtime transitively. Add exactly one of thes
 Do not put both generated protobuf artifacts on the same classpath; they provide the same generated
 CEL protobuf classes for different protobuf runtime choices.
 
+The generated protobuf classes check at runtime that `protobuf-java` is at least as new as the
+protobuf version they were generated with. If your framework or platform BOM manages an older
+`protobuf-java` (for example, Quarkus 4.0 manages 4.35.x), loading CEL-Java fails with a
+`ProtobufRuntimeVersionException`. Either override the managed `protobuf-java` version, or use
+[`cel-standalone`](#dependency-free-artifact), which relocates its protobuf dependencies.
+
 ## Usage
 
 ### Basic scripts

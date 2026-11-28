@@ -159,4 +159,6 @@ celProject("quarkus-smoke-standalone")
 
 celProject("quarkus-smoke-core-pb3-jackson3")
 
+celProject("quarkus-smoke-core-pb4-jackson3")
+
 celProject("bom")
