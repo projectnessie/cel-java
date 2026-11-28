@@ -36,13 +36,12 @@ if (isCI && configurationCacheRequested) {
   )
 }
 
-pluginManagement {
-  includeBuild("build-logic") { name = "cel-java-build-logic" }
+includeBuild("build-logic") { name = "cel-java-build-logic" }
 
-  repositories {
-    mavenCentral() // prefer Maven Central, in case Gradle's repo has issues
-    gradlePluginPortal()
-    if (providers.systemProperty("withMavenLocal").map(String::toBoolean).getOrElse(false)) {
+pluginManagement {
+  if (providers.systemProperty("withMavenLocal").map(String::toBoolean).getOrElse(false)) {
+    repositories {
+      gradlePluginPortal()
       mavenLocal()
     }
   }
@@ -150,6 +149,8 @@ celProject("jackson")
 celProject("jackson3")
 
 celProject("conformance")
+
+celProject("benchmarks")
 
 celProject("tools")
 

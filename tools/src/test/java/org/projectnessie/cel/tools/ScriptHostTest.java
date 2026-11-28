@@ -27,26 +27,45 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.projectnessie.cel.EnvOption;
 import org.projectnessie.cel.Library;
 import org.projectnessie.cel.ProgramOption;
+import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.checker.Decls;
 import org.projectnessie.cel.common.types.IntT;
 import org.projectnessie.cel.common.types.ListT;
 import org.projectnessie.cel.common.types.MapT;
+import org.projectnessie.cel.common.types.Overloads;
 import org.projectnessie.cel.common.types.StringT;
+import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
+import org.projectnessie.cel.common.types.ref.TypeRegistry;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.interpreter.ActivationFunction;
 import org.projectnessie.cel.interpreter.functions.Overload;
 import org.projectnessie.cel.toolstests.Dummy;
 
+@SuppressWarnings("deprecation")
 class ScriptHostTest {
   private static final String AUTHORIZATION_EXPRESSION =
       "resource.service == \"storage.googleapis.com\""
           + " && resource.type == \"storage.googleapis.com/Object\""
           + " && resource.name.startsWith(\"projects/_/buckets/example/objects/reports/\")"
           + " && request.time < timestamp(\"2026-08-01T00:00:00Z\")";
+
+  @Test
+  void checkedPlanningPreservesCrossTypeListMembership() throws Exception {
+    for (String expression : List.of("dyn(1.0) in [1]", "dyn(1) in [1.0]", "dyn(1u) in [1]")) {
+      Script optimized = ScriptHost.newBuilder().build().buildScript(expression).build();
+      Script unoptimized =
+          ScriptHost.newBuilder().disableOptimize().build().buildScript(expression).build();
+      assertThat(optimized.execute(Boolean.class, Map.of())).isTrue();
+      assertThat(unoptimized.execute(Boolean.class, Map.of())).isTrue();
+    }
+    Script mismatch = ScriptHost.newBuilder().build().buildScript("dyn('1') in [1]").build();
+    assertThat(mismatch.execute(Boolean.class, Map.of())).isFalse();
+  }
 
   @Test
   void basic() throws Exception {
@@ -122,6 +141,62 @@ class ScriptHostTest {
     Object result = script.executeWithActivation(Object.class, Collections.emptyMap());
 
     assertThat(result).isEqualTo(Arrays.asList(1L, 2L, 3L));
+  }
+
+  @Test
+  void optimizationFoldsConstantConversionAtBuildWhileDisableOptimizeDefersIt() throws Exception {
+    AtomicInteger optimizedCalls = new AtomicInteger();
+    Script optimized =
+        ScriptHost.newBuilder()
+            .build()
+            .buildScript("int(\"ignored\")")
+            .withLibraries(new CountingStringToIntLibrary(optimizedCalls))
+            .build();
+
+    assertThat(optimizedCalls).hasValue(1);
+    assertThat(optimized.executeWithActivation(Integer.class, Collections.emptyMap()))
+        .isEqualTo(42);
+    assertThat(optimized.executeWithActivation(Integer.class, Collections.emptyMap()))
+        .isEqualTo(42);
+    assertThat(optimizedCalls).hasValue(1);
+
+    AtomicInteger unoptimizedCalls = new AtomicInteger();
+    Script unoptimized =
+        ScriptHost.newBuilder()
+            .disableOptimize()
+            .build()
+            .buildScript("int(\"ignored\")")
+            .withLibraries(new CountingStringToIntLibrary(unoptimizedCalls))
+            .build();
+
+    assertThat(unoptimizedCalls).hasValue(0);
+    assertThat(unoptimized.executeWithActivation(Integer.class, Collections.emptyMap()))
+        .isEqualTo(42);
+    assertThat(unoptimized.executeWithActivation(Integer.class, Collections.emptyMap()))
+        .isEqualTo(42);
+    assertThat(unoptimizedCalls).hasValue(2);
+  }
+
+  @Test
+  void selectsRegexEngineForAllScripts() throws Exception {
+    Script javaScript =
+        ScriptHost.newBuilder().build().buildScript("'ab'.matches('a(?=b)')").build();
+    assertThat(javaScript.execute(Boolean.class, Map.of())).isTrue();
+
+    ScriptHost re2Host = ScriptHost.newBuilder().regexEngine(RegexEngine.RE2).build();
+    Script portable = re2Host.buildScript("'abc'.matches('b')").build();
+    Script javaOnly = re2Host.buildScript("'ab'.matches('a(?=b)')").build();
+
+    assertThat(portable.execute(Boolean.class, Map.of())).isTrue();
+    assertThatThrownBy(() -> javaOnly.execute(Boolean.class, Map.of()))
+        .isInstanceOf(ScriptExecutionException.class);
+  }
+
+  @Test
+  void rejectsNullRegexEngine() {
+    assertThatThrownBy(() -> ScriptHost.newBuilder().regexEngine(null))
+        .isInstanceOf(NullPointerException.class)
+        .hasMessage("regexEngine");
   }
 
   @Test
@@ -205,6 +280,60 @@ class ScriptHostTest {
     arguments.put("checkName", checkName);
 
     assertThat(script.executeWithActivation(Boolean.class, arguments)).isTrue();
+  }
+
+  @Test
+  void suppliedRegistryIsSnapshottedAndBuilderTypesAccumulateIdempotently() throws Exception {
+    ProtoTypeRegistry supplied = ProtoTypeRegistry.newEmptyRegistry();
+    ScriptHost host = ScriptHost.newBuilder().registry(supplied).build();
+    String messageType = Dummy.MyPojo.getDescriptor().getFullName();
+
+    for (int i = 0; i < 3; i++) {
+      Script script =
+          host.buildScript("inp.Property1")
+              .withDeclarations(Decls.newVar("inp", Decls.newObjectType(messageType)))
+              .withTypes(Dummy.MyPojo.getDefaultInstance())
+              .build();
+      assertThat(
+              script.executeWithActivation(
+                  String.class,
+                  Map.of("inp", Dummy.MyPojo.newBuilder().setProperty1("value").build())))
+          .isEqualTo("value");
+    }
+
+    assertThat(supplied.findType(messageType)).isNull();
+
+    Script scriptWithoutRepeatedType =
+        host.buildScript("inp.Property1")
+            .withDeclarations(Decls.newVar("inp", Decls.newObjectType(messageType)))
+            .build();
+    assertThat(
+            scriptWithoutRepeatedType.executeWithActivation(
+                String.class,
+                Map.of("inp", Dummy.MyPojo.newBuilder().setProperty1("accumulated").build())))
+        .isEqualTo("accumulated");
+  }
+
+  @Test
+  void repeatedProtoTypesAreIdempotentForGeneralAndExactRegistries() throws Exception {
+    for (TypeRegistry registry :
+        List.of(ProtoTypeRegistry.newRegistry(), ProtoTypeRegistry.newExactAggregateRegistry())) {
+      ScriptHost host = ScriptHost.newBuilder().registry(registry).build();
+      for (int i = 0; i < 3; i++) {
+        Script script =
+            host.buildScript("inp.Property1")
+                .withDeclarations(
+                    Decls.newVar(
+                        "inp", Decls.newObjectType(Dummy.MyPojo.getDescriptor().getFullName())))
+                .withTypes(Dummy.MyPojo.getDefaultInstance())
+                .build();
+        assertThat(
+                script.executeWithActivation(
+                    String.class,
+                    Map.of("inp", Dummy.MyPojo.newBuilder().setProperty1("value").build())))
+            .isEqualTo("value");
+      }
+    }
   }
 
   @Test
@@ -420,6 +549,31 @@ class ScriptHostTest {
       return Boolean.TRUE.equals(script.executeWithActivation(Boolean.class, arguments));
     } catch (ScriptException | RuntimeException e) {
       return false;
+    }
+  }
+
+  private static final class CountingStringToIntLibrary implements Library {
+    private final AtomicInteger calls;
+
+    private CountingStringToIntLibrary(AtomicInteger calls) {
+      this.calls = calls;
+    }
+
+    @Override
+    public List<EnvOption> getCompileOptions() {
+      return Collections.emptyList();
+    }
+
+    @Override
+    public List<ProgramOption> getProgramOptions() {
+      return Collections.singletonList(
+          ProgramOption.functions(
+              Overload.unary(
+                  Overloads.StringToInt,
+                  ignored -> {
+                    calls.incrementAndGet();
+                    return IntT.intOf(42);
+                  })));
     }
   }
 

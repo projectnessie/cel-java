@@ -37,7 +37,7 @@ import org.projectnessie.cel.parser.ExprHelper;
 import org.projectnessie.cel.parser.Macro;
 
 /**
- * OptionalLib provides CEL optional helper functions.
+ * CEL optional-value extension library.
  *
  * <p>This library provides runtime optional values, ordinary optional constructors/receiver
  * methods, optional access operators, and lazy optMap/optFlatMap macro expansion.
@@ -77,6 +77,7 @@ public final class OptionalLib implements Library {
 
   private OptionalLib() {}
 
+  /** Returns an environment option installing optional types, macros, and operations. */
   public static EnvOption optionals() {
     return Library.Lib(new OptionalLib());
   }

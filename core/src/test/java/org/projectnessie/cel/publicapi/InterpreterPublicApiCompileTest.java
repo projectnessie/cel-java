@@ -17,24 +17,39 @@ package org.projectnessie.cel.publicapi;
 
 import static java.util.Collections.emptyMap;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.projectnessie.cel.checker.Decls.Int;
+import static org.projectnessie.cel.checker.Decls.newListType;
 import static org.projectnessie.cel.common.types.IntT.intOf;
 
 import com.google.api.expr.v1alpha1.CheckedExpr;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.projectnessie.cel.Env;
+import org.projectnessie.cel.ProgramOption;
+import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.common.containers.Container;
 import org.projectnessie.cel.common.types.pb.ProtoTypeRegistry;
+import org.projectnessie.cel.common.types.ref.ExactAggregateFieldProvider;
+import org.projectnessie.cel.common.types.ref.ExactAggregateTypeAdapter;
+import org.projectnessie.cel.common.types.ref.TypeProvider;
+import org.projectnessie.cel.common.types.ref.TypeRegistry;
+import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.interpreter.Activation;
 import org.projectnessie.cel.interpreter.Activation.PartialActivation;
 import org.projectnessie.cel.interpreter.AttributeFactory;
 import org.projectnessie.cel.interpreter.AttributeFactory.Attribute;
+import org.projectnessie.cel.interpreter.AttributeFactory.ConstantQualifier;
+import org.projectnessie.cel.interpreter.AttributeFactory.ConstantQualifierEquator;
 import org.projectnessie.cel.interpreter.AttributeFactory.NamespacedAttribute;
 import org.projectnessie.cel.interpreter.AttributeFactory.Qualifier;
+import org.projectnessie.cel.interpreter.AttributeFactory.ValQualifier;
 import org.projectnessie.cel.interpreter.AttributePattern;
 import org.projectnessie.cel.interpreter.Coster;
 import org.projectnessie.cel.interpreter.Coster.Cost;
 import org.projectnessie.cel.interpreter.Dispatcher;
 import org.projectnessie.cel.interpreter.Interpretable;
+import org.projectnessie.cel.interpreter.Interpretable.InterpretableAttribute;
+import org.projectnessie.cel.interpreter.Interpretable.InterpretableCall;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableConst;
 import org.projectnessie.cel.interpreter.InterpretableDecorator;
 import org.projectnessie.cel.interpreter.InterpretablePlanner;
@@ -47,6 +62,36 @@ import org.projectnessie.cel.interpreter.Interpreter;
  * name any concrete interpreter implementation.
  */
 class InterpreterPublicApiCompileTest {
+
+  @Test
+  void optimizerHelpersRemainCallableOutsideInterpreterPackage() {
+    Env env = Env.newEnv();
+    var conversion = env.compile("int('42')").getAst();
+    var membership = env.compile("1 in [1]").getAst();
+    InterpretableDecorator foldUnary =
+        node ->
+            node instanceof InterpretableCall call
+                ? InterpretableDecorator.maybeOptimizeConstUnary(node, call)
+                : node;
+    InterpretableDecorator foldMembership =
+        node -> {
+          Interpretable folded = Interpreter.optimize().decorate(node);
+          return node instanceof InterpretableCall call
+              ? InterpretableDecorator.maybeOptimizeSetMembership(folded, call)
+              : folded;
+        };
+    assertThat(
+            env.program(conversion, ProgramOption.customDecorator(foldUnary))
+                .eval(emptyMap())
+                .getVal())
+        .isEqualTo(intOf(42));
+    assertThat(
+            env.program(membership, ProgramOption.customDecorator(foldMembership))
+                .eval(emptyMap())
+                .getVal()
+                .booleanValue())
+        .isTrue();
+  }
 
   @Test
   void retainedContractsAndFactoriesRemainUsableOutsideInterpreterPackage() {
@@ -73,6 +118,17 @@ class InterpreterPublicApiCompileTest {
         Interpreter.newStandardInterpreter(container, registry, registry, attributes);
     Interpreter configured =
         Interpreter.newInterpreter(extended, container, registry, registry, attributes);
+    Interpreter configuredEstablishedRe2 =
+        Interpreter.newInterpreter(
+            extended, container, registry, registry, attributes, RegexEngine.RE2);
+    Interpreter configuredNative =
+        Interpreter.newInterpreter(extended, container, registry, registry, attributes, true);
+    Interpreter configuredRe2 =
+        Interpreter.newInterpreter(
+            extended, container, registry, registry, attributes, true, RegexEngine.RE2);
+    Interpreter standardRe2 =
+        Interpreter.newStandardInterpreter(
+            container, registry, registry, attributes, RegexEngine.RE2);
     InterpretableDecorator optimizer = Interpreter.optimize();
     InterpretablePlanner checked =
         InterpretablePlanner.newPlanner(
@@ -83,18 +139,73 @@ class InterpreterPublicApiCompileTest {
     InterpretablePlanner unchecked =
         InterpretablePlanner.newUncheckedPlanner(
             extended, registry, registry, attributes, container);
+    InterpretablePlanner checkedRe2 =
+        InterpretablePlanner.newPlanner(
+            extended,
+            registry,
+            registry,
+            attributes,
+            container,
+            CheckedExpr.getDefaultInstance(),
+            RegexEngine.RE2);
+    InterpretablePlanner uncheckedRe2 =
+        InterpretablePlanner.newUncheckedPlanner(
+            extended, registry, registry, attributes, container, RegexEngine.RE2);
+    ExactAggregateTypeAdapter exactAdapter = registry::nativeToValue;
+    Val exactList = exactAdapter.nativeAggregateToValue(new long[] {1L, 2L}, newListType(Int));
+    TypeRegistry exactProto = ProtoTypeRegistry.newExactAggregateRegistry();
+
     assertThat(partial.unknownAttributePatterns()).hasSize(1);
     assertThat(namespaced.candidateVariableNames()).containsExactly("x");
     assertThat(relative.addQualifier(qualifier)).isSameAs(relative);
     assertThat(constant.value()).isEqualTo(intOf(1L));
     assertThat(standard).isNotNull();
     assertThat(configured).isNotNull();
+    assertThat(configuredEstablishedRe2).isNotNull();
+    assertThat(configuredNative).isNotNull();
+    assertThat(configuredRe2).isNotNull();
+    assertThat(standardRe2).isNotNull();
     assertThat(optimizer).isNotNull();
     assertThat(checked).isNotNull();
     assertThat(checkedMaps).isNotNull();
     assertThat(unchecked).isNotNull();
+    assertThat(checkedRe2).isNotNull();
+    assertThat(uncheckedRe2).isNotNull();
+    assertThat(exactList.value()).isEqualTo(new long[] {1L, 2L});
+    assertThat(exactProto).isInstanceOf(ProtoTypeRegistry.class);
     assertThat(Coster.costOf(1L, 2L).min).isEqualTo(1L);
     assertThat(Coster.costOf(1L, 2L).max).isEqualTo(2L);
     assertThat(Cost.estimateCost(constant)).isEqualTo(Cost.None);
+  }
+
+  @SuppressWarnings("unused")
+  private static void retainExactAggregateProviderContract(
+      ExternalExactAggregateAdapterProvider adapterProvider) {
+    ExactAggregateTypeAdapter exactAdapter = adapterProvider;
+    TypeProvider publicProvider = adapterProvider;
+    boolean exactField =
+        adapterProvider.isExactAggregateField(
+            "example.Message", "values", com.google.api.expr.v1alpha1.Type.getDefaultInstance());
+  }
+
+  private abstract static class ExternalExactAggregateAdapterProvider
+      implements ExactAggregateTypeAdapter, ExactAggregateFieldProvider {}
+
+  @SuppressWarnings("unused")
+  private static void retainInspectionContracts(
+      Interpretable interpretable,
+      InterpretableConst constant,
+      InterpretableAttribute attribute,
+      InterpretableCall call,
+      Qualifier qualifier,
+      ConstantQualifier constantQualifier,
+      ConstantQualifierEquator equator,
+      ValQualifier valQualifier,
+      Attribute resolvedAttribute,
+      NamespacedAttribute namespacedAttribute,
+      Coster coster) {
+    Interpretable.calShortCircuitBinaryOpsCost(interpretable, constant);
+    Interpretable.calExhaustiveBinaryOpsCost(interpretable, constant);
+    Interpretable.sumOfCost(new Interpretable[] {interpretable, constant});
   }
 }

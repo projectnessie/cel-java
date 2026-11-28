@@ -23,9 +23,12 @@ import static org.projectnessie.cel.ProgramOption.evalOptions;
 import static org.projectnessie.cel.interpreter.Activation.newActivation;
 
 import dev.cel.expr.conformance.proto3.TestAllTypes;
+import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
+import java.util.stream.LongStream;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -61,7 +64,8 @@ public class EvaluatorBaselineBench {
       "chainString",
       "shortCircuit",
       "mapSelection",
-      "protoSelection"
+      "protoSelection",
+      "longQuantifier"
     })
     public String expression;
 
@@ -71,6 +75,9 @@ public class EvaluatorBaselineBench {
     Activation activation;
     Class<?> nativeResultType;
     Supplier<Object> nativeJava;
+    ResourceLimits elapsedLimit;
+    ResourceLimits cpuLimit;
+    ResourceLimits allocationLimit;
 
     @Setup
     public void init() {
@@ -159,6 +166,14 @@ public class EvaluatorBaselineBench {
           nativeResultType = Boolean.class;
           nativeJava = () -> message.getSingleInt64() == (long) variables.get("target");
           break;
+        case "longQuantifier":
+          env = newEnv(declarations(Decls.newVar("values", Decls.newListType(Decls.Int))));
+          source = "values.exists(x, x == -1)";
+          List<Long> values = LongStream.range(0, 1_000).boxed().toList();
+          variables = Map.of("values", values);
+          nativeResultType = Boolean.class;
+          nativeJava = () -> values.stream().noneMatch(value -> value == -1);
+          break;
         default:
           throw new IllegalArgumentException(
               "Unknown evaluator benchmark expression: " + expression);
@@ -171,6 +186,9 @@ public class EvaluatorBaselineBench {
       program = env.program(ast.getAst(), evalOptions(OptOptimize));
       internalProgram = (Prog) program;
       activation = newActivation(variables);
+      elapsedLimit = ResourceLimits.newBuilder().elapsedTimeLimit(Duration.ofSeconds(1)).build();
+      cpuLimit = ResourceLimits.newBuilder().cpuTimeLimit(Duration.ofSeconds(1)).build();
+      allocationLimit = ResourceLimits.newBuilder().allocatedBytesLimit(1_000_000).build();
     }
   }
 
@@ -182,6 +200,26 @@ public class EvaluatorBaselineBench {
   @Benchmark
   public Program.EvalResult programEval(EvaluationState state) {
     return state.program.eval(state.variables);
+  }
+
+  @Benchmark
+  public Program.EvalResult programEvalCancellationOnly(EvaluationState state) {
+    return state.program.evalCancelable(state.variables).eval();
+  }
+
+  @Benchmark
+  public Program.EvalResult programEvalElapsedLimit(EvaluationState state) {
+    return state.program.evalCancelable(state.variables, state.elapsedLimit).eval();
+  }
+
+  @Benchmark
+  public Program.EvalResult programEvalCpuLimit(EvaluationState state) {
+    return state.program.evalCancelable(state.variables, state.cpuLimit).eval();
+  }
+
+  @Benchmark
+  public Program.EvalResult programEvalAllocationLimit(EvaluationState state) {
+    return state.program.evalCancelable(state.variables, state.allocationLimit).eval();
   }
 
   @Benchmark

@@ -18,19 +18,25 @@ package org.projectnessie.cel.interpreter;
 import static org.projectnessie.cel.common.types.Err.newErr;
 import static org.projectnessie.cel.common.types.Err.noSuchAttributeException;
 import static org.projectnessie.cel.common.types.Err.noSuchOverload;
+import static org.projectnessie.cel.common.types.Types.boolOf;
 import static org.projectnessie.cel.common.types.UnknownT.unknownOf;
 import static org.projectnessie.cel.common.types.Util.isUnknownOrError;
 import static org.projectnessie.cel.interpreter.Coster.Cost.OneOne;
 import static org.projectnessie.cel.interpreter.Coster.Cost.estimateCost;
 
 import java.util.Objects;
+import org.projectnessie.cel.OperationAbortedException;
+import org.projectnessie.cel.OperationAbortedException.Phase;
+import org.projectnessie.cel.RegexEngine;
 import org.projectnessie.cel.common.operators.Operator;
 import org.projectnessie.cel.common.types.Overloads;
+import org.projectnessie.cel.common.types.StringT;
 import org.projectnessie.cel.common.types.ref.TypeAdapter;
 import org.projectnessie.cel.common.types.ref.Val;
 import org.projectnessie.cel.common.types.traits.Negater;
 import org.projectnessie.cel.common.types.traits.Receiver;
 import org.projectnessie.cel.common.types.traits.Trait;
+import org.projectnessie.cel.internal.OperationCheckpoints;
 import org.projectnessie.cel.interpreter.Activation.PartialActivation;
 import org.projectnessie.cel.interpreter.AttributeFactory.Attribute;
 import org.projectnessie.cel.interpreter.Interpretable.InterpretableAttribute;
@@ -133,6 +139,24 @@ class EvalIdent extends AbstractEval implements Coster {
 }
 
 /** Checked aggregate identifier whose ordinary evaluation uses exact checked materialization. */
+class EvalExactAggregateIdent extends EvalIdent {
+  final CheckedAggregateMaterializer materializer;
+
+  EvalExactAggregateIdent(
+      long id, String name, TypeAdapter adapter, CheckedAggregateMaterializer materializer) {
+    super(id, name, adapter);
+    this.materializer = materializer;
+  }
+
+  @Override
+  public Val eval(Activation ctx) {
+    Object value = resolveRaw(ctx);
+    return value instanceof Val val && isUnknownOrError(val)
+        ? val
+        : materializer.materialize(value);
+  }
+}
+
 class EvalConst extends AbstractEval implements InterpretableConst, Coster {
   private final Val val;
 
@@ -420,6 +444,47 @@ class EvalBinary extends AbstractEvalLhsRhs implements InterpretableCall {
   }
 }
 
+/** Exact built-in string {@code matches} call using the program's selected regex engine. */
+final class EvalRegex extends EvalBinary {
+  private final RegexEngine regexEngine;
+
+  EvalRegex(
+      long id,
+      String function,
+      String overload,
+      Interpretable lhs,
+      Interpretable rhs,
+      RegexEngine regexEngine,
+      BinaryOp implementation,
+      Trait trait) {
+    super(id, function, overload, lhs, rhs, trait, implementation);
+    this.regexEngine = Objects.requireNonNull(regexEngine);
+  }
+
+  @Override
+  public Val eval(Activation ctx) {
+    Val left = lhs.eval(ctx);
+    Val right = rhs.eval(ctx);
+    if (left instanceof StringT input && right instanceof StringT expression) {
+      try {
+        OperationCheckpoints.checkpointNow(Phase.EVALUATE);
+        var matched =
+            RegexSupport.find(regexEngine, (String) expression.value(), (String) input.value());
+        OperationCheckpoints.checkpointNow(Phase.EVALUATE);
+        return boolOf(matched);
+      } catch (OperationAbortedException failure) {
+        throw failure;
+      } catch (Exception failure) {
+        if (failure instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+          throw aborted;
+        }
+        return newErr(failure, "%s", failure.getMessage());
+      }
+    }
+    return evalPrepared(left, right);
+  }
+}
+
 /** Evaluates an attribute value. */
 class EvalAttr extends AbstractEval
     implements InterpretableAttribute, Coster, AttributeFactory.Qualifier, Attribute {
@@ -458,6 +523,9 @@ class EvalAttr extends AbstractEval
     try {
       return adapter.nativeToValue(attr.resolve(ctx));
     } catch (Exception e) {
+      if (e instanceof org.projectnessie.cel.OperationAbortedException aborted) {
+        throw aborted;
+      }
       return newErr(e, e.toString());
     }
   }
