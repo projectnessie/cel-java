@@ -19,16 +19,22 @@ on:
     branches: [ main ]
   pull_request:
 
+permissions:
+  contents: read
+
+env:
+  MAMMOTH_CACHE_PARTITIONS: '[{"id":"dependency-metadata","writer":"java-25"}]'
+
 jobs:
   java:
     name: Java/Gradle
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     strategy:
       max-parallel: 4
       matrix:
         java-version: [21, 25]
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           submodules: 'true'
 
@@ -38,10 +44,13 @@ jobs:
           distribution: 'temurin'
           java-version: ${{ matrix.java-version }}
 
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6
+      - name: Setup Gradle and Caches
+        uses: buildish-tooling/buildish-mammoth-cache/actions/github/gradle@5befea0047cb7f46d468765ffd8061475941c3dc # v0.6.0
         with:
-          cache-read-only: ${{ github.event_name != 'push' || github.ref != 'refs/heads/main' }}
+          job-mode: distributed-worker
+          github-job-name: java-${{ matrix.java-version }}
+          cache-partitions: ${{ env.MAMMOTH_CACHE_PARTITIONS }}
+          wrapper-properties-files: gradle/wrapper/gradle-wrapper.properties
 
       - name: Build
         run: >
@@ -66,3 +75,23 @@ jobs:
           path: |
             **/build/reports/*
             **/build/test-results/*
+
+  aggregate-cache:
+    name: Aggregate Gradle caches
+    needs:
+      - java
+    if: ${{ !cancelled() && !failure() && github.event_name == 'push' }}
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Check out repository for cache aggregation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Aggregate worker caches and publish the next generation
+        uses: buildish-tooling/buildish-mammoth-cache/actions/github/gradle@5befea0047cb7f46d468765ffd8061475941c3dc # v0.6.0
+        with:
+          job-mode: distributed-aggregator
+          dependent-jobs: java-21, java-25
+          cache-partitions: ${{ env.MAMMOTH_CACHE_PARTITIONS }}
+          wrapper-properties-files: gradle/wrapper/gradle-wrapper.properties
