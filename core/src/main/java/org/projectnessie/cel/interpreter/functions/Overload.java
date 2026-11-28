@@ -235,8 +235,23 @@ public final class Overload {
     return sb.toString();
   }
 
-  /** StandardOverloads returns the definitions of the built-in overloads. */
+  /**
+   * Returns the built-in runtime overload definitions.
+   *
+   * <p>The returned array is a new shallow copy. The overload definitions and their operation
+   * objects are shared and immutable.
+   *
+   * @return a copy of the standard overload array
+   */
   public static Overload[] standardOverloads() {
+    return StandardOverloadsHolder.OVERLOADS.clone();
+  }
+
+  private static final class StandardOverloadsHolder {
+    private static final Overload[] OVERLOADS = createStandardOverloads();
+  }
+
+  private static Overload[] createStandardOverloads() {
     return new Overload[] {
       // Logical not (!a)
       unary(

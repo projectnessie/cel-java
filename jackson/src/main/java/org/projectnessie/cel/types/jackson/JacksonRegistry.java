@@ -26,6 +26,7 @@ import com.fasterxml.jackson.databind.type.TypeFactory;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.projectnessie.cel.common.types.ref.FieldType;
+import org.projectnessie.cel.common.types.ref.StandardScalarTypeAdapter;
 import org.projectnessie.cel.common.types.ref.Type;
 import org.projectnessie.cel.common.types.ref.TypeAdapterSupport;
 import org.projectnessie.cel.common.types.ref.TypeRegistry;
@@ -38,7 +39,7 @@ import org.projectnessie.cel.common.types.ref.Val;
  * therefore returning Jackson objects from CEL expressions is not possible/implemented and results
  * in {@link UnsupportedOperationException}s.
  */
-public final class JacksonRegistry implements TypeRegistry {
+public final class JacksonRegistry implements TypeRegistry, StandardScalarTypeAdapter {
   final ObjectMapper objectMapper;
   private final SerializerProvider serializationProvider;
   private final TypeFactory typeFactory;
